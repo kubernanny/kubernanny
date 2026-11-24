@@ -1,0 +1,39 @@
+{
+  "name": "kubernanny-agent",
+  "version": "0.3.0",
+  "private": true,
+  "description": "In-cluster agent for Kubernanny: runs homelab health checks and offers a few safe actions.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "start:dev": "tsc -p tsconfig.build.json && node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "rbac": "UPDATE_RBAC=1 vitest run src/rbac.spec.ts",
+    "start:demo": "npm run build && DEMO=broken node dist/main.js",
+    "demo:export": "npm run build && node scripts/export-demo.mjs"
+  },
+  "dependencies": {
+    "@kubernanny/protocol": "file:../protocol",
+    "@nestjs/common": "^12.6.0",
+    "@nestjs/core": "^12.6.0",
+    "@nestjs/platform-express": "^12.6.0",
+    "qrcode": "^1.5.4",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "ws": "^8.23.0"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^12.6.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.20.5",
+    "@types/qrcode": "^1.5.6",
+    "@types/supertest": "^7.2.1",
+    "@types/ws": "^8.18.2",
+    "supertest": "^7.3.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.1",
+    "yaml": "^2.9.1"
+  }
+}

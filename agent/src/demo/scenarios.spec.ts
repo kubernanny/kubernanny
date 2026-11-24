@@ -1,0 +1,65 @@
+import 'reflect-metadata';
+import { Test } from '@nestjs/testing';
+import { describe, expect, it } from 'vitest';
+import { de } from '../testing/i18n';
+import { AppModule } from '../app.module';
+import { KubeClient } from '../kube/kube-client';
+import { StatusService } from '../status/status.service';
+import { DemoKubeClient, DemoScenario } from './demo-cluster';
+
+async function run(scenario: DemoScenario) {
+  delete process.env.PULSE_TOKEN;
+  process.env.CHECK_INTERVAL_SECONDS = '3600';
+  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(KubeClient)
+    .useValue(new DemoKubeClient(undefined, scenario))
+    .compile();
+  const status = moduleRef.get(StatusService);
+  await status.refresh();
+  const snapshot = de(status.snapshot());
+  await moduleRef.close();
+  return snapshot;
+}
+
+describe('demo scenarios', () => {
+  it('healthy is green with no issue at all, so no check fires on a sound cluster', async () => {
+    const s = await run('healthy');
+    expect(s.issues.map((i) => i.title)).toEqual([]);
+    expect(s.light).toBe('green');
+    expect(s.score).toBe(100);
+    expect(s.modules.filter((m) => m.status !== 'ok').map((m) => m.id)).toEqual([]);
+  });
+
+  it('warning is yellow with the three things that want attention, and a hint about a coming API removal', async () => {
+    const s = await run('warning');
+    expect(s.light).toBe('yellow');
+    const removal = s.issues.find((i) => i.id.startsWith('kubernetes-support/deprecated-apis/'));
+    expect(removal?.severity).toBe('info');
+    expect(s.issues.map((i) => i.id).filter((id) => id !== removal?.id).sort()).toEqual(['argocd/weblate-chart/sync', 'certificates/weblate/weblate-tls', 'cnpg/default/shop-api-pg/backup']);
+  });
+
+  it('broken is red', async () => {
+    expect((await run('broken')).light).toBe('red');
+  });
+
+  it('broken runs a CloudNativePG operator with a known advisory and a loosely configured pgadmin, without calling the internet', async () => {
+    const s = await run('broken');
+    const vuln = s.issues.find((i) => i.id === 'vulnerabilities/cnpg');
+    expect(vuln).toMatchObject({ severity: 'warning', title: 'CloudNativePG 1.26.1: 1 bekannte Schwachstelle', advisories: ['GHSA-423p-g724-fr39'] });
+    expect(s.modules.find((m) => m.id === 'cnpg')?.issueIds).toContain('vulnerabilities/cnpg');
+    expect(s.issues.filter((i) => i.module === 'security').map((i) => [i.id, i.severity])).toEqual([
+      ['security/pgadmin/root', 'info'],
+      ['security/pgadmin/no-memory-limit', 'info'],
+    ]);
+  });
+
+  it('healthy and warning check vulnerabilities and security too, and find nothing', async () => {
+    for (const scenario of ['healthy', 'warning'] as const) {
+      const s = await run(scenario);
+      expect(s.modules.filter((m) => m.id === 'vulnerabilities' || m.id === 'security').map((m) => [m.id, m.status])).toEqual([
+        ['security', 'ok'],
+        ['vulnerabilities', 'ok'],
+      ]);
+    }
+  });
+});
