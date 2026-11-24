@@ -1,0 +1,9 @@
+node_modules
+**/node_modules
+**/dist
+**/.angular
+**/coverage
+# Native projects and store tooling: not part of the agent image.
+app/ios
+app/android
+fastlane
