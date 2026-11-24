@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./out-tsc/build",
+    "types": ["node"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noPropertyAccessFromIndexSignature": false
+  },
+  "include": ["build/**/*.ts", "scripts/**/*.ts", "vite.config.ts", "vitest.config.ts"]
+}

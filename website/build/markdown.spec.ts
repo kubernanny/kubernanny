@@ -1,0 +1,203 @@
+import { describe, expect, it } from 'vitest';
+import { editUrl, rewriteUrl, routeForFile, slugForFile, type RewriteContext } from './doc-paths.ts';
+import { BRANCH, MEDIA_BASE, REPO_URL, buildNav, listDocFiles, parseComponents, readDoc } from './docs-source.ts';
+import { githubSlug, renderMarkdown, rewriteHtml, truncate } from './markdown.ts';
+import { allRoutes } from './routes.ts';
+
+const known = new Set(['README.md', 'PROTOCOL.md', 'SECURITY.md', 'decisions/README.md', 'decisions/0001-noise-ik-per-request.md']);
+
+function ctx(docFile: string): RewriteContext {
+  return { docFile, knownDocs: known, repoUrl: REPO_URL, branch: BRANCH, mediaBase: MEDIA_BASE };
+}
+
+describe('slugs and routes', () => {
+  it('maps files to routes, README to its folder', () => {
+    expect(slugForFile('PROTOCOL.md')).toBe('protocol');
+    expect(slugForFile('README.md')).toBe('');
+    expect(slugForFile('decisions/README.md')).toBe('decisions');
+    expect(routeForFile('decisions/0001-noise-ik-per-request.md')).toBe('/docs/decisions/0001-noise-ik-per-request');
+    expect(routeForFile('README.md')).toBe('/docs');
+  });
+
+  it('builds the edit link', () => {
+    expect(editUrl('decisions/README.md', REPO_URL, 'main')).toBe(`${REPO_URL}/edit/main/docs/decisions/README.md`);
+  });
+});
+
+describe('rewriteUrl', () => {
+  it('turns links between docs into routes and keeps the fragment', () => {
+    expect(rewriteUrl('PROTOCOL.md', ctx('README.md')).url).toBe('/docs/protocol');
+    expect(rewriteUrl('SECURITY.md#what-the-agent-can-do', ctx('PROTOCOL.md')).url).toBe('/docs/security#what-the-agent-can-do');
+    expect(rewriteUrl('decisions/0001-noise-ik-per-request.md', ctx('PROTOCOL.md')).url).toBe(
+      '/docs/decisions/0001-noise-ik-per-request',
+    );
+    expect(rewriteUrl('0001-noise-ik-per-request.md', ctx('decisions/README.md')).url).toBe(
+      '/docs/decisions/0001-noise-ik-per-request',
+    );
+    expect(rewriteUrl('../PROTOCOL.md', ctx('decisions/README.md')).url).toBe('/docs/protocol');
+    expect(rewriteUrl('decisions/README.md', ctx('README.md')).url).toBe('/docs/decisions');
+  });
+
+  it('makes a bare fragment absolute, since #x alone would leave the page', () => {
+    expect(rewriteUrl('#test-vectors', ctx('PROTOCOL.md')).url).toBe('/docs/protocol#test-vectors');
+    expect(rewriteUrl('#x', ctx('README.md')).url).toBe('/docs#x');
+  });
+
+  it('serves images of docs/ from the media path', () => {
+    expect(rewriteUrl('screenshots/05-overview-red.png', ctx('README.md'))).toEqual({
+      url: '/docs-media/screenshots/05-overview-red.png',
+      media: 'screenshots/05-overview-red.png',
+    });
+    expect(rewriteUrl('../communication.png', ctx('decisions/README.md')).url).toBe('/docs-media/communication.png');
+  });
+
+  it('sends everything else in the repository to GitHub', () => {
+    expect(rewriteUrl('../README.md', ctx('README.md')).url).toBe(`${REPO_URL}/blob/main/README.md`);
+    expect(rewriteUrl('../protocol/test/vectors.json', ctx('PROTOCOL.md')).url).toBe(
+      `${REPO_URL}/blob/main/protocol/test/vectors.json`,
+    );
+    expect(rewriteUrl('../agent/src', ctx('PROTOCOL.md')).url).toBe(`${REPO_URL}/tree/main/agent/src`);
+    expect(rewriteUrl('diagrams/communication.html', ctx('README.md')).url).toBe(
+      `${REPO_URL}/blob/main/docs/diagrams/communication.html`,
+    );
+    expect(rewriteUrl('UNKNOWN.md', ctx('README.md')).url).toBe(`${REPO_URL}/blob/main/docs/UNKNOWN.md`);
+  });
+
+  it('leaves absolute and site-absolute URLs alone', () => {
+    for (const url of ['https://noiseprotocol.org/noise.html', 'mailto:a@b.c', '//cdn.example/x', '/docs/api']) {
+      expect(rewriteUrl(url, ctx('PROTOCOL.md')).url).toBe(url);
+    }
+  });
+});
+
+describe('rewriteHtml', () => {
+  const size = (file: string) => (file === 'screenshots/a.png' ? { width: 780, height: 1308 } : undefined);
+
+  it('rewrites href and src in raw HTML too and sizes images', () => {
+    const { html, media } = rewriteHtml('<p><a href="PROTOCOL.md">p</a></p><img src="screenshots/a.png" alt="A">', ctx('README.md'), size);
+    expect(html).toContain('href="/docs/protocol"');
+    expect(html).toContain('src="/docs-media/screenshots/a.png"');
+    expect(html).toContain('width="780" height="1308"');
+    expect(html).toContain('loading="lazy"');
+    expect(media).toEqual(['screenshots/a.png']);
+  });
+
+  it('derives the height when only the width is given', () => {
+    const { html } = rewriteHtml('<img src="screenshots/a.png" alt="A" width="390">', ctx('README.md'), size);
+    expect(html).toContain('width="390"');
+    expect(html).toContain('height="654"');
+  });
+
+  it('keeps escaped ampersands in query strings', () => {
+    const { html } = rewriteHtml('<a href="https://x.test/?a=1&amp;b=2">x</a>', ctx('README.md'));
+    expect(html).toContain('href="https://x.test/?a=1&amp;b=2"');
+  });
+});
+
+describe('renderMarkdown', () => {
+  const source = [
+    '# The protocol',
+    '',
+    'How the app talks to an agent, end to end, on every path: VPN, LAN or ingress.',
+    '',
+    '## Keys, pairing and the end-to-end channel',
+    '',
+    'See [the vectors](#test-vectors) and [security](SECURITY.md).',
+    '',
+    '### Message 1 (device to agent)',
+    '',
+    '| Field | Meaning |',
+    '|---|---|',
+    '| `m` | method |',
+    '',
+    '```sh',
+    'helm install kubernanny',
+    '```',
+    '',
+    '```mermaid',
+    'flowchart LR',
+    '  a --> b',
+    '```',
+    '',
+    '## Test vectors',
+    '',
+    '## Test vectors',
+  ].join('\n');
+  const doc = renderMarkdown(source, { ctx: ctx('PROTOCOL.md') });
+
+  it('takes the title and description from the text', () => {
+    expect(doc.title).toBe('The protocol');
+    expect(doc.description).toMatch(/^How the app talks to an agent/);
+  });
+
+  it('gives headings GitHub ids and builds the table of contents', () => {
+    expect(doc.toc).toEqual([
+      { id: 'keys-pairing-and-the-end-to-end-channel', text: 'Keys, pairing and the end-to-end channel', level: 2 },
+      { id: 'message-1-device-to-agent', text: 'Message 1 (device to agent)', level: 3 },
+      { id: 'test-vectors', text: 'Test vectors', level: 2 },
+      { id: 'test-vectors-1', text: 'Test vectors', level: 2 },
+    ]);
+    expect(doc.html).toContain('<h2 id="keys-pairing-and-the-end-to-end-channel">');
+  });
+
+  it('rewrites links, wraps tables and code, and marks mermaid', () => {
+    expect(doc.html).toContain('href="/docs/protocol#test-vectors"');
+    expect(doc.html).toContain('href="/docs/security"');
+    expect(doc.html).toContain('<div class="table-wrap"><table>');
+    expect(doc.html).toContain('data-copy');
+    expect(doc.html).toContain('<pre class="mermaid">flowchart LR\n  a --&gt; b</pre>');
+    expect(doc.hasMermaid).toBe(true);
+  });
+
+  it('cuts long descriptions at a word', () => {
+    expect(truncate('word '.repeat(60), 30)).toMatch(/^(word ){4}word…$/);
+  });
+
+  it('matches GitHub slugs for punctuation and repeats', () => {
+    const seen = new Map<string, number>();
+    expect(githubSlug('From issues to a light and a score', seen)).toBe('from-issues-to-a-light-and-a-score');
+    expect(githubSlug('Why IK, why `one` call?', seen)).toBe('why-ik-why-one-call');
+    expect(githubSlug('Why IK, why `one` call?', seen)).toBe('why-ik-why-one-call-1');
+  });
+});
+
+describe('the real docs/ folder', () => {
+  const files = listDocFiles();
+  const knownDocs = new Set(files);
+  const routes = new Set(allRoutes());
+
+  it('renders every page with a title, and every internal link lands on a prerendered route and heading', () => {
+    const rendered = files.map((file) => ({
+      route: routeForFile(file),
+      doc: renderMarkdown(readDoc(file), {
+        ctx: { docFile: file, knownDocs, repoUrl: REPO_URL, branch: BRANCH, mediaBase: MEDIA_BASE },
+      }),
+    }));
+    const ids = new Map(rendered.map((r) => [r.route, new Set([...r.doc.html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]))]));
+    for (const { route, doc } of rendered) {
+      expect(doc.title, route).not.toBe('');
+      for (const [, path, fragment] of doc.html.matchAll(/href="(\/[^"#]*)(?:#([^"]*))?"/g)) {
+        if (path.startsWith('/docs-media/')) {
+          continue;
+        }
+        expect(routes.has(path), `${route} links to ${path}`).toBe(true);
+        if (fragment && ids.has(path)) {
+          expect(ids.get(path)?.has(fragment), `${route} links to ${path}#${fragment}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('puts docs that are not configured into "More"', () => {
+    const nav = buildNav([...files, 'NEW-THING.md'], (f) => f);
+    expect(nav.at(-1)?.title).toBe('More');
+    expect(nav.at(-1)?.items.map((i) => i.file)).toContain('NEW-THING.md');
+  });
+
+  it('reads the component catalog from COMPONENTS.md', () => {
+    const groups = parseComponents(readDoc('COMPONENTS.md'));
+    const all = groups.flatMap((g) => g.components);
+    expect(all.length).toBeGreaterThan(50);
+    expect(all.find((c) => c.name === 'Longhorn')?.deep).toBe(true);
+  });
+});

@@ -1,0 +1,309 @@
+/* Rendered markdown (docs, imprint, privacy). Global because the HTML is built ahead of time. */
+
+.prose {
+  color: var(--ink-2);
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.prose > :first-child {
+  margin-top: 0;
+}
+
+.prose h1 {
+  color: var(--ink);
+  font-size: clamp(2rem, 1.4rem + 2.4vw, 2.875rem);
+  font-weight: 700;
+  margin: 0 0 20px;
+}
+
+.prose h2,
+.prose h3,
+.prose h4 {
+  color: var(--ink);
+  position: relative;
+  scroll-margin-top: calc(var(--header-h) + 20px);
+}
+
+.prose h2 {
+  font-size: 1.625rem;
+  font-weight: 700;
+  margin: 56px 0 14px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.prose h3 {
+  font-size: 1.25rem;
+  font-weight: 650;
+  margin: 36px 0 10px;
+}
+
+.prose h4 {
+  font-size: 1.0625rem;
+  margin: 28px 0 8px;
+}
+
+.prose .anchor {
+  margin-left: 0.4em;
+  color: var(--mute);
+  text-decoration: none;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.prose h2:hover .anchor,
+.prose h3:hover .anchor,
+.prose h4:hover .anchor,
+.prose .anchor:focus-visible {
+  opacity: 1;
+}
+
+.prose p,
+.prose ul,
+.prose ol {
+  margin: 0 0 16px;
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.4em;
+}
+
+.prose li {
+  margin: 6px 0;
+}
+
+.prose li::marker {
+  color: var(--mute);
+}
+
+.prose strong {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.prose a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  text-underline-offset: 3px;
+}
+
+.prose a:hover {
+  text-decoration-color: currentColor;
+}
+
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 40px 0;
+}
+
+.prose blockquote {
+  margin: 0 0 16px;
+  padding: 12px 18px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 0 var(--radius-s) var(--radius-s) 0;
+}
+
+.prose blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.prose :not(pre) > code {
+  font-size: 0.875em;
+  padding: 0.12em 0.4em;
+  border-radius: 6px;
+  background: var(--raise);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.prose img {
+  border-radius: var(--radius-m);
+  border: 1px solid var(--line);
+}
+
+/* Tables */
+.prose .table-wrap {
+  margin: 0 0 24px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+}
+
+.prose .table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
+.prose .table-wrap th,
+.prose .table-wrap td {
+  padding: 10px 14px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+
+.prose .table-wrap tr:last-child td {
+  border-bottom: 0;
+}
+
+.prose .table-wrap th {
+  color: var(--ink);
+  font-weight: 650;
+  background: var(--surface-2);
+  white-space: nowrap;
+}
+
+.prose .table-wrap thead th:empty {
+  padding: 0;
+}
+
+.prose .table-wrap thead:has(th:empty:only-child),
+.prose .table-wrap thead:not(:has(th:not(:empty))) {
+  display: none;
+}
+
+/* Raw HTML tables in the docs are image grids (SCREENSHOTS.md, README). */
+.prose > table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 12px;
+  margin: 0 -12px 16px;
+  table-layout: fixed;
+}
+
+.prose > table td {
+  vertical-align: top;
+  font-size: 0.875rem;
+  color: var(--mute);
+}
+
+.prose > table img {
+  width: 100%;
+  display: block;
+  margin-bottom: 6px;
+}
+
+@media (max-width: 640px) {
+  .prose > table,
+  .prose > table tbody,
+  .prose > table tr {
+    display: block;
+    margin: 0;
+  }
+  .prose > table td {
+    display: inline-block;
+    width: calc(50% - 6px);
+    margin: 0 0 12px;
+  }
+  .prose > table td:nth-child(odd) {
+    margin-right: 12px;
+  }
+}
+
+/* Code */
+.prose .code-block {
+  margin: 0 0 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--code-bg);
+  overflow: hidden;
+}
+
+.prose .code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 6px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.prose .code-lang {
+  font: 600 0.75rem/1 var(--font-mono);
+  color: var(--mute);
+  text-transform: lowercase;
+}
+
+.prose .copy-btn {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-2);
+  font: 600 0.75rem/1 var(--font-body);
+  cursor: pointer;
+}
+
+.prose .copy-btn:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.prose .copy-btn[data-copied] {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.prose pre {
+  margin: 0;
+  padding: 16px 18px;
+  overflow-x: auto;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  tab-size: 2;
+  background: transparent !important;
+}
+
+.prose pre code {
+  font-size: inherit;
+}
+
+/* Shiki dual themes: every token carries both colours. */
+.prose .shiki span {
+  color: var(--shiki-dark);
+}
+
+@media (prefers-color-scheme: light) {
+  .prose .shiki span {
+    color: var(--shiki-light);
+  }
+}
+
+/* Mermaid: the source shows until the diagram is drawn (or without JS). */
+.prose .mermaid-block {
+  margin: 0 0 24px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  overflow-x: auto;
+}
+
+.prose pre.mermaid {
+  padding: 0;
+  font-size: 0.8125rem;
+  color: var(--mute);
+  white-space: pre;
+}
+
+.prose pre.mermaid[data-processed='true'] {
+  white-space: normal;
+  color: inherit;
+  overflow: visible;
+}
+
+.prose pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}

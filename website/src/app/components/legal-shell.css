@@ -1,0 +1,26 @@
+:host {
+  display: block;
+}
+.legal {
+  max-width: 760px;
+  padding-top: 56px;
+}
+.draft {
+  margin: 0 0 32px;
+  padding: 14px 18px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-m);
+  background: var(--warn-soft);
+  color: var(--ink);
+  font-weight: 600;
+}
+.todo {
+  padding: 0.05em 0.35em;
+  border-radius: 5px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-weight: 650;
+}
+address {
+  font-style: normal;
+}
