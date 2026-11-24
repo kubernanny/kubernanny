@@ -1,0 +1,69 @@
+# 0005: The relay protocol
+
+**Status**: accepted
+
+## Context
+
+[0004](0004-direct-and-relay.md) settled that the app goes direct first and falls back to a relay the agent dials out to. This record fixes how: what the relay carries, how an agent proves it may register, how the app picks a path, and what the relay is built with. The relay must be cheap enough to run for free for many people, small enough to self-host on a VPS or as a Cloudflare Worker, and learn nothing beyond the metadata 0004 names.
+
+## Decisions
+
+**1. The relay carries the sealed body, unchanged.** The app sends exactly what it would send to `POST /api/e2e` (`0x01 | Noise message 1`) to `POST /v1/agents/{agentId}/e2e`, and gets exactly what the agent would answer. The agent hands the bytes to the same `E2eService.handle()` as its own route, so rate limit, replay cache, handshake, clock and device checks stay in one place. A relay that wanted to cheat could only drop, delay or replay, and the agent's replay cache and the app's pinned key already handle the last two.
+
+**2. The agent id is `base64url(BLAKE2b-256(agent public key))`.** The app derives it from the key it pinned; pairing links need no extra id. It reveals no more than the key itself does (which is public anyway, but the hash cannot be turned back into it). Its first 80 bits are the agent's fingerprint; that is harmless, since anyone with the key can compute both.
+
+**3. The agent connects to `GET /v1/agents/{agentId}/ws`.** The id is in the URL so that a Cloudflare Worker can route the upgrade to the Durable Object for that id before the socket exists. The claim is then proven inside the socket.
+
+**4. Proof of possession with a DH-based MAC.** The relay sends a fresh 32-byte nonce and a fresh ephemeral X25519 key; the agent answers with its static public key and `HMAC-BLAKE2b(K, label ‖ nonce)`, where `K = BLAKE2b-256(label ‖ X25519(agent secret, relay ephemeral) ‖ relay ephemeral ‖ agent public)`. The relay recomputes it with its ephemeral secret and checks that the public key hashes to the id. Refinements over the first sketch:
+- *The DH output is hashed with a label and both public keys before use.* The relay chooses the "ephemeral" key, so a hostile relay could choose a device's Noise ephemeral key taken from a message 1 it carried. The agent would then compute `X25519(agent secret, device ephemeral)`, which is that call's `es`. With the raw value as the HMAC key the relay would learn an HMAC under `es`; with the labelled hash it learns a value that cannot be turned back into `es`, and opening the call needs `es` itself (Noise mixes it into the chaining key with HKDF, which this never exposes). The agent has no signing key (X25519 only), and adding one would double the key handling for one feature.
+- *Each challenge verifies once* (`RegistrationChallenge`): a proof recorded from one connection fails on the next, and a second attempt on the same socket is not offered.
+- *Newest connection wins*, closing the older one with 4003. A restarted agent must not wait for its stale socket to time out; an agent told "replaced" waits at least 30 s, so two holders of the same key do not swap every second.
+
+What a squatter could achieve without the proof is only denial of service (it could never read a call), but a public relay should not offer even that.
+
+**5. Frames: `u8 type | u32 call id | payload`, answers in parts of 256 KiB.** Call ids let calls overlap on one socket. Answers are split because WebSocket message limits differ per platform and proxy; the relay reassembles up to 16 MiB. `Cancel` tells the agent a timed-out call's answer is not wanted. Unknown types are ignored, so either side can add some later. Registration frames use call id 0.
+
+**6. The heartbeat is the text messages `ping` / `pong`, every 25 s from the agent.** Not WebSocket protocol pings: the agent uses Node's built-in `WebSocket` (no dependency), which, like the browser API, cannot send them; and a Cloudflare Durable Object answers a fixed text pair through `setWebSocketAutoResponse` without waking up. The agent treats 60 s of silence as a dead connection and reconnects without waiting for a close handshake. Reconnects back off exponentially from 1 s to 60 s with equal jitter, so a relay restart does not get every agent back in the same second.
+
+**7. The app checks reachability with `GET /healthz` (4 s) rather than a short timeout on the call.** A slow answer (a status refresh can take seconds) is not an unreachable agent, and a call that timed out may still have reached it. After a working probe a call that fails without an answer goes to the relay only if it is a `GET`, freshly sealed; an action is never sent twice. The working path is remembered per agent (direct 10 minutes, relay 2 minutes, so the app returns to direct once back in the VPN) and shown in the cluster header.
+
+**8. The app learns the relay only from authenticated or pinned sources.** From the pairing link, and only next to `key=` from the same link; or from the agent's `/info`, which arrives sealed. Without a key in the link the app fetches the key directly (https, localhost or same origin, as before), never through the relay, which could hand it any key.
+
+**9. Same status semantics as `/api/e2e`, plus `RELAY_*` codes; CORS `*`.** The app's error handling needs one more table, not another mode. CORS can be open because nothing ambient authenticates a call: no cookie, no token, and every answer is ciphertext for one device. `CORS_ORIGINS` restricts it for those who want to.
+
+**10. Fair-use limits by default, per agent:** 4 calls in flight, 120 a minute (bursts of 30), 256 MiB an hour, 64 KiB per request, 9 MiB per answer, 25 s per call; per relay: 10 000 agents, 64 MiB of answers held at once, 1 000 unproven connections (8 per client address, 3 s to prove a key). All are environment variables, shared by both variants (`relay/src/core/limits.ts`).
+
+**14. After the security review (2026-11): the relay and the agent each assume the other side may be hostile.** Findings and what changed:
+- *A request target like `http://[` crashed the Node relay* (`new URL()` threw in the upgrade handler). The upgrade handler now takes only origin-form paths (`pathOf`) and has its own error boundary; anything escaping every handler is logged with its stack and ends the process, which the orchestrator restarts. Keeping a process alive after an unknown error was rejected: its state is unknown, and the bug would stay hidden.
+- *Self-registered agents could pin 16 MiB × 8 calls each in relay memory*, because answer parts were kept until `ReplyEnd`. Every part is now checked against the answer size, the agent's hourly bytes and a relay-wide budget of answer bytes in flight before it is kept (`RELAY_BUSY` past it); defaults were lowered and a sizing formula documented. Streaming answers to the caller was rejected: the status comes last, and a call stays all or nothing.
+- *1 000 sockets that never prove a key blocked every registration.* Unproven connections are now capped per client address (from a trusted proxy header only with `TRUST_PROXY`), the oldest is dropped when the pool is full, and the proof window is 3 s; the Worker caps them per agent id and no longer pushes an earlier alarm later.
+- *A hostile relay could grow agent memory with cancels for made-up call ids, make the agent compute X25519 per extra challenge, and send messages of any size.* The agent now uses `ws` with a message limit of one request, answers one challenge per connection, accepts cancels only for calls in flight, caps calls in flight, drops a connection whose unread answers pile up, and resets its backoff only after a stable connection. The rule: a relay gets no more out of the agent than a direct caller.
+- *A blank pairing code cleared the active code*, so anyone with the agent's key could deny pairing through the relay. A blank code is now an ordinary wrong attempt; attempts through the relay never burn the code and are limited to 5 wrong ones per 10 minutes. Someone can still keep that quota used up; pairing directly is unaffected.
+- *The relay passed on any status and body an "agent" sent.* Only 200 (sealed bytes) or the agent's plain refusals 400/413/429/503, with a body the relay rebuilds, are passed on; anything else is `502 RELAY_BAD_AGENT_RESPONSE`.
+- *Re-review: the relay-wide answer budget could be pinned by two self-made ids streaming without end, and one host could register agents until the relay was full.* Each agent id and each client address now hold at most a share (1/4) of the answer budget; a started answer must make progress every 3 s and finish within 15 s; registered agents are capped per address (20, a soft limit for agents behind one NAT), and a full relay takes a slot from the address holding the most rather than refusing the newcomer. `TRUST_PROXY` is only safe with a header the proxy overwrites (`cf-connecting-ip`, `x-real-ip`) or appends to; the example manifest uses `x-real-ip` for ingress-nginx. What is left: an attacker with several addresses can still take the answer budget for up to 15 s at a time, and agents behind a flooder's address share its limits.
+- *Sizes and timing are a side channel*: the relay can tell kinds of calls apart by length. Padding was considered and left for a later protocol version; it would change the wire format and test vectors, cost up to twice the bytes for answers, and not hide timing (docs/RELAY.md).
+
+**11. NestJS, with `ws` on the HTTP server's upgrade event instead of a Nest gateway.** The maintainer uses Nest for backends, and the HTTP side (routes, CORS, lifecycle, shutdown) fits it. The WebSocket side has four frame types and must keep per-connection state small, so it is plain `ws` attached to Nest's HTTP server; `@nestjs/platform-ws` would add an adapter and a message router for nothing. Measured on the same machine (docs/RELAY.md, "Sizing"): the Nest relay needs about 25 to 35 MB more than a plain `ws` relay running the same core code (roughly 90 to 100 MB against 62 to 65 MB idle, Node 22). That is more than the earlier 47 MB measurement, which predates the shared protocol package and the registration proof; it is not absurd for a service that holds thousands of agents in about 150 MB, so Nest stays.
+
+**12. The Cloudflare variant shares the code, not just the spec.** `relay/src/core` (limits, routes, `AgentLink`, registration) and `@kubernanny/protocol` (frames, proof) are bundled into the Worker. State that must survive hibernation (agent id, challenge bytes, registered flag) lives in the socket attachment. No periodic alarm checks for idle agents (it would wake every object every minute); a dead connection is found when a call needs it, by the time of its last heartbeat.
+
+**13. One process holds an agent's socket.** No shared state between relay instances: an agent's calls must reach the process holding its socket. More agents than one process carries means another relay URL, not a second replica. The Worker variant scales by its nature (one object per agent).
+
+## Alternatives considered
+
+| | Why not |
+|---|---|
+| A relay that terminates the end-to-end channel or TLS to the agent | it would see everything; the point is that it sees nothing |
+| HTTP long-polling from the agent instead of a WebSocket | more requests, more latency, and no cheaper on any platform we looked at |
+| MQTT or another broker | one more protocol and server for what four frame types do |
+| WebRTC / hole punching | needs a signalling server anyway, fails behind many carrier NATs, and is heavy in a cluster agent |
+| An unauthenticated registration (first come, first served) | anyone knowing the public key could make the agent unreachable |
+| Signing the challenge (Ed25519) | the agent has an X25519 key only; a second key pair to store, rotate and pin for one feature |
+| Sending the same sealed request to both paths at once | the second copy is refused as a replay at best, and an action could run twice if the copies were sealed separately |
+
+## Consequences
+
+- No inbound port for access from anywhere; with the relay off the agent has no outbound connection at all.
+- The relay learns which agent is online, when calls happen, their sizes, and the IP addresses of agent and phone (docs/RELAY.md, "What the relay sees").
+- Pairing links get one more parameter (`relay=`); old app versions ignore it, old agents simply do not send it.
+- Third-party relays or agents can be written from docs/RELAY.md and `protocol/src/relay.ts`; the agent id has a test vector.

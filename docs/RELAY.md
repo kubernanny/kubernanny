@@ -1,0 +1,189 @@
+# The relay
+
+Status on the go without opening a port: the agent dials out to a relay and keeps that one connection open; when the phone cannot reach the agent directly (no VPN, mobile network), the app sends its call to the relay, which hands it down the agent's connection. The relay carries the same end-to-end encrypted bytes the app would send to the agent itself. It can read none of them.
+
+Optional and off by default. Why it is built this way: [decisions/0004](decisions/0004-direct-and-relay.md) (direct first, relay as fallback) and [decisions/0005](decisions/0005-relay-protocol.md) (the relay protocol).
+
+## How a call travels
+
+```mermaid
+sequenceDiagram
+  participant P as Phone
+  participant R as Relay
+  participant A as Agent (in the cluster)
+  A->>R: WebSocket GET /v1/agents/{agentId}/ws (outbound, wss://)
+  R->>A: Challenge: nonce, relay ephemeral key
+  A->>R: Proof: agent public key, MAC with DH(agent key, relay ephemeral)
+  R->>R: hash(public key) == agentId? MAC valid?
+  R->>A: Ready (limits)
+  loop every 25 s
+    A->>R: "ping"
+    R-->>A: "pong"
+  end
+  P->>P: GET {agent url}/healthz fails within 4 s
+  P->>R: POST /v1/agents/{agentId}/e2e  body: 0x01 | Noise message 1
+  R->>A: Call #17: the same bytes
+  A->>A: E2eService.handle(): size, replay cache, handshake, budget, clock, device, dispatch
+  A->>R: ReplyEnd #17: status 200, 0x01 | message 2 | frames
+  R-->>P: 200, the same bytes
+  P->>P: open with this call's keys
+```
+
+- **The agent id** is `base64url(BLAKE2b-256(agent static public key))`, 43 characters. The app derives it from the key it pinned at pairing; it needs nothing else. Example: the test-vector agent key `883186b8…f06c77` ([PROTOCOL.md](PROTOCOL.md#test-vectors)) has the id `o7oXZcDvJEDDJobQgsCp8flX2LO88EMA3CUTU5SqYok`.
+- **The proof at registration** keeps anyone from taking an agent's place on the relay. A squatter could not read anything (it lacks the agent's private key, so it cannot open a single call), but it could make the agent unreachable. Only the holder of the private key can compute the proof.
+- **Newest connection wins.** A restarted agent replaces its stale connection at once instead of waiting for it to time out. Two agents with the same key (a copied Secret, two replicas) would push each other out; the one that gets "replaced" waits at least 30 s before trying again.
+- **Everything the agent checks still happens in the agent**, in the same order as for `POST /api/e2e`: size, replay cache, handshake ceiling, handshake, the caller's own budget, replay entry, clock, device, dispatch ([PROTOCOL.md](PROTOCOL.md)). The relay adds limits of its own in front, never instead.
+
+## The wire
+
+HTTP, for the app:
+
+| | |
+|---|---|
+| `POST /v1/agents/{agentId}/e2e` | body: the sealed request (`application/octet-stream`, at most 64 KiB). Answer: exactly what the agent's own `/api/e2e` answers: 200 with the sealed response, or the agent's plain refusal (`{"code":"E2E_…"}`), or the relay's own (below). |
+| `OPTIONS` same path | CORS preflight. `Access-Control-Allow-Origin: *` by default: calls carry no cookie or credential, and every answer is ciphertext for one device. |
+| `GET /healthz` | `{"ok":true}` |
+| `GET /metrics` | Prometheus, on its own port (`METRICS_PORT`, default 9100), not the public one. Node relay only. |
+
+The relay's own refusals, plain JSON `{"code": …}`:
+
+| Code | Status | Meaning |
+|---|---|---|
+| `RELAY_BAD_REQUEST` | 400 | empty body |
+| `RELAY_NOT_FOUND` | 404 | unknown path or not an agent id |
+| `RELAY_TOO_LARGE` | 413 | request over 64 KiB |
+| `RELAY_RATE_LIMITED` | 429 | this agent's call rate, concurrency or hourly byte budget is used up |
+| `RELAY_RESPONSE_TOO_LARGE` | 502 | the agent's answer is over 9 MiB |
+| `RELAY_BAD_AGENT_RESPONSE` | 502 | the agent answered with something the relay does not pass on (below) |
+| `RELAY_BUSY` | 503 | the relay holds as many answer bytes in memory as it may (`RELAY_MAX_INFLIGHT_BYTES`) |
+| `RELAY_AGENT_OFFLINE` | 503 | no agent with this id is connected, or it dropped during the call |
+| `RELAY_FULL` | 503 | the relay takes no more agents, or this address has too many unproven connections (at the WebSocket upgrade) |
+| `RELAY_TIMEOUT` | 504 | the agent did not answer within 25 s |
+
+WebSocket, for the agent: `GET /v1/agents/{agentId}/ws`. Binary messages are frames `u8 type | u32 call id (big-endian) | payload`; text messages are only the heartbeat `ping` / `pong`.
+
+| Type | Direction | Payload |
+|---|---|---|
+| `0x01` Call | relay → agent | the sealed request |
+| `0x02` ReplyChunk | agent → relay | part of the response body, more follows |
+| `0x03` ReplyEnd | agent → relay | `u16 status` and the last part |
+| `0x04` Cancel | relay → agent | none: the call timed out, its answer is not wanted |
+| `0x10` Challenge | relay → agent, id 0 | 32-byte nonce, relay's ephemeral X25519 public key |
+| `0x11` Proof | agent → relay, id 0 | agent's static public key, 32-byte MAC |
+| `0x12` Ready | relay → agent, id 0 | the relay's limits as JSON |
+
+What the relay passes on from an agent is only ever 200 with the sealed bytes (`application/octet-stream`) or one of the agent's plain refusals, 400, 413, 429 or 503 with a body the relay rebuilds itself as `{"code":"E2E_…"}`. Any other status or body becomes `502 RELAY_BAD_AGENT_RESPONSE`: anyone can register an agent id of their own, and the relay's origin must not serve whatever such an "agent" sends.
+
+Answers travel in parts of at most 256 KiB, so no platform's WebSocket message limit matters. Unknown frame types are ignored by both sides. Close codes: 4000 protocol error, 4001 proof failed, 4002 no proof in time, 4003 replaced by a newer connection, 4008 idle, 4029 full, 1001 relay restarting.
+
+The proof: `key = BLAKE2b-256("kubernanny-relay/1" ‖ X25519(agent secret, relay ephemeral) ‖ relay ephemeral ‖ agent public)`, `MAC = HMAC-BLAKE2b("kubernanny-relay/1" ‖ nonce)` with that key, first 32 bytes. The relay computes the same with its ephemeral secret and the agent's public key, and checks that the key hashes to the id in the URL. Each challenge verifies once. The code is `protocol/src/relay.ts`, shared by the agent, the Node relay and the Worker.
+
+## What the relay sees, and what it does not
+
+| The relay sees | The relay never sees |
+|---|---|
+| the agent id (a hash of the agent's public key) and that the agent is online | anything inside a call: paths, cluster data, logs, actions, pairing codes |
+| the agent's IP address (its outbound connection) | which device calls: the device's key travels encrypted inside the handshake |
+| when calls happen, how long they take, and their sizes | any key that could open a call or an answer |
+| the IP address of the phone or browser that calls | the agent's address in your network |
+
+- Whoever knows an agent's public key (anyone who saw a pairing link or QR code) can compute its id and send calls to it through the relay. They get what they would get at the agent's own address: `DEVICE_UNKNOWN`, or `PAIRING_CODE_INVALID` / `PAIRING_RATE_LIMITED` for wrong codes. The relay adds a rate limit per agent in front.
+- A relay operator could drop calls or delay them, or answer in the agent's place. An answer that does not come from the pinned agent fails to open; the app shows that it was discarded.
+- The Node relay keeps running whatever a single request contains: every handler that reads from the network catches its own errors. Should a programming error still escape, the process logs it with its stack and exits, and the orchestrator restarts it (agents reconnect within seconds); carrying on in an unknown state would hide the bug.
+- The Node relay logs only the first 8 characters of an agent id, sizes and durations (per call only at `LOG_LEVEL=debug`), never a payload or an IP address. Metrics carry no agent ids. What the reverse proxy or the cloud provider in front logs is up to them.
+
+## What a hostile relay can still do, and other limits
+
+The relay is not trusted, but it is not powerless. Honestly:
+
+- **Drop, delay or reorder calls**, or answer `RELAY_AGENT_OFFLINE` when the agent is online. The app then shows the agent as unreachable; in the VPN it goes direct.
+- **Replay a call it carried.** The agent's replay cache refuses it until the request's clock window has passed (also for a request first refused because its time lay ahead), the clock window after that; a replayed request has no effect and its answer is useless without the device's ephemeral key.
+- **See sizes and timing (a side channel).** Requests are the JSON `{m,p,t,b}` sealed with a fixed overhead (1 + 32 + 48 + 16 bytes), so their size follows the path: `GET /status` (about 140 bytes), the views (`/nodes`, `/workloads`, …), a log request or an action (`POST /actions/restart?issue=…`, longer, with the issue id) and a pairing attempt are told apart by length, roughly, not by content. Answers reveal the size of what came back: a short sealed refusal (`DEVICE_UNKNOWN`), a status with few or many issues, a log of a few KiB. Timing shows when the app is open (it polls every 30 s while in the foreground) and when someone acts. Padding would hide much of this: requests padded to one size (say 1 KiB) cost under 1 KiB per call; answers padded to power-of-two buckets cost up to twice the bytes. It would change the wire format and the test vectors, so it is not done in protocol version 1; timing would leak anyway.
+- **Use the strangers' budget, never a device's.** Calls through the relay go through the same limits as direct calls ([PROTOCOL.md](PROTOCOL.md), "What the agent checks"): junk that fails the size, version or replay check costs nothing; opening a handshake has one generous ceiling for everyone (400, refilled at 200 per second), only as CPU protection; after the handshake each paired device spends its own budget, and unknown keys (pairing attempts included) share one small one (20, refilled at 2 per second). So a relay, or anyone sending through it, can use up the strangers' budget and slow other pairing attempts down, but cannot touch a paired device's budget; only a flood past the handshake ceiling (hundreds of valid-looking requests a second) delays everyone. The agent spends no more on a relay than on a direct caller: a relay message is at most one request (larger ones close the connection before they are buffered), the challenge is answered once per connection, cancels count only for calls in flight, at most 16 calls run at once, answers a relay does not read close the connection after 16 MiB queued, and a connection that drops right away does not reset the reconnect backoff.
+- **Try pairing codes.** Anyone who knows the agent's public key (a pairing link, a QR code) can send pairing attempts, through the relay or directly; the rule is the same for both. Wrong codes never burn the code, and the right one is compared before any throttle, so nobody can keep the owner from pairing. Past 5 wrong attempts in 10 minutes a wrong one is answered `429 PAIRING_RATE_LIMITED`. What bounds guessing is the strangers' shared budget: at most about 7200 attempts an hour against 31^10 codes, under 10^-11 per code's hour. Someone keeping that budget used up slows pairing down (the app retries), but the owner's attempt is never refused for being right; and a new pairing shows up as a notification ([SECURITY.md](SECURITY.md)).
+- **Keep others' agents off the relay, within limits.** Registration needs the agent's private key, so nobody can take an agent's place. A flood of connections that never prove a key is bounded per client address (`RELAY_MAX_PENDING_PER_IP`) and in total (`RELAY_MAX_PENDING_REGISTRATIONS`, the oldest goes when it is full); a real agent proves its key in one round trip and gets in. Registered agents (anyone can make ids of their own) are capped per address (`RELAY_MAX_AGENTS_PER_IP`), and when the relay is full the address holding the most gives one up for a newcomer from elsewhere. Filling the relay therefore takes about `RELAY_MAX_AGENTS / RELAY_MAX_AGENTS_PER_IP` addresses (500 with the defaults), and even then each new address displaces one of theirs. A flood from many addresses faster than one proof round trip can still delay registrations, and agents behind the same address as a flooder (one NAT) share its limits. Behind a proxy, set `TRUST_PROXY` so the limits see client addresses, not the proxy's.
+- **Hold memory, within limits.** Anyone can register agent ids of their own and answer calls to them slowly or hugely. The relay holds at most `RELAY_MAX_INFLIGHT_BYTES` of answers across all agents (64 MiB by default); one agent id, and all agents of one address together, hold at most a quarter of it (`RELAY_INFLIGHT_SHARE`). Every part is checked against the answer size, the agent's hourly bytes, its share, its address' share and the total before it is kept (`RELAY_BUSY` past any of them). An answer that has started must keep moving (a part at least every 3 s) and be complete within 15 s, or it is cancelled and its bytes go back. So taking the whole budget needs four addresses or more, and holds it for at most 15 s per round, while each agent's hourly bytes run down; legitimate answers are small (a status is a few KiB) and get through in the remaining room most of the time. Measured with the re-review's attack (two self-registered ids streaming without end, re-armed every 25 s): before the shares every other call on the relay got `RELAY_BUSY`; with them a legitimate agent's call succeeds while the attack runs. Answers are not streamed to the caller: the status arrives last (in `ReplyEnd`), and a call is all or nothing, so a cut-off answer can never reach the app as a complete one.
+
+## Turning it on
+
+Helm:
+
+```yaml
+relay:
+  enabled: true
+  url: wss://relay.kubernanny.app   # the public relay, or your own
+```
+
+This sets `RELAY_URL` on the agent. Without it the agent opens no outbound connection at all. With `networkPolicy.egress.enabled`, the chart allows the relay's port (`relay.egressPort`, 443); a NetworkPolicy cannot name a host.
+
+Pairing links and the QR code then carry `relay=<https url>`, and the agent's `/info` names it, so already paired devices learn it on the next look at the cluster settings. In the app:
+
+- The cluster's settings show the relay's address, whether the agent is connected to it, and a switch to never use it for that cluster.
+- The cluster header says "über Relay", small, while calls go that way.
+- Pairing through the relay uses only the key from the link. Without a key (address and code typed by hand) the app fetches the key directly from the agent, over HTTPS or localhost, never through a relay.
+
+How the app picks the path: before calling, it checks `GET {agent url}/healthz` with a 4 s timeout. Answered: direct, and it stays direct for 10 minutes or until a call fails. Not answered: the relay, for 2 minutes, then it tries direct again (back in the VPN, back to direct). A read (`GET`) whose direct call is lost is sent again through the relay, freshly sealed; an action (`POST`, `DELETE`) never is, so nothing runs twice.
+
+## Running your own
+
+A relay belongs **outside** the clusters it serves: one inside the cluster it monitors fails together with it, exactly when you want to look.
+
+- **Container**: `docker build -f relay/Dockerfile -t kubernanny-relay .` from the repository root, then `docker run --read-only --user 1000 -p 8080:8080 kubernanny-relay`. Put TLS in front (Caddy, Traefik, an ingress); agents connect with `wss://`, the app with `https://`. The proxy must pass WebSockets and keep idle connections open longer than 25 s.
+- **Kubernetes**: [`deploy/relay/relay.yaml`](../deploy/relay/relay.yaml): Deployment, Service, Ingress, NetworkPolicy. One replica: an agent's connection lives on one pod, and its calls must reach that pod.
+- **Cloudflare Worker**: [`relay/cloudflare/`](../relay/cloudflare/README.md). One Durable Object per agent holds its WebSocket with the Hibernation API; same API, same proof and the same per-agent limits (request and answer size, calls in flight, calls per minute, bytes per hour, the timeouts), from the same code (`relay/src/core`). The object keeps the state of the per-agent token buckets in the socket's attachment, so hibernating between calls does not refill them. What differs, because no object sees the others: there is no relay-wide answer budget and no per-address limit (`RELAY_MAX_AGENTS`, the `_PER_IP` settings and the address share of `RELAY_INFLIGHT_SHARE` do not apply; each agent may hold its own share of `RELAY_MAX_INFLIGHT_BYTES`), and unproven connections are capped at 4 per agent id instead of per address. Cloudflare's own platform limits stand in for the relay-wide ones.
+
+On both relays the token buckets belong to the agent's connection: a reconnect, which needs the agent's key, starts them full. Whoever holds an agent's key can register any number of ids anyway, so per-connection buckets cost nothing an attacker could not get otherwise.
+
+Settings (environment variables of the Node relay, `[vars]` of the Worker):
+
+| Variable | Default | |
+|---|---|---|
+| `PORT` | 8080 | HTTP API and agent WebSockets |
+| `METRICS_PORT` | 9100 | Prometheus; 0 turns it off (Node only) |
+| `RELAY_MAX_AGENTS` | 10000 | connected agents (Node only; a Worker has one object per agent) |
+| `RELAY_MAX_PENDING_REGISTRATIONS` | 1000 | connections that have not proven their key yet; when full the oldest is dropped (Node only; a Worker keeps 4 per agent id) |
+| `RELAY_MAX_PENDING_PER_IP` | 8 | unproven connections per client address (Node only) |
+| `RELAY_MAX_AGENTS_PER_IP` | 20 | registered agents per client address (Node only). A soft limit for agents behind one NAT; raise it for a relay of your own that serves many agents from one address |
+| `TRUST_PROXY` | unset | `cf-connecting-ip`, `x-real-ip` or `x-forwarded-for` (last entry): where the client address comes from behind a proxy you trust. Unset: the socket address; the headers are ignored, since anyone can send them. See the warning below |
+| `RELAY_MAX_REQUEST_BYTES` | 65536 | never more: one Noise message plus the version byte |
+| `RELAY_MAX_RESPONSE_BYTES` | 9437184 | 9 MiB; the agent's own answers stay below 8 MiB plus the sealing |
+| `RELAY_MAX_INFLIGHT_BYTES` | 67108864 | 64 MiB of answers held at once across all agents; the main memory knob (see Sizing) |
+| `RELAY_INFLIGHT_SHARE` | 0.25 | the part of it one agent id, and all agents of one client address together, may hold; an answer larger than this share is refused |
+| `RELAY_PROGRESS_TIMEOUT_MS` | 3000 | once an answer has started, a longer gap between its parts cancels it |
+| `RELAY_STREAM_TIMEOUT_MS` | 15000 | once an answer has started, it must be complete within this (9 MiB at about 5 Mbit/s) |
+| `RELAY_MAX_CONCURRENT` | 4 | calls in flight per agent |
+| `RELAY_CALL_BURST`, `RELAY_CALLS_PER_MINUTE` | 30, 120 | token bucket per agent |
+| `RELAY_BYTES_PER_HOUR` | 268435456 | 256 MiB of requests and answers per agent and hour |
+| `RELAY_CALL_TIMEOUT_MS` | 25000 | then 504 |
+| `RELAY_REGISTER_TIMEOUT_MS` | 3000 | time to prove the key (one round trip is enough) |
+| `RELAY_IDLE_TIMEOUT_MS` | 90000 | no message, not even a ping, for this long: closed |
+| `CORS_ORIGINS` | `*` | comma-separated, to restrict browsers |
+| `LOG_LEVEL` | `log` | `debug` adds one line per call (id prefix, status, sizes, ms) |
+
+**`TRUST_PROXY` only helps if the proxy owns the header.** The per-address limits (unproven connections, registered agents, the share of the answer budget) are only as good as the address they read. The proxy in front must set the header itself from the connecting address, overwriting anything the client sent (`cf-connecting-ip` behind Cloudflare, `x-real-ip` behind most reverse proxies), or append to `x-forwarded-for`. A proxy that passes a client's own `x-forwarded-for` through unchanged lets every client pick its address, and with it a fresh set of limits. Prefer `cf-connecting-ip` or `x-real-ip` where the proxy sets them; check with a request carrying a made-up header that the relay does not see it.
+
+Metrics of the Node relay: `kubernanny_relay_agents`, `kubernanny_relay_pending_registrations`, `kubernanny_relay_calls_total{outcome}`, `kubernanny_relay_registrations_total{outcome}`, `kubernanny_relay_bytes_total{direction}`, `kubernanny_relay_call_duration_seconds`, `process_resident_memory_bytes`.
+
+## Sizing
+
+Measured with `relay/scripts/measure-memory.mjs` (`npm run measure` in `relay/`): real WebSocket clients that each prove a real key, then 2 000 calls of 400 bytes answered with 8 KiB (about one `/status`). Resident memory of the relay process, Node 22.23 on Linux x64, three runs each; the image runs Node 24, where numbers can differ.
+
+| | idle | 1 000 agents connected | after 2 000 calls |
+|---|---|---|---|
+| NestJS relay (`dist/main.js`) | 87 to 102 MB | 96 to 122 MB | 140 to 152 MB |
+| plain `ws` baseline (`scripts/plain-ws-relay.mjs`), same core code | 62 to 65 MB | 70 to 100 MB | 87 to 127 MB |
+
+The lower numbers in each range come from `--max-semi-space-size=1` (a smaller young generation). Nest and express cost about 25 to 35 MB on top of the baseline; a connected agent costs roughly 8 to 25 KB. Both carried 1 300 to 2 400 calls per second, with the simulated agents and the client on the same machine; the relay is not the bottleneck for this use. Worst case, the relay needs about
+
+    memory ≈ 100 MB (process) + agents × 25 KB + 2 × RELAY_MAX_INFLIGHT_BYTES
+
+(twice, because a finished answer is joined into one buffer before it is sent). With the defaults and 1 000 agents that is about 100 + 25 + 128 = 253 MB, inside the 256 MiB limit of the Kubernetes example; for more agents raise the limit or lower `RELAY_MAX_INFLIGHT_BYTES`. One agent can hold at most `RELAY_MAX_CONCURRENT × RELAY_MAX_RESPONSE_BYTES` (36 MiB) of it. Measured with the reviewer's attack (three self-registered agents answering 8 calls each with 16 MiB that never end): before the global cap the relay grew from 98 MB to 525 MB; with it, from 98 MB to 123 MB.
+
+## The public relay, fair use
+
+`wss://relay.kubernanny.app` is run by the maintainer, free, outside any cluster it serves. Fair use means the defaults above: up to 120 calls a minute (bursts of 30), 4 at once and 256 MiB an hour per agent, which is far more than a person looking at a few clusters needs. There is no account, no log of content (there is none to log), and no guarantee: if it is down, the app still reaches the agent directly in the VPN. Anything heavier, a whole team or a company: run your own, it is one container.
+
+## Turning it off
+
+- For a cluster, in the app: its settings, "Relay nutzen" off. The app then never calls the relay for it.
+- For the agent: `relay.enabled: false` (the default), or remove `RELAY_URL`. The agent then has no outbound connection. Paired devices drop the relay address the next time they open the cluster's settings (the agent's `/info` no longer names one); until then a call through the relay gets `RELAY_AGENT_OFFLINE`.

@@ -1,0 +1,173 @@
+# The Kubernanny protocol (version 1)
+
+How the app talks to an agent. Every API call is end-to-end encrypted and authenticated between the device and the agent, whatever carries it: an ingress with TLS, a plain-HTTP LAN, a VPN, and later a relay. Nothing in between can read a request or an answer, change one without it being rejected, or replay one.
+
+The implementation is `protocol/` (TypeScript, about 650 lines with comments, shared by agent and app). This page is precise enough to write another one; the [test vectors](#test-vectors) check it byte for byte.
+
+## In one paragraph
+
+Each device has its own X25519 key pair; the private key never leaves the device. The agent has one key pair too, kept in the Secret `kubernanny-identity`, and every pairing link carries its public key, so the app knows exactly whom it talks to before the first byte. Each API call is one fresh [Noise](https://noiseprotocol.org/noise.html) `IK` handshake: the request rides in the first handshake message, the answer in the second plus transport messages. The handshake proves both keys, gives every call fresh keys (forward secrecy for answers) and needs no session state on either side.
+
+## Building blocks
+
+| | |
+|---|---|
+| Handshake | `Noise_IK_25519_ChaChaPoly_BLAKE2b`, Noise revision 34, no PSK |
+| DH | X25519 (RFC 7748) |
+| AEAD | ChaCha20-Poly1305 (RFC 8439), nonce = 4 zero bytes + 64-bit little-endian counter |
+| Hash | BLAKE2b-512; HKDF with HMAC-BLAKE2b |
+| Prologue | the ASCII bytes `kubernanny-e2e/1` |
+| Libraries | `@noble/curves`, `@noble/ciphers`, `@noble/hashes` (audited, no native code); the Noise layer itself is `protocol/src/noise.ts` |
+| Cross-check | the test suite runs it against [`noise-protocol`](https://github.com/emilbayes/noise-protocol) (libsodium) in both roles, 20 handshakes each |
+
+Why IK, why one handshake per call, and why not TLS client certificates or a bearer token: [decisions/0001-noise-ik-per-request.md](decisions/0001-noise-ik-per-request.md).
+
+## Keys
+
+| Key | Where it lives | Who knows the public half |
+|---|---|---|
+| Agent static key | Secret `kubernanny-identity` (`secretKey`, base64url), created on first start | every paired device (pinned), anyone who sees a pairing link, `GET /api/identity` |
+| Device static key | the app's storage, one per cluster | the agent's device list (Secret `kubernanny-devices`) |
+| Ephemeral keys | memory, one per call and side | nobody after the call |
+
+Public keys travel as unpadded base64url (43 characters). For humans the app and the agent's log show a **fingerprint**: the first 80 bits of BLAKE2b-256 over the public key, Crockford base32, in groups of four (`6CR3-RQZS-NBKK-9VND`). The protocol always pins the full key; the fingerprint is only for comparing by eye.
+
+## One call
+
+```
+POST /api/e2e
+Content-Type: application/octet-stream
+
+request body  = 0x01 || message1
+response body = 0x01 || u16(len(message2)) || message2 || ( u16(len(frame)) || frame )+
+```
+
+`u16` is big-endian. The HTTP status of the outer response is 200 whenever the handshake completed; the call's own status is inside.
+
+### Message 1 (device to agent)
+
+`-> e, es, s, ss` with the payload:
+
+```json
+{ "m": "GET", "p": "/history?hours=24", "t": 1795000000000, "b": { … } }
+```
+
+| Field | |
+|---|---|
+| `m` | `GET`, `POST` or `DELETE` |
+| `p` | path below `/api`, with the query. Printable ASCII from `A-Za-z0-9-._~/%?=&:,+`, at most 2048 characters, starts with one `/`, no `.` or `..` segment and no encoded `.` `/` `\` in the path part. |
+| `t` | the device's clock, ms since the epoch |
+| `b` | optional JSON body |
+| `l` | optional language for the texts in the answer: `en` or `de`. Without it the agent answers in its default (`LANGUAGE`, default `en`). Any other value is ignored, not refused, so an app that knows more languages still talks to an older agent; the sending side only sends the values it knows. Only texts change with it (titles, causes, summaries, labels, error messages); ids, codes and every other field stay the same. |
+
+The payload is at most 65 439 bytes (a Noise message is at most 65 535, minus the two keys and tags).
+
+### Message 2 (agent to device)
+
+`<- e, ee, se` with the payload `{ "s": <status>, "t": <agent clock, ms> }`.
+
+### Frames
+
+After message 2 both sides `Split()`. The agent encrypts the answer body (usually JSON) with its sending CipherState, empty associated data, in chunks of at most 65 518 bytes. Each frame's plaintext is one flag byte and the chunk; flag bit 0 marks the **last** frame, other bits must be zero. There is always at least one frame (an empty body is one frame with just the flag). The device rejects:
+
+- any frame that fails authentication (nonces count up, so frames cannot be reordered, dropped or repeated),
+- data after the last frame,
+- a response without a last frame (cut off),
+- a response body over 32 MiB.
+
+A response opens only once, and only with the state of the request it answers.
+
+## What the agent checks, in order
+
+1. **Size and version byte**: over 65 536 bytes is plain `413 E2E_TOO_LARGE`, a wrong version byte or a body too short for an ephemeral key plain `400 E2E_VERSION`. Free: nothing is computed yet.
+2. **Replay cache**: the first 32 bytes after the version byte are the device's ephemeral key, unique per call. Seen before: plain `400 E2E_REPLAY`. Also free.
+3. **Handshake ceiling**: opening message 1 costs two X25519 operations (answering, two more), so the agent opens at most 400 at once, refilled at 200 per second, for everyone together. Over it: plain `429 E2E_RATE_LIMITED`. This only protects the CPU the checks need; it is far above what any honest use reaches.
+4. **Message 1**: decrypts only for the holder of the agent's private key, and authenticates the device's static key inside it. Failure: plain `400 E2E_HANDSHAKE`.
+5. **The caller's own budget**: each paired device has a bucket of its own (60, refilled at 20 per second); every unknown key, pairing attempts included, shares one small bucket (20, refilled at 2 per second). Over it: plain `429 E2E_RATE_LIMITED`. Strangers compete only with each other: however many junk calls arrive, a paired device's budget is untouched. (In DEMO mode, where every key is let in, that one demo device gets a device's budget.)
+6. **Replay entry**: for a paired device and for a pairing attempt, the ephemeral key is remembered now, **before** the clock check, until the request's own clock window has passed (at least 10 minutes). So a request refused because its time lies ahead cannot be replayed once that time comes. Unknown keys sending anything but `POST /pair` are not remembered, so they cannot fill the cache; at 20 000 entries (or 1 000 dated far ahead) the agent answers `503 E2E_BUSY`.
+7. **Clock**: `|t - now|` over 5 minutes for a `GET`, over **60 seconds** for a `POST` or `DELETE` (a captured call that changes something is worth less the sooner it expires), is answered sealed with `401 E2E_CLOCK_SKEW`. The answer's `t` is the agent's clock, authenticated, so the app corrects its own and retries once.
+8. **Device**: a known key acts as that device. An unknown key may only send `POST /pair`; anything else is answered sealed with `401 DEVICE_UNKNOWN`.
+9. **Dispatch**: the request goes to the agent's internal API (a Unix socket, see [decisions/0003-internal-socket.md](decisions/0003-internal-socket.md)) as that device. Routes, validation and audit log are the same for every caller. If the internal call itself fails, the answer is sealed `502 E2E_INTERNAL`, so the device still gets an answer it can trust.
+
+Plain answers (steps 1 to 5) are `{"code": "…"}` without detail: nothing is authenticated yet.
+
+## Pairing
+
+```mermaid
+sequenceDiagram
+  participant A as Agent
+  participant L as Pod log
+  participant P as Phone
+  A->>L: link: kubernanny://pair?url=…&code=K7QM2XRT9C&name=homelab&key=<agent public key>
+  L-->>P: QR code (camera) or link
+  P->>P: new X25519 key pair for this cluster
+  P->>A: message 1 to the pinned key: POST /pair {code, name}
+  A->>A: code right, unused, < 60 min?
+  A->>A: store device {id, name, public key from the handshake}
+  A-->>P: message 2: 200 {deviceId, cluster}
+```
+
+- The agent learns the device's public key **from the handshake**, not from the body: whoever paired holds the matching private key.
+- The code is 10 characters from a 31-letter alphabet, single use, valid 60 minutes, compared in constant time, and a new one invalidates the old. The right code always pairs: it is compared **before** any throttle, and wrong attempts never burn it, so whoever knows the agent's key (directly or through the relay, [RELAY.md](RELAY.md)) cannot keep the owner from pairing. Past five wrong attempts (a blank code counts as one) in 10 minutes, a wrong one is answered sealed with `429 PAIRING_RATE_LIMITED` instead of `401 PAIRING_CODE_INVALID`, and the agent logs that someone may be guessing. What bounds guessing is the code's size against the strangers' shared budget (step 5 above: at most about 7200 attempts an hour, so under 10^-11 per code), not that counter.
+- A new pairing is announced through the notification channels, like other security-relevant changes ([SECURITY.md](SECURITY.md)).
+- The device pins `key` from the link. A link without a key (typing address and code by hand) makes the app fetch `GET /api/identity`, which it only does over `https://`, from `localhost` (a port-forward), or from the origin the web UI itself was served from. TLS or the local machine vouches for the key once; from then on it is pinned and the transport no longer matters.
+- Pairing the same key again keeps its device entry and takes the new name.
+- New code without kubectl: any paired device (`POST /pair/code`). With kubectl: `kubectl -n kubernanny exec deploy/kubernanny -- node dist/cli.js pair`.
+
+## Properties
+
+| Property | Holds because |
+|---|---|
+| Only the pinned agent can read a request | message 1 is encrypted to its static key (`es`, `ss`) |
+| Only the device that asked can read an answer | message 2 and frames are keyed with `ee` and `se` |
+| Answers cannot be forged or changed | AEAD on every message, keys bound to both static keys and the transcript |
+| A device proves itself on every call | `ss` in message 1; no bearer secret ever crosses the wire |
+| Replays do nothing | replay cache on the ephemeral key, written before the clock check and kept until the request's window has passed, plus the clock window |
+| Forward secrecy for answers | answers depend on both ephemeral keys; a later theft of either static key does not open recorded answers |
+| Identity hiding | the device's static key travels encrypted; an observer cannot tell which device called |
+| No session state | each call is a complete handshake; the agent keeps only the replay cache |
+
+## Limits, stated plainly
+
+- **Requests are not forward-secret against the agent's static key.** Message 1 depends on `es` and `ss`, both involving the agent's static key. Someone who records traffic and later steals `kubernanny-identity` can read recorded **requests** (paths like `/status`, action requests, pairing codes already used). Not answers. Requests carry no cluster data and no credential.
+- **A stolen device key** is that device until revoked, exactly like a stolen phone. Revocation takes effect on the next call.
+- **A stolen agent key** lets its holder impersonate the agent to devices that reach them (they would need to sit on the path too). Rotate: delete `kubernanny-identity`, restart, pair every device again.
+- **Traffic analysis**: sizes and timing of calls stay visible to whoever carries them.
+- **Clock**: the windows (5 minutes for reads, 60 seconds for writes) assume clocks within reach of each other; the sealed skew answer corrects the device automatically.
+- **Single replica**: the replay cache lives in memory, so the agent runs with one replica and the `Recreate` strategy (as the chart does). A restart clears the cache; a replay across a restart still has to pass the clock window.
+
+## Test vectors
+
+Fixed keys and fixed ephemeral keys, so the bytes are deterministic. All of them are in [`protocol/test/vectors.json`](../protocol/test/vectors.json); `npm test` in `protocol/` reproduces them and opens every message 1 with libsodium too. The first one:
+
+| | hex |
+|---|---|
+| device static secret | `0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20` |
+| device static public | `07a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7c` |
+| device ephemeral secret | `4142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60` |
+| agent static secret | `8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0` |
+| agent static public | `883186b800b41d5cf0429695da9b3cc4f328ebcd184a6e482fa578c103f06c77` |
+| agent ephemeral secret | `c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0` |
+
+Request `{ method: GET, path: /status, time: 1795000000000 }`, 140 bytes:
+
+```
+0164b101b1d0be5a8704bd078f9895001fc03e8e9f9522f188dd128d9846d48466ea46fec0bee3ce
+0e052ec0cfad8ea652235164c7c9730cd3671b131e60a74e005f47aeddc79ac0dae82a994adea884
+8cfe69b3f2ca51e980a3c7b261fc6a00c342e880b32a9b12f59773727653b88bb19654ab4a6881a9
+75b671e4550b30f0af2d24dee903a044025f05cd
+```
+
+Response `{ status: 200, time: 1795000000150, body: {"light":"green"} }`, 114 bytes:
+
+```
+01004b3a553d74792d727efa9b9a4cde3da1ad93f1a2d0c09cb639b1a3c0fda14cbe24de1b289258
+5ab80b7bd1b2f3f5e39d73efe6ba4349ab8d05e63c8922d8cccfc4a1f41f6c844c91e74393830022
+bebd6be62c44c8d5ea60235e3421dbe19cc8a00321773a80ebd1ffd0172ca95ccf13
+```
+
+The JSON payloads are serialised without spaces, keys in the order `m, p, t, b` and `s, t`. A different serialisation is still valid protocol, but will not reproduce the vectors.
+
+## Versioning
+
+The first byte of both bodies is the version, and the prologue names it. A future version gets a new byte and prologue; an agent may accept several, the app uses the highest the pinned agent accepts. Never reuse a version for different bytes.

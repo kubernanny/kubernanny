@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Kubernanny communication</title>
+<style>
+  body { margin: 0; background: #0f1626; font-family: 'Figtree', system-ui, sans-serif; }
+  svg { display: block; }
+  .zone { fill: none; stroke-width: 1.5; stroke-dasharray: 6 5; rx: 22; }
+  .zone-label { font: 600 15px system-ui, sans-serif; letter-spacing: .02em; }
+  .box { fill: #172036; stroke: #2a3658; stroke-width: 1.5; rx: 16; }
+  .box.agent { fill: #1c2a4a; stroke: #8ea2ff; stroke-width: 2.5; }
+  .title { fill: #e9edf7; font: 700 19px system-ui, sans-serif; }
+  .sub { fill: #8d97b5; font: 14px system-ui, sans-serif; }
+  .line { fill: none; stroke-width: 2.5; }
+  .tls { stroke: #36d6a8; }
+  .plain { stroke: #f5b83d; stroke-dasharray: 7 6; }
+  .e2e { stroke: #8ea2ff; stroke-width: 4; }
+  .num { font: 800 15px system-ui, sans-serif; fill: #0f1626; }
+  .tag { font: 600 13.5px system-ui, sans-serif; }
+  .legend { fill: #c3cbe0; font: 14px system-ui, sans-serif; }
+</style></head>
+<body>
+<svg width="1600" height="1040" viewBox="0 0 1600 1040" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#36d6a8"/></marker>
+    <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8ea2ff"/></marker>
+    <marker id="y" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f5b83d"/></marker>
+  </defs>
+
+  <text x="40" y="52" fill="#e9edf7" style="font:800 30px system-ui,sans-serif">Kubernanny: who talks to whom, and what protects it</text>
+  <text x="40" y="82" class="sub">Every app call is end-to-end encrypted between the device key and the pinned agent key. No secret on the wire. Actions come only from Kubernetes data.</text>
+
+  <!-- zones -->
+  <rect x="30" y="120" width="1540" height="740" class="zone" stroke="#3a445e"/>
+  <text x="52" y="148" class="zone-label" fill="#8d97b5">Internet</text>
+  <rect x="290" y="170" width="1000" height="670" class="zone" stroke="#8ea2ff"/>
+  <text x="312" y="198" class="zone-label" fill="#8ea2ff">Your network: VPN or LAN</text>
+  <rect x="520" y="220" width="750" height="600" class="zone" stroke="#36d6a8"/>
+  <text x="542" y="248" class="zone-label" fill="#36d6a8">Kubernetes cluster</text>
+
+  <!-- phone -->
+  <rect x="320" y="300" width="170" height="130" class="box"/>
+  <text x="340" y="338" class="title">Kubernanny app</text>
+  <text x="340" y="362" class="sub">iOS · Android</text>
+  <text x="340" y="384" class="sub">or browser</text>
+  <text x="340" y="408" class="sub">own key pair</text>
+
+  <!-- operator -->
+  <rect x="320" y="640" width="170" height="110" class="box"/>
+  <text x="340" y="678" class="title">You</text>
+  <text x="340" y="702" class="sub">kubectl logs</text>
+  <text x="340" y="724" class="sub">scan the QR code</text>
+
+  <!-- ingress -->
+  <rect x="560" y="300" width="180" height="130" class="box"/>
+  <text x="580" y="338" class="title">Ingress</text>
+  <text x="580" y="362" class="sub">optional; sees</text>
+  <text x="580" y="384" class="sub">ciphertext only</text>
+  <text x="580" y="408" class="sub">VPN · LAN · TLS</text>
+
+  <!-- agent -->
+  <rect x="820" y="280" width="220" height="250" class="box agent"/>
+  <text x="842" y="318" class="title">kubernanny</text>
+  <text x="842" y="344" class="sub">checks every 60 s</text>
+  <text x="842" y="368" class="sub">actions bound to issues</text>
+  <text x="842" y="392" class="sub">Noise IK, replay cache</text>
+  <text x="842" y="416" class="sub">audit log per device</text>
+  <text x="842" y="440" class="sub">non-root, read-only FS</text>
+  <text x="842" y="476" class="sub">:8080 API + web UI</text>
+  <text x="842" y="500" class="sub">:9100 metrics</text>
+
+  <!-- api server -->
+  <rect x="1090" y="280" width="160" height="130" class="box"/>
+  <text x="1110" y="318" class="title">Kubernetes</text>
+  <text x="1110" y="340" class="title">API</text>
+  <text x="1110" y="366" class="sub">RBAC: read +</text>
+  <text x="1110" y="388" class="sub">4 action verbs</text>
+
+  <!-- secrets -->
+  <rect x="1090" y="450" width="160" height="150" class="box"/>
+  <text x="1110" y="488" class="title">Secrets</text>
+  <text x="1110" y="512" class="sub">kubernanny-identity</text>
+  <text x="1110" y="534" class="sub">(agent key pair)</text>
+  <text x="1110" y="560" class="sub">kubernanny-devices</text>
+  <text x="1110" y="582" class="sub">(public keys only)</text>
+
+  <!-- monitoring -->
+  <rect x="820" y="640" width="260" height="150" class="box"/>
+  <text x="842" y="678" class="title">Monitoring</text>
+  <text x="842" y="704" class="sub">Prometheus · Alertmanager</text>
+  <text x="842" y="726" class="sub">Grafana · Loki</text>
+  <text x="842" y="756" class="sub">untrusted: shown, never acted on</text>
+
+  <!-- pod log -->
+  <rect x="560" y="640" width="180" height="110" class="box"/>
+  <text x="580" y="678" class="title">Pod log</text>
+  <text x="580" y="702" class="sub">one-time code and</text>
+  <text x="580" y="724" class="sub">public agent key</text>
+
+  <!-- notifications -->
+  <rect x="1330" y="300" width="210" height="150" class="box"/>
+  <text x="1350" y="338" class="title">Notifications</text>
+  <text x="1350" y="362" class="sub">ntfy · Discord · Slack</text>
+  <text x="1350" y="384" class="sub">Gotify · webhook</text>
+  <text x="1350" y="410" class="sub">HTTPS only, no redirects</text>
+  <text x="1350" y="432" class="sub">detail: full or minimal</text>
+
+  <!-- 1 app -> ingress -> agent -->
+  <path d="M490,300 C560,262 760,262 816,320" class="line e2e" marker-end="url(#b)"/>
+  <path d="M490,355 L556,355" class="line tls" marker-end="url(#g)"/>
+  <path d="M740,355 L816,355" class="line plain" marker-end="url(#y)"/>
+  <!-- 2 pairing -->
+  <path d="M490,400 C520,400 530,420 556,410" class="line tls" marker-end="url(#g)"/>
+  <!-- 3 agent -> api -->
+  <path d="M1040,330 L1086,330" class="line tls" marker-end="url(#g)"/>
+  <path d="M1040,520 L1086,520" class="line tls" marker-end="url(#g)"/>
+  <!-- 4 agent -> monitoring -->
+  <path d="M930,530 L930,636" class="line plain" marker-end="url(#y)"/>
+  <!-- 6 prometheus -> metrics -->
+  <path d="M1000,636 L1000,534" class="line plain" marker-end="url(#y)"/>
+  <!-- 5 agent -> notifications -->
+  <path d="M1040,300 C1180,240 1260,250 1326,330" class="line tls" marker-end="url(#g)"/>
+  <!-- 7 agent -> log, you -> log -->
+  <path d="M820,500 C760,560 700,590 660,636" class="line plain" marker-end="url(#y)"/>
+  <path d="M490,695 L556,695" class="line tls" marker-end="url(#g)"/>
+
+  <!-- numbers -->
+  <g>
+    <circle cx="653" cy="268" r="13" fill="#8ea2ff"/><text x="648" y="273" class="num">1</text>
+    <circle cx="523" cy="425" r="13" fill="#8ea2ff"/><text x="518" y="430" class="num">2</text>
+    <circle cx="1063" cy="312" r="13" fill="#36d6a8"/><text x="1058" y="317" class="num">3</text>
+    <circle cx="912" cy="585" r="13" fill="#f5b83d"/><text x="907" y="590" class="num">4</text>
+    <circle cx="1205" cy="245" r="13" fill="#36d6a8"/><text x="1200" y="250" class="num">5</text>
+    <circle cx="1018" cy="585" r="13" fill="#f5b83d"/><text x="1013" y="590" class="num">6</text>
+    <circle cx="523" cy="678" r="13" fill="#36d6a8"/><text x="518" y="683" class="num">7</text>
+  </g>
+
+  <!-- legend -->
+  <g transform="translate(40,905)">
+    <line x1="0" y1="-30" x2="44" y2="-30" class="line e2e"/>
+    <text x="56" y="-25" class="legend">end to end: Noise IK per call, device key ↔ pinned agent key; whatever carries it (green or yellow below) sees ciphertext</text>
+    <line x1="0" y1="0" x2="44" y2="0" class="line tls"/>
+    <text x="56" y="5" class="legend">TLS, server certificate verified</text>
+    <line x1="380" y1="0" x2="424" y2="0" class="line plain"/>
+    <text x="436" y="5" class="legend">inside the cluster network (encrypted by your CNI if it runs over WireGuard or IPsec)</text>
+    <text x="0" y="48" class="legend" xml:space="preserve">1  status, details, actions, sealed per call      2  one-time code in, device public key registered      3  list/get, plus 4 action verbs</text>
+    <text x="0" y="78" class="legend" xml:space="preserve">4  GET only, no credentials, no redirects, max 8 MB      5  issue texts, or only counts      6  numbers only      7  QR code: one-time code + agent key</text>
+  </g>
+</svg>
+</body></html>
