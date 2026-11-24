@@ -1,0 +1,267 @@
+{
+  "modules": {
+    "argocd": [
+      {
+        "group": "argoproj.io",
+        "resources": [
+          "applications"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      }
+    ],
+    "cert-manager": [
+      {
+        "group": "cert-manager.io",
+        "resources": [
+          "certificates",
+          "clusterissuers"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      }
+    ],
+    "cnpg": [
+      {
+        "group": "postgresql.cnpg.io",
+        "resources": [
+          "clusters"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      }
+    ],
+    "etcd": [
+      {
+        "group": "k3s.cattle.io",
+        "resources": [
+          "etcdsnapshotfiles"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      }
+    ],
+    "external-secrets": [
+      {
+        "group": "external-secrets.io",
+        "resources": [
+          "externalsecrets",
+          "clustersecretstores"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      }
+    ],
+    "flux": [
+      {
+        "group": "kustomize.toolkit.fluxcd.io",
+        "resources": [
+          "kustomizations"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      },
+      {
+        "group": "helm.toolkit.fluxcd.io",
+        "resources": [
+          "helmreleases"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      },
+      {
+        "group": "source.toolkit.fluxcd.io",
+        "resources": [
+          "gitrepositories"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      }
+    ],
+    "hpa": [
+      {
+        "group": "autoscaling",
+        "resources": [
+          "horizontalpodautoscalers"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      }
+    ],
+    "infisical": [
+      {
+        "group": "secrets.infisical.com",
+        "resources": [
+          "infisicalsecrets",
+          "infisicalstaticsecrets"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      }
+    ],
+    "longhorn": [
+      {
+        "group": "longhorn.io",
+        "resources": [
+          "volumes",
+          "nodes",
+          "backups",
+          "backuptargets"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      }
+    ],
+    "pdb": [
+      {
+        "group": "policy",
+        "resources": [
+          "poddisruptionbudgets"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      }
+    ],
+    "system-upgrade-controller": [
+      {
+        "group": "upgrade.cattle.io",
+        "resources": [
+          "plans"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      }
+    ],
+    "velero": [
+      {
+        "group": "velero.io",
+        "resources": [
+          "backups"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      }
+    ]
+  },
+  "actions": {
+    "argocd-refresh": {
+      "modules": [
+        "argocd"
+      ],
+      "rules": [
+        {
+          "group": "argoproj.io",
+          "resources": [
+            "applications"
+          ],
+          "verbs": [
+            "patch"
+          ]
+        }
+      ]
+    },
+    "argocd-sync": {
+      "modules": [
+        "argocd"
+      ],
+      "rules": [
+        {
+          "group": "argoproj.io",
+          "resources": [
+            "applications"
+          ],
+          "verbs": [
+            "patch"
+          ]
+        }
+      ]
+    },
+    "cnpg-backup": {
+      "modules": [
+        "cnpg"
+      ],
+      "rules": [
+        {
+          "group": "postgresql.cnpg.io",
+          "resources": [
+            "backups"
+          ],
+          "verbs": [
+            "create"
+          ]
+        }
+      ]
+    },
+    "logs": {
+      "modules": [
+        "cnpg",
+        "etcd",
+        "pods"
+      ],
+      "rules": [
+        {
+          "group": "",
+          "resources": [
+            "pods/log"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ]
+    },
+    "restart": {
+      "modules": [
+        "argocd",
+        "pods"
+      ],
+      "rules": [
+        {
+          "group": "apps",
+          "resources": [
+            "deployments",
+            "statefulsets",
+            "daemonsets"
+          ],
+          "verbs": [
+            "patch"
+          ]
+        }
+      ]
+    }
+  },
+  "writeActions": [
+    "restart",
+    "argocd-sync",
+    "argocd-refresh",
+    "cnpg-backup"
+  ]
+}

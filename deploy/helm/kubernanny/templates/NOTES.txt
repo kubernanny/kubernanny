@@ -1,0 +1,18 @@
+Kubernanny is starting in {{ .Release.Namespace }}.
+
+Pair the app or the web UI: the agent prints a QR code and a link in its log.
+
+  kubectl -n {{ .Release.Namespace }} logs deploy/kubernanny
+
+{{- if not .Values.ingress.enabled }}
+
+Without an ingress, open the web UI through a port-forward:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/kubernanny 8080:{{ .Values.service.port }}
+  open http://localhost:8080
+{{- end }}
+{{- if not (or .Values.notifications.ntfyUrl .Values.notifications.webhookUrl .Values.notifications.existingSecret) }}
+
+No notifications are set up. Set notifications.ntfyUrl or notifications.webhookUrl
+to hear about problems when the app is closed.
+{{- end }}

@@ -1,0 +1,80 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "kubernanny.name" . }}
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "kubernanny.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    {{- if .Values.networkPolicy.egress.enabled }}
+    - Egress
+    {{- end }}
+  ingress:
+    # API and web UI: only through the ingress controller (and kubelet probes, which policies do not block).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressControllerNamespace }}
+      ports:
+        - port: http
+    # Metrics: only Prometheus.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.monitoringNamespace }}
+      ports:
+        - port: metrics
+  {{- if .Values.networkPolicy.egress.enabled }}
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # The API server (its address is node IPs on most distributions).
+    - ports:
+        {{- range .Values.networkPolicy.egress.apiServerPorts }}
+        - port: {{ . }}
+          protocol: TCP
+        {{- end }}
+    # Prometheus, Alertmanager, Grafana, Loki.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.monitoringNamespace }}
+    {{- if .Values.networkPolicy.egress.internetHttps }}
+    # Notifications (ntfy, Discord, Slack, Gotify, webhooks).
+    - ports:
+        - port: 443
+          protocol: TCP
+    {{- end }}
+    {{- if and .Values.vulnerabilities.enabled (not (has "vulnerabilities" .Values.checks.disabled)) }}
+    {{- if .Values.vulnerabilities.dbNamespace }}
+    # The self-hosted vulnerability database.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.vulnerabilities.dbNamespace }}
+    {{- else if not .Values.networkPolicy.egress.internetHttps }}
+    # The vulnerability database (api.osv.dev or vulnerabilities.dbUrl). A NetworkPolicy cannot name a host.
+    - ports:
+        - port: 443
+          protocol: TCP
+    {{- end }}
+    {{- end }}
+    {{- if and .Values.relay.enabled (or (not .Values.networkPolicy.egress.internetHttps) (ne (int .Values.relay.egressPort) 443)) }}
+    # The relay's WebSocket (relay.url). A NetworkPolicy cannot name a host, only a port.
+    - ports:
+        - port: {{ .Values.relay.egressPort }}
+          protocol: TCP
+    {{- end }}
+  {{- end }}
+{{- end }}

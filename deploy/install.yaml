@@ -1,0 +1,234 @@
+# Kubernanny agent, plain manifests for `kubectl apply -f`. Same as the Helm chart
+# with its defaults (namespace kubernanny, read-only plus the four actions, no
+# ingress). Pair afterwards: kubectl -n kubernanny logs deploy/kubernanny
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubernanny
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubernanny
+  namespace: kubernanny
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubernanny
+rules:
+  - apiGroups: [""]
+    resources: [nodes, pods, services, namespaces, events, persistentvolumeclaims]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, daemonsets]
+    verbs: [get, list, patch]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [get, list]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [get, list]
+  - apiGroups: [storage.k8s.io]
+    resources: [storageclasses]
+    verbs: [get, list]
+  - apiGroups: [metrics.k8s.io]
+    resources: [nodes, pods]
+    verbs: [get, list]
+  - apiGroups: [longhorn.io]
+    resources: [volumes, nodes, backups, backuptargets]
+    verbs: [get, list]
+  - apiGroups: [cert-manager.io]
+    resources: [certificates, clusterissuers]
+    verbs: [get, list]
+  - apiGroups: [argoproj.io]
+    resources: [applications]
+    verbs: [get, list, patch]
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [get, list]
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [backups]
+    verbs: [create]
+  - apiGroups: [upgrade.cattle.io]
+    resources: [plans]
+    verbs: [get, list]
+  - apiGroups: [velero.io]
+    resources: [backups]
+    verbs: [get, list]
+  - apiGroups: [kustomize.toolkit.fluxcd.io]
+    resources: [kustomizations]
+    verbs: [get, list]
+  - apiGroups: [helm.toolkit.fluxcd.io]
+    resources: [helmreleases]
+    verbs: [get, list]
+  - apiGroups: [source.toolkit.fluxcd.io]
+    resources: [gitrepositories]
+    verbs: [get, list]
+  - apiGroups: [external-secrets.io]
+    resources: [externalsecrets, clustersecretstores]
+    verbs: [get, list]
+  - apiGroups: [secrets.infisical.com]
+    resources: [infisicalsecrets, infisicalstaticsecrets]
+    verbs: [get, list]
+  - apiGroups: [policy]
+    resources: [poddisruptionbudgets]
+    verbs: [get, list]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [get, list]
+  # RKE2 and k3s record their etcd snapshots here.
+  - apiGroups: [k3s.cattle.io]
+    resources: [etcdsnapshotfiles]
+    verbs: [get, list]
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [httproutes]
+    verbs: [get, list]
+  - apiGroups: [traefik.io, traefik.containo.us]
+    resources: [ingressroutes]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubernanny
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubernanny
+subjects:
+  - kind: ServiceAccount
+    name: kubernanny
+    namespace: kubernanny
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kubernanny-keys
+  namespace: kubernanny
+rules:
+  # Read its key pair and its device list (public keys only), update the
+  # device list on pairing and revocation. Nothing else in the namespace.
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [kubernanny-identity, kubernanny-devices]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [kubernanny-devices]
+    verbs: [patch]
+  # The switches set in the app (modules, actions, notifications).
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [kubernanny-settings]
+    verbs: [get, patch]
+  # create cannot be limited by name in Kubernetes RBAC; the agent only ever
+  # creates the two Secrets and the ConfigMap above.
+  - apiGroups: [""]
+    resources: [secrets, configmaps]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kubernanny-keys
+  namespace: kubernanny
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kubernanny-keys
+subjects:
+  - kind: ServiceAccount
+    name: kubernanny
+    namespace: kubernanny
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubernanny
+  namespace: kubernanny
+  labels:
+    app.kubernetes.io/name: kubernanny
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kubernanny
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kubernanny
+    spec:
+      serviceAccountName: kubernanny
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          image: ghcr.io/kubernanny/agent:0.3.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: metrics
+              containerPort: 9100
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: CLUSTER_NAME
+              value: homelab
+            - name: LANGUAGE
+              value: en
+            - name: NODE_EXTRA_CA_CERTS
+              value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+            # - name: NTFY_URL
+            #   value: https://ntfy.sh/<long-random-topic>
+            # - name: WEBHOOK_URL
+            #   value: https://discord.com/api/webhooks/…
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          # The internal API socket (end-to-end channel, admin CLI) lives in /tmp.
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests: { cpu: 20m, memory: 128Mi }
+            limits: { memory: 256Mi }
+      volumes:
+        - name: tmp
+          emptyDir: { medium: Memory, sizeLimit: 1Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubernanny
+  namespace: kubernanny
+  labels:
+    app.kubernetes.io/name: kubernanny
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+    - name: metrics
+      port: 9100
+      targetPort: metrics
+  selector:
+    app.kubernetes.io/name: kubernanny

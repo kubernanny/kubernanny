@@ -1,0 +1,138 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "kubernanny.name" . }}
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+---
+# Read-only across the cluster: every check spans namespaces. The rules of
+# each module and action come from files/rbac.json, generated from the agent's
+# code (`npm run rbac` in agent/):
+# - a module in checks.disabled gets no rule at all;
+# - an action's permission is granted only while the action is enabled and at
+#   least one module offering it is enabled. argocd-sync and argocd-refresh
+#   both need `patch` on Applications, so that stays while either is enabled;
+#   checks.disabled: [argocd] removes it together with every Argo CD read.
+{{- $rbac := .Files.Get "files/rbac.json" | fromJson }}
+{{- $disabledModules := .Values.checks.disabled | default list }}
+{{- $disabledActions := include "kubernanny.disabledActions" . | fromJsonArray }}
+{{- $granted := dict }}
+{{- range $type, $grant := $rbac.actions }}
+{{- if not (has $type $disabledActions) }}
+{{- $offered := false }}
+{{- range $grant.modules }}{{- if not (has . $disabledModules) }}{{- $offered = true }}{{- end }}{{- end }}
+{{- if $offered }}
+{{- range $grant.rules }}
+{{- $_ := set $granted (printf "%s|%s|%s" .group (join "," .resources) (join "," .verbs)) . }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-{{ include "kubernanny.name" . }}
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+rules:
+  # The inventory every run reads.
+  - apiGroups: [""]
+    resources: [nodes, pods, services, namespaces, events, persistentvolumeclaims]
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, daemonsets]
+    verbs: [get, list]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [get, list]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [get, list]
+  - apiGroups: [storage.k8s.io]
+    resources: [storageclasses]
+    verbs: [get, list]
+  - apiGroups: [metrics.k8s.io]
+    resources: [nodes, pods]
+    verbs: [get, list]
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [httproutes]
+    verbs: [get, list]
+  - apiGroups: [traefik.io, traefik.containo.us]
+    resources: [ingressroutes]
+    verbs: [get, list]
+  {{- range $id, $rules := $rbac.modules }}
+  {{- if not (has $id $disabledModules) }}
+  # module {{ $id }}
+  {{- range $rules }}
+  - apiGroups: [{{ .group | quote }}]
+    resources: {{ .resources | toJson }}
+    verbs: {{ .verbs | toJson }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
+  # Permissions of the enabled actions, each once.
+  {{- range $key := keys $granted | sortAlpha }}
+  {{- $rule := get $granted $key }}
+  - apiGroups: [{{ $rule.group | quote }}]
+    resources: {{ $rule.resources | toJson }}
+    verbs: {{ $rule.verbs | toJson }}
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-{{ include "kubernanny.name" . }}
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-{{ include "kubernanny.name" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "kubernanny.name" . }}
+    namespace: {{ .Release.Namespace }}
+---
+# The agent keeps its key pair and its paired devices in two Secrets of its namespace, nowhere else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "kubernanny.name" . }}-keys
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+rules:
+  # Read its key pair and its device list (public keys only), update the
+  # device list on pairing and revocation. Nothing else in the namespace.
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [kubernanny-identity, kubernanny-devices]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [kubernanny-devices]
+    verbs: [patch]
+  # The switches set in the app (modules, actions, notifications).
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [kubernanny-settings]
+    verbs: [get, patch]
+  # create cannot be limited by name in Kubernetes RBAC; the agent only ever
+  # creates the two Secrets and the ConfigMap above.
+  - apiGroups: [""]
+    resources: [secrets, configmaps]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "kubernanny.name" . }}-keys
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "kubernanny.name" . }}-keys
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "kubernanny.name" . }}
+    namespace: {{ .Release.Namespace }}

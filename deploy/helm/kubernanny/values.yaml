@@ -1,0 +1,167 @@
+image:
+  repository: ghcr.io/kubernanny/agent
+  pullPolicy: IfNotPresent
+  # Defaults to the chart's appVersion.
+  tag: ""
+
+imagePullSecrets: []
+
+# Shown in the app and in every notification.
+clusterName: homelab
+
+# en or de. The app asks for its own UI language with every call; this is
+# the language of notifications, the weekly report, the pairing banner in
+# the pod log, and of answers to callers that name none.
+language: en
+
+# No token to configure: every device pairs with its own key pair. The
+# agent creates its key pair in the Secret `kubernanny-identity` on first
+# start, and its log shows a QR code with a one-time pairing code (valid 60
+# minutes) and the agent's public key. New code: `kubectl exec deploy/kubernanny
+# -- node dist/cli.js pair`. See docs/PROTOCOL.md.
+
+# The address the app reaches the agent at. Defaults to https://<ingress.host>
+# when the ingress is on; used for the pairing link and ntfy's click action.
+publicUrl: ""
+
+notifications:
+  # ntfy topic URL (ntfy.sh or self-hosted), e.g. https://ntfy.sh/<long-random-topic>.
+  ntfyUrl: ""
+  # Discord, Slack, Gotify (…/message?token=…) or any URL taking JSON.
+  webhookUrl: ""
+  # auto | discord | slack | gotify | json
+  webhookFormat: auto
+  # Secret holding NTFY_TOKEN and/or WEBHOOK_URL, for URLs that are secret themselves.
+  existingSecret: ""
+  # Issues shorter than this are never sent (rollouts, planned reboots).
+  notifyAfterSeconds: 300
+  # full: titles and causes. minimal: only the cluster name and counts, for
+  # public services (ntfy.sh): no namespace, name or message leaves the cluster.
+  detail: full
+  # A weekly report through the same channels: how many problems, the longest
+  # ones, what is still open. weekday: 0 = Sunday … 6 = Saturday.
+  weeklyDigest:
+    enabled: false
+    weekday: 1
+    hour: 9
+
+# Time zone for the weekly report and log times, e.g. Europe/Berlin. Empty: UTC.
+timezone: ""
+
+checks:
+  intervalSeconds: 60
+  certWarnDays: 14
+  certCriticalDays: 3
+  backupMaxAgeHours: 26
+  # Modules to switch off for good, e.g. [argocd, alertmanager]: the agent
+  # does not run them and, for integrations, gets no RBAC to read them. Ids:
+  # docs/CHECKS.md and docs/COMPONENTS.md. "notifications" switches all
+  # notifications off. Everything else can be switched on and off in the app
+  # (cluster settings), within these limits.
+  disabled: []
+  # Found automatically; set only to override.
+  prometheusUrl: ""
+  alertmanagerUrl: ""
+  # Namespaces the security posture check (`security`) leaves alone, on top
+  # of kube-system and the other system namespaces it knows.
+  systemNamespaces: []
+
+# Known vulnerabilities (module `vulnerabilities`): matches the Kubernetes
+# version and the versions of recognised components against OSV.dev. Off by
+# default because it sends component names and versions (never cluster data
+# or workload names) to the database. enabled: true switches it on for this
+# install; the app can still switch it off, and `checks.disabled:
+# [vulnerabilities]` locks it off. Details: docs/SECURITY-CHECKS.md.
+vulnerabilities:
+  enabled: false
+  # An OSV-compatible mirror instead of https://api.osv.dev (https, or plain
+  # http to an in-cluster *.svc host).
+  dbUrl: ""
+  # With networkPolicy.egress on: the namespace of that mirror. Empty: HTTPS
+  # to anywhere is allowed while the module is enabled (a NetworkPolicy
+  # cannot name a host).
+  dbNamespace: ""
+
+# Your own applications, shown as components with name, icon and category
+# instead of anonymous workloads. Image prefixes match at a boundary
+# (ghcr.io/acme/api matches :1.2 and @sha256:…, never ghcr.io/acme/api-evil).
+# customComponents:
+#   - name: Shop API
+#     images: [ghcr.io/acme/shop-api]
+#     category: apps
+#     icon: restaurant-outline
+#     description: Backend of the shopping list app.
+customComponents: []
+
+actions:
+  # Action types to switch off for good: restart, argocd-sync, argocd-refresh,
+  # cnpg-backup, logs; the app cannot switch them on. A permission is dropped
+  # once no enabled action of an enabled module needs it (argocd-sync and
+  # argocd-refresh share `patch` on Applications: disable both to drop it).
+  disabled: []
+
+rbac:
+  # Sync and refresh Argo CD apps, restart Deployments/StatefulSets/DaemonSets,
+  # start CNPG backups. The agent only runs an action an open issue offers.
+  # false: strictly read-only (adds the four write actions to actions.disabled).
+  allowActions: true
+# Prometheus, Alertmanager, Grafana and Loki are reached directly over cluster
+# DNS (no services/proxy grant). With NetworkPolicies, allow egress from the
+# agent to them.
+
+# Reach the agent from outside the VPN without opening any inbound port: the
+# agent keeps one outbound WebSocket to the relay, and the app falls back to
+# it when the agent's own address is out of reach. The relay only carries
+# end-to-end encrypted bytes; it learns the agent's id, when and how much,
+# and the device's IP address, never content or which device (docs/RELAY.md).
+# Off: no outbound connection at all. The public relay is free with fair use;
+# run your own with deploy/relay/ or the Cloudflare Worker in relay/cloudflare/.
+relay:
+  enabled: false
+  url: wss://relay.kubernanny.app
+  # Port the relay listens on, for the NetworkPolicy egress rule (443 for wss:// behind TLS).
+  egressPort: 443
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  host: kubernanny.example.com
+  annotations: {}
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  tls: true
+
+# Prometheus Operator: scrape kubernanny_* metrics (score, issues, module status).
+serviceMonitor:
+  enabled: false
+  interval: 60s
+
+# Restrict the agent's network. Ingress: the API and web UI only from the
+# ingress controller's namespace, metrics only from Prometheus'. Egress
+# (optional, off by default because the API server's address differs per
+# distribution): DNS, the API server, the monitoring namespace, HTTPS out.
+networkPolicy:
+  enabled: false
+  ingressControllerNamespace: kube-system
+  monitoringNamespace: monitoring
+  egress:
+    enabled: false
+    # Ports the API server listens on behind the kubernetes Service (6443 on most distributions).
+    apiServerPorts: [443, 6443]
+    # Allow HTTPS to anywhere for ntfy/webhooks; false: only in-cluster.
+    internetHttps: true
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 128Mi
+  limits:
+    memory: 256Mi
+
+extraEnv: []
+nodeSelector: {}
+tolerations: []
+affinity: {}
