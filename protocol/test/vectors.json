@@ -1,0 +1,44 @@
+[
+  {
+    "name": "GET /status",
+    "deviceStaticSecret": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+    "deviceEphemeralSecret": "4142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60",
+    "agentStaticSecret": "8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0",
+    "agentEphemeralSecret": "c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0",
+    "request": {
+      "method": "GET",
+      "path": "/status",
+      "time": 1795000000000
+    },
+    "response": {
+      "status": 200,
+      "time": 1795000000150,
+      "body": "{\"light\":\"green\"}"
+    },
+    "requestBody": "0164b101b1d0be5a8704bd078f9895001fc03e8e9f9522f188dd128d9846d48466ea46fec0bee3ce0e052ec0cfad8ea652235164c7c9730cd3671b131e60a74e005f47aeddc79ac0dae82a994adea8848cfe69b3f2ca51e980a3c7b261fc6a00c342e880b32a9b12f59773727653b88bb19654ab4a6881a975b671e4550b30f0af2d24dee903a044025f05cd",
+    "responseBody": "01004b3a553d74792d727efa9b9a4cde3da1ad93f1a2d0c09cb639b1a3c0fda14cbe24de1b2892585ab80b7bd1b2f3f5e39d73efe6ba4349ab8d05e63c8922d8cccfc4a1f41f6c844c91e74393830022bebd6be62c44c8d5ea60235e3421dbe19cc8a00321773a80ebd1ffd0172ca95ccf13"
+  },
+  {
+    "name": "POST /pair",
+    "deviceStaticSecret": "1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30",
+    "deviceEphemeralSecret": "5152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f70",
+    "agentStaticSecret": "9192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0",
+    "agentEphemeralSecret": "d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0",
+    "request": {
+      "method": "POST",
+      "path": "/pair",
+      "body": {
+        "code": "K7QM2XRT9C",
+        "name": "iPhone, Safari"
+      },
+      "time": 1795000060000
+    },
+    "response": {
+      "status": 201,
+      "time": 1795000060020,
+      "body": "{\"deviceId\":\"3f1c\",\"cluster\":\"homelab\"}"
+    },
+    "requestBody": "010233f006ef4bed144ea0a5bb46c7067c7c2acec5f8cc811f3df59fdcd5ac761414735edf6d21d5c4059e17e2ef932a7172d5a794db62064e0040664a2a69290e5dea498a4f3599c3a9ed26d99d994eb65a16517a7ffee5ac26a2831f9b5365dc0cbc98138d4ec2a0e8008e76da2db9e94895d9aa948662466b0b1ca2abcf9b5777bbcbb992b09ece5971ff631d0c929e11984a73511ecd7f8090fbf65a67cc55af7b43ed4605f1d2001741d01ea77c37f9fe3f2df76dd0ff3dfb723f",
+    "responseBody": "01004b21c3332b61be6a7b6ab8461e155651b17501b6e07532ecf9ab6661bd5a2ca5759840dc4faeaa5f49bfda713e0a0c91e940e3cbb4ee6e2dc618b6a03ea7b6c2e1bfba0520a643e349fed20f00383a4042498122a76eab6e9eabecd66ced289c980c79028f58c3360064571c5e6c38b1069ef860736f9925c4447ab74da73939a9141636bcb0"
+  }
+]

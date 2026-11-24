@@ -1,0 +1,33 @@
+{
+  "name": "@kubernanny/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kubernanny end-to-end protocol: Noise_IK_25519_ChaChaPoly_BLAKE2b handshake per request, used by the agent, the app and the relay.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@noble/ciphers": "2.4.0",
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "noise-protocol": "^3.0.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.1"
+  }
+}
