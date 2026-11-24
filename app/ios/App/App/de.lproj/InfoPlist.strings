@@ -1,0 +1,2 @@
+/* Shown when iOS asks for local network access. */
+"NSLocalNetworkUsageDescription" = "Kubernanny fragt den Kubernanny-Agent in deinem Cluster nach dem Zustand, auch im lokalen Netzwerk. Alles ist Ende-zu-Ende verschlüsselt.";

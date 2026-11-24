@@ -1,0 +1,360 @@
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+import { TranslocoDirective } from '@jsverse/transloco';
+import { IonIcon } from '@ionic/angular/standalone';
+import { ClusterConfig, HistoryView, Series } from '../../core/agent.model';
+import { Loadable } from '../../core/cluster-data.store';
+import { AreaChart } from '../../ui/area-chart';
+import { IssueList } from '../../ui/issue-list';
+import { LanguageService } from '../../i18n/language.service';
+import { Translator } from '../../i18n/translator';
+import { ClusterView } from '../cluster-view';
+import { HistorySection } from '../history-section';
+import { HistoryVM } from '../history-view';
+
+const CHART_ORDER = ['cpu', 'memory', 'net-in', 'net-out', 'restarts', 'etcd-fsync', 'apiserver-p99'];
+/** The time ranges of the usage charts. */
+export function hourChoices(tr: Translator): { hours: number; label: string }[] {
+  return [1, 6, 24, 168].map((hours) => ({ hours, label: hours < 48 ? tr.t('overview.hours', { count: hours }) : tr.t('overview.days', { count: hours / 24 }) }));
+}
+
+@Component({
+  selector: 'app-overview-tab',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [TranslocoDirective, IssueList, AreaChart, IonIcon, HistorySection],
+  template: `
+    <ng-container *transloco="let t">
+      @if (view().update; as update) {
+        <aside class="update">
+          <ion-icon name="arrow-up-circle-outline" aria-hidden="true" />
+          <div>
+            <strong>{{ t('overview.updateTitle') }}</strong>
+            <span class="muted">{{ update.text }}</span>
+            <code>{{ update.command }}</code>
+          </div>
+        </aside>
+      }
+
+      @if (view().maintenance.active) {
+        <aside class="maintenance" role="status">
+          <ion-icon name="construct-outline" aria-hidden="true" />
+          <span>{{ view().maintenance.banner }}</span>
+        </aside>
+      }
+
+      <section>
+        @if (view().issues.length > 0) {
+          <h2>{{ t('overview.needsYou') }}</h2>
+          <app-issue-list [cards]="view().issues" [cluster]="cluster()" (changed)="changed.emit()" />
+        } @else if (view().light === 'green') {
+          <div class="calm">
+            <ion-icon name="checkmark-circle" aria-hidden="true" />
+            <div>
+              <strong>{{ t('overview.calmTitle') }}</strong>
+              <span class="muted">{{ t('overview.calmText') }}</span>
+            </div>
+          </div>
+        }
+      </section>
+
+      @if (view().hints.length > 0) {
+        <section class="hints">
+          <h2>{{ t('overview.hints') }} <span class="count">{{ view().hints.length }}</span></h2>
+          <p class="muted hint-intro">{{ t('overview.hintsIntro') }}</p>
+          <app-issue-list [cards]="view().hints" [cluster]="cluster()" (changed)="changed.emit()" />
+        </section>
+      }
+
+      @if (view().silenced.length > 0) {
+        <section class="hints">
+          <h2>{{ t('overview.silenced') }} <span class="count">{{ view().silenced.length }}</span></h2>
+          <p class="muted hint-intro">{{ t('overview.silencedIntro') }}</p>
+          <app-issue-list [cards]="view().silenced" [cluster]="cluster()" (changed)="changed.emit()" />
+        </section>
+      }
+
+      @if (incidents(); as vm) {
+        <app-history-section [vm]="vm" />
+      }
+
+      <section>
+        <div class="section-head">
+          <h2>{{ t('overview.usage') }}</h2>
+          @if (view().hasPrometheus) {
+            <div class="range" role="group" [attr.aria-label]="t('overview.range')">
+              @for (choice of hourChoices(); track choice.hours) {
+                <button type="button" [class.on]="choice.hours === hours()" [attr.aria-pressed]="choice.hours === hours()" (click)="setHours.emit(choice.hours)">
+                  {{ choice.label }}
+                </button>
+              }
+            </div>
+          }
+        </div>
+        @if (charts().length > 0) {
+          <div class="charts">
+            @for (s of charts(); track s.id) {
+              <div class="card">
+                <app-area-chart [title]="s.label" [points]="s.points" [unit]="s.unit" />
+              </div>
+            }
+          </div>
+          @if (history().value?.source === 'agent') {
+            <p class="muted note">{{ t('overview.historyFromAgent') }}</p>
+          }
+        } @else if (history().loading) {
+          <p class="muted note">{{ t('overview.loadingHistory') }}</p>
+        } @else {
+          <p class="muted note">{{ t('overview.noHistory') }}</p>
+        }
+      </section>
+
+      <section class="kpi-section">
+        <h2>{{ t('overview.keyFigures') }}</h2>
+        <dl class="kpis">
+          @for (k of view().kpis; track k.label) {
+            <div [class]="'kpi tone-' + k.tone">
+              <dt>{{ k.label }}</dt>
+              <dd class="display">{{ k.value }}</dd>
+              <dd class="note">{{ k.note }}</dd>
+            </div>
+          }
+        </dl>
+      </section>
+
+      @if (view().attention.length > 0) {
+        <section>
+          <h2>{{ t('overview.attention') }}</h2>
+          <ul class="attention">
+            @for (row of view().attention; track row.module.id) {
+              <li>
+                <button type="button" [class]="'tone-' + row.tone" (click)="openModule.emit(row.module.id)">
+                  <span class="icon"><ion-icon [name]="row.module.icon" aria-hidden="true" /></span>
+                  <span class="text">
+                    <strong>{{ row.module.name }}</strong>
+                    <span>{{ row.module.summary }}</span>
+                  </span>
+                  <span class="pill">{{ row.statusLabel }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+        </section>
+      }
+    </ng-container>
+  `,
+  styles: `
+    section {
+      margin-bottom: 2rem;
+    }
+    h2 {
+      font-size: 1.2rem;
+      font-weight: 650;
+      margin-bottom: 0.75rem;
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+    }
+    .section-head h2 {
+      margin: 0;
+    }
+    .range {
+      display: inline-flex;
+      background: var(--surface);
+      border-radius: 999px;
+      padding: 3px;
+    }
+    .range button {
+      border: 0;
+      background: transparent;
+      color: var(--mute);
+      font: inherit;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      padding: 0.3rem 0.7rem;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .range button.on {
+      background: var(--raise);
+      color: var(--ink);
+    }
+    .update {
+      display: flex;
+      gap: 0.75rem;
+      margin: 0 0 1.5rem;
+      padding: 0.9rem 1rem;
+      border-radius: var(--radius-m);
+      background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+    }
+    .maintenance {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin: 0 0 1.5rem;
+      padding: 0.7rem 1rem;
+      border-radius: var(--radius-m);
+      background: var(--mute-soft);
+      font-weight: 600;
+      font-size: 0.9375rem;
+    }
+    .maintenance ion-icon {
+      flex: none;
+      font-size: 1.2rem;
+      color: var(--accent);
+    }
+    .update ion-icon {
+      flex: none;
+      font-size: 1.4rem;
+      color: var(--accent);
+    }
+    .update div {
+      display: grid;
+      gap: 0.3rem;
+      min-width: 0;
+    }
+    .update code {
+      font-size: 0.75rem;
+      overflow-wrap: anywhere;
+      user-select: all;
+    }
+    .hints h2 {
+      display: flex;
+      gap: 0.5rem;
+      align-items: baseline;
+    }
+    .count {
+      color: var(--mute);
+      font-family: var(--font-body);
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    .hint-intro {
+      font-size: 0.875rem;
+      margin: -0.25rem 0 0.75rem;
+    }
+    .calm {
+      display: flex;
+      gap: 0.9rem;
+      align-items: center;
+      background: var(--surface);
+      border-radius: var(--radius-l);
+      padding: 1.1rem;
+    }
+    .calm ion-icon {
+      font-size: 2rem;
+      color: var(--ok);
+      flex: none;
+    }
+    .calm div {
+      display: grid;
+      gap: 0.2rem;
+    }
+    .charts {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+      gap: 0.75rem;
+    }
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius-m);
+      padding: 0.9rem 1rem 0.7rem;
+    }
+    .note {
+      font-size: 0.875rem;
+      margin-top: 0.75rem;
+    }
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
+      gap: 0.75rem;
+      margin: 0;
+    }
+    .kpi {
+      background: var(--surface);
+      border-radius: var(--radius-m);
+      padding: 0.85rem 1rem;
+      box-shadow: inset 0 -3px 0 var(--tone-soft);
+    }
+    .kpi dt {
+      color: var(--mute);
+      font-size: 0.8125rem;
+      font-weight: 600;
+    }
+    .kpi dd {
+      margin: 0;
+    }
+    .kpi .display {
+      font-size: 1.6rem;
+      font-weight: 650;
+      margin-top: 0.2rem;
+    }
+    .kpi .note {
+      color: var(--mute);
+      font-size: 0.8125rem;
+      margin-top: 0.15rem;
+    }
+    .attention {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 0.5rem;
+    }
+    .attention button {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      padding: 0.75rem 0.9rem;
+      background: var(--surface);
+      border: 0;
+      border-radius: var(--radius-m);
+      color: var(--ink);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .icon {
+      flex: none;
+      width: 2.25rem;
+      height: 2.25rem;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      background: var(--tone-soft);
+      color: var(--tone);
+      font-size: 1.15rem;
+    }
+    .text {
+      flex: 1;
+      min-width: 0;
+      display: grid;
+    }
+    .text span {
+      color: var(--mute);
+      font-size: 0.875rem;
+    }
+  `,
+})
+export class OverviewTab {
+  readonly view = input.required<ClusterView>();
+  readonly cluster = input.required<ClusterConfig>();
+  readonly history = input.required<Loadable<HistoryView>>();
+  readonly hours = input(6);
+  /** The last seven days; null until the agent answered (agents before 0.4 never do). */
+  readonly incidents = input<HistoryVM | null>(null);
+  readonly changed = output<void>();
+  readonly openModule = output<string>();
+  readonly setHours = output<number>();
+  private readonly language = inject(LanguageService);
+  readonly hourChoices = computed(() => hourChoices(this.language.translator()));
+
+  readonly charts = computed<Series[]>(() => {
+    const series = this.history().value?.series ?? [];
+    return CHART_ORDER.map((id) => series.find((s) => s.id === id)).filter((s): s is Series => Boolean(s && s.points.length > 1));
+  });
+}

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launch screen before Android 12 (12+ shows the launcher icon on
+     windowSplashScreenBackground instead). A layer list, not Capacitor's
+     per-density bitmaps, so the logo is never stretched to the screen's ratio.
+     splash_logo.png comes from `npm run native-assets`. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splash_background" />
+    <item
+        android:width="160dp"
+        android:height="160dp"
+        android:gravity="center"
+        android:drawable="@drawable/splash_logo" />
+</layer-list>

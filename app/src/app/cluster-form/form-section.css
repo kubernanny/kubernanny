@@ -1,0 +1,65 @@
+/* Shared by the settings page and its sections, so each section looks as it did inline. */
+label {
+  display: grid;
+  gap: 0.35rem;
+}
+label span {
+  color: var(--mute);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+input {
+  padding: 0.8rem 1rem;
+  border-radius: var(--radius-m);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.hint {
+  color: var(--mute);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+}
+code {
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+section {
+  margin: 2.5rem 0 1.5rem;
+}
+h2 {
+  font-size: 1.2rem;
+  font-weight: 650;
+  margin-bottom: 0.75rem;
+}
+dl {
+  margin: 0 0 1rem;
+  background: var(--surface);
+  border-radius: var(--radius-m);
+  overflow: hidden;
+}
+dl div {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  gap: 1rem;
+  padding: 0.65rem 1rem;
+}
+dl div + div {
+  border-top: 1px solid var(--line);
+}
+dt {
+  color: var(--mute);
+  font-size: 0.875rem;
+}
+dd {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+@media (max-width: 480px) {
+  dl div {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
+}

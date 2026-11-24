@@ -1,0 +1,123 @@
+<ng-container *transloco="let t">
+  <ion-header class="ion-no-border">
+    <ion-toolbar>
+      <ion-buttons slot="start">
+        <ion-button routerLink="/clusters" [attr.aria-label]="multiple() ? t('cluster.allClusters') : t('cluster.manageClusters')">
+          <ion-icon slot="icon-only" [name]="multiple() ? 'chevron-back' : 'layers-outline'" />
+        </ion-button>
+      </ion-buttons>
+      <ion-buttons slot="end">
+        <ion-button class="share" (click)="share()" [disabled]="!canShare()" [attr.aria-label]="t('cluster.share')" [title]="t('cluster.share')">
+          <ion-icon slot="icon-only" name="share-outline" />
+        </ion-button>
+        <ion-button (click)="refresh()" [disabled]="loading()" [attr.aria-label]="t('cluster.checkNow')">
+          <ion-icon slot="icon-only" name="refresh-outline" [class.spin]="loading()" />
+        </ion-button>
+        @if (cluster(); as c) {
+          <ion-button [routerLink]="['/cluster', c.id]" [attr.aria-label]="t('cluster.settings')">
+            <ion-icon slot="icon-only" name="settings-outline" />
+          </ion-button>
+        }
+      </ion-buttons>
+    </ion-toolbar>
+  </ion-header>
+
+  <ion-content>
+    <ion-refresher slot="fixed" (ionRefresh)="pullToRefresh($event)">
+      <ion-refresher-content />
+    </ion-refresher>
+
+    <div class="layout">
+      <header [class]="'hero tone-' + view().tone" [class.stale]="view().stale">
+        <h1 class="name">
+          {{ cluster()?.name }}
+          @if (cluster()?.demo) {
+            <span class="demo-pill" [title]="t('cluster.demoTitle')">{{ t('common.demo') }}</span>
+          }
+        </h1>
+        @if (view().subline) {
+          <p class="subline">{{ view().subline }}</p>
+        }
+        @if (viaRelay()) {
+          <p class="via-relay" [title]="t('cluster.viaRelayTitle')">{{ t('cluster.viaRelay') }}</p>
+        }
+        <app-heartbeat [light]="view().light" [label]="heartbeatLabel()" />
+        <p class="headline display">{{ view().headline }}</p>
+        <p class="checked">
+          {{ view().checked }}
+          @if (view().score !== null) {
+            <span class="score" [title]="t('cluster.scoreTitle')">{{ t('cluster.score', { score: view().score }) }}</span>
+          }
+        </p>
+        @if (view().kpis.length > 0) {
+          <dl class="vitals">
+            @for (k of view().kpis; track k.label) {
+              <div [class]="'tone-' + k.tone">
+                <dt>{{ k.label }}</dt>
+                <dd class="display">{{ k.value }}</dd>
+                <dd class="note">{{ k.note }}</dd>
+              </div>
+            }
+          </dl>
+        }
+      </header>
+
+      <main>
+        <div class="tabs">
+          <ion-segment [value]="tab()" (ionChange)="selectTab($event.detail.value)" scrollable>
+            @for (t of tabs(); track t.id) {
+              <ion-segment-button [value]="t.id">
+                <span class="tab-label">
+                  {{ t.label }}
+                  @if (t.badge) {
+                    <span class="badge">{{ t.badge }}</span>
+                  }
+                </span>
+              </ion-segment-button>
+            }
+          </ion-segment>
+        </div>
+
+        @if (cluster(); as c) {
+          <div class="panel">
+            @switch (tab()) {
+              @case ('lage') {
+                <app-overview-tab
+                  [view]="view()"
+                  [cluster]="c"
+                  [history]="data.history()"
+                  [hours]="data.hours()"
+                  [incidents]="incidents()"
+                  (changed)="refresh()"
+                  (openModule)="openModule($event)"
+                  (setHours)="data.setHours($event)"
+                />
+              }
+              @case ('dienste') {
+                <app-services-tab [groups]="view().groups" (open)="openModule($event)" />
+              }
+              @case ('nodes') {
+                <app-nodes-tab [nodes]="data.nodes()" [history]="data.history()" [now]="now()" />
+              }
+              @case ('workloads') {
+                <app-workloads-tab [workloads]="data.workloads()" [now]="now()" />
+              }
+              @case ('speicher') {
+                <app-storage-tab [storage]="data.storage()" />
+              }
+              @case ('backups') {
+                <app-backups-tab [backups]="data.backups()" [now]="now()" />
+              }
+              @case ('netzwerk') {
+                <app-network-tab [network]="data.network()" />
+              }
+              @case ('ereignisse') {
+                <app-events-tab [events]="data.events()" [now]="now()" />
+              }
+            }
+          </div>
+        }
+      </main>
+    </div>
+  </ion-content>
+</ng-container>

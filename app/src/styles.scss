@@ -1,0 +1,202 @@
+@import '@fontsource-variable/bricolage-grotesque/index.css';
+@import '@fontsource-variable/figtree/index.css';
+@import '@ionic/angular/css/core.css';
+@import '@ionic/angular/css/normalize.css';
+@import '@ionic/angular/css/structure.css';
+@import '@ionic/angular/css/typography.css';
+@import '@ionic/angular/css/padding.css';
+
+/*
+ * Kubernanny tokens. Dark is the primary mode (people check this at night); light
+ * is its own set of steps, not an inversion.
+ */
+:root {
+  --font-display: 'Bricolage Grotesque Variable', 'Bricolage Grotesque', system-ui, sans-serif;
+  --font-body: 'Figtree Variable', 'Figtree', system-ui, sans-serif;
+
+  --ground: #f3f5f9;
+  --surface: #ffffff;
+  --raise: #e9edf5;
+  --ink: #121a2c;
+  --ink-2: #3a445e;
+  --mute: #5b6582;
+  --line: rgba(18, 26, 44, 0.1);
+  --ok: #0e9f77;
+  --warn: #b97800;
+  --crit: #d92d4a;
+  --accent: #4d5fd6;
+  --chart: #4d5fd6;
+  --ok-soft: rgba(14, 159, 119, 0.12);
+  --warn-soft: rgba(185, 120, 0, 0.13);
+  --crit-soft: rgba(217, 45, 74, 0.11);
+  --mute-soft: rgba(91, 101, 130, 0.12);
+  --radius-l: 20px;
+  --radius-m: 14px;
+  --radius-s: 8px;
+
+  --ion-font-family: var(--font-body);
+  --ion-background-color: var(--ground);
+  --ion-background-color-rgb: 243, 245, 249;
+  --ion-text-color: var(--ink);
+  --ion-text-color-rgb: 18, 26, 44;
+  --ion-toolbar-background: var(--ground);
+  --ion-toolbar-border-color: transparent;
+  --ion-item-background: transparent;
+  --ion-border-color: var(--line);
+  --ion-color-primary: var(--accent);
+  --ion-color-primary-rgb: 77, 95, 214;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-shade: #3f50c0;
+  --ion-color-primary-tint: #5f70dc;
+  --ion-color-danger: var(--crit);
+  --ion-color-success: var(--ok);
+  --ion-color-warning: var(--warn);
+  --ion-color-medium: var(--mute);
+}
+
+@mixin dark-tokens {
+  --ground: #0f1626;
+  --surface: #172036;
+  --raise: #1f2a46;
+  --ink: #e9edf7;
+  --ink-2: #c3cbe0;
+  --mute: #8d97b5;
+  --line: rgba(141, 151, 181, 0.16);
+  --ok: #36d6a8;
+  --warn: #f5b83d;
+  --crit: #ff5d73;
+  --accent: #8ea2ff;
+  --chart: #8ea2ff;
+  --ok-soft: rgba(54, 214, 168, 0.13);
+  --warn-soft: rgba(245, 184, 61, 0.14);
+  --crit-soft: rgba(255, 93, 115, 0.15);
+  --mute-soft: rgba(141, 151, 181, 0.14);
+
+  --ion-background-color: var(--ground);
+  --ion-background-color-rgb: 15, 22, 38;
+  --ion-text-color: var(--ink);
+  --ion-text-color-rgb: 233, 237, 247;
+  --ion-color-primary-rgb: 142, 162, 255;
+  --ion-color-primary-contrast: #0f1626;
+  --ion-color-primary-shade: #7d8fe0;
+  --ion-color-primary-tint: #99abff;
+  --ion-color-step-50: #172036;
+  --ion-color-step-100: #1f2a46;
+  --ion-color-step-150: #26324f;
+  --ion-card-background: var(--surface);
+  --ion-item-background: transparent;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    @include dark-tokens;
+  }
+}
+:root[data-theme='dark'] {
+  @include dark-tokens;
+}
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-feature-settings: 'tnum' 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+.display {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Status vocabulary: a coloured dot always comes with a word or an icon. */
+.tone-ok {
+  --tone: var(--ok);
+  --tone-soft: var(--ok-soft);
+}
+.tone-warning {
+  --tone: var(--warn);
+  --tone-soft: var(--warn-soft);
+}
+.tone-critical {
+  --tone: var(--crit);
+  --tone-soft: var(--crit-soft);
+}
+.tone-muted {
+  --tone: var(--mute);
+  --tone-soft: var(--mute-soft);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  padding: 0.15em 0.6em;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--tone, var(--mute));
+  background: var(--tone-soft, var(--mute-soft));
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--mute);
+}
+
+.page-spinner {
+  display: flex;
+  justify-content: center;
+  padding: 3rem 0;
+}
+
+ion-segment-button {
+  /* iOS draws the indicator as a pill behind the label, md as an underline. */
+  --indicator-color: var(--raise);
+  --color-checked: var(--ink);
+  --color: var(--mute);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  min-width: auto;
+}
+
+.md ion-segment-button {
+  --indicator-color: var(--ink);
+}
+
+ion-modal.sheet {
+  --border-radius: var(--radius-l);
+  --background: var(--surface);
+}
+
+ion-alert {
+  --background: var(--surface);
+}
+
+ion-toast {
+  --border-radius: var(--radius-m);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

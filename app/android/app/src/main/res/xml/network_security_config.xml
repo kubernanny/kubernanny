@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext HTTP is allowed on purpose. Agents are often reached as
+  http://<LAN or VPN address> (a port-forward, a NodePort, a home network
+  without certificates). Every request and answer is end-to-end encrypted and
+  authenticated with Noise against the agent key pinned at pairing
+  (docs/PROTOCOL.md), so the transport carries only ciphertext; TLS would add
+  nothing an attacker on the path could break. Fetching an agent key that is
+  not pinned yet is refused over plain HTTP by the app itself
+  (transportAllowed in agent-client.service.ts). See docs/RELEASING.md.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

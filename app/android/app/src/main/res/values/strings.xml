@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Kubernanny</string>
+    <string name="title_activity_main">Kubernanny</string>
+    <string name="package_name">app.kubernanny</string>
+    <string name="custom_url_scheme">app.kubernanny</string>
+</resources>
