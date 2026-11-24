@@ -1,0 +1,1 @@
+Eine Ampel für dein selbst gehostetes Kubernetes: was kaputt ist, warum, und was hilft. Open Source, kostenlos, ohne Konto, Ende-zu-Ende verschlüsselt.

@@ -1,0 +1,66 @@
+name: Website
+
+# Builds kubernanny.app from website/ and docs/ and deploys it to Cloudflare Pages.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - 'docs/**'
+      - 'branding/**'
+      - '.github/workflows/website.yml'
+  pull_request:
+    paths:
+      - 'website/**'
+      - 'docs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      # Includes a check that every link between the docs lands on a page and heading.
+      - run: npm test
+      # Fails if any route did not prerender.
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: website
+          path: website/dist/analog/public
+          retention-days: 7
+
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: website
+      url: https://kubernanny.app
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: website
+          path: site
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy site --project-name=kubernanny --branch=main --commit-dirty=true

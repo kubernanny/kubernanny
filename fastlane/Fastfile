@@ -1,0 +1,406 @@
+# Store uploads for the Kubernanny app: signed builds, listing texts, release
+# notes and screenshots, for the App Store and Google Play. Everything is
+# documented in docs/RELEASING.md; the npm scripts in app/package.json are the
+# usual way in (`npm run release`, `npm run release:production`, ...).
+#
+# Nothing account-specific lives in this repo. It comes from the environment
+# or from ~/.config/kubernanny-store/ (KUBERNANNY_STORE_DIR moves it):
+#   asc-api-key.json, asc-api-key.p8   App Store Connect API key (role Admin)
+#   play-service-account.json          Google Play service account
+#   upload-keystore.jks                Android upload key
+#   store.env                          KUBERNANNY_APPLE_TEAM_ID, review contact, ...
+#
+# Lanes:
+#   ios beta / android beta        build, upload to TestFlight / the internal track
+#   ios release / android release  send the tested build for review / to production
+#   ios metadata / android metadata, metadata        listing texts
+#   ios screenshots / android screenshots, screenshots  screenshots and Play graphics
+
+require 'fileutils'
+require 'json'
+require 'dotenv'
+
+# fastlane would otherwise rewrite fastlane/README.md after every run; the
+# documentation is docs/RELEASING.md.
+skip_docs
+
+FASTLANE_DIR = File.expand_path(__dir__)
+ROOT = File.expand_path('..', FASTLANE_DIR)
+APP = File.join(ROOT, 'app')
+BUILD_DIR = File.join(FASTLANE_DIR, 'build')
+NOTES_DIR = File.join(FASTLANE_DIR, 'release-notes')
+SCREENSHOTS_DIR = File.join(FASTLANE_DIR, 'screenshots')
+STORE_DIR = File.expand_path(ENV['KUBERNANNY_STORE_DIR'] || '~/.config/kubernanny-store')
+ASC_KEY_PATH = File.join(STORE_DIR, 'asc-api-key.json')
+ASC_P8_PATH = File.join(STORE_DIR, 'asc-api-key.p8')
+
+# Account values (team id, review contact, keystore alias). Variables already
+# set in the environment win over the file.
+store_env = File.join(STORE_DIR, 'store.env')
+Dotenv.load(store_env) if File.exist?(store_env)
+
+# The listing languages; the App Store and Play use the same codes for these two.
+LOCALES = %w[de-DE en-US].freeze
+
+def app_version
+  JSON.parse(File.read(File.join(APP, 'package.json')))['version']
+end
+
+def require_file(path, hint)
+  UI.user_error!("Missing #{path}: #{hint} (docs/RELEASING.md, one-time setup)") unless File.exist?(path)
+  path
+end
+
+def require_env(name, hint)
+  value = ENV[name].to_s.strip
+  UI.user_error!("#{name} is not set: #{hint} (docs/RELEASING.md, one-time setup)") if value.empty?
+  value
+end
+
+def asc_key_path
+  require_file(ASC_KEY_PATH, 'App Store Connect API key as fastlane JSON')
+end
+
+# The web app the native shells load. `cap sync` copies it and the plugins.
+def build_web(platform)
+  sh("cd #{APP} && npx ng build && npx cap sync #{platform}")
+end
+
+# The release notes of this version, one file per locale, written by hand
+# before `npm run release` (the script shows them and asks once).
+def release_notes
+  LOCALES.to_h do |locale|
+    text = File.read(require_file(File.join(NOTES_DIR, "#{locale}.txt"), 'release notes for this version')).strip
+    UI.user_error!("fastlane/release-notes/#{locale}.txt is empty") if text.empty?
+    # Play's limit; the App Store allows more, but both get the same text.
+    UI.user_error!("fastlane/release-notes/#{locale}.txt is over 500 characters") if text.length > 500
+    [locale, text]
+  end
+end
+
+REVIEW_CONTACT = {
+  first_name: 'KUBERNANNY_REVIEW_FIRST_NAME',
+  last_name: 'KUBERNANNY_REVIEW_LAST_NAME',
+  phone_number: 'KUBERNANNY_REVIEW_PHONE',
+  email_address: 'KUBERNANNY_REVIEW_EMAIL',
+}.freeze
+
+# App Review contact and notes. The contact is personal data, so it comes only
+# from the environment / store.env. No demo account: the app has none, and the
+# notes explain the built-in demo instead. `required: false` (listing texts
+# alone) leaves it out when the contact is not set up.
+def app_review_information(required: true)
+  missing = REVIEW_CONTACT.values.select { |name| ENV[name].to_s.strip.empty? }
+  unless missing.empty?
+    UI.user_error!("#{missing.join(', ')} not set: the App Review contact (docs/RELEASING.md, one-time setup)") if required
+    UI.important('App Review contact not set up, leaving the review information as it is')
+    return nil
+  end
+  REVIEW_CONTACT.transform_values { |name| ENV[name].strip }
+                .merge(notes: File.read(File.join(FASTLANE_DIR, 'review-notes.txt')).strip)
+end
+
+def non_empty_dir?(dir)
+  Dir.exist?(dir) && !Dir.glob(File.join(dir, '**', '*.png')).empty?
+end
+
+# ---- iOS --------------------------------------------------------------------
+
+def ios_metadata
+  deliver(
+    api_key_path: asc_key_path,
+    metadata_path: File.join(FASTLANE_DIR, 'metadata', 'ios'),
+    app_review_information: app_review_information(required: false),
+    skip_screenshots: true,
+    skip_binary_upload: true,
+    skip_app_version_update: true,
+    run_precheck_before_submit: false,
+    submit_for_review: false,
+    force: true,
+  )
+end
+
+def ios_screenshots
+  dir = File.join(SCREENSHOTS_DIR, 'ios')
+  UI.user_error!("No screenshots in #{dir} (docs/RELEASING.md, Screenshots)") unless non_empty_dir?(dir)
+  # With several threads deliver can race itself creating screenshot sets.
+  ENV['DELIVER_NUMBER_OF_THREADS'] = '1'
+  deliver(
+    api_key_path: asc_key_path,
+    screenshots_path: dir,
+    # Not uploaded (skip_metadata), but deliver checks the folder.
+    metadata_path: File.join(FASTLANE_DIR, 'metadata', 'ios'),
+    overwrite_screenshots: true,
+    skip_binary_upload: true,
+    skip_metadata: true,
+    skip_app_version_update: true,
+    run_precheck_before_submit: false,
+    submit_for_review: false,
+    force: true,
+  )
+end
+
+platform :ios do
+  desc 'Build and sign the app for the App Store (no upload), e.g. to check signing. macOS only.'
+  lane :build do
+    UI.user_error!('iOS builds need macOS with Xcode') unless FastlaneCore::Helper.mac?
+    key = JSON.parse(File.read(asc_key_path))
+    p8 = require_file(ASC_P8_PATH, 'the same App Store Connect key as .p8 (xcodebuild needs the file)')
+    team = require_env('KUBERNANNY_APPLE_TEAM_ID', 'your Apple Developer team id')
+
+    build_web('ios')
+
+    # TestFlight counts build numbers per version, so a second upload of the
+    # same version simply takes the next one. Nothing is written to the project.
+    build_number = latest_testflight_build_number(
+      api_key_path: asc_key_path,
+      version: app_version,
+      initial_build_number: 0,
+    ) + 1
+
+    build_app(
+      project: File.join(APP, 'ios/App/App.xcodeproj'),
+      scheme: 'App',
+      export_method: 'app-store',
+      output_directory: BUILD_DIR,
+      output_name: 'Kubernanny.ipa',
+      # Automatic signing as in Xcode, authenticated with the API key; Apple's
+      # cloud-managed distribution certificate needs the key's Admin role.
+      xcargs: '-allowProvisioningUpdates ' \
+              "-authenticationKeyPath #{p8} " \
+              "-authenticationKeyID #{key['key_id']} -authenticationKeyIssuerID #{key['issuer_id']} " \
+              "DEVELOPMENT_TEAM=#{team} MARKETING_VERSION=#{app_version} CURRENT_PROJECT_VERSION=#{build_number}",
+      export_team_id: team,
+    )
+  end
+
+  desc 'Build and upload to TestFlight for internal testers; prepares the App Store version with texts and release notes, not submitted'
+  lane :beta do
+    build
+
+    # The App Store takes listing texts only together with a version, so they
+    # ride along with every release, plus this version's release notes.
+    metadata = File.join(BUILD_DIR, 'release-metadata-ios')
+    FileUtils.rm_rf(metadata)
+    FileUtils.mkdir_p(metadata)
+    FileUtils.cp_r(File.join(FASTLANE_DIR, 'metadata', 'ios', '.'), metadata)
+    release_notes.each do |locale, text|
+      File.write(File.join(metadata, locale, 'release_notes.txt'), "#{text}\n")
+    end
+
+    # deliver uploads the IPA (it shows up in TestFlight for internal testers
+    # once Apple has processed it) and creates the App Store version.
+    deliver(
+      api_key_path: asc_key_path,
+      app_version: app_version,
+      ipa: File.join(BUILD_DIR, 'Kubernanny.ipa'),
+      metadata_path: metadata,
+      app_review_information: app_review_information,
+      skip_screenshots: true,
+      run_precheck_before_submit: false,
+      submit_for_review: false,
+      automatic_release: false,
+      force: true,
+    )
+  end
+
+  desc 'Submit the prepared App Store version with its newest build for review (AUTO_RELEASE=1 publishes it once approved)'
+  lane :release do
+    # Running it twice must not fail: Apple refuses to link a build to a
+    # version that is already submitted.
+    Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.from(filepath: asc_key_path)
+    app = Spaceship::ConnectAPI::App.find(CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier))
+    version = app.get_app_store_versions(filter: { versionString: app_version, platform: 'IOS' }).first
+    UI.user_error!("No App Store version #{app_version} yet: run `fastlane ios beta` first") unless version
+    state = version.app_version_state || version.app_store_state
+    submitted = %w[
+      WAITING_FOR_REVIEW IN_REVIEW ACCEPTED PENDING_APPLE_RELEASE PENDING_DEVELOPER_RELEASE
+      PROCESSING_FOR_APP_STORE PROCESSING_FOR_DISTRIBUTION READY_FOR_SALE READY_FOR_DISTRIBUTION
+    ]
+    if submitted.include?(state)
+      UI.important("#{app_version} is already submitted (#{state}), nothing to send")
+      next
+    end
+
+    deliver(
+      api_key_path: asc_key_path,
+      app_version: app_version,
+      skip_binary_upload: true,
+      skip_metadata: true,
+      skip_screenshots: true,
+      # Checked even with skip_metadata.
+      metadata_path: File.join(FASTLANE_DIR, 'metadata', 'ios'),
+      run_precheck_before_submit: false,
+      submit_for_review: true,
+      automatic_release: ENV['AUTO_RELEASE'] == '1',
+      # No advertising identifier. Export compliance is answered in App Store
+      # Connect (docs/RELEASING.md, Encryption).
+      submission_information: { add_id_info_uses_idfa: false },
+      force: true,
+    )
+  end
+
+  desc 'Upload the listing texts in fastlane/metadata/ios (name, subtitle, description, keywords, URLs, review notes)'
+  lane :metadata do
+    ios_metadata
+  end
+
+  desc 'Replace the App Store screenshots with fastlane/screenshots/ios'
+  lane :screenshots do
+    ios_screenshots
+  end
+end
+
+# ---- Android ----------------------------------------------------------------
+
+def play_key_path
+  require_file(File.join(STORE_DIR, 'play-service-account.json'), 'Google Play service account key')
+end
+
+# The next free version code: one above the highest on any track. Play refuses
+# a code twice, so this also makes a second upload of the same version work.
+def next_version_code
+  return ENV['VERSION_CODE'].to_i if ENV['VERSION_CODE']
+
+  codes = %w[internal alpha beta production].flat_map do |track|
+    google_play_track_version_codes(track: track, json_key: play_key_path)
+  rescue StandardError => e
+    UI.message("No version codes on #{track}: #{e.message}")
+    []
+  end
+  (codes.max || 0) + 1
+end
+
+# Gradle properties that sign the bundle with the upload key (Play App Signing
+# holds the real signing key). The password comes from the environment or the
+# macOS keychain, never from a file in the repo.
+def android_signing
+  keystore = File.expand_path(ENV['KUBERNANNY_UPLOAD_KEYSTORE'] || File.join(STORE_DIR, 'upload-keystore.jks'))
+  require_file(keystore, 'Android upload keystore')
+  password = ENV['KUBERNANNY_UPLOAD_KEYSTORE_PASSWORD'].to_s
+  if password.empty? && FastlaneCore::Helper.mac?
+    password = sh('security find-generic-password -s kubernanny-upload-keystore -w', log: false, error_callback: ->(_) {}).to_s.strip
+  end
+  UI.user_error!('No keystore password: set KUBERNANNY_UPLOAD_KEYSTORE_PASSWORD or the keychain entry kubernanny-upload-keystore') if password.empty?
+  {
+    'android.injected.signing.store.file' => keystore,
+    'android.injected.signing.store.password' => password,
+    'android.injected.signing.key.alias' => ENV['KUBERNANNY_UPLOAD_KEY_ALIAS'] || 'upload',
+    'android.injected.signing.key.password' => password,
+  }
+end
+
+def android_metadata
+  upload_to_play_store(
+    json_key: play_key_path,
+    metadata_path: File.join(FASTLANE_DIR, 'metadata', 'android'),
+    skip_upload_apk: true,
+    skip_upload_aab: true,
+    skip_upload_changelogs: true,
+    skip_upload_images: true,
+    skip_upload_screenshots: true,
+  )
+end
+
+def android_screenshots
+  dir = File.join(SCREENSHOTS_DIR, 'android')
+  UI.user_error!("No images in #{dir} (docs/RELEASING.md, Screenshots)") unless non_empty_dir?(dir)
+  upload_to_play_store(
+    json_key: play_key_path,
+    metadata_path: dir,
+    skip_upload_apk: true,
+    skip_upload_aab: true,
+    skip_upload_metadata: true,
+    skip_upload_changelogs: true,
+    # icon.png and featureGraphic.png come from `npm run native-assets`.
+    skip_upload_images: false,
+    skip_upload_screenshots: false,
+    sync_image_upload: true,
+  )
+end
+
+platform :android do
+  desc 'Build and sign the app bundle (no upload), e.g. to check signing'
+  lane :build do
+    build_web('android')
+    code = next_version_code
+    UI.message("Version #{app_version}, version code #{code}")
+    gradle(
+      project_dir: File.join(APP, 'android'),
+      task: ':app:bundleRelease',
+      print_command: false,
+      properties: android_signing.merge('VERSION_CODE' => code.to_s),
+    )
+    lane_context[:KUBERNANNY_VERSION_CODE] = code
+  end
+
+  desc 'Build and upload to the internal test track with this version\'s release notes'
+  lane :beta do
+    build
+
+    notes = File.join(BUILD_DIR, 'release-notes-android')
+    FileUtils.rm_rf(notes)
+    release_notes.each do |locale, text|
+      FileUtils.mkdir_p(File.join(notes, locale, 'changelogs'))
+      File.write(File.join(notes, locale, 'changelogs', "#{lane_context[:KUBERNANNY_VERSION_CODE]}.txt"), "#{text}\n")
+    end
+
+    upload_to_play_store(
+      json_key: play_key_path,
+      track: 'internal',
+      # An app that was never published only takes draft releases
+      # (PLAY_RELEASE_STATUS=draft); see docs/RELEASING.md.
+      release_status: ENV['PLAY_RELEASE_STATUS'] || 'completed',
+      metadata_path: notes,
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+    )
+  end
+
+  desc 'Promote the newest internal build to production and send it for review'
+  lane :release do
+    code = google_play_track_version_codes(track: 'internal', json_key: play_key_path).max
+    UI.user_error!('Nothing on the internal track: run `fastlane android beta` first') unless code
+    upload_to_play_store(
+      json_key: play_key_path,
+      track: 'internal',
+      track_promote_to: 'production',
+      version_code: code,
+      # Sent for review at once. With managed publishing on in the Play Console
+      # it then waits there for the click on "Publish".
+      release_status: 'completed',
+      skip_upload_apk: true,
+      skip_upload_aab: true,
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+    )
+  end
+
+  desc 'Upload the listing texts in fastlane/metadata/android (title, short and full description)'
+  lane :metadata do
+    android_metadata
+  end
+
+  desc 'Replace the Play screenshots, icon and feature graphic with fastlane/screenshots/android'
+  lane :screenshots do
+    android_screenshots
+  end
+end
+
+# ---- Both stores ------------------------------------------------------------
+
+desc 'Upload the listing texts to both stores'
+lane :metadata do
+  android_metadata
+  ios_metadata
+end
+
+desc 'Upload the screenshots (and Play graphics) to both stores'
+lane :screenshots do
+  android_screenshots
+  ios_screenshots
+end

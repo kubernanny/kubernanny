@@ -1,0 +1,24 @@
+name: False alarm
+description: Kubernanny reports a problem that is not one
+labels: [false-positive]
+body:
+  - type: textarea
+    attributes:
+      label: What Kubernanny said
+      description: Title and cause of the issue, or a screenshot.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Why it is fine
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: The object
+      description: "`kubectl get <kind> <name> -n <ns> -o yaml`, secrets removed."
+      render: yaml
+  - type: input
+    attributes:
+      label: Versions
+      description: Kubernanny agent, Kubernetes distribution and version, component version.

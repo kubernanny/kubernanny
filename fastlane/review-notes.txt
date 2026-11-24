@@ -1,0 +1,12 @@
+Kubernanny shows the health of a self-hosted Kubernetes cluster. It talks only to the Kubernanny agent that the user installs in their own cluster. There is no backend of ours, no account and no sign-in, so no demo account is needed.
+
+HOW TO REVIEW WITHOUT A CLUSTER
+On the start screen, tap the demo button ("Erst mal die Demo ansehen", German for "Try the demo first"). It opens three invented clusters built into the app: one red (outages), one yellow (warnings), one green. Every screen of the app is reachable there: the overview with the problems and their cause and action, services, nodes, workloads, storage, network, events and settings. Actions in the demo are simulated; nothing leaves the device.
+
+WITH A REAL CLUSTER
+The agent is installed with Helm or kubectl (https://github.com/kubernanny/kubernanny). Its log shows a QR code; scanning it with the camera opens the app through the kubernanny:// URL scheme and pairs the device.
+
+NETWORK AND ENCRYPTION
+The app connects only to the user's own agent, often by plain HTTP inside a home network or VPN, where certificates are rare. Every request and answer is end-to-end encrypted and authenticated with the Noise protocol: the device has its own key pair, and the agent's public key is pinned at pairing. The transport therefore only ever carries ciphertext. This is why the app sets NSAllowsArbitraryLoadsInWebContent (all requests go through the web view; the app has no other networking) and asks for local network access.
+
+The app is open source under the Apache-2.0 licence: https://github.com/kubernanny/kubernanny

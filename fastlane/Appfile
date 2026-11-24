@@ -1,0 +1,5 @@
+# The app's store identity. Credentials and account ids are not here: they live
+# in ~/.config/kubernanny-store/ (KUBERNANNY_STORE_DIR), see docs/RELEASING.md.
+app_identifier('app.kubernanny')
+package_name('app.kubernanny')
+json_key_file(File.join(File.expand_path(ENV['KUBERNANNY_STORE_DIR'] || '~/.config/kubernanny-store'), 'play-service-account.json'))

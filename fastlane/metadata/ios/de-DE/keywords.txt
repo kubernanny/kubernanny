@@ -1,0 +1,1 @@
+kubernetes,k8s,k3s,rke2,homelab,cluster,monitoring,selfhosted,devops,status,ampel,helm,kubectl

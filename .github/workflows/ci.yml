@@ -1,0 +1,248 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  protocol:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: protocol
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: protocol/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      # Includes the cross-test against libsodium and the published test vectors.
+      - run: npm test
+
+  agent:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: agent/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: protocol
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: protocol
+      - run: npm ci
+      - run: npx ng test --watch=false
+      - run: npm run test:scripts
+      - run: npx ng build
+
+  relay:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: relay
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: relay/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: protocol
+      # The end-to-end test starts a real demo agent behind the relay.
+      - run: npm ci
+        working-directory: agent
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Cloudflare Worker typecheck and bundle
+        working-directory: relay/cloudflare
+        run: |
+          npm ci
+          npm run typecheck
+          npx wrangler deploy --dry-run --outdir dist
+
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v4
+      - name: Lint and validate
+        run: |
+          curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz | tar xz -C /usr/local/bin kubeconform
+          helm lint deploy/helm/kubernanny
+          for values in "" "--set ingress.enabled=true --set serviceMonitor.enabled=true --set rbac.allowActions=false --set notifications.ntfyUrl=https://ntfy.sh/x" "--set relay.enabled=true --set networkPolicy.enabled=true --set networkPolicy.egress.enabled=true --set networkPolicy.egress.internetHttps=false"; do
+            helm template kubernanny deploy/helm/kubernanny -n kubernanny $values | kubeconform -strict -ignore-missing-schemas -summary
+          done
+          kubeconform -strict -summary deploy/install.yaml
+      # The switches in values.yaml must really take the permissions away (rules generated from files/rbac.json).
+      - name: RBAC follows the switches
+        run: |
+          render() { helm template kubernanny deploy/helm/kubernanny -n kubernanny "$@"; }
+          render | grep -q 'argoproj.io'
+          ! render --set 'checks.disabled={argocd}' | grep -q 'argoproj.io'
+          ! render --set 'actions.disabled={restart}' | grep -A2 '"apps"' | grep -q '"patch"'
+          render --set 'actions.disabled={argocd-sync}' | grep -q '"patch"'
+          ! render --set rbac.allowActions=false | grep -Eq '"(patch|create)"'
+          ! render --set 'actions.disabled={logs}' | grep -q 'pods/log'
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Install
+        run: |
+          for dir in protocol agent app e2e; do (cd "$dir" && npm ci); done
+      - name: Build
+        working-directory: e2e
+        run: npm run build
+      - run: npx playwright install --with-deps chromium
+        working-directory: e2e
+      # The web demo and a real agent serving its web UI, on a phone and a desktop viewport.
+      - run: npm test
+        working-directory: e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+
+  image:
+    needs: [protocol, agent, app, chart, e2e]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      # Keyless signing with the workflow's own identity (Sigstore).
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: tags
+        run: |
+          OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          if [[ '${{ github.ref }}' == refs/tags/v* ]]; then
+            echo "tags=ghcr.io/$OWNER/agent:${GITHUB_REF_NAME#v},ghcr.io/$OWNER/agent:latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=ghcr.io/$OWNER/agent:$(date -u +%Y-%m-%d)-${{ github.run_number }},ghcr.io/$OWNER/agent:edge" >> "$GITHUB_OUTPUT"
+          fi
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          # Build provenance and an SBOM travel with the image as attestations.
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: sigstore/cosign-installer@v3
+      # Signs the digest, not a tag: verify with
+      # cosign verify ghcr.io/kubernanny/agent@<digest> --certificate-identity-regexp 'https://github.com/kubernanny/kubernanny/' --certificate-oidc-issuer https://token.actions.githubusercontent.com
+      - run: |
+          OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          cosign sign --yes "ghcr.io/$OWNER/agent@${{ steps.build.outputs.digest }}"
+
+  relay-image:
+    needs: [protocol, relay]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: tags
+        run: |
+          OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          if [[ '${{ github.ref }}' == refs/tags/v* ]]; then
+            echo "tags=ghcr.io/$OWNER/relay:${GITHUB_REF_NAME#v},ghcr.io/$OWNER/relay:latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=ghcr.io/$OWNER/relay:edge" >> "$GITHUB_OUTPUT"
+          fi
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: relay/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=relay
+          cache-to: type=gha,mode=max,scope=relay
+      - uses: sigstore/cosign-installer@v3
+      - run: |
+          OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          cosign sign --yes "ghcr.io/$OWNER/relay@${{ steps.build.outputs.digest }}"
+
+  helm-release:
+    needs: [image]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v4
+      - uses: sigstore/cosign-installer@v3
+      - run: |
+          OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          echo '${{ secrets.GITHUB_TOKEN }}' | helm registry login ghcr.io -u '${{ github.actor }}' --password-stdin
+          helm package deploy/helm/kubernanny --version "${GITHUB_REF_NAME#v}" --app-version "${GITHUB_REF_NAME#v}"
+          helm push kubernanny-*.tgz "oci://ghcr.io/$OWNER/charts" 2>&1 | tee push.log
+          DIGEST=$(grep -o 'sha256:[0-9a-f]*' push.log | head -1)
+          cosign sign --yes "ghcr.io/$OWNER/charts/kubernanny@$DIGEST"

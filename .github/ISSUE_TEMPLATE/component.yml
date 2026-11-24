@@ -1,0 +1,14 @@
+name: Recognise a component / new check
+description: Something Kubernanny should know about
+labels: [component]
+body:
+  - type: input
+    attributes:
+      label: Component and image
+      description: e.g. Gatus, ghcr.io/twin/gatus
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: What you check by hand
+      description: Which object, field, endpoint or metric, and when it should be a warning or critical.

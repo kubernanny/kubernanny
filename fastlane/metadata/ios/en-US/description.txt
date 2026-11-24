@@ -1,0 +1,35 @@
+Is my cluster okay, and if not, what exactly is wrong?
+
+Kubernanny answers that one question for self-hosted Kubernetes. A small agent in your cluster recognises what you run (Longhorn, Argo CD, cert-manager, CloudNativePG, Prometheus, Loki, kured and about 70 more), checks each of them the way you would by hand, and shows a traffic light per cluster. Below it: only what is broken right now, why, and the one action that usually fixes it.
+
+Made for the moment your phone buzzes at 4:10 in the morning, or the glance before you go to bed. Not another cluster browser, but a clear answer.
+
+WHAT IT CHECKS
+• Nodes: NotReady, pressure, RAM and disk. Planned kured reboots are a warning, not an alarm.
+• etcd: members, quorum, WAL fsync, leader changes
+• Workloads: CrashLoopBackOff with the logs of the crashed run, stuck rollouts, failed CronJobs
+• Volumes: pending, lost, nearly full
+• Longhorn, cert-manager, Argo CD, CloudNativePG, Prometheus and Alertmanager, Grafana, Loki, Velero, Flux and more
+• Plus nodes, workloads, volumes, ingress certificates, events and history over up to seven days
+
+ACTIONS, SAFELY
+Exactly four, and only on an open problem: sync and hard refresh an Argo CD app, restart a workload, start a CloudNativePG backup. The agent takes the target from its own check, never from the app. The app cannot delete anything, and the agent can be made strictly read-only.
+
+NOTIFICATIONS
+The agent reports problems itself through ntfy, Discord, Slack, Gotify or a webhook, once they have lasted five minutes.
+
+PRIVATE BY DESIGN
+• End-to-end encrypted: every call between app and agent is a Noise handshake with your device's key. Ingress, proxies and Wi-Fi only see ciphertext, which is why plain HTTP in your LAN or VPN is fine.
+• No account, no server of ours, no tracking, no ads.
+• Your device's private key never leaves it. A lost phone is revoked with one tap.
+
+GETTING STARTED
+1. Install the agent with the Helm chart or kubectl apply.
+2. The agent's log shows a QR code.
+3. Scan it with your camera. Done.
+
+No cluster at hand? The built-in demo shows three invented clusters, one per traffic light colour.
+
+Open source (Apache-2.0) and free, with no subscription and no pro version. Source and docs: github.com/kubernanny/kubernanny
+
+Kubernanny needs the Kubernanny agent in your cluster. Kubernetes is a trademark of the Linux Foundation; Kubernanny is an independent project.
