@@ -1,0 +1,22 @@
+# The Kubernanny relay on Cloudflare Workers (README.md in this folder).
+name = "kubernanny-relay"
+main = "src/worker.ts"
+compatibility_date = "2026-11-01"
+
+[[durable_objects.bindings]]
+name = "AGENTS"
+class_name = "AgentObject"
+
+# SQLite-backed Durable Objects; the object writes nothing to storage; it holds the agent's WebSocket, and its state lives in the socket's attachment.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AgentObject"]
+
+# Limits, the same variables as the Node relay (docs/RELAY.md). Unset ones use the defaults.
+[vars]
+RELAY_MAX_CONCURRENT = "8"
+RELAY_CALL_TIMEOUT_MS = "25000"
+# CORS_ORIGINS = "*"
+
+# Your own domain instead of *.workers.dev:
+# routes = [{ pattern = "relay.example.com", custom_domain = true }]

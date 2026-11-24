@@ -1,0 +1,20 @@
+{
+  "name": "kubernanny-relay-cloudflare",
+  "version": "0.3.0",
+  "private": true,
+  "description": "The Kubernanny relay as a Cloudflare Worker with one Durable Object per agent.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@kubernanny/protocol": "file:../../protocol"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261124.2",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.168.0"
+  }
+}
