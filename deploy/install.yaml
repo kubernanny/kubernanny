@@ -455,6 +455,17 @@ spec:
         !variables.opChanged || (
           has(object.operation) &&
           object.operation.?initiatedBy.?username == optional.of('kubernanny') &&
+          object.operation.?initiatedBy.?automated.orValue(false) == false &&
+          object.operation.?retry == optional.none() &&
+          size(object.operation.?info.orValue([])) <= 1 &&
+          object.operation.?info.orValue([]).all(i, i.name == 'Reason') &&
+          object.operation.?sync.?syncStrategy.?hook.hasValue() &&
+          object.operation.?sync.?syncStrategy.?hook.?force.orValue(false) == false &&
+          object.operation.?sync.?syncStrategy.?apply == optional.none() &&
+          object.operation.?sync.?prune.orValue(false) == false &&
+          object.operation.?sync.?dryRun.orValue(false) == false &&
+          object.operation.?sync.?syncOptions == optional.none() &&
+          object.operation.?sync.?autoHealAttemptsCount == optional.none() &&
           object.operation.?sync.?revision == optional.none() &&
           object.operation.?sync.?revisions == optional.none() &&
           object.operation.?sync.?source == optional.none() &&
@@ -462,6 +473,10 @@ spec:
           object.operation.?sync.?manifests == optional.none() &&
           object.operation.?sync.?resources == optional.none()
         )
+      # An allowlist of the one operation the agent sends (actions.service.ts): a hook sync of
+      # the Application as it is, by kubernanny, without prune, force, dry run, options, retry,
+      # another revision, source, manifests or a resource subset. Every field of Argo CD's
+      # Operation schema is named here; a field a later Argo CD adds is not covered until listed.
       message: the Kubernanny agent may only start a plain sync of the Application as it is
       reason: Forbidden
 ---
