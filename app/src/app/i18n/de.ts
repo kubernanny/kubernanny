@@ -506,7 +506,7 @@ export const de = {
     titleNew: 'Cluster hinzufügen',
     titleEdit: 'Einstellungen',
     name: 'Name',
-    namePlaceholder: 'leer lassen: Name aus dem Agent',
+    namePlaceholder: 'Wie im Agent, wenn leer',
     url: 'Adresse des Agents',
     code: 'Pairing-Code',
     hintNew:

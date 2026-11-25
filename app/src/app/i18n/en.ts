@@ -502,7 +502,7 @@ export const en: Dictionary = {
     titleNew: 'Add cluster',
     titleEdit: 'Settings',
     name: 'Name',
-    namePlaceholder: 'Leave empty to use the agent’s name',
+    namePlaceholder: 'The agent’s name if empty',
     url: 'Agent address',
     code: 'Pairing code',
     hintNew:
