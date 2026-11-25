@@ -4,6 +4,7 @@
  */
 import { Marked, Renderer, type Tokens } from 'marked';
 import { rewriteUrl, type RewriteContext } from './doc-paths.ts';
+import { sanitizeRawHtml } from './raw-html.ts';
 
 export interface TocEntry {
   id: string;
@@ -148,6 +149,10 @@ export function renderMarkdown(source: string, options: RenderOptions): Rendered
           `<button type="button" class="copy-btn" data-copy>Copy</button></div>` +
           `${highlight(token.text, label)}</div>\n`
         );
+      },
+      // Raw HTML in a doc, block or inline: only the allowlisted tags survive (raw-html.ts).
+      html(token: Tokens.HTML | Tokens.Tag) {
+        return sanitizeRawHtml(token.text);
       },
       table(this: Renderer, token: Tokens.Table) {
         return `<div class="table-wrap">${Renderer.prototype.table.call(this, token)}</div>\n`;

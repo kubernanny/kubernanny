@@ -104,7 +104,7 @@ export class DocViewComponent {
   private readonly seo = inject(SeoService);
 
   protected readonly doc = toSignal(this.route.data.pipe(map((d) => d['doc'] as DocPage)), { requireSync: true });
-  // Built from the repository's own docs at build time, not from user input.
+  // Built from the repository's own docs at build time; raw HTML in them passed an allowlist there (build/raw-html.ts).
   protected readonly html = computed(() => this.sanitizer.bypassSecurityTrustHtml(this.doc().html));
   protected readonly vm = computed(() => ({ hasToc: this.doc().toc.length > 1 }));
   protected readonly activeId = signal<string | null>(null);

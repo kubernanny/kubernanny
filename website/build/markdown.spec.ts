@@ -176,6 +176,9 @@ describe('the real docs/ folder', () => {
     const ids = new Map(rendered.map((r) => [r.route, new Set([...r.doc.html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]))]));
     for (const { route, doc } of rendered) {
       expect(doc.title, route).not.toBe('');
+      // Every raw tag the docs use passes the allowlist (raw-html.ts) instead of showing as text.
+      const outsideCode = doc.html.replace(/<pre[\s\S]*?<\/pre>/g, '').replace(/<code>[\s\S]*?<\/code>/g, '');
+      expect(outsideCode, route).not.toMatch(/&lt;\/?(img|td|tr|table|br|sub|p|details|summary)\b/);
       for (const [, path, fragment] of doc.html.matchAll(/href="(\/[^"#]*)(?:#([^"]*))?"/g)) {
         if (path.startsWith('/docs-media/')) {
           continue;
@@ -199,5 +202,29 @@ describe('the real docs/ folder', () => {
     const all = groups.flatMap((g) => g.components);
     expect(all.length).toBeGreaterThan(50);
     expect(all.find((c) => c.name === 'Longhorn')?.deep).toBe(true);
+  });
+});
+
+describe('raw HTML in the docs', () => {
+  const render = (source: string) => renderMarkdown(source, { ctx: ctx('README.md') }).html;
+
+  it('keeps the few tags the docs use, with their allowed attributes', () => {
+    const html = render('<table>\n<tr>\n<td valign="top" width="50%"><img src="https://example.com/a.png" alt="A “quoted” shot" width="300"><br><sub>Caption</sub></td>\n</tr>\n</table>\n');
+    expect(html).toContain('<td valign="top" width="50%">');
+    expect(html).toContain('<img src="https://example.com/a.png" alt="A “quoted” shot" width="300"');
+    expect(html).toContain('<br><sub>Caption</sub></td>');
+  });
+
+  it('escapes everything else, so no markup a doc carries can run', () => {
+    const html = render('Hi <script>alert(1)</script> and <img src="x" onerror="alert(1)"> and <a href="javascript:alert(1)">x</a>\n\n<iframe src="https://evil.example"></iframe>\n\n<img src="javascript:alert(1)">\n');
+    expect(html).not.toMatch(/<script|<iframe|<a href="javascript|onerror="|<img src="javascript/);
+    expect(html).toContain('&lt;script&gt;');
+    expect(html).toContain('&lt;iframe');
+  });
+
+  it('drops comments and shows placeholders like <name> as text', () => {
+    const html = render('<!-- generated:write -->\nUse kubectl get <name> here.\n');
+    expect(html).not.toContain('generated:write');
+    expect(html).toContain('&lt;name&gt;');
   });
 });

@@ -1,10 +1,12 @@
-# Cloudflare Pages response headers.
+# Cloudflare Pages response headers. INLINE_SCRIPT_HASHES is replaced by
+# scripts/postbuild.ts with the hashes of the inline scripts Angular's
+# prerendering writes (event replay bootstrap), so no other inline script runs.
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()
   X-Frame-Options: DENY
-  Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+  Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' INLINE_SCRIPT_HASHES; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
 
 # Hashed bundles never change.
 /assets/*
