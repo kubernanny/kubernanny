@@ -73,6 +73,22 @@ async function phoneDark(browser, L) {
   } else {
     errors.push('no per-node section for 84-overview-per-node');
   }
+  // Manual Argo CD apps with a change waiting: one calm card, and the list behind it.
+  const pending = page.locator('app-overview-tab app-pending-sync-card').last();
+  if ((await pending.count()) > 0) {
+    await pending.scrollIntoViewIfNeeded();
+    await page.evaluate(() => window.scrollBy(0, 0));
+    await page.waitForTimeout(400);
+    await shot(page, '89-overview-ready-to-sync');
+    await pending.locator('button').click();
+    await page.waitForSelector('app-pending-sync-sheet li', { timeout: 10000 });
+    await page.waitForTimeout(900);
+    await shot(page, '90-ready-to-sync-list');
+    await page.locator('app-pending-sync-sheet ion-button', { hasText: L.close }).click();
+    await page.waitForTimeout(700);
+  } else {
+    errors.push('no ready-to-sync card for 89-overview-ready-to-sync');
+  }
 
   // actions: logs, confirm, toast, silence
   await scroll(page, 900);
