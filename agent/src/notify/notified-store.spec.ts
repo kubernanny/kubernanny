@@ -94,7 +94,10 @@ describe('notifications across an agent restart (roadmap: persist notification s
     const { notifier, sent } = await pushOnlyNotifier(new DemoKubeClient(), { notifyDetail: 'minimal' });
     expect(notifier.channels).toEqual(['app']);
     await notifier.update(snapshot([issue('pods/secret-ns/Deployment/billing')]), NOW);
-    expect(sent).toEqual([{ title: 'home: new problems', body: '1 critical. Details in Kubernanny.', priority: 5 }]);
+    expect(sent).toMatchObject([{ title: 'home: new problems', body: '1 critical. Details in Kubernanny.', priority: 5 }]);
+    // The widget's status counts only, no titles, like the text.
+    expect(sent[0]!.status).toMatchObject({ c: 1, n: 0 });
+    expect(sent[0]!.status!.i).toBeUndefined();
     expect(JSON.stringify(sent)).not.toMatch(/billing|secret-ns/);
   });
 

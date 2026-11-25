@@ -130,6 +130,8 @@ sequenceDiagram
 
 **What it needs**: the relay (`relay.enabled`, [RELAY.md](RELAY.md)), and a relay that delivers push. The public relay does, for the app from the stores. Messages are the same as on every other channel: the five-minute rule, escalations, resolutions, silences, the maintenance window, security alerts and the weekly report, and with `detail: minimal` only counts (still sealed). The app is a channel like ntfy: it counts for the test button and for "a channel took it".
 
+**The home-screen widget catches up with every push.** Each push also carries the cluster's state, sealed like the text: its light, the numbers of outages and warnings, the time of the last check and, with `detail: full`, the titles of the three worst problems ([PROTOCOL.md, Push status](PROTOCOL.md#push-status)). The code that opens the push on the phone (the iOS Notification Service Extension, the Android messaging service) writes it into the widget's storage and redraws the widgets, without starting the app. A resolution push turns the widget green again. There is no push without a change, so between pushes the widget shows how old its state is and turns grey after 30 minutes (the agent does not push every check: iOS shows every push that reaches the extension as a notification, and a silent background push would wake the app only now and then, when the system allows).
+
 ### Who sees what
 
 | Party | Sees | Never sees |

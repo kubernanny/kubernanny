@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '../http/errors';
 import { Logger } from '../logger';
-import { PUSH_PLATFORMS, PushOutcome, PushPlatform, encodePushContent, isPushToken, parsePublicKey, sealPush, toBase64Url } from '@kubernanny/protocol';
+import { PUSH_PLATFORMS, PushOutcome, PushPlatform, PushStatus, encodePushContent, isPushToken, parsePublicKey, sealPush, toBase64Url } from '@kubernanny/protocol';
 import { DevicesService, Principal, PushTarget, validKey } from '../auth/devices.service';
 import { IdentityService } from '../auth/identity.service';
 import type { Config } from '../config';
@@ -27,6 +27,8 @@ export interface AppPushMessage {
   title: string;
   body: string;
   priority: number;
+  /** The cluster's state for the phone's widget (push-status.ts); absent where the sender has no snapshot. */
+  status?: PushStatus;
 }
 
 /**
@@ -142,7 +144,7 @@ export class AppPushService {
     if (targets.length === 0) {
       return [];
     }
-    const content = encodePushContent({ t: message.title, b: message.body, p: message.priority, s: Date.now() });
+    const content = encodePushContent({ t: message.title, b: message.body, p: message.priority, s: Date.now(), ...(message.status ? { w: message.status } : {}) });
     const outcomes = await Promise.all(
       targets.map(async ({ push }) => {
         try {

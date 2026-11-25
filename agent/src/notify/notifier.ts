@@ -4,6 +4,7 @@ import { render, t } from '../i18n/text';
 import type { Snapshot } from '../status/status.service';
 import { IncidentsService } from '../incidents/incidents.service';
 import { AppPushService } from '../push/app-push.service';
+import { pushStatus } from '../push/push-status';
 import { digestDue, formatDigest, weekKey } from './digest';
 import { NotifyPlan, Push, Pushed, SecurityEvent, formatPush, formatSecurityAlert, planNotifications } from './format';
 import { NotifiedStore } from './notified-store';
@@ -20,6 +21,8 @@ export class Notifier {
   private readonly logger = new Logger(Notifier.name);
   private readonly pushed = new Map<string, Pushed>();
   private digestSentFor: string | null = null;
+  /** The newest snapshot: every native push carries its state for the phone's widget. */
+  private latest: Snapshot | null = null;
   /** The issues already pushed, read back from the ConfigMap once, before the first run plans anything. */
   private restored: Promise<void> | null = null;
 
@@ -62,6 +65,7 @@ export class Notifier {
   }
 
   async update(snapshot: Snapshot, now: Date): Promise<void> {
+    this.latest = snapshot;
     if (this.channels.length === 0) {
       return;
     }
@@ -185,9 +189,15 @@ export class Notifier {
     return done;
   }
 
-  /** The same title and body as every channel, `minimal` included; sealed per device by AppPushService. */
+  /**
+   * The same title and body as every channel, `minimal` included; sealed per
+   * device by AppPushService. Plus the cluster's state of the newest run, so
+   * the phone's widget catches up with every push (not with the test or a
+   * security alert sent before the first run: there is no state yet).
+   */
   private async sendApp(appPush: AppPushService, push: Push): Promise<void> {
-    if (!(await appPush.deliver({ title: push.title, body: push.body, priority: push.priority }))) {
+    const status = this.latest ? pushStatus(this.latest, this.config.notifyDetail, this.config.language) : undefined;
+    if (!(await appPush.deliver({ title: push.title, body: push.body, priority: push.priority, status }))) {
       throw new Error('app push reached no device');
     }
   }
