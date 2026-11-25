@@ -11,7 +11,9 @@ import { DemoKubeClient } from './demo/demo-cluster';
 import { E2eController, e2eRoutes } from './e2e/e2e.controller';
 import { E2eService } from './e2e/e2e.service';
 import { InternalServer } from './e2e/internal-server';
+import { HttpException } from './http/errors';
 import { Reply, Route, createHttpHandler } from './http/server';
+import { t } from './i18n/text';
 import { Leader, LeaderElection, SoleLeader } from './lease/leader';
 import { Logger } from './logger';
 import { IncidentsService } from './incidents/incidents.service';
@@ -81,6 +83,9 @@ export class Agent {
   private readonly startedAt = Date.now();
   private initialized = false;
   private readonly logger = new Logger('kubernanny');
+  /** False from a takeover until devices and switches were read again successfully. */
+  private stateCurrent = true;
+  private followerRead: Promise<void> | null = null;
 
   constructor(options: AgentOptions = {}) {
     // Unknown module ids or action types in the hard switches stop the start (switch-ids.ts).
@@ -90,7 +95,8 @@ export class Agent {
     const kube = options.kube ?? (config.demo ? new DemoKubeClient(undefined, config.demo) : new KubeClient());
     this.kube = kube;
     this.leader = options.leader ?? (config.podName && !config.demo ? new LeaderElection(kube, { namespace: config.namespace, name: config.leaseName ?? 'kubernanny', identity: config.podName }) : new SoleLeader());
-    const isLeader = () => this.leader.isLeader();
+    // In charge: holds the lease AND has read the stored state since taking it (fail closed after a handover).
+    const isLeader = () => this.inCharge();
     this.identity = new IdentityService(config, kube);
     this.devices = new DevicesService(config, kube);
     this.internal = new InternalServer(config);
@@ -128,6 +134,9 @@ export class Agent {
       corsOrigins: config.corsOrigins,
       webRoot: config.webRoot,
       isLeader,
+      // A pod not in charge reads devices and switches again before every guarded call:
+      // a device revoked on the pod in charge must not keep reading here during the overlap.
+      beforeGuard: () => (this.inCharge() ? Promise.resolve() : this.refreshAsFollower()),
     });
 
     for (const [cls, value] of [
@@ -212,15 +221,52 @@ export class Agent {
    */
   private async takeCharge(takeover: boolean): Promise<void> {
     if (takeover) {
+      // Fail closed: until devices and switches are read again, this pod holds the lease but acts on
+      // nothing (writes 503, no notifications, no relay). It retries every 2 s while it holds the lease.
+      this.stateCurrent = false;
       this.logger.log('in charge now: reloading stored state');
-      try {
-        await Promise.all([this.devices.onModuleInit(), this.settings.onModuleInit(), this.silences.onModuleInit(), this.acceptance.onModuleInit()]);
-      } catch (err) {
-        this.logger.warn(`reloading state failed: ${err instanceof Error ? err.message : String(err)}`);
+      for (;;) {
+        if (!this.leader.isLeader() || this.shuttingDown || this.closed) {
+          return;
+        }
+        try {
+          await Promise.all([this.devices.reload(), this.settings.reload()]);
+          // Silences and acceptances only quiet issues; their loaders keep the last state on a failed read.
+          await Promise.all([this.silences.onModuleInit(), this.acceptance.onModuleInit()]);
+          break;
+        } catch (err) {
+          this.logger.warn(`reloading devices and switches failed, not acting yet: ${err instanceof Error ? err.message : String(err)}`);
+          await new Promise((resolve) => setTimeout(resolve, 2000).unref());
+        }
       }
+      this.stateCurrent = true;
     }
     await this.appPush.onApplicationBootstrap();
     this.relay.onApplicationBootstrap();
+  }
+
+  /** Holds the lease and has current state: may write, notify and hold the relay. */
+  inCharge(): boolean {
+    return this.stateCurrent && this.leader.isLeader();
+  }
+
+  /**
+   * Before a guarded call on a pod that is not in charge: devices and
+   * switches read again (calls arriving together share one read). A failed
+   * read answers 503 AGENT_HANDOVER, never with the state read at start.
+   */
+  private async refreshAsFollower(): Promise<void> {
+    this.followerRead ??= Promise.all([this.devices.reload(), this.settings.reload()])
+      .then(() => undefined)
+      .finally(() => {
+        this.followerRead = null;
+      });
+    try {
+      await this.followerRead;
+    } catch (err) {
+      this.logger.warn(`not in charge and cannot read devices: ${err instanceof Error ? err.message : String(err)}`);
+      throw new HttpException({ code: 'AGENT_HANDOVER', message: t('error.agentHandover') }, 503);
+    }
   }
 
   /**

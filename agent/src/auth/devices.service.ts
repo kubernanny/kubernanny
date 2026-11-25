@@ -103,6 +103,26 @@ export class DevicesService {
     return this.loaded;
   }
 
+  /**
+   * Reads the device list again and throws on any failure but 404 (no list
+   * yet), keeping nothing old: a pod taking over from another, or answering
+   * next to it during a rolling update, must not accept a device the other
+   * pod revoked (agent.ts, lease handover).
+   */
+  async reload(): Promise<void> {
+    let devices: Device[] = [];
+    try {
+      const secret = await this.kube.get<{ data?: { devices?: string } }>(`${this.path}/${DEVICES_SECRET}`);
+      const parsed = JSON.parse(Buffer.from(secret.data?.devices ?? '', 'base64').toString('utf8') || '[]') as Device[];
+      devices = parsed.filter((d) => typeof d.id === 'string' && validKey(d.publicKey)).map((d) => (d.push && !validPush(d.push) ? withoutPush(d) : d));
+    } catch (err) {
+      if (!(err instanceof KubeError && err.status === 404)) {
+        throw err;
+      }
+    }
+    this.devices = devices;
+  }
+
   /** The device holding this key, or null. */
   byKey(publicKey: Uint8Array): Principal | null {
     const key = toBase64Url(publicKey);

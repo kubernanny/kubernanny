@@ -7,6 +7,8 @@ import { KubeError } from '../kube/kube-client';
 import { Notifier } from '../notify/notifier';
 import { Snapshot } from '../status/status.service';
 import { DemoAgent, startDemoAgent } from '../testing/demo-agent';
+import { DemoKubeClient } from '../demo/demo-cluster';
+import { generateKeyPair } from '@kubernanny/protocol';
 import { LeaderElection, LeaseApi } from './leader';
 
 /** One Lease object with the API server's optimistic concurrency: a write naming an old resourceVersion gets 409. */
@@ -232,5 +234,93 @@ describe('readiness and shutdown', () => {
       delete process.env.DEMO;
       delete process.env.READY_TIMEOUT_SECONDS;
     }
+  });
+});
+
+/** One cluster for both pods; reads of the agent's own Secret and ConfigMap can be made to fail. */
+class SharedKube extends DemoKubeClient {
+  stateReadsFail = false;
+  override async get<T>(path: string): Promise<T> {
+    if (this.stateReadsFail && (path.includes('/secrets/') || path.includes('/configmaps/'))) {
+      throw new KubeError(503, 'etcd is busy');
+    }
+    return super.get<T>(path);
+  }
+}
+
+describe('devices and switches during a handover (fail closed)', () => {
+  const agents: DemoAgent[] = [];
+  afterEach(async () => {
+    for (const a of agents.splice(0)) {
+      await a.close();
+    }
+  });
+
+  const internal = (agent: Agent) =>
+    createServer((req, res) => {
+      (req as typeof req & { [INTERNAL]?: true })[INTERNAL] = true;
+      agent.handler(req, res);
+    });
+
+  async function pair(kube: SharedKube, api: FakeLeases, clock: { now: number }) {
+    const notifier = { channels: [], update: async () => undefined, securityAlert: async () => undefined, test: async () => [], locked: false } as unknown as Notifier;
+    const start = async (name: string) => {
+      const a = await startDemoAgent({ DEMO: '', CHECK_INTERVAL_SECONDS: '3600', POD_NAMESPACE: 'kubernanny' }, { kube, notifier, leader: pod(api, name, clock) });
+      agents.push(a);
+      return a.app;
+    };
+    const old = await start('pod-old');
+    const device = await old.devices.add('phone', generateKeyPair().publicKey);
+    const neu = await start('pod-new');
+    return { old, neu, device };
+  }
+
+  it('a device revoked on the pod in charge reads nothing more on the other pod', async () => {
+    const kube = new SharedKube(undefined, 'healthy');
+    const api = new FakeLeases();
+    const { old, neu, device } = await pair(kube, api, { now: Date.now() });
+    await neu.status.refresh();
+    await request(internal(neu)).get('/api/status').set(PRINCIPAL_HEADER, device.id).expect(200);
+    expect(await old.devices.revoke(device.id)).toBe(true);
+    const res = await request(internal(neu)).get('/api/status').set(PRINCIPAL_HEADER, device.id).expect(401);
+    expect(res.body.code).toBe('E2E_REQUIRED');
+    // On the pod in charge too, of course.
+    await request(internal(old)).get('/api/status').set(PRINCIPAL_HEADER, device.id).expect(401);
+  });
+
+  it('a pod not in charge that cannot read the device list answers 503 AGENT_HANDOVER, not with the list from its start', async () => {
+    const kube = new SharedKube(undefined, 'healthy');
+    const api = new FakeLeases();
+    const { neu, device } = await pair(kube, api, { now: Date.now() });
+    kube.stateReadsFail = true;
+    const res = await request(internal(neu)).get('/api/status').set(PRINCIPAL_HEADER, device.id).expect(503);
+    expect(res.body.code).toBe('AGENT_HANDOVER');
+    // Strangers on the network cause no reads at all.
+    await request(neu.getHttpServer()).get('/api/status').set(PRINCIPAL_HEADER, device.id).expect(401);
+  });
+
+  it('takes charge only once devices and switches were read again; until then it writes and notifies nothing', async () => {
+    const kube = new SharedKube(undefined, 'healthy');
+    const api = new FakeLeases();
+    const clock = { now: Date.now() };
+    const { old, neu, device } = await pair(kube, api, clock);
+    const neuLeader = (neu as unknown as { leader: LeaderElection }).leader;
+    // The old pod revokes the device, then hands over while the API cannot serve the Secret.
+    await old.devices.revoke(device.id);
+    kube.stateReadsFail = true;
+    await (old as unknown as { leader: LeaderElection }).leader.release();
+    expect(await neuLeader.tryNow()).toBe(true);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(neu.inCharge()).toBe(false);
+    expect(neu.status.notifies()).toBe(false);
+    await request(internal(neu)).post('/api/maintenance/end').set(PRINCIPAL_HEADER, 'admin').expect(503);
+    // Holding the lease but not in charge, it still refreshes per call: the revoked device gets nothing.
+    await request(internal(neu)).get('/api/status').set(PRINCIPAL_HEADER, device.id).expect(503);
+
+    kube.stateReadsFail = false;
+    await new Promise((r) => setTimeout(r, 2300));
+    expect(neu.inCharge()).toBe(true);
+    await request(internal(neu)).get('/api/status').set(PRINCIPAL_HEADER, device.id).expect(401);
+    await request(internal(neu)).post('/api/maintenance/end').set(PRINCIPAL_HEADER, 'admin').expect(204);
   });
 });
