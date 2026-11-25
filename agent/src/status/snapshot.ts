@@ -61,6 +61,12 @@ export interface Snapshot {
   error?: Text;
   /** ISO time of the first of the failed runs in a row; absent while runs succeed. */
   failingSince?: string;
+  /**
+   * ISO time of the next scheduled run: the next interval tick, or sooner
+   * when a watch event has an early run waiting. Absent until the schedule
+   * runs (and from agents before 0.5); the app then shows no countdown.
+   */
+  nextCheckAt?: string;
 }
 
 export interface HistoryPoint {
