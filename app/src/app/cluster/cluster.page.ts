@@ -24,7 +24,7 @@ import { StatusStore } from '../core/status-store.service';
 import { LanguageService } from '../i18n/language.service';
 import { NannyEye } from '../ui/nanny-eye';
 import { countdownView } from './countdown';
-import { ResourceBar } from '../ui/resource-bar';
+import { ResourceRail } from './resource-rail';
 import { buildClusterView, issueCards } from './cluster-view';
 import { historyView } from './history-view';
 import { statusReport } from './status-report';
@@ -69,7 +69,7 @@ const NEEDS: Record<Tab, Parameters<ClusterDataStore['need']>> = {
     IonSegment,
     IonSegmentButton,
     NannyEye,
-    ResourceBar,
+    ResourceRail,
     OverviewTab,
     ServicesTab,
     NodesTab,

@@ -191,6 +191,7 @@ export const de = {
     reserved: '{{value}} reserviert',
     limit: '{{value}} Limit',
     noLimit: 'kein Limit',
+    withoutLimitShort: { one: '+ {{count}} ohne Limit', other: '+ {{count}} ohne Limit' },
     withoutLimit: { one: '+ {{count}} Pod ohne Limit', other: '+ {{count}} Pods ohne Limit' },
     over: '+{{pct}} % überbucht',
   },

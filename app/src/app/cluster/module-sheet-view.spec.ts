@@ -120,3 +120,24 @@ describe('countdown to the next check', () => {
     expect([v.text, v.progress]).toEqual(['Checked 3 min ago', null]);
   });
 });
+
+describe('overview rail', () => {
+  it('puts the small counts in one row and CPU and RAM with their nodes, problem nodes first', async () => {
+    const { buildRail } = await import('./cluster-view');
+    const kpi = (label: string) => ({ label, value: '1', note: '', tone: 'ok' as const });
+    const node = (name: string, used: number) => ({
+      name,
+      cpu: { usedMilli: used, allocatableMilli: 4000, requestedMilli: 1000, limitMilli: 2000 },
+      memory: { used: 2 ** 30, allocatable: 8 * 2 ** 30, requested: 2 ** 30, limit: 2 ** 31 },
+      podsWithoutLimit: { cpu: 1, memory: 0 },
+    });
+    const cpu = { ...kpi('CPU'), bar: { kind: 'cpu' as const, used: 5000, capacity: 8000 } };
+    const rail = buildRail([kpi('Nodes'), cpu, kpi('RAM'), kpi('Pods'), kpi('Volumes'), kpi('Adressen')], [node('a', 1000), node('b', 3800)], de);
+    expect(rail.small.map((k) => k.label)).toEqual(['Nodes', 'Pods', 'Volumes', 'Adressen']);
+    expect(rail.resources.map((r) => r.key)).toEqual(['cpu', 'memory']);
+    expect(rail.resources[0]!.nodes.map((n) => [n.name, n.pct, n.problem])).toEqual([
+      ['b', '95 %', true],
+      ['a', '25 %', false],
+    ]);
+  });
+});
