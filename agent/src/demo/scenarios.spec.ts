@@ -35,7 +35,22 @@ describe('demo scenarios', () => {
     expect(s.light).toBe('yellow');
     const removal = s.issues.find((i) => i.id.startsWith('kubernetes-support/deprecated-apis/'));
     expect(removal?.severity).toBe('info');
-    expect(s.issues.map((i) => i.id).filter((id) => id !== removal?.id).sort()).toEqual(['argocd/argocd/weblate-chart/sync', 'certificates/weblate/weblate-tls', 'cnpg/default/shop-api-pg/backup']);
+    expect(s.issues.map((i) => i.id).filter((id) => id !== removal?.id).sort()).toEqual(['argocd/argocd/weblate-chart/sync', 
+      'certificates/weblate/weblate-tls',
+      'cnpg/default/shop-api-pg/backup',
+      'standard-alerts/etcd-peer-rtt/rke2-node-1/rke2-node-5',
+    ]);
+    expect(s.issues.find((i) => i.id.startsWith('standard-alerts/'))?.title).toBe('etcd rke2-node-1 → rke2-node-5: Netzwerk-Laufzeit 243 ms');
+  });
+
+  it('broken shows the slow etcd link once: the built-in issue, saying Alertmanager fires it too', async () => {
+    const s = await run('broken');
+    const rtt = s.issues.find((i) => i.id === 'standard-alerts/etcd-peer-rtt/rke2-node-1/rke2-node-5');
+    expect(rtt?.severity).toBe('warning');
+    expect(rtt?.cause).toMatch(/Alertmanager meldet das ebenfalls \(etcdMemberCommunicationSlow\)\.$/);
+    expect(s.issues.map((i) => i.id)).not.toContain('alertmanager/etcdMemberCommunicationSlow');
+    expect(s.modules.find((m) => m.id === 'alertmanager')?.issueIds).toEqual(['alertmanager/BlackboxProbeFailed', 'alertmanager/KubePersistentVolumeFillingUp']);
+    expect(s.issues.find((i) => i.id === 'standard-alerts/dns-errors/coredns')?.severity).toBe('critical');
   });
 
   it('broken is red', async () => {
@@ -61,8 +76,11 @@ describe('demo scenarios', () => {
     ]);
     expect(s.modules.find((m) => m.id === 'redis')?.issueIds).toContain('trivy/default/StatefulSet/shop-api-valkey');
     const trivy = s.modules.find((m) => m.id === 'trivy')!;
-    expect(trivy.stats.find((st) => st.label === 'Alte Berichte übergangen')?.value).toBe('1');
-    expect(s.modules.find((m) => m.id === 'vulnerabilities')?.stats.find((st) => st.label === 'Jedes Image')?.value).toBe('Trivy Operator gefunden: jedes Image wird geprüft');
+    // Beyond the four severities, the facts sit in a list on the sheet.
+    const fact = (id: string, label: string) => s.modules.find((m) => m.id === id)?.details?.flatMap((d) => (d.kind === 'list' ? d.rows : [])).find((r) => r.name === label)?.value;
+    expect(trivy.stats.map((st) => st.label)).toEqual(['Kritisch', 'Hoch', 'Mittel', 'Niedrig oder ohne Einstufung']);
+    expect(fact('trivy', 'Alte Berichte übergangen')).toBe('1');
+    expect(fact('vulnerabilities', 'Jedes Image')).toBe('Trivy Operator gefunden: jedes Image wird geprüft');
   });
 
   it('healthy and warning check vulnerabilities and security too, and find nothing', async () => {

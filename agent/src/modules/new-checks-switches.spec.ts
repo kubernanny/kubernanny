@@ -16,12 +16,12 @@ import { INTEGRATIONS } from './integrations';
 
 /**
  * Every check added with Rook Ceph, the ingress error rates, the policy
- * engines, node clocks, image updates and Trivy Operator can be switched off for good in
+ * engines, node clocks, image updates, Trivy Operator and the standard alerts can be switched off for good in
  * the deployment (`checks.disabled`), and then really is off: it does not
  * run, the app cannot switch it back on, its RBAC is not generated, and it
  * makes no request, to the cluster or out of it.
  */
-const NEW = ['rook-ceph', 'traefik', 'ingress-nginx', 'kyverno', 'gatekeeper', 'node-clocks', 'image-updates', 'trivy'];
+const NEW = ['rook-ceph', 'traefik', 'ingress-nginx', 'kyverno', 'gatekeeper', 'node-clocks', 'image-updates', 'trivy', 'standard-alerts'];
 const who = { kind: 'device' as const, id: 'd1', name: 'Test' };
 
 function config(env: Record<string, string>) {
@@ -117,7 +117,7 @@ describe('the new checks, switched off in the deployment', () => {
     expect(s.issues.filter((i) => NEW.some((id) => i.id.startsWith(`${id}/`)))).toEqual([]);
     expect(kube.lists.filter((p) => /ceph\.rook\.io|wgpolicyk8s\.io|kyverno\.io|gatekeeper\.sh|aquasecurity\.github\.io/.test(p))).toEqual([]);
     const queries = gets.mock.calls.map(([p]) => decodeURIComponent(String(p)));
-    expect(queries.filter((q) => /traefik_|nginx_ingress|node_timex|node_ntp/.test(q))).toEqual([]);
+    expect(queries.filter((q) => /traefik_|nginx_ingress|node_timex|node_ntp|etcd_network_peer|coredns_|node_nf_conntrack|group by \(__name__\)/.test(q))).toEqual([]);
     expect(registry).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -125,7 +125,7 @@ describe('the new checks, switched off in the deployment', () => {
   it('run when on (so the test above proves something)', async () => {
     const registry = vi.spyOn(DemoRegistry.prototype, 'tags');
     const s = await run(new DemoKubeClient(undefined, 'broken'), {});
-    expect(s.modules.filter((m) => NEW.includes(m.id)).map((m) => m.id).sort()).toEqual(['gatekeeper', 'image-updates', 'kyverno', 'node-clocks', 'rook-ceph', 'traefik', 'trivy']);
+    expect(s.modules.filter((m) => NEW.includes(m.id)).map((m) => m.id).sort()).toEqual(['gatekeeper', 'image-updates', 'kyverno', 'node-clocks', 'rook-ceph', 'standard-alerts', 'traefik', 'trivy']);
     expect(registry).toHaveBeenCalled();
   });
 });

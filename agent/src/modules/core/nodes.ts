@@ -1,10 +1,12 @@
 import { evaluateNodes } from '../../checks/nodes.check';
-import { condition, Issue } from '../../checks/types';
-import { t } from '../../i18n/text';
+import { ageText, condition, Issue } from '../../checks/types';
+import { raw, t } from '../../i18n/text';
+import { buildNodes } from '../../views/nodes';
+import { listSection, sections } from '../details';
 import { cpuMilli, Inventory, parseQuantity } from '../../inventory/inventory';
 import { bytes, pct } from '../format';
 import { CoreCheck } from '../module';
-import { ModuleContext, ModuleResult, Stat } from '../types';
+import { DetailMeta, DetailRow, DetailSection, ModuleContext, ModuleResult, Stat } from '../types';
 
 /** Memory and disk of each node. Memory from metrics-server, disk from node-exporter via Prometheus. */
 export function evaluateNodeUsage(inv: Inventory, disk: Map<string, number> | undefined): Issue[] {
@@ -55,10 +57,12 @@ function nodesStats(inv: Inventory): Stat[] {
     memUsed += u?.memBytes ?? 0;
   }
   const stats: Stat[] = [{ label: t('stat.ready'), value: `${ready}/${inv.nodes.length}`, tone: ready === inv.nodes.length ? 'ok' : 'critical' }];
+  // Three or four figures: use when metrics-server answers, the capacity otherwise (the Nodes tab shows both per node).
   if (inv.nodeUsage) {
     stats.push({ label: t('stat.cpu'), value: `${pct(cpuUsed, cpuAlloc)} %` }, { label: t('stat.ram'), value: `${pct(memUsed, memAlloc)} %` });
+  } else {
+    stats.push({ label: t('nodes.stat.cores'), value: String(Math.round(cpuAlloc / 1000)) }, { label: t('nodes.stat.memory'), value: bytes(memAlloc) });
   }
-  stats.push({ label: t('nodes.stat.cores'), value: String(Math.round(cpuAlloc / 1000)) }, { label: t('nodes.stat.memory'), value: bytes(memAlloc) });
   return stats;
 }
 
@@ -78,6 +82,7 @@ export class NodesCheck extends CoreCheck {
     return {
       issues,
       stats: nodesStats(ctx.inv),
+      details: nodeDetails(ctx),
       summary: notReady > 0 ? t('nodes.summary.notReady', { n: notReady }) : t('nodes.summary.ready', { n: ctx.inv.nodes.length }),
     };
   }
@@ -104,4 +109,31 @@ async function nodeDiskUsage(ctx: ModuleContext): Promise<Map<string, number>> {
     }
   }
   return result;
+}
+
+/** One row per node: state, kubelet, conditions with since when, use and pods. */
+function nodeDetails(ctx: ModuleContext): DetailSection[] {
+  const rows = buildNodes(ctx.inv, ctx.data).map((n): DetailRow => {
+    const meta: DetailMeta[] = n.conditions
+      .filter((c) => c.type !== 'Ready')
+      .map((c) => {
+        const since = Date.parse(c.since ?? '');
+        return { text: Number.isFinite(since) ? t('detail.node.conditionSince', { type: c.type, age: ageText(Math.max(0, ctx.now.getTime() - since)) }) : raw(c.type), tone: 'warning' as const };
+      });
+    if (n.cpu.usedMilli !== null && n.memory.used !== null) {
+      meta.push({ text: t('detail.node.use', { cpu: pct(n.cpu.usedMilli, n.cpu.allocatableMilli), mem: pct(n.memory.used, n.memory.allocatable) }) });
+    }
+    meta.push({ text: t('detail.node.pods', { n: n.pods.count, capacity: n.pods.capacity }) });
+    if (n.disk !== null) {
+      meta.push({ text: t('detail.node.disk', { pct: Math.round(n.disk * 100) }), ...(n.disk >= 0.85 ? { tone: 'warning' as const } : {}) });
+    }
+    return {
+      name: n.name,
+      sub: raw([n.roles.join(', ') || 'worker', n.kubelet].filter(Boolean).join(', ')),
+      value: !n.ready ? t('detail.notReady') : n.rebooting ? t('detail.kured.rebooting') : n.cordoned ? t('detail.node.cordoned') : t('detail.ready'),
+      tone: !n.ready ? (n.rebooting || n.cordoned ? 'warning' : 'critical') : n.conditions.some((c) => c.type !== 'Ready') ? 'warning' : n.cordoned || n.rebooting ? 'muted' : 'ok',
+      meta,
+    };
+  });
+  return sections(listSection(t('detail.node.title'), rows));
 }

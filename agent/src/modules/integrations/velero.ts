@@ -1,6 +1,7 @@
 import { Integration } from '../module';
 import { Condition, Issue, ageText } from '../../checks/types';
-import {ModuleContext, ModuleResult, Stat } from '../types';
+import { DetailRow, ModuleContext, ModuleResult, Stat } from '../types';
+import { listSection, sections } from '../details';
 import { raw, rawOr, t } from '../../i18n/text';
 import { Conditioned } from './util';
 
@@ -21,12 +22,15 @@ export class VeleroIntegration extends Integration {
     const bySchedule = newestBySchedule(backups);
     const issues: Issue[] = [];
     const stats: Stat[] = [];
+    const rows: DetailRow[] = [];
+    let newest = -Infinity;
     for (const [schedule, b] of bySchedule) {
       const name = schedule === MANUAL ? t('velero.manual') : raw(schedule);
       const phase = b.status?.phase ?? '?';
       const at = Date.parse(b.status?.completionTimestamp ?? b.metadata.creationTimestamp ?? '');
       const age = ctx.now.getTime() - at;
-      stats.push({ label: name, value: t('velero.stat.value', { phase, age: ageText(age) }), tone: phase === 'Completed' ? 'ok' : 'warning' });
+      rows.push({ name, value: raw(phase), tone: phase === 'Completed' ? 'ok' : phase === 'Failed' ? 'critical' : 'warning', ...(Number.isFinite(at) ? { meta: [{ text: t('detail.backupAgo', { age: ageText(age) }) }] } : {}) });
+      newest = Math.max(newest, Number.isFinite(at) ? at : -Infinity);
       if (phase === 'Failed' || phase === 'PartiallyFailed') {
         issues.push({
           id: `velero/${schedule}`,
@@ -40,7 +44,11 @@ export class VeleroIntegration extends Integration {
         issues.push({ id: `velero/${schedule}`, check: 'cnpg', severity: 'warning', title: t('velero.old.title', { schedule: name, age: ageText(age) }), cause: t('velero.old.cause'), actions: [] });
       }
     }
-    return { issues, stats, summary: issues.length === 0 ? t('velero.summary.ok', { n: bySchedule.size }) : issues[0].title };
+    stats.push({ label: t('stat.schedules'), value: String([...bySchedule.keys()].filter((k) => k !== MANUAL).length) });
+    if (Number.isFinite(newest)) {
+      stats.push({ label: t('stat.lastBackup'), value: t('common.ago', { age: ageText(ctx.now.getTime() - newest) }) });
+    }
+    return { issues, stats, details: sections(listSection(t('detail.velero.schedules'), rows)), summary: issues.length === 0 ? t('velero.summary.ok', { n: bySchedule.size }) : issues[0].title };
   }
 }
 

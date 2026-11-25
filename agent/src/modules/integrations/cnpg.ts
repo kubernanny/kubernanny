@@ -2,14 +2,21 @@ import { Integration } from '../module';
 import { CnpgCluster, evaluateCnpg } from '../../checks/cnpg.check';
 import { ageText } from '../../checks/types';
 import {ModuleContext, ModuleResult, Stat } from '../types';
-import { raw, t } from '../../i18n/text';
+import { t } from '../../i18n/text';
+import { CnpgScheduledBackup, cnpgDetails } from '../details';
 
 export class CnpgIntegration extends Integration {
   readonly id = 'cnpg';
   override readonly actions = ['cnpg-backup', 'logs'] as const;
-  readonly reads = [{ group: 'postgresql.cnpg.io', resource: 'clusters', why: 'instances, failover state and last backup per database cluster' }];
+  readonly reads = [
+    { group: 'postgresql.cnpg.io', resource: 'clusters', why: 'instances, failover state and last backup per database cluster' },
+    { group: 'postgresql.cnpg.io', resource: 'scheduledbackups', why: 'schedule and last and next run of every scheduled backup, for the sheet' },
+  ];
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
-    const clusters = (await ctx.kube.list<CnpgCluster>('/apis/postgresql.cnpg.io/v1/clusters')) ?? [];
+    const [clusters, scheduled] = await Promise.all([
+      ctx.kube.list<CnpgCluster>('/apis/postgresql.cnpg.io/v1/clusters').then((l) => l ?? []),
+      ctx.kube.list<CnpgScheduledBackup>('/apis/postgresql.cnpg.io/v1/scheduledbackups').catch(() => null),
+    ]);
     ctx.data.cnpgClusters = clusters;
     const issues = evaluateCnpg(clusters, ctx.now, { backupMaxAgeHours: ctx.config.backupMaxAgeHours });
     const instances = clusters.reduce((s, c) => s + (c.spec?.instances ?? 0), 0);
@@ -23,13 +30,7 @@ export class CnpgIntegration extends Integration {
     if (oldest !== null) {
       stats.push({ label: t('cnpg.stat.oldestBackup'), value: t('common.ago', { age: ageText(ctx.now.getTime() - oldest) }), tone: ctx.now.getTime() - oldest > ctx.config.backupMaxAgeHours * 3_600_000 ? 'warning' : 'ok' });
     }
-    for (const c of clusters) {
-      stats.push({
-        label: raw(`${c.metadata.namespace}/${c.metadata.name}`),
-        value: `${c.status?.readyInstances ?? 0}/${c.spec?.instances ?? 0} · Primary ${c.status?.currentPrimary ?? '?'}`,
-        tone: c.status?.phase === 'Cluster in healthy state' ? 'ok' : 'warning',
-      });
-    }
-    return { issues, stats, summary: issues.length === 0 ? t('cnpg.summary.ok', { n: clusters.length }) : issues[0].title };
+    const details = cnpgDetails(clusters, ctx.now, ctx.config.backupMaxAgeHours, scheduled ?? []);
+    return { issues, stats, details, summary: issues.length === 0 ? t('cnpg.summary.ok', { n: clusters.length }) : issues[0].title };
   }
 }

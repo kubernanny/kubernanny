@@ -1,4 +1,5 @@
 /** The Events tab: recent Kubernetes warnings, newest first, one row per object and reason. */
+import { podOwner } from '../checks/pods.check';
 import { Inventory } from '../inventory/inventory';
 
 export interface EventView {
@@ -16,6 +17,29 @@ export interface EventView {
   firstSeen: string;
   /** How many Event objects were merged into this row (1: none). */
   events: number;
+  /** The Deployment, StatefulSet or DaemonSet the object belongs to (a pod's or ReplicaSet's owner), for a link to it. */
+  workload?: { kind: string; name: string };
+}
+
+/** The workload behind a Pod or ReplicaSet the event is about; a workload itself is its own. */
+function workloadOf(inv: Inventory, namespace: string | undefined, kind: string | undefined, name: string | undefined): { kind: string; name: string } | undefined {
+  if (!name || !kind) {
+    return undefined;
+  }
+  if (kind === 'Deployment' || kind === 'StatefulSet' || kind === 'DaemonSet') {
+    return { kind, name };
+  }
+  if (kind === 'Pod') {
+    const pod = inv.pods.find((p) => p.metadata.namespace === namespace && p.metadata.name === name);
+    const owner = pod ? podOwner(pod) : undefined;
+    return owner && owner.kind !== 'Pod' ? { kind: owner.kind, name: owner.name } : undefined;
+  }
+  if (kind === 'ReplicaSet') {
+    // A ReplicaSet is named after its Deployment plus the pod-template-hash.
+    const deployment = inv.deployments.find((d) => d.metadata.namespace === namespace && name.startsWith(`${d.metadata.name}-`) && !name.slice(d.metadata.name.length + 1).includes('-'));
+    return deployment ? { kind: 'Deployment', name: deployment.metadata.name } : undefined;
+  }
+  return undefined;
 }
 
 /**
@@ -40,6 +64,10 @@ export function buildEvents(inv: Inventory, limit = 200): EventView[] {
       firstSeen: first,
       events: 1,
     };
+    const workload = workloadOf(inv, row.namespace, row.kind, row.name);
+    if (workload) {
+      row.workload = workload;
+    }
     const key = JSON.stringify([row.namespace, row.kind, row.name, row.reason]);
     const seen = groups.get(key);
     if (!seen) {

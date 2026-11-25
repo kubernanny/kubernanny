@@ -1,6 +1,6 @@
 /** The Network tab: Ingresses, HTTPRoutes and Traefik IngressRoutes with their certificates, and LoadBalancer services. */
 import { condition } from '../checks/types';
-import { Detected, hostsInMatch, hostsOf } from '../discovery/discovery';
+import { allWorkloads, Detected, hostsInMatch, hostsOf } from '../discovery/discovery';
 import { Inventory } from '../inventory/inventory';
 import { RunData } from '../modules/types';
 
@@ -12,12 +12,33 @@ export interface IngressView {
   tls: boolean;
   certificate?: { name: string; notAfter?: string; daysLeft: number | null; ready: boolean };
   backends: string[];
+  /** The workloads behind the backend services ("Deployment/web"), found by the services' selectors. */
+  workloads: string[];
   component?: string;
 }
 
 export interface NetworkView {
   ingresses: IngressView[];
   loadBalancers: { namespace: string; name: string; addresses: string[]; ports: string[] }[];
+}
+
+/** "Kind/name" of every workload in the namespace whose pods the service selects. */
+function workloadsBehind(inv: Inventory, namespace: string, services: string[]): string[] {
+  const out = new Set<string>();
+  for (const name of services) {
+    const svc = inv.services.find((s) => s.metadata.namespace === namespace && s.metadata.name === name);
+    const selector = svc?.spec?.selector;
+    if (!selector || Object.keys(selector).length === 0) {
+      continue;
+    }
+    for (const { kind, w } of allWorkloads(inv)) {
+      const labels = w.spec?.template?.metadata?.labels;
+      if ((w.metadata.namespace ?? 'default') === namespace && labels && Object.entries(selector).every(([k, v]) => labels[k] === v)) {
+        out.add(`${kind}/${w.metadata.name}`);
+      }
+    }
+  }
+  return [...out].sort();
 }
 
 export function buildNetwork(inv: Inventory, data: RunData, detected: Detected[]): NetworkView {
@@ -61,6 +82,7 @@ export function buildNetwork(inv: Inventory, data: RunData, detected: Detected[]
             }
           : undefined,
         backends,
+        workloads: workloadsBehind(inv, ns, (ing.spec?.rules ?? []).flatMap((r) => (r.http?.paths ?? []).map((p) => p.backend?.service?.name ?? ''))),
         component,
       };
     });
@@ -76,6 +98,7 @@ export function buildNetwork(inv: Inventory, data: RunData, detected: Detected[]
       tls: true,
       certificate: undefined,
       backends: [...new Set(backends.map((b) => `${b.name}:${b.port ?? ''}`))],
+      workloads: workloadsBehind(inv, ns, backends.filter((b) => !b.namespace || b.namespace === ns).map((b) => b.name)),
       component: backends.map((b) => componentOfService.get(`${b.namespace ?? ns}/${b.name}`)).find(Boolean),
     });
   }
@@ -95,6 +118,7 @@ export function buildNetwork(inv: Inventory, data: RunData, detected: Detected[]
         ? { name: cert.metadata.name, notAfter: cert.status?.notAfter, daysLeft: Number.isFinite(notAfter) ? Math.floor((notAfter - inv.at.getTime()) / 86_400_000) : null, ready: condition(cert.status?.conditions, 'Ready')?.status === 'True' }
         : undefined,
       backends: [...new Set(services.map((s) => `${s.name}:${s.port ?? ''}`))],
+      workloads: workloadsBehind(inv, ns, services.filter((s) => !s.namespace || s.namespace === ns).map((s) => s.name)),
       component: services.map((s) => componentOfService.get(`${s.namespace ?? ns}/${s.name}`)).find(Boolean),
     });
   }

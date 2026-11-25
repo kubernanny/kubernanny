@@ -1,7 +1,8 @@
 /** The Workloads tab: every Deployment, StatefulSet and DaemonSet with its pods, images, restarts and resource use. */
 import { podOwner, podReady } from '../checks/pods.check';
 import { allWorkloads, Detected, imagesOf, readiness } from '../discovery/discovery';
-import { Inventory } from '../inventory/inventory';
+import { FullPod, Inventory, parseQuantity } from '../inventory/inventory';
+import { addResources, holdsResources, NO_RESOURCES, podResources } from './resources';
 import { Health } from './health';
 
 export interface WorkloadView {
@@ -17,7 +18,63 @@ export interface WorkloadView {
   createdAt?: string;
   cpuMilli: number | null;
   memBytes: number | null;
-  pods: { name: string; node?: string; phase?: string; ready: boolean; restarts: number }[];
+  /** Requests and limits of the pods that hold resources; a limit is null when no container sets one. */
+  resources: { cpuRequestMilli: number; cpuLimitMilli: number | null; memRequest: number; memLimit: number | null; cpuUnlimited: number; memUnlimited: number };
+  /** The most recent restart of any of its containers, with why it ended. */
+  lastRestart?: Termination & { pod: string; container: string };
+  pods: { name: string; node?: string; phase?: string; ready: boolean; restarts: number; containers: ContainerView[] }[];
+}
+
+/** How a container's previous run ended (`lastState.terminated`). */
+export interface Termination {
+  reason?: string;
+  exitCode?: number;
+  signal?: number;
+  finishedAt?: string;
+  /** The container's memory limit, set when the run was OOMKilled, so the app can name it. */
+  memLimit?: number;
+}
+
+export interface ContainerView {
+  name: string;
+  ready: boolean;
+  restarts: number;
+  /** Why it waits right now (CrashLoopBackOff, ImagePullBackOff). */
+  waiting?: string;
+  lastTermination?: Termination;
+}
+
+interface ContainerStatusFull {
+  name: string;
+  ready: boolean;
+  restartCount: number;
+  state?: { waiting?: { reason?: string } };
+  lastState?: { terminated?: { reason?: string; exitCode?: number; signal?: number; finishedAt?: string } };
+}
+
+/** The containers of a pod with the end of their last run; the memory limit next to an OOMKilled one. */
+export function containerViews(pod: FullPod): ContainerView[] {
+  const statuses = (pod.status?.containerStatuses ?? []) as ContainerStatusFull[];
+  return statuses.map((c) => {
+    const term = c.lastState?.terminated;
+    const limit = pod.spec?.containers?.find((s) => s.name === c.name)?.resources?.limits?.memory;
+    const lastTermination: Termination | undefined = term
+      ? {
+          ...(term.reason ? { reason: term.reason } : {}),
+          ...(term.exitCode !== undefined ? { exitCode: term.exitCode } : {}),
+          ...(term.signal !== undefined ? { signal: term.signal } : {}),
+          ...(term.finishedAt ? { finishedAt: term.finishedAt } : {}),
+          ...(term.reason === 'OOMKilled' && limit ? { memLimit: parseQuantity(limit) } : {}),
+        }
+      : undefined;
+    return {
+      name: c.name,
+      ready: c.ready,
+      restarts: c.restartCount,
+      ...(c.state?.waiting?.reason ? { waiting: c.state.waiting.reason } : {}),
+      ...(lastTermination ? { lastTermination } : {}),
+    };
+  });
 }
 
 export function buildWorkloads(inv: Inventory, detected: Detected[]): WorkloadView[] {
@@ -49,6 +106,24 @@ export function buildWorkloads(inv: Inventory, detected: Detected[]): WorkloadVi
         }
       }
       const restarts = pods.reduce((s, p) => s + (p.status?.containerStatuses ?? []).reduce((x, c) => x + c.restartCount, 0), 0);
+      const res = pods.filter(holdsResources).map(podResources).reduce(addResources, NO_RESOURCES);
+      const podViews = pods.map((p) => ({
+        name: p.metadata.name,
+        node: p.spec?.nodeName,
+        phase: p.status?.phase,
+        ready: podReady(p),
+        restarts: (p.status?.containerStatuses ?? []).reduce((x, c) => x + c.restartCount, 0),
+        containers: containerViews(p),
+      }));
+      let lastRestart: WorkloadView['lastRestart'];
+      for (const p of podViews) {
+        for (const c of p.containers) {
+          const at = c.lastTermination?.finishedAt;
+          if (c.restarts > 0 && at && (!lastRestart?.finishedAt || at > lastRestart.finishedAt)) {
+            lastRestart = { ...c.lastTermination, pod: p.name, container: c.name };
+          }
+        }
+      }
       const health: Health = desired > 0 && ready === 0 ? 'critical' : ready < desired ? 'warning' : 'ok';
       return {
         kind,
@@ -63,13 +138,16 @@ export function buildWorkloads(inv: Inventory, detected: Detected[]): WorkloadVi
         createdAt: w.metadata.creationTimestamp,
         cpuMilli: cpu,
         memBytes: mem,
-        pods: pods.map((p) => ({
-          name: p.metadata.name,
-          node: p.spec?.nodeName,
-          phase: p.status?.phase,
-          ready: podReady(p),
-          restarts: (p.status?.containerStatuses ?? []).reduce((x, c) => x + c.restartCount, 0),
-        })),
+        resources: {
+          cpuRequestMilli: res.cpuRequestMilli,
+          cpuLimitMilli: res.cpuLimitMilli > 0 ? res.cpuLimitMilli : null,
+          memRequest: res.memRequest,
+          memLimit: res.memLimit > 0 ? res.memLimit : null,
+          cpuUnlimited: res.cpuUnlimited,
+          memUnlimited: res.memUnlimited,
+        },
+        ...(lastRestart ? { lastRestart } : {}),
+        pods: podViews,
       };
     })
     .sort((a, b) => a.namespace.localeCompare(b.namespace) || a.name.localeCompare(b.name));

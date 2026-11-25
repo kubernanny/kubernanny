@@ -4,7 +4,9 @@ import { podReady } from '../../checks/pods.check';
 import { ageText } from '../../checks/types';
 import { t } from '../../i18n/text';
 import { CoreCheck } from '../module';
-import { ModuleContext, ModuleResult, Stat } from '../types';
+import { DetailMeta, DetailRow, ModuleContext, ModuleResult, Stat } from '../types';
+import { bytes } from '../format';
+import { listSection, sections } from '../details';
 
 export class EtcdCheck extends CoreCheck {
   readonly id = 'etcd';
@@ -39,11 +41,42 @@ export class EtcdCheck extends CoreCheck {
     }
     if (snapshots && snapshots.length > 0) {
       const newest = Math.max(...snapshots.map((s) => Date.parse(s.status?.creationTime ?? s.metadata.creationTimestamp ?? '')).filter(Number.isFinite));
-      stats.push({ label: t('etcd.stat.snapshots'), value: String(snapshots.length) }, { label: t('etcd.stat.lastSnapshot'), value: t('common.ago', { age: ageText(ctx.now.getTime() - newest) }) });
+      stats.push({ label: t('etcd.stat.lastSnapshot'), value: t('common.ago', { age: ageText(ctx.now.getTime() - newest) }) });
     }
+    // Per member from Prometheus, by the etcd pod's name: who leads, how big the database is, how fast the WAL syncs.
+    const byPod = async (expr: string) => new Map((ctx.prom ? await ctx.prom.query(expr).catch(() => []) : []).filter((s) => s.metric.pod).map((s) => [s.metric.pod!, s.value]));
+    const [leader, dbSize, fsyncByPod] = pods.length
+      ? await Promise.all([
+          byPod('max by (pod) (etcd_server_is_leader)'),
+          byPod('max by (pod) (etcd_mvcc_db_total_size_in_bytes)'),
+          byPod('histogram_quantile(0.99, sum by (le, pod) (rate(etcd_disk_wal_fsync_duration_seconds_bucket[5m])))'),
+        ])
+      : [new Map<string, number>(), new Map<string, number>(), new Map<string, number>()];
+    const members: DetailRow[] = pods.map((p) => {
+      const name = p.metadata.name;
+      const meta: DetailMeta[] = [];
+      if (leader.get(name) === 1) {
+        meta.push({ text: t('detail.etcd.leader') });
+      }
+      if (dbSize.has(name)) {
+        meta.push({ text: t('detail.etcd.db', { size: bytes(dbSize.get(name)!) }) });
+      }
+      const f = fsyncByPod.get(name);
+      if (f !== undefined && Number.isFinite(f)) {
+        meta.push({ text: t('detail.etcd.fsync', { ms: (f * 1000).toFixed(1) }), ...(f > 0.01 ? { tone: 'warning' as const } : {}) });
+      }
+      return {
+        name: p.spec?.nodeName ?? name,
+        sub: name,
+        value: podReady(p) ? t('detail.ready') : t('detail.notReady'),
+        tone: podReady(p) ? 'ok' : 'critical',
+        ...(meta.length ? { meta } : {}),
+      };
+    });
     return {
       issues,
       stats,
+      details: sections(listSection(t('detail.etcd.members'), members)),
       summary: pods.length === 0 ? t('etcd.summary.none') : issues.length === 0 ? t('etcd.summary.ok', { n: pods.length }) : issues[0].title,
     };
   }

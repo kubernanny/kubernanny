@@ -73,6 +73,11 @@ function issuesFor(inv: Inventory, reports: VulnerabilityReport[], accepted: Rea
   return items.map((w) => trivyIssue(w, NOW)).filter((i) => i !== null);
 }
 
+/** The plain facts of a module's sheet (`keyFigures` moves everything past the four severities there). */
+function facts<R>(result: { details?: ({ kind: 'list'; rows: R[] } | { kind: 'table' })[] }): R[] {
+  return (result.details ?? []).flatMap((d) => (d.kind === 'list' ? d.rows : []));
+}
+
 describe('Trivy Operator reports', () => {
   it('belong to the workload Trivy names, a Deployment through its ReplicaSet', () => {
     const index = workloadIndex(inventory(deployment('apps', 'web', 'ghcr.io/acme/web:1.0.0')));
@@ -249,16 +254,16 @@ describe('the built-in lookup next to Trivy Operator', () => {
     expect(without.issues.map((i) => i.id)).toEqual(['vulnerabilities/cnpg']);
     const withTrivy = en(await check.run(ctx({ trivy: { covered } }, [cnpg()]), () => true));
     expect(withTrivy.issues).toEqual([]);
-    expect(withTrivy.stats.find((s) => s.label === 'Left to Trivy Operator')?.value).toBe('1');
+    expect(facts(withTrivy).find((r) => r.name === 'Left to Trivy Operator')?.value).toBe('1');
     expect(withTrivy.summary).toBe('No known vulnerabilities in 1 version, Trivy Operator covers every image');
   });
 
   it('says what it cannot see, and how Trivy Operator fills the gap', async () => {
     expect(MAPPED_COMPONENTS).toBe(13); // the module descriptions name the number
     const result = en(await check.run(ctx({}, [cnpg()]), () => true));
-    expect(result.stats.slice(0, 2)).toEqual([
-      { label: 'Compares', value: 'Kubernetes and 13 recognised components, not your own images' },
-      { label: 'Every image', value: 'For every image, including your own: install Trivy Operator; Kubernanny reads its reports', tone: 'muted' },
+    expect(facts(result).slice(0, 2)).toEqual([
+      { name: 'Compares', value: 'Kubernetes and 13 recognised components, not your own images', tone: 'muted' },
+      { name: 'Every image', value: 'For every image, including your own: install Trivy Operator; Kubernanny reads its reports', tone: 'muted' },
     ]);
     expect(de(trivyHint(true, true)).value).toBe('Trivy Operator gefunden: jedes Image wird geprüft');
     expect(en(trivyHint(false, true)).value).toBe('Trivy Operator found, its check is switched off');

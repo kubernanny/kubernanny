@@ -23,13 +23,24 @@
           "get",
           "list"
         ]
+      },
+      {
+        "group": "acme.cert-manager.io",
+        "resources": [
+          "challenges"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
       }
     ],
     "cnpg": [
       {
         "group": "postgresql.cnpg.io",
         "resources": [
-          "clusters"
+          "clusters",
+          "scheduledbackups"
         ],
         "verbs": [
           "get",
@@ -133,7 +144,9 @@
         "group": "secrets.infisical.com",
         "resources": [
           "infisicalsecrets",
-          "infisicalstaticsecrets"
+          "infisicalstaticsecrets",
+          "infisicaldynamicsecrets",
+          "infisicalpushsecrets"
         ],
         "verbs": [
           "get",
@@ -172,7 +185,8 @@
           "volumes",
           "nodes",
           "backups",
-          "backuptargets"
+          "backuptargets",
+          "replicas"
         ],
         "verbs": [
           "get",
@@ -431,6 +445,7 @@
     "rook-ceph",
     "sealed-secrets",
     "security",
+    "standard-alerts",
     "system-upgrade-controller",
     "tailscale",
     "tempo",

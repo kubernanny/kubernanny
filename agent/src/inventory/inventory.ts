@@ -5,7 +5,7 @@ import { KubeClient } from '../kube/kube-client';
 
 export interface PodSpecLite {
   nodeName?: string;
-  containers?: { name: string; image: string; resources?: { requests?: Record<string, string> } }[];
+  containers?: { name: string; image: string; resources?: { requests?: Record<string, string>; limits?: Record<string, string> } }[];
   initContainers?: { name: string; image: string }[];
   volumes?: { name: string; persistentVolumeClaim?: { claimName: string } }[];
 }

@@ -8,7 +8,8 @@
 import { Issue, IssueSeverity } from '../checks/types';
 import { isText, t } from '../i18n/text';
 import { CONTROL_CHARS } from '../util/log-safe';
-import type { Stat } from './types';
+import type { DetailSection, Stat } from './types';
+import type { Text } from '../i18n/text';
 
 /** Longest string kept from an untrusted answer (names, states, messages). */
 export const MAX_FIELD = 300;
@@ -87,4 +88,36 @@ export function capIssues(issues: Issue[], moduleId: string, max = MAX_ISSUES_PE
 /** A stat value that is neither a string nor a Text (an object from a forged answer) becomes "?". */
 export function boundStats(stats: Stat[]): Stat[] {
   return stats.slice(0, 20).map((s) => (typeof s.value === 'string' ? { ...s, value: str(s.value, 80) ?? '?' } : isText(s.value) ? s : { ...s, value: '?' }));
+}
+
+/** Rows one section of an untrusted integration may show. */
+export const MAX_DETAIL_ROWS = 50;
+
+function cell(value: unknown, max = 120): string | Text {
+  return typeof value === 'string' ? (str(value, max) ?? '?') : isText(value) ? value : '?';
+}
+
+/** Detail sections of an untrusted integration: at most 6, each cut to MAX_DETAIL_ROWS rows, every string cut and cleaned. */
+export function boundDetails(details: DetailSection[] | undefined): DetailSection[] | undefined {
+  if (!details) {
+    return undefined;
+  }
+  return details.slice(0, 6).map((d) => {
+    const more = (d.more ?? 0) + Math.max(0, d.rows.length - MAX_DETAIL_ROWS);
+    const extra = more > 0 ? { more } : {};
+    if (d.kind === 'table') {
+      return { ...d, ...extra, rows: d.rows.slice(0, MAX_DETAIL_ROWS).map((r) => ({ tone: r.tone, cells: r.cells.slice(0, d.columns.length).map((c) => cell(c)) })) };
+    }
+    return {
+      ...d,
+      ...extra,
+      rows: d.rows.slice(0, MAX_DETAIL_ROWS).map((r) => ({
+        name: cell(r.name, 200),
+        tone: r.tone,
+        ...(r.sub !== undefined ? { sub: cell(r.sub) } : {}),
+        ...(r.value !== undefined ? { value: cell(r.value, 60) } : {}),
+        ...(r.meta ? { meta: r.meta.slice(0, 6).map((m) => ({ text: cell(m.text, 80), ...(m.tone ? { tone: m.tone } : {}) })) } : {}),
+      })),
+    };
+  });
 }

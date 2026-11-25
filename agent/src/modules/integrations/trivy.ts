@@ -1,4 +1,5 @@
-import { TextError, t } from '../../i18n/text';
+import { MessageKey, TextError, t } from '../../i18n/text';
+import { keyFigures } from '../details';
 import { Integration } from '../module';
 import { ModuleContext, ModuleResult, Stat } from '../types';
 import { TrivyCollector, VulnerabilityReport, acceptTrivy, total, trivyIssue, workloadFindings, workloadIndex } from './trivy-reports';
@@ -53,6 +54,7 @@ export class TrivyIntegration extends Integration {
       ...(accepted.length ? [{ label: t('vulnerabilities.stat.accepted'), value: String(accepted.length), tone: 'muted' as const }] : []),
     ];
     const summary = issues.length === 0 ? t('trivy.summary.none', { n: workloads.size }) : t('trivy.summary.affected', { n: issues.length });
-    return { issues, stats, summary, accepted, canAccept: acceptance.allowed };
+    const severities: MessageKey[] = ['vulnerabilities.stat.critical', 'vulnerabilities.stat.high', 'vulnerabilities.stat.medium', 'vulnerabilities.stat.lowOrUnrated'];
+    return { issues, ...keyFigures(stats, severities, t('detail.lookup')), summary, accepted, canAccept: acceptance.allowed };
   }
 }

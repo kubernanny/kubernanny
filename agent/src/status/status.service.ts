@@ -18,6 +18,7 @@ import { SettingsService } from '../settings/settings.service';
 import { SilenceService } from '../silence/silence.service';
 import { AGENT_VERSION } from '../version';
 import { mergeIssues, runComponent, runCoreCheck } from './run-modules';
+import { dedupeAlerts } from '../modules/core/standard-alerts/alertmanager-dedupe';
 import { buildOverview, HistoryPoint, IssueView, lightFor, Overview, scoreFor, SEVERITY_RANK, Snapshot } from './snapshot';
 
 // The types and rules of a snapshot live in snapshot.ts; existing imports keep working through here.
@@ -155,6 +156,8 @@ export class StatusService implements OnApplicationBootstrap, OnApplicationShutd
     );
     const core = await Promise.all(CORE_CHECKS.filter((m) => this.settings.moduleOn(m.id)).map((m) => runCoreCheck(ctx, m, allowed)));
     const byId = mergeIssues(core, components);
+    // An Alertmanager alert that is the same as a built-in issue shows once, as the built-in one.
+    dedupeAlerts(byId, [...core, ...components].map((o) => o.view), data, inv);
     const issues = this.withHistory([...byId.values()], now);
     const modules = [...core, ...components].map((a) => a.view);
     const overview = buildOverview(inv, detected.length, prom !== null);

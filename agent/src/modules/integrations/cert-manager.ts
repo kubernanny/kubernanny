@@ -4,6 +4,7 @@ import { Issue, ageText, condition } from '../../checks/types';
 import {ModuleContext, ModuleResult, Stat } from '../types';
 import { rawOr, t } from '../../i18n/text';
 import { Conditioned } from './util';
+import { AcmeChallenge, certificateDetails } from '../details';
 
 interface Issuer extends Conditioned {
   kind?: string;
@@ -11,11 +12,16 @@ interface Issuer extends Conditioned {
 
 export class CertManagerIntegration extends Integration {
   readonly id = 'cert-manager';
-  readonly reads = [{ group: 'cert-manager.io', resource: 'certificates', why: 'expiry and Ready condition of every certificate' }, { group: 'cert-manager.io', resource: 'clusterissuers', why: 'whether the issuers are ready' }];
+  readonly reads = [
+    { group: 'cert-manager.io', resource: 'certificates', why: 'expiry and Ready condition of every certificate' },
+    { group: 'cert-manager.io', resource: 'clusterissuers', why: 'whether the issuers are ready' },
+    { group: 'acme.cert-manager.io', resource: 'challenges', why: 'ACME challenges still open, with their state and reason, for the sheet' },
+  ];
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
-    const [certs, issuers] = await Promise.all([
+    const [certs, issuers, challenges] = await Promise.all([
       ctx.kube.list<Certificate>('/apis/cert-manager.io/v1/certificates'),
       ctx.kube.list<Issuer>('/apis/cert-manager.io/v1/clusterissuers').catch(() => null),
+      ctx.kube.list<AcmeChallenge>('/apis/acme.cert-manager.io/v1/challenges').catch(() => null),
     ]);
     ctx.data.certificates = certs ?? [];
     const issues: Issue[] = evaluateCertificates(certs ?? [], ctx.now, { warnDays: ctx.config.certWarnDays, criticalDays: ctx.config.certCriticalDays });
@@ -49,6 +55,7 @@ export class CertManagerIntegration extends Integration {
         tone: next.t - ctx.now.getTime() < ctx.config.certWarnDays * 86_400_000 ? 'warning' : 'ok',
       });
     }
-    return { issues, stats, summary: issues.length === 0 ? t('certificates.summary.ok', { n: certs?.length ?? 0 }) : issues[0].title };
+    const details = certificateDetails(certs ?? [], issuers ?? [], ctx.now, ctx.config.certWarnDays, ctx.config.certCriticalDays, challenges ?? []);
+    return { issues, stats, details, summary: issues.length === 0 ? t('certificates.summary.ok', { n: certs?.length ?? 0 }) : issues[0].title };
   }
 }

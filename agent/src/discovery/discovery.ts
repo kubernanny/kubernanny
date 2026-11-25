@@ -26,6 +26,22 @@ export interface Detected {
   workloads: WorkloadRef[];
   services: Service[];
   links: Link[];
+  /**
+   * One entry per namespace the component runs in (Redis/Valkey once per app,
+   * a CloudNativePG cluster per team). `namespace` and `version` above are the
+   * first one's; with more than one entry the component is installed several
+   * times and each copy carries its own version.
+   */
+  instances?: DetectedInstance[];
+}
+
+export interface DetectedInstance {
+  namespace: string;
+  /** The first workload of the component in that namespace. */
+  name: string;
+  version?: string;
+  ready: number;
+  desired: number;
 }
 
 export function readiness(kind: WorkloadKind, w: Workload): { ready: number; desired: number } {
@@ -169,13 +185,23 @@ export function discover(inv: Inventory, custom: CustomComponent[] = []): Detect
   const found = new Map<string, Detected>();
   const match = (images: string[]) => catalog.find((e) => images.some((i) => e.images.some((re) => re.test(i))));
   const record = (entry: CatalogEntry, namespace: string, images: string[], ref: WorkloadRef, podLabels: Record<string, string> | undefined) => {
-    const det = found.get(entry.id) ?? ({ entry, namespace, workloads: [], services: [], links: [] } satisfies Detected);
+    const det = found.get(entry.id) ?? ({ entry, namespace, workloads: [], services: [], links: [], instances: [] } satisfies Detected);
     const image = images.find((i) => entry.images.some((re) => re.test(i)));
     if (det.version === undefined && image) {
       det.version = imageVersion(image);
       det.image = image;
     }
     det.workloads.push(ref);
+    const instances = (det.instances ??= []);
+    const instance = instances.find((x) => x.namespace === namespace);
+    if (instance) {
+      instance.ready += Math.min(ref.ready, ref.desired);
+      instance.desired += ref.desired;
+      instance.version ??= image ? imageVersion(image) : undefined;
+    } else {
+      const version = image ? imageVersion(image) : undefined;
+      instances.push({ namespace, name: ref.name, ...(version ? { version } : {}), ready: Math.min(ref.ready, ref.desired), desired: ref.desired });
+    }
     det.services.push(...servicesOf(inv, namespace, podLabels));
     found.set(entry.id, det);
   };
