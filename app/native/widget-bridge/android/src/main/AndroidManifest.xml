@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
-        <!-- The home-screen widget. Not exported to anyone but the launcher's
-             APPWIDGET_UPDATE broadcast; it reads only what the app wrote. -->
+        <!-- The home-screen widgets. Exported only for the launcher's
+             APPWIDGET_UPDATE broadcast; they read only what the app and pushes stored. -->
         <receiver
             android:name="app.kubernanny.widget.ClusterWidgetProvider"
             android:exported="true"
@@ -13,6 +13,26 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/kn_cluster_widget_info" />
+        </receiver>
+        <receiver
+            android:name="app.kubernanny.widget.ClusterDetailWidgetProvider"
+            android:exported="true"
+            android:label="@string/kn_widget_cluster_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/kn_cluster_detail_widget_info" />
+        </receiver>
+        <!-- Redraws after a push (explicit intent from the push service), when a
+             cluster turns grey (an alarm) and after an app update. Not exported. -->
+        <receiver
+            android:name="app.kubernanny.widget.WidgetRefreshReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
         </receiver>
     </application>
 </manifest>

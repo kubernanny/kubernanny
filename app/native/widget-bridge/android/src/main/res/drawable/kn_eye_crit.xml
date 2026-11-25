@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The nanny's glasses from the app icon (branding/): the left lens with a dark
+     pupil, the right one in the cluster's light with a soft glow (an empty grey
+     ring when unknown or no longer current). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="56dp"
+    android:height="26dp"
+    android:viewportWidth="104"
+    android:viewportHeight="48">
+    <path android:pathData="M50,23 a26,26 0 1,0 52,0 a26,26 0 1,0 -52,0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial" android:centerX="76" android:centerY="23" android:gradientRadius="26" android:startColor="#80FF5D73" android:endColor="#00FF5D73" />
+        </aapt:attr>
+    </path>
+    <group android:translateY="1">
+        <path android:fillColor="@color/kn_lens" android:strokeColor="@color/kn_frame" android:strokeWidth="5" android:pathData="M5,23 a19,19 0 1,0 38,0 a19,19 0 1,0 -38,0" />
+        <path android:fillColor="@color/kn_lens" android:strokeColor="@color/kn_frame" android:strokeWidth="5" android:pathData="M57,23 a19,19 0 1,0 38,0 a19,19 0 1,0 -38,0" />
+        <path android:strokeColor="@color/kn_frame" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M43,19 Q50,13 57,19" />
+        <path android:fillColor="@color/kn_pupil" android:pathData="M18,25 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0" />
+        <path android:fillColor="@color/kn_crit" android:pathData="M68.5,25 a8.5,8.5 0 1,0 17,0 a8.5,8.5 0 1,0 -17,0" />
+        <path android:fillColor="#CCFFFFFF" android:pathData="M78.5,21 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0" />
+    </group>
+</vector>

@@ -1,13 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The app's light theme (app/src/styles.scss); values-night has the dark one. -->
+<!-- Navy like the app icon in both modes (branding/), the lights in the app's
+     dark-theme tones (app/src/styles.scss), which read on navy. -->
 <resources>
-    <color name="kn_ground">#F3F5F9</color>
-    <color name="kn_surface">#FFFFFF</color>
-    <color name="kn_ink">#121A2C</color>
-    <color name="kn_mute">#5B6582</color>
-    <color name="kn_ok">#0E9F77</color>
-    <color name="kn_warn">#B97800</color>
-    <color name="kn_crit">#D92D4A</color>
-    <color name="kn_accent">#4D5FD6</color>
-    <color name="kn_stale">#9AA3BC</color>
+    <color name="kn_navy_top">#1D2B4D</color>
+    <color name="kn_navy_bottom">#0F1626</color>
+    <color name="kn_raised">#B324335A</color>
+    <color name="kn_line">#2C3A5E</color>
+    <color name="kn_ink">#E9EDF7</color>
+    <color name="kn_ink_2">#C3CBE0</color>
+    <color name="kn_mute">#8D97B5</color>
+    <color name="kn_accent">#8EA2FF</color>
+    <color name="kn_stale">#5A6585</color>
+    <color name="kn_ok">#36D6A8</color>
+    <color name="kn_warn">#F5B83D</color>
+    <color name="kn_warn_soft">#D9B56E</color>
+    <color name="kn_crit">#FF5D73</color>
+    <color name="kn_lens">#EEF1FF</color>
+    <color name="kn_frame">#7B90F3</color>
+    <color name="kn_pupil">#16213B</color>
 </resources>

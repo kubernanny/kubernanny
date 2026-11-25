@@ -7,7 +7,14 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-/** One cluster as the widget shows it: exactly the fields the app writes (WidgetCluster in the app). */
+/** One open problem as the larger widgets list it (WidgetProblem in the app). */
+data class WidgetProblem(val title: String, val critical: Boolean)
+
+/**
+ * One cluster as the widget shows it: exactly the fields the app writes
+ * (WidgetCluster in the app), and that the push service updates from a sealed
+ * push (WidgetPushStatus.java in app/native/push).
+ */
 data class WidgetCluster(
     val id: String,
     val name: String,
@@ -17,7 +24,14 @@ data class WidgetCluster(
     /** Epoch milliseconds of the agent's last check, or null before its first run. */
     val checkedAt: Long?,
     val demo: Boolean,
-)
+    /** The worst open problems, outages first; absent in lists an older app version stored. */
+    val problems: List<WidgetProblem> = emptyList(),
+) {
+    val hasProblems get() = critical + warning > 0
+    val notChecked get() = checkedAt == null || (light == "unknown" && !hasProblems)
+
+    fun isStale(now: Long) = checkedAt == null || now - checkedAt > WidgetStore.STALE_AFTER_MS
+}
 
 /**
  * The widget's storage: one JSON string in a private SharedPreferences file
@@ -25,10 +39,11 @@ data class WidgetCluster(
  * off for the whole app (allowBackup="false"), this file included.
  */
 object WidgetStore {
+    // Keep in step with WidgetPushStatus.java (app/native/push), which writes a push's state here.
     private const val FILE = "kubernanny_widget"
     private const val KEY = "clusters.v1"
 
-    /** After this long without a check the widget greys out: the app only refreshes while it is open. */
+    /** After this long without a check the widget greys out: only the open app and pushes refresh it. */
     const val STALE_AFTER_MS = 30 * 60 * 1000L
 
     fun readJson(context: Context): String? =
@@ -55,6 +70,11 @@ object WidgetStore {
                     warning = o.getInt("warning"),
                     checkedAt = if (o.isNull("checkedAt")) null else parseIso(o.getString("checkedAt")),
                     demo = o.getBoolean("demo"),
+                    problems = o.optJSONArray("problems")?.let { list ->
+                        (0 until minOf(list.length(), 3)).mapNotNull { j ->
+                            list.optJSONObject(j)?.let { p -> WidgetProblem(p.getString("title"), p.getString("severity") == "critical") }
+                        }
+                    } ?: emptyList(),
                 )
             }.getOrNull()
         }

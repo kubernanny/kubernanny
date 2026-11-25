@@ -5,6 +5,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Build;
 import androidx.core.app.NotificationCompat;
@@ -54,11 +55,27 @@ public class PushMessagingService extends FirebaseMessagingService {
                 return;
             }
             PushKeyStore.markShown(this, kid, sealedAt);
+            // The cluster's state for the home-screen widget (agents that send it; docs/PROTOCOL.md "Push status").
+            updateWidget(this, entry.clusterId, content.optJSONObject("w"));
             String title = PushMarker.title(PushKeyStore.getMarker(this), content.getString("t"));
             show(this, entry.clusterId, title, content.getString("b"), content.optInt("p", 3), sealedAt);
         } catch (Exception ignored) {
             // Not from the pinned agent, or damaged: nothing to show.
         }
+    }
+
+    /** Writes a push's cluster state into the widget's storage and redraws the widgets (WidgetPushStatus). */
+    static void updateWidget(Context context, String clusterId, JSONObject status) {
+        if (status == null) {
+            return;
+        }
+        SharedPreferences prefs = context.getSharedPreferences(WidgetPushStatus.FILE, Context.MODE_PRIVATE);
+        String next = WidgetPushStatus.merge(prefs.getString(WidgetPushStatus.KEY, null), clusterId, status);
+        if (next == null) {
+            return;
+        }
+        prefs.edit().putString(WidgetPushStatus.KEY, next).commit();
+        context.sendBroadcast(new Intent(WidgetPushStatus.REFRESH).setClassName(context.getPackageName(), WidgetPushStatus.RECEIVER));
     }
 
     @Override

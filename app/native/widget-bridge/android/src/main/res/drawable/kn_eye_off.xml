@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The nanny's glasses from the app icon (branding/): the left lens with a dark
+     pupil, the right one in the cluster's light with a soft glow (an empty grey
+     ring when unknown or no longer current). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="56dp"
+    android:height="26dp"
+    android:viewportWidth="104"
+    android:viewportHeight="48">
+
+    <group android:translateY="1">
+        <path android:fillColor="@color/kn_lens" android:strokeColor="@color/kn_frame" android:strokeWidth="5" android:pathData="M5,23 a19,19 0 1,0 38,0 a19,19 0 1,0 -38,0" />
+        <path android:fillColor="@color/kn_lens" android:strokeColor="@color/kn_frame" android:strokeWidth="5" android:pathData="M57,23 a19,19 0 1,0 38,0 a19,19 0 1,0 -38,0" />
+        <path android:strokeColor="@color/kn_frame" android:strokeWidth="5" android:strokeLineCap="round" android:pathData="M43,19 Q50,13 57,19" />
+        <path android:fillColor="@color/kn_pupil" android:pathData="M18,25 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0" />
+        <path android:strokeColor="@color/kn_stale" android:strokeWidth="3" android:pathData="M71,25 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0" />
+    </group>
+</vector>
