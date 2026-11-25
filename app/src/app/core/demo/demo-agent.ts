@@ -172,7 +172,7 @@ export class DemoAgent {
       .map((m) => (m.id === 'argocd' ? withRollbacks(m, settings, state.rolledBack) : m))
       .map((m) => (m.issueIds.some((id) => state.fixed.has(id)) ? { ...m, issueIds: m.issueIds.filter((id) => !state.fixed.has(id)) } : m));
     const maintenance = state.maintenanceUntil > now ? { maintenanceUntil: new Date(state.maintenanceUntil).toISOString() } : {};
-    return { ...data.status, ...judge(issues.filter((i) => !i.silencedUntil)), checkedAt: new Date().toISOString(), cluster: DEMO_LABELS[data.scenario].cluster, issues, modules, ...maintenance };
+    return { ...data.status, ...judge(issues.filter((i) => !i.silencedUntil)), ...demoSchedule(now), cluster: DEMO_LABELS[data.scenario].cluster, issues, modules, ...maintenance };
   }
 
   private act({ data, state, settings }: Demo, type: string, issueId: string, lang: Lang): { done: string } {
@@ -315,4 +315,10 @@ export function applySettings(view: SettingsView, patch: SettingsPatch): Setting
     actions: view.actions.map((a) => flip(a, patch.actions?.[a.type])),
     notifications: patch.notifications === undefined || view.notifications === 'locked' ? view.notifications : patch.notifications ? 'on' : 'off',
   };
+}
+
+/** The demo checks once a minute on the minute, like an agent with the default interval: the last run and the next. */
+export function demoSchedule(now: number): { checkedAt: string; nextCheckAt: string } {
+  const last = now - (now % 60_000);
+  return { checkedAt: new Date(last).toISOString(), nextCheckAt: new Date(last + 60_000).toISOString() };
 }
