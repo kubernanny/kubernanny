@@ -103,6 +103,8 @@ export function formatPush(
 export type SecurityEvent =
   | { kind: 'notificationsOff' }
   | { kind: 'moduleOff'; id: string }
+  /** A default-off module (one that sends data out of the cluster) switched on. */
+  | { kind: 'moduleOn'; id: string }
   | { kind: 'actionOff'; id: string }
   | { kind: 'maintenance'; hours: number }
   | { kind: 'deviceRevoked'; device: string }
@@ -114,6 +116,7 @@ export type SecurityEvent =
 const SECURITY_LINE: { [K in SecurityEvent['kind']]: (by: string, e: Extract<SecurityEvent, { kind: K }>) => Text } = {
   notificationsOff: (by) => t('push.security.notificationsOff', { by }),
   moduleOff: (by, e) => t('push.security.moduleOff', { by, id: e.id }),
+  moduleOn: (by, e) => t('push.security.moduleOn', { by, id: e.id }),
   actionOff: (by, e) => t('push.security.actionOff', { by, id: e.id }),
   maintenance: (by, e) => t('push.security.maintenance', { by, hours: e.hours }),
   deviceRevoked: (by, e) => t('push.security.deviceRevoked', { by, device: e.device }),

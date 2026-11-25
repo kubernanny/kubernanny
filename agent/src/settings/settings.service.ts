@@ -89,8 +89,9 @@ interface Stored {
  * 2. **The app**, within those limits: any paired device can switch modules,
  *    action types and notifications off and on again. Stored in the
  *    ConfigMap `kubernanny-settings`, so it survives restarts. Every change
- *    is in the audit log with the device, and switching anything off is
- *    announced through the notification channels first (Notifier.securityAlert).
+ *    is in the audit log with the device, and switching anything off, or a
+ *    module on that sends data out of the cluster, is announced through the
+ *    notification channels first (Notifier.securityAlert).
  */
 @Injectable()
 export class SettingsService implements OnModuleInit {
@@ -131,16 +132,16 @@ export class SettingsService implements OnModuleInit {
     this.listeners.push(listener);
   }
 
-  moduleState(id: string): ToggleState {
+  moduleState(id: string, stored: Stored = this.stored): ToggleState {
     if (this.config.disabledModules.includes(id)) {
       return 'locked';
     }
-    if (this.stored.disabledModules.includes(id)) {
+    if (stored.disabledModules.includes(id)) {
       return 'off';
     }
     if (DEFAULT_OFF.has(id)) {
       // On when the app switched it on, or the deployment did (Helm, ENABLED_MODULES). The demo shows everything.
-      return this.stored.enabledModules.includes(id) || this.config.enabledModules.includes(id) || this.kube instanceof DemoKubeClient ? 'on' : 'off';
+      return stored.enabledModules.includes(id) || this.config.enabledModules.includes(id) || this.kube instanceof DemoKubeClient ? 'on' : 'off';
     }
     return 'on';
   }
@@ -260,7 +261,7 @@ export class SettingsService implements OnModuleInit {
       throw new NotLoadedError('settings');
     }
     // Before the change: once notifications are off, this would be the last message anyway.
-    await this.notifier?.securityAlert(who.name, this.switchedOff(next));
+    await this.notifier?.securityAlert(who.name, this.securityEvents(next));
     await this.save(next);
     this.logger.log(`settings changed by "${who.name}" (${who.id}): ${JSON.stringify(patch)}`);
     for (const listener of this.listeners) {
@@ -268,8 +269,12 @@ export class SettingsService implements OnModuleInit {
     }
   }
 
-  /** What `next` switches off that runs now: the changes a stolen device key would make to go unnoticed. */
-  private switchedOff(next: Stored): SecurityEvent[] {
+  /**
+   * What `next` changes that a stolen device key would use: everything it
+   * switches off that runs now (to go unnoticed), and every default-off
+   * module it switches on (those send data out of the cluster).
+   */
+  private securityEvents(next: Stored): SecurityEvent[] {
     const events: SecurityEvent[] = [];
     if (next.notificationsPaused && this.notificationsOn()) {
       events.push({ kind: 'notificationsOff' });
@@ -277,6 +282,11 @@ export class SettingsService implements OnModuleInit {
     for (const id of next.disabledModules.filter((id) => !this.stored.disabledModules.includes(id))) {
       if (this.moduleOn(id)) {
         events.push({ kind: 'moduleOff', id });
+      }
+    }
+    for (const id of DEFAULT_OFF) {
+      if (!this.moduleOn(id) && this.moduleState(id, next) === 'on') {
+        events.push({ kind: 'moduleOn', id });
       }
     }
     for (const type of next.disabledActions.filter((type) => !this.stored.disabledActions.includes(type))) {
