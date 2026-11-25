@@ -5,6 +5,7 @@ import { ClusterConfig, HistoryView, Series } from '../../core/agent.model';
 import { Loadable } from '../../core/cluster-data.store';
 import { AreaChart } from '../../ui/area-chart';
 import { ResourceBar } from '../../ui/resource-bar';
+import { ResourceRail } from '../resource-rail';
 import { IssueList } from '../../ui/issue-list';
 import { LanguageService } from '../../i18n/language.service';
 import { Translator } from '../../i18n/translator';
@@ -31,7 +32,7 @@ export function foldIssues(cards: IssueCard[], all: boolean, tr: Translator): { 
 @Component({
   selector: 'app-overview-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, IssueList, AreaChart, IonIcon, HistorySection, ResourceBar],
+  imports: [TranslocoDirective, IssueList, AreaChart, IonIcon, HistorySection, ResourceBar, ResourceRail],
   template: `
     <ng-container *transloco="let t">
       @if (view().update; as update) {
@@ -131,18 +132,7 @@ export function foldIssues(cards: IssueCard[], all: boolean, tr: Translator): { 
 
       <section class="kpi-section">
         <h2>{{ t('overview.keyFigures') }}</h2>
-        <dl class="kpis">
-          @for (k of view().kpis; track k.label) {
-            <div [class]="'kpi tone-' + k.tone">
-              <dt>{{ k.label }}</dt>
-              <dd class="display">{{ k.value }}</dd>
-              <dd class="note">{{ k.note }}</dd>
-                @if (k.bar; as b) {
-                  <dd class="bar"><app-resource-bar [resource]="b" [label]="k.label" [head]="false" [compact]="true" /></dd>
-                }
-            </div>
-          }
-        </dl>
+        <app-resource-rail [rail]="view().rail" [nodes]="false" />
       </section>
 
       @if (view().perNode.length > 0) {
