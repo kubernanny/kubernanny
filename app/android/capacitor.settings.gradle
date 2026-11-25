@@ -13,3 +13,9 @@ project(':capacitor-preferences').projectDir = new File('../node_modules/@capaci
 
 include ':capacitor-share'
 project(':capacitor-share').projectDir = new File('../node_modules/@capacitor/share/android')
+
+include ':kubernanny-push-native'
+project(':kubernanny-push-native').projectDir = new File('../native/push/android')
+
+include ':kubernanny-widget-bridge'
+project(':kubernanny-widget-bridge').projectDir = new File('../native/widget-bridge/android')

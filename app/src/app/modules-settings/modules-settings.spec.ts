@@ -51,6 +51,14 @@ describe('settings sections', () => {
     expect(s[2]!.rows[0]!.note).toBe('Turned off in the Helm chart, and only changeable there.');
   });
 
+  it('says under each action what it may change, in the agent\'s words', () => {
+    const effect = 'Darf am betroffenen Workload die Annotation restartedAt setzen, wie kubectl rollout restart.';
+    const s = settingsSections({ ...view, actions: [{ type: 'restart', label: 'Workloads neu starten', description: 'x', effect, state: 'on' }] }, de);
+    expect(s[2]!.rows[0]).toMatchObject({ effect, on: true });
+    // An agent before 0.4 sends no effect: the row simply has none.
+    expect(settingsSections(view, de)[2]!.rows[0]!.effect).toBeUndefined();
+  });
+
   it('leaves out the "not found" section when everything is in the cluster', () => {
     expect(settingsSections({ ...view, modules: view.modules.slice(0, 3) }, de).map((x) => x.title)).not.toContain('Nicht gefunden');
   });

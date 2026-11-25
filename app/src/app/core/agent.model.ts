@@ -71,6 +71,20 @@ export interface ModuleView {
   workloads: { ready: number; total: number; items: { kind: string; namespace: string; name: string; ready: number; desired: number }[] };
   issueIds: string[];
   error?: string;
+  /** Vulnerabilities only: advisories someone marked as not applicable. */
+  accepted?: AcceptedAdvisory[];
+  /** Vulnerabilities only: advisories can be accepted (not locked in Helm). */
+  canAccept?: boolean;
+}
+
+/** One advisory marked as "does not apply here" on one component, until it expires. */
+export interface AcceptedAdvisory {
+  component: string;
+  name: string;
+  advisory: string;
+  until: string;
+  by: string;
+  reason?: string;
 }
 
 export interface Overview {
@@ -297,6 +311,24 @@ export interface ClusterConfig {
   relayUrl?: string;
   /** Switched off in the cluster's settings: never use the relay for this cluster. */
   relayOff?: boolean;
+  /** Switched off in the cluster's settings: never show this cluster on a home-screen widget (docs/SECURITY.md). */
+  widgetOff?: boolean;
+  /**
+   * Native push to this device is registered with the agent (docs/NOTIFICATIONS.md).
+   * `kid` names the push key pair whose secret half is kept natively (never
+   * here); `key` is its public half; `token` is the FCM token it was
+   * registered with, compared on start to notice a new one.
+   */
+  push?: { kid: string; key: string; token: string };
+}
+
+/** GET /push: whether this device can get native push from the agent, and whether it does. */
+export interface AgentPushView {
+  /** on: possible. locked: APP_PUSH=off in the deployment. no-relay: the agent has no relay, the only way a push leaves. */
+  state: 'on' | 'locked' | 'no-relay';
+  /** The relay is connected and delivers push right now. */
+  relay: boolean;
+  registered: boolean;
 }
 
 /** on: runs. off: switched off in the app. locked: switched off in the deployment (Helm), only changeable there. */
@@ -320,7 +352,8 @@ export interface ModuleSetting {
 
 export interface SettingsView {
   modules: ModuleSetting[];
-  actions: { type: IssueActionType; label: string; description: string; state: ToggleState }[];
+  /** `effect`: what the action may change in the cluster, one line from the agent (missing in agents before 0.4). */
+  actions: { type: IssueActionType; label: string; description: string; effect?: string; state: ToggleState }[];
   notifications: ToggleState;
 }
 

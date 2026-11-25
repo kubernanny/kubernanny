@@ -1,0 +1,12 @@
+/* Texte des Widgets, im Wortlaut der App (app/src/app/i18n/de.ts). */
+"widget.name" = "Kubernanny";
+"widget.description" = "Ampel deiner Cluster. Aktualisiert, solange die App offen ist.";
+"widget.empty" = "Öffne Kubernanny, um deine Cluster hier zu sehen.";
+"widget.stale" = "Seit über 30 Minuten nicht aktualisiert. Das Widget wird aktualisiert, solange die App offen ist: Tippen öffnet sie.";
+"widget.staleShort" = "Zum Aktualisieren App öffnen";
+"widget.demo" = "Demo";
+"widget.asOf" = "Stand %@";
+"widget.notChecked" = "Noch nicht geprüft";
+"widget.allGood" = "Alles läuft";
+"widget.partly" = "Läuft, aber nicht alles ist prüfbar";
+"widget.both" = "%1$@ und %2$@";

@@ -96,6 +96,27 @@ describe('DemoAgent', () => {
     expect(view.issues.every((c) => !c.issue.silencedUntil && c.canSilence)).toBe(true);
   });
 
+  it('accepts an advisory: it leaves its issue, the issue goes when nothing remains, and comes back when taken back', async () => {
+    const before = await agent.call<Snapshot>('broken', 'GET', '/status', undefined, 'en');
+    const issue = before.issues.find((i) => i.id.startsWith('vulnerabilities/'))!;
+    const component = issue.id.slice('vulnerabilities/'.length);
+    const advisory = issue.advisories![0]!;
+    expect(before.modules.find((m) => m.id === 'vulnerabilities')!.canAccept).toBe(true);
+    await expect(agent.call('broken', 'POST', '/vulnerabilities/accept', { component, advisory, days: 7 })).rejects.toBeInstanceOf(AgentError);
+    await agent.call('broken', 'POST', '/vulnerabilities/accept', { component, advisory, days: 90, reason: 'not exposed' }, 'en');
+    const after = await agent.call<Snapshot>('broken', 'GET', '/status', undefined, 'en');
+    const left = after.issues.find((i) => i.id === issue.id);
+    expect(left?.advisories ?? []).not.toContain(advisory);
+    const sheet = after.modules.find((m) => m.id === 'vulnerabilities')!;
+    expect(sheet.accepted).toEqual([expect.objectContaining({ component, advisory, reason: 'not exposed', by: 'Demo device' })]);
+    if (issue.advisories!.length === 1) {
+      expect(left).toBeUndefined();
+      expect(sheet.issueIds).not.toContain(issue.id);
+    }
+    await agent.call('broken', 'POST', '/vulnerabilities/unaccept', { component, advisory }, 'en');
+    expect((await agent.call<Snapshot>('broken', 'GET', '/status', undefined, 'en')).issues.find((i) => i.id === issue.id)?.advisories).toContain(advisory);
+  });
+
   it('answers from the recording in the UI language, keeping what was done across a switch', async () => {
     const fetched = vi.mocked(fetch);
     const before = await agent.call<Snapshot>('warning', 'GET', '/status', undefined, 'en');

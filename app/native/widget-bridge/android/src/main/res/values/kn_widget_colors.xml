@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app's light theme (app/src/styles.scss); values-night has the dark one. -->
+<resources>
+    <color name="kn_ground">#F3F5F9</color>
+    <color name="kn_surface">#FFFFFF</color>
+    <color name="kn_ink">#121A2C</color>
+    <color name="kn_mute">#5B6582</color>
+    <color name="kn_ok">#0E9F77</color>
+    <color name="kn_warn">#B97800</color>
+    <color name="kn_crit">#D92D4A</color>
+    <color name="kn_accent">#4D5FD6</color>
+    <color name="kn_stale">#9AA3BC</color>
+</resources>

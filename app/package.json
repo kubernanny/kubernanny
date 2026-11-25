@@ -16,6 +16,7 @@
     "release:production": "cd .. && bundle exec fastlane android release && bundle exec fastlane ios release",
     "store:metadata": "cd .. && bundle exec fastlane metadata",
     "store:screenshots": "cd .. && bundle exec fastlane screenshots",
+    "store:shots": "../scripts/store-screenshots/run.sh",
     "test:scripts": "node --test scripts/*.test.mjs"
   },
   "private": true,
@@ -39,6 +40,8 @@
     "@ionic/angular": "^8.8.21",
     "@jsverse/transloco": "^8.4.0",
     "@kubernanny/protocol": "file:../protocol",
+    "@kubernanny/push-native": "file:native/push",
+    "@kubernanny/widget-bridge": "file:native/widget-bridge",
     "ionicons": "^8.1.1",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"

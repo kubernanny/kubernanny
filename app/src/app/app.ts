@@ -4,6 +4,10 @@ import { App as CapApp } from '@capacitor/app';
 import { IonApp, IonRouterOutlet } from '@ionic/angular/standalone';
 import { registerIcons } from './core/icons';
 import { relayUrlAllowed } from './core/relay-route';
+import { clusterLinkId } from './core/widget/widget-link';
+import { WidgetSync } from './core/widget/widget-sync.service';
+import { ClusterStore } from './core/cluster-store.service';
+import { PushRegistration } from './core/push/push-registration.service';
 
 /** "kubernanny://pair?url=…&code=…&key=…[&relay=…]" -> the /pair page's params, or null for anything else. */
 export function pairingRoute(link: string): { url: string; code: string; name?: string; key?: string; relay?: string } | null {
@@ -43,7 +47,26 @@ export class App {
       if (params) {
         void this.router.navigate(['/pair'], { queryParams: params });
       }
+      // A tap on a home-screen widget opens that cluster.
+      const clusterId = clusterLinkId(url);
+      if (clusterId) {
+        void this.router.navigate(['/c', clusterId]);
+      }
     }).catch(() => undefined);
+    // A widget tap that cold-starts the app may only show up as the launch URL; a second navigation to the same cluster is harmless.
+    void CapApp.getLaunchUrl()
+      .then((launch) => {
+        const clusterId = launch ? clusterLinkId(launch.url) : null;
+        if (clusterId) {
+          void this.router.navigate(['/c', clusterId]);
+        }
+      })
+      .catch(() => undefined);
+    // Starts keeping the home-screen widgets in step with every new snapshot.
+    inject(WidgetSync);
+    // A new FCM token (restored phone, rotated token) reaches every agent this device gets push from.
+    const push = inject(PushRegistration);
+    void inject(ClusterStore).loaded.then(() => push.refreshTokens()).catch(() => undefined);
   }
 }
 

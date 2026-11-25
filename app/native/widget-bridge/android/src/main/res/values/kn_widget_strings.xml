@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget texts; the German ones are in values-de. Same wording as the app (app/src/app/i18n/en.ts). -->
+<resources>
+    <string name="kn_widget_name">Kubernanny</string>
+    <string name="kn_widget_description">Traffic light of your clusters. Updated while the app is open.</string>
+    <string name="kn_widget_empty">Open Kubernanny to see your clusters here.</string>
+    <string name="kn_widget_stale">Not updated for over 30 minutes. The widget is refreshed while the app is open: tap to open it.</string>
+    <string name="kn_widget_demo">Demo</string>
+    <string name="kn_widget_as_of">as of %1$s</string>
+    <string name="kn_widget_not_checked">Not checked yet</string>
+    <string name="kn_widget_all_good">All good</string>
+    <string name="kn_widget_partly">Running, but not everything can be checked</string>
+    <string name="kn_widget_both">%1$s and %2$s</string>
+    <plurals name="kn_widget_outages">
+        <item quantity="one">%d outage</item>
+        <item quantity="other">%d outages</item>
+    </plurals>
+    <plurals name="kn_widget_warnings">
+        <item quantity="one">%d warning</item>
+        <item quantity="other">%d warnings</item>
+    </plurals>
+</resources>

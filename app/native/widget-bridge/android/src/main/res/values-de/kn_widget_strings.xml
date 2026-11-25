@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="kn_widget_name">Kubernanny</string>
+    <string name="kn_widget_description">Ampel deiner Cluster. Aktualisiert, solange die App offen ist.</string>
+    <string name="kn_widget_empty">Öffne Kubernanny, um deine Cluster hier zu sehen.</string>
+    <string name="kn_widget_stale">Seit über 30 Minuten nicht aktualisiert. Das Widget wird aktualisiert, solange die App offen ist: Tippen öffnet sie.</string>
+    <string name="kn_widget_demo">Demo</string>
+    <string name="kn_widget_as_of">Stand %1$s</string>
+    <string name="kn_widget_not_checked">Noch nicht geprüft</string>
+    <string name="kn_widget_all_good">Alles läuft</string>
+    <string name="kn_widget_partly">Läuft, aber nicht alles ist prüfbar</string>
+    <string name="kn_widget_both">%1$s und %2$s</string>
+    <plurals name="kn_widget_outages">
+        <item quantity="one">%d Ausfall</item>
+        <item quantity="other">%d Ausfälle</item>
+    </plurals>
+    <plurals name="kn_widget_warnings">
+        <item quantity="one">%d Warnung</item>
+        <item quantity="other">%d Warnungen</item>
+    </plurals>
+</resources>

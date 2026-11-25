@@ -4,6 +4,7 @@ import { Method, ProtocolError, fingerprint, fromBase64Url, generateKeyPair, key
 import { firstValueFrom, timeout } from 'rxjs';
 import {
   AgentInfo,
+  AgentPushView,
   BackupsView,
   ClusterConfig,
   EventView,
@@ -175,6 +176,15 @@ export class AgentClient {
     return this.call(cluster, 'POST', `/issues/unsilence?${new URLSearchParams({ issue: issueId })}`);
   }
 
+  /** Marks one advisory on one component as not applicable for 30, 90 or 365 days. */
+  acceptAdvisory(cluster: ClusterConfig, component: string, advisory: string, days: number, reason?: string): Promise<{ acceptedUntil: string }> {
+    return this.call(cluster, 'POST', '/vulnerabilities/accept', { component, advisory, days, ...(reason ? { reason } : {}) });
+  }
+
+  unacceptAdvisory(cluster: ClusterConfig, component: string, advisory: string): Promise<void> {
+    return this.call(cluster, 'POST', '/vulnerabilities/unaccept', { component, advisory });
+  }
+
   /** A maintenance window of 1, 2, 4, 8 or 24 hours: checks go on, notifications wait. */
   startMaintenance(cluster: ClusterConfig, hours: number): Promise<{ maintenanceUntil: string }> {
     return this.call(cluster, 'POST', `/maintenance?${new URLSearchParams({ hours: String(hours) })}`);
@@ -208,6 +218,24 @@ export class AgentClient {
 
   testNotification(cluster: ClusterConfig): Promise<{ channels: string[] }> {
     return this.call(cluster, 'POST', '/notify/test');
+  }
+
+  /** Native push for this device (docs/NOTIFICATIONS.md, "Native push"). */
+  pushState(cluster: ClusterConfig): Promise<AgentPushView> {
+    return this.call(cluster, 'GET', '/push');
+  }
+
+  /** Registers this device's FCM token and its push public key for this cluster. */
+  registerPush(cluster: ClusterConfig, registration: { token: string; platform: 'ios' | 'android'; key: string }): Promise<void> {
+    return this.call(cluster, 'POST', '/push/register', registration);
+  }
+
+  unregisterPush(cluster: ClusterConfig): Promise<void> {
+    return this.call(cluster, 'DELETE', '/push/register');
+  }
+
+  testPush(cluster: ClusterConfig): Promise<{ outcome: string }> {
+    return this.call(cluster, 'POST', '/push/test');
   }
 
   /**

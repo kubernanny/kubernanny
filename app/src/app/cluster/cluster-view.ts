@@ -4,6 +4,7 @@ import { LIGHT_TONE, STATUS_TONE, bytes, cores, duration, percent, ratio, relati
 import { TranslationKey } from '../i18n/dictionary';
 import { Translator } from '../i18n/translator';
 import { MaintenanceVM, maintenanceView } from './maintenance-view';
+import { ACCEPTING_MODULES, acceptComponentOf } from './vulnerability-acceptance';
 
 export interface ActionButton {
   type: IssueActionType;
@@ -28,6 +29,8 @@ export interface IssueCard {
   canSilence: boolean;
   /** Advisories of a known vulnerability, each a link to its osv.dev page. */
   advisoryLinks: { id: string; url: string }[];
+  /** The component whose advisories can be marked as not applicable here; null when the agent does not allow it. */
+  acceptComponent: string | null;
 }
 
 export interface Kpi {
@@ -135,6 +138,7 @@ function buttonsFor(issue: Issue, tr: Translator): ActionButton[] {
 
 export function issueCards(issues: Issue[], modules: ModuleView[], now: Date, tr: Translator): IssueCard[] {
   const names = new Map(modules.map((m) => [m.id, m.name]));
+  const canAccept = modules.some((m) => ACCEPTING_MODULES.includes(m.id) && m.canAccept === true);
   return issues.map((issue) => ({
     issue,
     tone: issue.severity === 'info' ? 'muted' : issue.severity,
@@ -145,6 +149,7 @@ export function issueCards(issues: Issue[], modules: ModuleView[], now: Date, tr
     silencedText: issue.silencedUntil ? untilText(issue.silencedUntil, now, tr.lang) : null,
     canSilence: issue.severity !== 'info' && !issue.silencedUntil,
     advisoryLinks: advisoryLinks(issue.advisories),
+    acceptComponent: acceptComponentOf(issue, canAccept),
   }));
 }
 

@@ -1,0 +1,54 @@
+// Kubernanny's native push plugin (docs/NOTIFICATIONS.md, "Native push").
+// Included by `npx cap sync` like any npm plugin; the messaging service in
+// src/main/AndroidManifest.xml is merged into the app. Plain Java, so the
+// decryption (PushCrypto) also runs on a desktop JDK: `npm test` here.
+ext {
+    androidxCoreVersion = project.hasProperty('androidxCoreVersion') ? rootProject.ext.androidxCoreVersion : '1.17.0'
+}
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.0'
+    }
+}
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace = "app.kubernanny.push"
+    compileSdk = project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 36
+    defaultConfig {
+        minSdkVersion project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 24
+        targetSdkVersion project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 36
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+    lintOptions {
+        abortOnError = false
+    }
+    // PushCryptoTest is a plain main (see package.json), not a Gradle unit test.
+    sourceSets {
+        test.java.srcDirs = []
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':capacitor-android')
+    implementation "androidx.core:core:$androidxCoreVersion"
+    // Messaging only: no Analytics. Without google-services.json in android/app the app builds and has no push.
+    implementation platform('com.google.firebase:firebase-bom:35.0.2')
+    implementation 'com.google.firebase:firebase-messaging'
+    // X25519 for Android before API 33.
+    implementation 'com.google.crypto.tink:tink-android:1.22.0'
+}

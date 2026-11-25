@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Asked for only when someone taps "Push to this device" in a cluster's settings (Android 13 and later). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <application>
+        <!-- Kubernanny pushes: FCM data messages, opened on the phone (PushMessagingService). Not exported: only FCM (inside the app's process) delivers to it. -->
+        <service
+            android:name="app.kubernanny.push.PushMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <!-- No Firebase Analytics or other collection: only messaging is used. -->
+        <meta-data android:name="firebase_analytics_collection_deactivated" android:value="true" />
+        <meta-data android:name="google_analytics_adid_collection_enabled" android:value="false" />
+    </application>
+</manifest>

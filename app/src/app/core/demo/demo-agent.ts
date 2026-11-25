@@ -1,9 +1,10 @@
 import { Injectable } from '@angular/core';
 import { AgentError } from '../agent-error';
-import { IncidentsView, Issue, Light, SettingsPatch, SettingsView, Snapshot } from '../agent.model';
+import { AcceptedAdvisory, IncidentsView, Issue, Light, ModuleView, SettingsPatch, SettingsView, Snapshot } from '../agent.model';
 import { Lang } from '../../i18n/lang';
 import { translatorFor } from '../../i18n/translator';
 import { MAINTENANCE_HOURS } from '../../cluster/maintenance-view';
+import { ACCEPTING_MODULES, componentOfIssueId } from '../../cluster/vulnerability-acceptance';
 import { DEMO_LABELS, DemoData, DemoScenario, ageIssues, shiftTimes } from './demo-data';
 
 const SEVERITY_FACTOR = { critical: 0.82, warning: 0.95, info: 1 } as const;
@@ -24,6 +25,8 @@ interface DemoState {
   toggles: SettingsPatch;
   /** End of the maintenance window (ms); 0: none. */
   maintenanceUntil: number;
+  /** "component|advisory" to the advisory marked as not applicable. */
+  accepted: Map<string, { until: number; reason?: string }>;
 }
 
 interface Demo {
@@ -54,7 +57,7 @@ export class DemoAgent {
     const q = (name: string) => url.searchParams.get(name) ?? '';
     switch (true) {
       case route === 'GET /status' || route === 'POST /status/refresh':
-        return this.snapshot(demo) as T;
+        return this.snapshot(demo, lang) as T;
       case route === 'GET /info':
         return data.info as T;
       case route === 'GET /nodes' || route === 'GET /workloads' || route === 'GET /storage' || route === 'GET /network' || route === 'GET /events':
@@ -92,6 +95,20 @@ export class DemoAgent {
       case route === 'POST /issues/unsilence':
         state.silenced.delete(q('issue'));
         return undefined as T;
+      case route === 'POST /vulnerabilities/accept': {
+        const { component, advisory, days, reason } = body as { component: string; advisory: string; days: number; reason?: string };
+        if (![30, 90, 365].includes(days)) {
+          throw new AgentError(400, 'ACCEPT_DAYS', tr.t('errors.status', { status: 400 }));
+        }
+        const until = Date.now() + days * 86_400_000;
+        state.accepted.set(`${component}|${advisory}`, { until, ...(reason ? { reason } : {}) });
+        return { acceptedUntil: new Date(until).toISOString() } as T;
+      }
+      case route === 'POST /vulnerabilities/unaccept': {
+        const { component, advisory } = body as { component: string; advisory: string };
+        state.accepted.delete(`${component}|${advisory}`);
+        return undefined as T;
+      }
       case method === 'POST' && url.pathname.startsWith('/actions/'):
         return this.act(demo, url.pathname.slice('/actions/'.length), q('issue'), lang) as T;
       case route === 'GET /settings':
@@ -111,7 +128,7 @@ export class DemoAgent {
   private stateOf(scenario: DemoScenario): DemoState {
     let state = this.states.get(scenario);
     if (!state) {
-      state = { fixed: new Map<string, number>(), silenced: new Map<string, number>(), toggles: {}, maintenanceUntil: 0 };
+      state = { fixed: new Map<string, number>(), silenced: new Map<string, number>(), toggles: {}, maintenanceUntil: 0, accepted: new Map() };
       this.states.set(scenario, state);
     }
     return state;
@@ -138,13 +155,14 @@ export class DemoAgent {
     return recording;
   }
 
-  private snapshot({ data, state, settings }: Demo): Snapshot {
+  private snapshot({ data, state, settings }: Demo, lang: Lang): Snapshot {
     const off = new Set(settings.modules.filter((m) => m.state !== 'on').map((m) => m.id));
     const now = Date.now();
-    const issues = data.status.issues
+    const accepted = acceptInDemo(data.status.issues, data.status.modules, state.accepted, now, translatorFor(lang).t('demo.device'));
+    const issues = accepted.issues
       .filter((i) => !state.fixed.has(i.id) && !off.has(i.module))
       .map((i) => ((state.silenced.get(i.id) ?? 0) > now ? { ...i, silencedUntil: new Date(state.silenced.get(i.id)!).toISOString() } : i));
-    const modules = data.status.modules
+    const modules = accepted.modules
       .filter((m) => !off.has(m.id))
       .map((m) => (m.issueIds.some((id) => state.fixed.has(id)) ? { ...m, issueIds: m.issueIds.filter((id) => !state.fixed.has(id)) } : m));
     const maintenance = state.maintenanceUntil > now ? { maintenanceUntil: new Date(state.maintenanceUntil).toISOString() } : {};
@@ -163,6 +181,49 @@ export class DemoAgent {
     state.fixed.set(issueId, Date.now());
     return { done: tr.t('demo.done', { title: issue.title }) };
   }
+}
+
+/**
+ * Accepted advisories, applied like the agent does: they leave their issue
+ * (which goes once nothing remains) and are listed on the module that
+ * reported them (the built-in lookup or Trivy Operator), which always allows
+ * accepting in the demo.
+ */
+export function acceptInDemo(
+  issues: Issue[],
+  modules: ModuleView[],
+  accepted: ReadonlyMap<string, { until: number; reason?: string }>,
+  now: number,
+  by: string,
+): { issues: Issue[]; modules: ModuleView[] } {
+  const lists = new Map<string, AcceptedAdvisory[]>(ACCEPTING_MODULES.map((id) => [id, []]));
+  const kept: Issue[] = [];
+  for (const issue of issues) {
+    const component = componentOfIssueId(issue.id);
+    if (component === null || !issue.advisories) {
+      kept.push(issue);
+      continue;
+    }
+    const name = issue.check === 'trivy' ? issue.id.split('/')[3] : (modules.find((m) => m.id === component)?.name ?? component);
+    const remaining = issue.advisories.filter((advisory) => {
+      const a = accepted.get(`${component}|${advisory}`);
+      if (a && a.until > now) {
+        lists.get(issue.check === 'trivy' ? 'trivy' : 'vulnerabilities')!.push({ component, name, advisory, until: new Date(a.until).toISOString(), by, ...(a.reason ? { reason: a.reason } : {}) });
+        return false;
+      }
+      return true;
+    });
+    if (remaining.length > 0) {
+      kept.push(remaining.length === issue.advisories.length ? issue : { ...issue, advisories: remaining });
+    }
+  }
+  const gone = new Set(issues.filter((i) => !kept.some((k) => k.id === i.id)).map((i) => i.id));
+  return {
+    issues: kept,
+    modules: modules.map((m) =>
+      lists.has(m.id) ? { ...m, canAccept: true, accepted: lists.get(m.id)!, issueIds: m.issueIds.filter((id) => !gone.has(id)) } : gone.size ? { ...m, issueIds: m.issueIds.filter((id) => !gone.has(id)) } : m,
+    ),
+  };
 }
 
 /**

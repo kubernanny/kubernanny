@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- The home-screen widget. Not exported to anyone but the launcher's
+             APPWIDGET_UPDATE broadcast; it reads only what the app wrote. -->
+        <receiver
+            android:name="app.kubernanny.widget.ClusterWidgetProvider"
+            android:exported="true"
+            android:label="@string/kn_widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/kn_cluster_widget_info" />
+        </receiver>
+    </application>
+</manifest>

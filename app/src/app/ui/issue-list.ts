@@ -7,6 +7,7 @@ import { ClusterConfig } from '../core/agent.model';
 import { TranslationKey } from '../i18n/dictionary';
 import { LanguageService } from '../i18n/language.service';
 import { LogsModal } from './logs-modal';
+import { ACCEPT_CHOICES } from '../cluster/vulnerability-acceptance';
 
 export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[] = [
   { hours: 1, label: 'issues.hour' },
@@ -34,6 +35,11 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
                   @for (a of item.advisoryLinks; track a.id) {
                     <li>
                       <a [href]="a.url" target="_blank" rel="noopener noreferrer">{{ a.id }}<ion-icon name="open-outline" aria-hidden="true" /></a>
+                      @if (item.acceptComponent) {
+                        <button type="button" class="accept" [disabled]="busy() !== null" [attr.aria-label]="t('issues.acceptLabel', { id: a.id })" (click)="accept(item, a.id)">
+                          {{ t('issues.accept') }}
+                        </button>
+                      }
                     </li>
                   }
                 </ul>
@@ -189,6 +195,13 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
       margin: 0;
       color: inherit;
     }
+    .advisories button.accept {
+      padding: 0.1rem 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: transparent;
+      color: var(--ink-2);
+    }
     .silenced {
       display: inline-flex;
       align-items: center;
@@ -256,6 +269,43 @@ export class IssueList {
     await this.busyWhile(item.issue.id + 'silence', async () => {
       await this.client.silence(this.cluster(), item.issue.id, data);
       await this.toast(this.language.translator().t('issues.silenced'), 'success');
+    });
+  }
+
+  /** Asks for how long and, optionally, why; then marks the advisory as not applicable on this component. */
+  async accept(item: IssueCard, advisory: string): Promise<void> {
+    const component = item.acceptComponent;
+    if (!component) {
+      return;
+    }
+    const tr = this.language.translator();
+    const sheet = await this.sheets.create({
+      header: tr.t('issues.acceptHeader', { id: advisory }),
+      subHeader: tr.t('issues.acceptText'),
+      buttons: [...ACCEPT_CHOICES.map((c) => ({ text: tr.t(c.label), data: c.days })), { text: tr.t('common.cancel'), role: 'cancel' }],
+    });
+    await sheet.present();
+    const { data: days } = await sheet.onDidDismiss<number>();
+    if (typeof days !== 'number') {
+      return;
+    }
+    const alert = await this.alerts.create({
+      header: tr.t('issues.acceptReasonHeader'),
+      inputs: [{ name: 'reason', type: 'text', placeholder: tr.t('issues.acceptReasonPlaceholder'), attributes: { maxlength: 200 } }],
+      buttons: [
+        { text: tr.t('common.cancel'), role: 'cancel' },
+        { text: tr.t('issues.acceptConfirm'), role: 'confirm' },
+      ],
+    });
+    await alert.present();
+    const { role, data } = await alert.onDidDismiss<{ values?: { reason?: string } }>();
+    if (role !== 'confirm') {
+      return;
+    }
+    const reason = data?.values?.reason?.trim() || undefined;
+    await this.busyWhile(item.issue.id + 'accept' + advisory, async () => {
+      await this.client.acceptAdvisory(this.cluster(), component, advisory, days, reason);
+      await this.toast(this.language.translator().t('issues.accepted'), 'success');
     });
   }
 

@@ -13,7 +13,10 @@ import { AgentSectionComponent } from './agent-section.component';
 import { DevicesSectionComponent } from './devices-section.component';
 import { MaintenanceSectionComponent } from './maintenance-section.component';
 import { PairingSectionComponent } from './pairing-section.component';
+import { PushSectionComponent } from './push-section.component';
+import { PushRegistration } from '../core/push/push-registration.service';
 import { RelaySectionComponent } from './relay-section.component';
+import { WidgetSectionComponent } from './widget-section.component';
 
 @Component({
   selector: 'app-cluster-form',
@@ -34,6 +37,8 @@ import { RelaySectionComponent } from './relay-section.component';
     MaintenanceSectionComponent,
     DevicesSectionComponent,
     PairingSectionComponent,
+    WidgetSectionComponent,
+    PushSectionComponent,
   ],
   template: `
     <ng-container *transloco="let t">
@@ -86,7 +91,9 @@ import { RelaySectionComponent } from './relay-section.component';
               <ion-button fill="outline" [routerLink]="modulesLink()">{{ t('form.modules') }}</ion-button>
             </section>
 
+            <app-push-section [cluster]="saved()" />
             <app-maintenance-section [cluster]="saved()" />
+            <app-widget-section [cluster]="saved()" />
             <app-devices-section [cluster]="saved()" (revokedSelf)="forget($event)" />
             <app-pairing-section [cluster]="saved()" />
             <ion-button expand="block" fill="clear" color="danger" (click)="remove()">{{ t('form.removeCluster') }}</ion-button>
@@ -128,6 +135,7 @@ export class ClusterFormPage implements OnInit {
   private readonly router = inject(Router);
   private readonly alerts = inject(AlertController);
   private readonly language = inject(LanguageService);
+  private readonly push = inject(PushRegistration);
 
   readonly isNew = signal(true);
   readonly modulesLink = computed(() => `/cluster/${this.id()}/modules`);
@@ -229,6 +237,11 @@ export class ClusterFormPage implements OnInit {
 
   /** Drops the cluster from this device and goes back to the list. */
   async forget(id: string): Promise<void> {
+    // Off at the agent if it still answers, and the push key leaves the device in any case.
+    const cluster = this.store.find(id);
+    if (cluster) {
+      await this.push.forget(cluster);
+    }
     await this.store.remove(id);
     this.status.forget(id);
     await this.router.navigateByUrl('/', { replaceUrl: true });

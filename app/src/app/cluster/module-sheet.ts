@@ -1,11 +1,13 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
-import { IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonToolbar, ModalController } from '@ionic/angular/standalone';
+import { IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonToolbar, ModalController, ToastController } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
+import { AgentClient, describeError } from '../core/agent-client.service';
 import { ClusterConfig, ModuleView } from '../core/agent.model';
 import { STATUS_TONE } from '../core/format';
 import { LanguageService } from '../i18n/language.service';
 import { IssueList } from '../ui/issue-list';
 import { IssueCard, moduleRow } from './cluster-view';
+import { AcceptedRow, acceptedRows } from './vulnerability-acceptance';
 
 /** Everything Kubernanny knows about one component: its numbers, its problems, its pods and where to open it. */
 @Component({
@@ -59,6 +61,30 @@ import { IssueCard, moduleRow } from './cluster-view';
         @if (issues().length > 0) {
           <h2>{{ t('module.issues') }}</h2>
           <app-issue-list [cards]="issues()" [cluster]="cluster" (changed)="changed.set(true)" />
+        }
+
+        @if (accepted().length > 0) {
+          <h2>{{ t('module.acceptedTitle') }}</h2>
+          <ul class="accepted">
+            @for (a of accepted(); track a.key) {
+              <li>
+                <div>
+                  @if (a.url) {
+                    <a class="advisory" [href]="a.url" target="_blank" rel="noopener noreferrer">{{ a.advisory }}</a>
+                  } @else {
+                    <span class="advisory">{{ a.advisory }}</span>
+                  }
+                  <span class="muted">{{ a.meta }}</span>
+                  @if (a.reason) {
+                    <span class="reason">{{ a.reason }}</span>
+                  }
+                </div>
+                @if (a.canUndo) {
+                  <button type="button" [disabled]="busy() !== null" (click)="unaccept(a)">{{ t('module.unaccept') }}</button>
+                }
+              </li>
+            }
+          </ul>
         }
 
         @if (module.workloads.items.length > 0) {
@@ -188,6 +214,52 @@ import { IssueCard, moduleRow } from './cluster-view';
       grid-row: 2;
       font-size: 0.8125rem;
     }
+    .accepted {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .accepted li {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .accepted li div {
+      display: grid;
+      gap: 0.15rem;
+      min-width: 0;
+    }
+    .accepted .advisory {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.875rem;
+      overflow-wrap: anywhere;
+    }
+    .accepted .muted,
+    .accepted .reason {
+      font-size: 0.8125rem;
+      overflow-wrap: anywhere;
+    }
+    .accepted .reason {
+      color: var(--ink-2);
+    }
+    .accepted button {
+      flex: none;
+      padding: 0.4rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--raise);
+      color: var(--ink);
+      font: inherit;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .accepted button:disabled {
+      opacity: 0.55;
+    }
     .workloads .pill {
       grid-row: 1 / span 2;
       grid-column: 2;
@@ -203,7 +275,11 @@ export class ModuleSheet implements OnInit {
 
   private readonly modals = inject(ModalController);
   private readonly language = inject(LanguageService);
+  private readonly client = inject(AgentClient);
+  private readonly toasts = inject(ToastController);
   readonly issues = signal<IssueCard[]>([]);
+  readonly accepted = signal<AcceptedRow[]>([]);
+  readonly busy = signal<string | null>(null);
   readonly changed = signal(false);
   tone = STATUS_TONE.ok;
   statusLabel = '';
@@ -213,6 +289,27 @@ export class ModuleSheet implements OnInit {
     this.tone = row.tone;
     this.statusLabel = row.statusLabel;
     this.issues.set(this.issueCards);
+    this.accepted.set(acceptedRows(this.module, this.language.translator()));
+  }
+
+  /** Lets the advisory count again; the page reloads the status when the sheet closes. */
+  async unaccept(row: AcceptedRow): Promise<void> {
+    this.busy.set(row.key);
+    try {
+      await this.client.unacceptAdvisory(this.cluster, row.component, row.advisory);
+      this.accepted.update((rows) => rows.filter((r) => r.key !== row.key));
+      this.changed.set(true);
+      await this.toast(this.language.translator().t('issues.unaccepted'), 'success');
+    } catch (err) {
+      await this.toast(describeError(err, this.language.translator()), 'danger');
+    } finally {
+      this.busy.set(null);
+    }
+  }
+
+  private async toast(message: string, color: 'success' | 'danger'): Promise<void> {
+    const toast = await this.toasts.create({ message, color, duration: 3500, position: 'bottom' });
+    await toast.present();
   }
 
   close(): Promise<boolean> {

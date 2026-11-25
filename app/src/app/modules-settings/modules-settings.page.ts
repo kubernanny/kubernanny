@@ -15,6 +15,8 @@ interface Row {
   note: string;
   /** What the module sends out of the cluster, when it does. */
   privacy?: string;
+  /** What an action may change in the cluster, in the agent's words. */
+  effect?: string;
   on: boolean;
   locked: boolean;
   patch: (on: boolean) => SettingsPatch;
@@ -50,6 +52,7 @@ export function settingsSections(view: SettingsView, tr: Translator): { title: s
         icon: a.type === 'logs' ? 'document-text-outline' : 'flash-outline',
         title: a.label,
         note: a.state === 'locked' ? tr.t('modules.locked') : a.description,
+        ...(a.effect ? { effect: a.effect } : {}),
         ...state(a.state),
         patch: (on: boolean) => ({ actions: { [a.type]: on } }),
       })),
@@ -105,6 +108,9 @@ export function settingsSections(view: SettingsView, tr: Translator): { title: s
                         <span class="hint">{{ r.note }}</span>
                         @if (r.privacy) {
                           <span class="privacy"><ion-icon name="cloud-upload-outline" aria-hidden="true" />{{ r.privacy }}</span>
+                        }
+                        @if (r.effect) {
+                          <span class="privacy"><ion-icon name="key-outline" aria-hidden="true" />{{ r.effect }}</span>
                         }
                       </div>
                       <ion-toggle [checked]="r.on" [disabled]="r.locked || saving()" (ionChange)="toggle(r, $event.detail.checked)" [attr.aria-label]="r.title" />

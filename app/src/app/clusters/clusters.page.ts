@@ -7,6 +7,7 @@ import { ClusterStore } from '../core/cluster-store.service';
 import { StatusStore } from '../core/status-store.service';
 import { LangChoice, LanguageService } from '../i18n/language.service';
 import { Heartbeat } from '../ui/heartbeat';
+import { WidgetSwitchComponent } from './widget-switch.component';
 
 export const INSTALL_COMMAND = 'helm install kubernanny oci://ghcr.io/kubernanny/charts/kubernanny -n kubernanny --create-namespace';
 export const PAIR_COMMAND = 'kubectl -n kubernanny logs deploy/kubernanny';
@@ -14,7 +15,7 @@ export const PAIR_COMMAND = 'kubectl -n kubernanny logs deploy/kubernanny';
 @Component({
   selector: 'app-clusters',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, RouterLink, IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonIcon, IonContent, Heartbeat],
+  imports: [TranslocoDirective, RouterLink, IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonIcon, IonContent, Heartbeat, WidgetSwitchComponent],
   template: `
     <ng-container *transloco="let t">
       <ion-header class="ion-no-border">
@@ -108,6 +109,7 @@ export const PAIR_COMMAND = 'kubectl -n kubernanny logs deploy/kubernanny';
                 </button>
               }
             </div>
+            <app-widget-switch />
           </footer>
         </div>
       </ion-content>

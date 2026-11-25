@@ -39,11 +39,13 @@
 	  goes through the WebView and is end-to-end encrypted and authenticated with
 	  Noise against the agent key pinned at pairing (docs/PROTOCOL.md), so the
 	  transport carries only ciphertext. NSAllowsArbitraryLoadsInWebContent lifts ATS
-	  for the WebView only; the app has no native networking of its own.
+	  for the WebView only; the app does no native networking to agents.
 	  Not NSAllowsLocalNetworking: it covers only .local and unqualified names, not
 	  the VPN host names (e.g. Tailscale) or LAN DNS names agents are reached under.
 	  Not NSAllowsArbitraryLoads: iOS ignores it when an InWebContent key is present,
 	  and the WebView exception is the narrower one. Review text: docs/RELEASING.md.
+	  Native push (Firebase Messaging, only in builds with GoogleService-Info.plist)
+	  talks to Google over HTTPS and needs no exception.
 	-->
 	<key>NSAppTransportSecurity</key>
 	<dict>

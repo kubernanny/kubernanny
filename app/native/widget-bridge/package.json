@@ -1,0 +1,15 @@
+{
+  "name": "@kubernanny/widget-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kubernanny's own Capacitor plugin: hands the home-screen widgets their short cluster summary (docs/ARCHITECTURE.md, Widgets). The TypeScript side lives in app/src/app/core/widget/.",
+  "license": "Apache-2.0",
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    },
+    "android": {
+      "src": "android"
+    }
+  }
+}
