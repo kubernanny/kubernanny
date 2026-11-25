@@ -89,7 +89,7 @@ async function phoneDark(browser, L) {
   await page.waitForTimeout(500);
   await shot(page, '12-action-done');
   await page.waitForTimeout(3500);
-  await page.locator('app-issue-list button', { hasText: L.silence }).first().click();
+  await page.locator('app-issue-list').first().getByRole('button', { name: L.silence }).first().click();
   await page.waitForSelector('ion-action-sheet', { timeout: 5000 });
   await page.waitForTimeout(400);
   await shot(page, '63-silence');
