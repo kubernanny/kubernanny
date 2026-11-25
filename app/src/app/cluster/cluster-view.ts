@@ -252,7 +252,9 @@ export function buildClusterView(snapshot: Snapshot | null, error: string | null
     o ? tr.n('cluster.subline.components', o.components) : null,
   ]
     .filter(Boolean)
-    .join(', ');
+    .join(', ')
+    // Which Kubernanny runs there: the image tag CI baked in, else the version.
+    .concat(s?.agentBuild || s?.agentVersion ? ` · ${tr.t('cluster.subline.agent', { version: s.agentBuild ?? s.agentVersion! })}` : '');
 
   const cpu = o?.cpu ? ratio(o.cpu.usedMilli, o.cpu.allocatableMilli) : null;
   const mem = o?.memory ? ratio(o.memory.used, o.memory.allocatable) : null;
