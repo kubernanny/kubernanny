@@ -27,6 +27,9 @@ import { LanguageService } from '../i18n/language.service';
 import { DEMO_HOST } from '../../environments/build-flags';
 
 const TIMEOUT_MS = 20_000;
+/** A rolling update of the agent hands over within a few seconds: a write refused meanwhile is sent again this often. */
+const HANDOVER_RETRIES = 4;
+const HANDOVER_RETRY_MS = 1500;
 
 /** Raised by the demo host build (build-flags.ts) for anything but the built-in demo. */
 export class DemoHostError extends Error {
@@ -38,7 +41,7 @@ export class DemoHostError extends Error {
 
 // Re-exported: most callers import the client and its errors from here.
 export { AgentError, InsecureTransportError };
-export { describeError } from './describe-error';
+export { describeError, isTransient } from './describe-error';
 
 /**
  * Where the app may fetch an agent's key it has not pinned yet (manual pairing
@@ -282,6 +285,11 @@ export class AgentClient {
         return await this.once<T>(target, method, path, body);
       } catch (err) {
         if (attempt === 0 && err instanceof AgentError && err.code === 'E2E_CLOCK_SKEW') {
+          continue;
+        }
+        // A pod being replaced refused before doing anything: safe to send again, also for actions.
+        if (attempt < HANDOVER_RETRIES && err instanceof AgentError && err.code === 'AGENT_HANDOVER') {
+          await new Promise((resolve) => setTimeout(resolve, HANDOVER_RETRY_MS));
           continue;
         }
         throw err;
