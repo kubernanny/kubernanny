@@ -36,3 +36,4 @@ GoogleService-Info.plist
 *firebase-adminsdk*.json
 fcm-service-account*.json
 /app/native/push/build/
+agent/bundle/

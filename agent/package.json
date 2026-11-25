@@ -13,7 +13,8 @@
     "rbac": "UPDATE_RBAC=1 UPDATE_DOCS=1 vitest run src/rbac.spec.ts src/permissions-doc.spec.ts",
     "docs:permissions": "UPDATE_DOCS=1 vitest run src/permissions-doc.spec.ts",
     "start:demo": "npm run build && DEMO=broken node dist/main.js",
-    "demo:export": "npm run build && node scripts/export-demo.mjs"
+    "demo:export": "npm run build && node scripts/export-demo.mjs",
+    "bundle": "rm -rf bundle && node scripts/bundle.mjs"
   },
   "dependencies": {
     "@kubernanny/protocol": "file:../protocol",
@@ -25,6 +26,7 @@
     "@types/qrcode": "^1.5.6",
     "@types/supertest": "^7.2.1",
     "@types/ws": "^8.18.2",
+    "esbuild": "0.28.2",
     "supertest": "^7.3.2",
     "typescript": "^7.0.2",
     "vitest": "^5.1.1",
