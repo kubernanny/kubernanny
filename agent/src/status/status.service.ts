@@ -204,7 +204,8 @@ export class StatusService implements OnApplicationBootstrap, OnApplicationShutd
     }
     const kept = previous.issues.filter((i) => i.id !== UNREACHABLE_ISSUE_ID);
     if (this.failures < UNREACHABLE_AFTER_RUNS) {
-      return { ...previous, light: previous.modules.length ? 'yellow' : 'unknown' };
+      // At least yellow (stale), never better than the last good run: a red cluster does not turn yellow for losing its API server.
+      return { ...previous, light: !previous.modules.length ? 'unknown' : previous.light === 'red' ? 'red' : 'yellow' };
     }
     const unreachable: Issue & { module: string } = {
       id: UNREACHABLE_ISSUE_ID,

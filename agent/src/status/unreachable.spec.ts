@@ -28,9 +28,9 @@ describe('API server unreachable (review: was silent)', () => {
     await moduleRef.close();
   });
 
-  async function start() {
+  async function start(scenario: 'healthy' | 'broken' = 'healthy') {
     process.env.CHECK_INTERVAL_SECONDS = '3600';
-    const kube = new FlakyKube(undefined, 'healthy');
+    const kube = new FlakyKube(undefined, scenario);
     const pushed: Snapshot[] = [];
     const notifier = { channels: ['ntfy'], update: async (s: Snapshot) => void pushed.push(s), securityAlert: async () => undefined, test: async () => [] };
     moduleRef = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(KubeClient).useValue(kube).overrideProvider(Notifier).useValue(notifier).compile();
@@ -76,6 +76,20 @@ describe('API server unreachable (review: was silent)', () => {
     expect(back.error).toBeUndefined();
     expect(back.issues.map((i) => i.id)).not.toContain(UNREACHABLE_ISSUE_ID);
     expect(back.checkedAt).not.toBe(good.checkedAt);
+  });
+
+  it('keeps a red cluster red during the first failed runs instead of turning it yellow (review)', async () => {
+    const { kube, status } = await start('broken');
+    expect(status.snapshot().light).toBe('red');
+    kube.down = true;
+    for (let i = 1; i < UNREACHABLE_AFTER_RUNS; i++) {
+      await status.refresh();
+      expect(status.snapshot().light).toBe('red');
+      expect(status.snapshot().issues.map((i) => i.id)).not.toContain(UNREACHABLE_ISSUE_ID);
+    }
+    await status.refresh();
+    expect(status.snapshot().light).toBe('red');
+    expect(status.snapshot().issues.map((i) => i.id)).toContain(UNREACHABLE_ISSUE_ID);
   });
 
   it('respects a maintenance window like any other issue', async () => {
