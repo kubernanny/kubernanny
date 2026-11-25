@@ -159,7 +159,8 @@ ion-segment-button {
   text-align: center;
 }
 
-.vitals {
+.vitals,
+.rail-pending {
   display: none;
 }
 
@@ -243,8 +244,14 @@ ion-segment-button {
 
   /* The rail on the left already compares the nodes: the overview's own figures and per-node section are for phones. */
   :host ::ng-deep app-overview-tab .kpi-section,
-  :host ::ng-deep app-overview-tab .per-node {
+  :host ::ng-deep app-overview-tab .per-node,
+  :host ::ng-deep app-overview-tab .pending {
     display: none;
+  }
+
+  .rail-pending {
+    display: block;
+    margin-top: 1.5rem;
   }
 }
 

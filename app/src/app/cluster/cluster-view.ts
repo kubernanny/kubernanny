@@ -1,4 +1,4 @@
-import { Category, CheckStatus, Issue, IssueAction, IssueActionType, Light, ModuleView, Overview, Snapshot, Tone } from '../core/agent.model';
+import { Category, CheckStatus, Issue, IssueAction, IssueActionType, Light, ModuleView, Overview, PendingSync, Snapshot, Tone } from '../core/agent.model';
 import { KNOWN_AGENT_VERSION, UPGRADE_COMMAND, olderThan } from '../core/version';
 import { LIGHT_TONE, STATUS_TONE, bytes, cores, duration, percent, ratio, relativeTime, sinceText, untilText } from '../core/format';
 import { ResourceInput, resourceBarView } from '../ui/resource-bar';
@@ -108,6 +108,10 @@ export interface ClusterView {
   warning: number;
   kpis: Kpi[];
   rail: RailView;
+  /** Manual Argo CD apps with a change waiting: one calm card, no issue. */
+  pendingSyncs: PendingSync[];
+  /** "3 Apps bereit zum Sync", empty without any. */
+  pendingLabel: string;
   /** Use, requests and limits per node, under the cluster's figures. */
   perNode: NodeResourceRow[];
   groups: CategoryGroup[];
@@ -330,6 +334,8 @@ export function buildClusterView(snapshot: Snapshot | null, error: string | null
     warning,
     kpis,
     rail: buildRail(kpis, o?.perNode ?? [], tr),
+    pendingSyncs: stale ? [] : (s?.modules ?? []).flatMap((m) => m.pendingSyncs ?? []),
+    pendingLabel: stale ? '' : ((n) => (n ? tr.n('pendingSync.card', n) : ''))((s?.modules ?? []).reduce((c, m) => c + (m.pendingSyncs?.length ?? 0), 0)),
     perNode: (o?.perNode ?? []).map((n) => ({
       name: n.name,
       cpu: { kind: 'cpu', used: n.cpu.usedMilli, capacity: n.cpu.allocatableMilli, requested: n.cpu.requestedMilli, limit: n.cpu.limitMilli, withoutLimit: n.podsWithoutLimit.cpu },

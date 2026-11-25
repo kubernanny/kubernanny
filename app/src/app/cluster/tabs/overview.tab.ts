@@ -6,6 +6,7 @@ import { Loadable } from '../../core/cluster-data.store';
 import { AreaChart } from '../../ui/area-chart';
 import { ResourceBar } from '../../ui/resource-bar';
 import { ResourceRail } from '../resource-rail';
+import { PendingSyncCard } from '../pending-sync-card';
 import { IssueList } from '../../ui/issue-list';
 import { LanguageService } from '../../i18n/language.service';
 import { Translator } from '../../i18n/translator';
@@ -32,7 +33,7 @@ export function foldIssues(cards: IssueCard[], all: boolean, tr: Translator): { 
 @Component({
   selector: 'app-overview-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, IssueList, AreaChart, IonIcon, HistorySection, ResourceBar, ResourceRail],
+  imports: [TranslocoDirective, IssueList, AreaChart, IonIcon, HistorySection, ResourceBar, ResourceRail, PendingSyncCard],
   template: `
     <ng-container *transloco="let t">
       @if (view().update; as update) {
@@ -70,6 +71,10 @@ export function foldIssues(cards: IssueCard[], all: boolean, tr: Translator): { 
           </div>
         }
       </section>
+
+      @if (view().pendingLabel) {
+        <app-pending-sync-card class="pending" [label]="view().pendingLabel" [hint]="t('pendingSync.cardHint')" (open)="openPending.emit()" />
+      }
 
       @if (view().hints.length > 0) {
         <section class="hints">
@@ -172,6 +177,9 @@ export function foldIssues(cards: IssueCard[], all: boolean, tr: Translator): { 
     </ng-container>
   `,
   styles: `
+    .pending {
+      margin: -0.5rem 0 1.75rem;
+    }
     .more {
       margin-top: 0.5rem;
       padding: 0.5rem 0.2rem;
@@ -409,6 +417,7 @@ export class OverviewTab {
   readonly incidents = input<HistoryVM | null>(null);
   readonly changed = output<void>();
   readonly openModule = output<string>();
+  readonly openPending = output<void>();
   readonly setHours = output<number>();
   private readonly language = inject(LanguageService);
   readonly hourChoices = computed(() => hourChoices(this.language.translator()));
