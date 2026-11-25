@@ -36,6 +36,7 @@ export const en = {
   'stat.workloads': 'Workloads',
 
   'module.checkFailed': 'Check failed',
+  'module.staleRead': (p) => `Could not read ${p.kinds}. Showing the last known state.`,
   'workloadHealth.scheduled': 'Runs on a schedule',
   'workloadHealth.none': 'No pods scheduled',
   'workloadHealth.ready': (p) => `${n1(p.n, 'pod', 'pods')} ready`,

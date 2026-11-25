@@ -10,6 +10,7 @@ import { listSection, sections } from '../details';
 
 export class EtcdCheck extends CoreCheck {
   readonly id = 'etcd';
+  override readonly uses = ['pods'] as const;
   readonly name = t('module.etcd.name');
   readonly icon = 'layers-outline';
   readonly description = t('module.etcd.description');

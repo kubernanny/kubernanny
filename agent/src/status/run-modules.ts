@@ -4,7 +4,17 @@ import { errorText, raw, t, Text } from '../i18n/text';
 import { CoreCheck, Integration } from '../modules/module';
 import { ModuleContext, ModuleResult, ModuleView } from '../modules/types';
 import { componentDetails, componentStats } from '../modules/component-details';
+import type { Inventory, InventoryKind } from '../inventory/inventory';
 import { IssueView } from './snapshot';
+
+/** What a recognised component's health rests on: its workloads, pods, services and routes. */
+const COMPONENT_USES: readonly InventoryKind[] = ['pods', 'deployments', 'statefulsets', 'daemonsets', 'services', 'ingresses', 'httpRoutes', 'ingressRoutes'];
+
+/** The error of a module whose inputs include a list that could not be read this run. */
+function staleError(inv: Inventory, uses: readonly InventoryKind[]): Text | undefined {
+  const stale = (inv.stale ?? []).filter((k) => uses.includes(k));
+  return stale.length ? t('module.staleRead', { kinds: stale.join(', ') }) : undefined;
+}
 
 /** What one module contributed to a run: its sheet in the app and its issues. */
 export interface ModuleOutcome {
@@ -58,7 +68,8 @@ function readinessStatus(items: { ready: number; desired: number }[]): CheckStat
 export async function runComponent(ctx: ModuleContext, d: Detected, integration: Integration | undefined, allowed: ActionFilter): Promise<ModuleOutcome> {
   const total = d.workloads.reduce((s, w) => s + w.desired, 0);
   const ready = d.workloads.reduce((s, w) => s + Math.min(w.ready, w.desired), 0);
-  const result = integration ? await safe(() => integration.run(ctx, d, allowed)) : { issues: [], stats: componentStats(ctx.inv, d), summary: workloadSummary(d.workloads, ready, total) };
+  const ran: ModuleResult & { error?: Text } = integration ? await safe(() => integration.run(ctx, d, allowed)) : { issues: [], stats: componentStats(ctx.inv, d), summary: workloadSummary(d.workloads, ready, total) };
+  const result = ran.error ? ran : { ...ran, error: staleError(ctx.inv, COMPONENT_USES) };
   const status: CheckStatus = result.error
     ? 'error'
     : worst([...result.issues.map((i) => i.severity), ...([readinessStatus(d.workloads)].filter((s) => s !== 'ok') as Severity[])]);
@@ -93,7 +104,8 @@ export async function runComponent(ctx: ModuleContext, d: Detected, integration:
 }
 
 export async function runCoreCheck(ctx: ModuleContext, check: CoreCheck, allowed: ActionFilter): Promise<ModuleOutcome> {
-  const result = await safe(() => check.run(ctx, allowed));
+  const ran = await safe(() => check.run(ctx, allowed));
+  const result = ran.error ? ran : { ...ran, error: staleError(ctx.inv, check.uses) };
   return {
     issues: result.issues,
     view: {

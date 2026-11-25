@@ -103,6 +103,7 @@ export function evaluateJobs(inv: Inventory): Issue[] {
 
 export class WorkloadsCheck extends CoreCheck {
   readonly id = 'pods';
+  override readonly uses = ['pods', 'deployments', 'statefulsets', 'daemonsets', 'jobs', 'cronjobs'] as const;
   readonly name = t('module.pods.name');
   readonly icon = 'cube-outline';
   readonly description = t('module.pods.description');

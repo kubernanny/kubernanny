@@ -6,6 +6,7 @@ import { ModuleContext, ModuleResult, Stat } from '../types';
 
 export class ApiServerCheck extends CoreCheck {
   readonly id = 'apiserver';
+  override readonly uses = [] as const;
   readonly name = t('module.apiserver.name');
   readonly icon = 'globe-outline';
   readonly description = t('module.apiserver.description');

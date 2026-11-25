@@ -2,6 +2,7 @@ import { Logger } from '../logger';
 import { Issue } from '../checks/types';
 import type { Config } from '../config';
 import { Detected, discover, distribution } from '../discovery/discovery';
+import { ClusterCache } from '../inventory/cluster-cache';
 import { Inventory, emptyInventory, gatherInventory } from '../inventory/inventory';
 import { errorText, t } from '../i18n/text';
 import { IncidentsService } from '../incidents/incidents.service';
@@ -28,6 +29,10 @@ export * from './snapshot';
 export const UNREACHABLE_ISSUE_ID = 'agent/cluster-unreachable';
 /** One failed run is a blip (an API server restart); this many in a row are an outage worth a red light and a notification. */
 export const UNREACHABLE_AFTER_RUNS = 3;
+/** A relevant change (a pod into CrashLoopBackOff, a node NotReady) starts a run after this quiet time … */
+export const EARLY_RUN_DEBOUNCE_MS = 3_000;
+/** … but never sooner than this after the previous run started, so a rollout of fifty pods costs a few runs, not fifty. */
+export const EARLY_RUN_MIN_GAP_MS = 15_000;
 
 export class StatusService {
   private readonly logger = new Logger(StatusService.name);
@@ -45,6 +50,11 @@ export class StatusService {
   private failingSince: string | null = null;
   /** Kept across runs: its cache is what limits the vulnerability check to two lookups a day. */
   private readonly vulnDb: VulnDb;
+  /** The watches behind the inventory; null where the client cannot watch (demo, tests). */
+  readonly cache: ClusterCache | null;
+  private earlyTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastRunStarted = 0;
+  private stopped = false;
 
   constructor(
     private readonly kube: KubeClient,
@@ -60,15 +70,47 @@ export class StatusService {
     settings.onChange(() => void this.refreshAfterChange());
     this.snapshotValue = this.emptySnapshot();
     this.vulnDb = vulnDbFor(kube, config);
+    this.cache = kube.supportsWatch ? new ClusterCache(kube, { onRelevantChange: () => this.requestEarlyRun() }) : null;
   }
 
   onApplicationBootstrap(): void {
-    void this.refresh();
-    this.timer = setInterval(() => void this.refresh(), this.config.intervalSeconds * 1000);
+    // The first run waits for the first lists of the watches (at most 20 s), so it reads from memory.
+    this.cache?.start();
+    void (this.cache ? this.cache.ready() : Promise.resolve()).then(() => {
+      if (!this.stopped) {
+        void this.refresh();
+        this.timer = setInterval(() => void this.refresh(), this.config.intervalSeconds * 1000);
+      }
+    });
   }
 
   onApplicationShutdown(): void {
+    this.stopped = true;
     clearInterval(this.timer);
+    if (this.earlyTimer) {
+      clearTimeout(this.earlyTimer);
+      this.earlyTimer = null;
+    }
+    this.cache?.stop();
+  }
+
+  /**
+   * A watch saw a change that can open or close an issue: run soon instead
+   * of at the next interval, debounced. Notifications keep their own rules
+   * (NOTIFY_AFTER_SECONDS, sent once), so an early run only shows the app
+   * the change sooner. Not while the cluster cannot be read: the
+   * unreachable count is per run.
+   */
+  requestEarlyRun(): void {
+    if (this.stopped || this.earlyTimer || this.failures > 0) {
+      return;
+    }
+    const wait = Math.max(EARLY_RUN_DEBOUNCE_MS, this.lastRunStarted + EARLY_RUN_MIN_GAP_MS - Date.now());
+    this.earlyTimer = setTimeout(() => {
+      this.earlyTimer = null;
+      void this.refresh();
+    }, wait);
+    this.earlyTimer.unref?.();
   }
 
   /**
@@ -128,9 +170,10 @@ export class StatusService {
   private async run(): Promise<void> {
     const now = new Date();
     const started = Date.now();
+    this.lastRunStarted = started;
     let inv: Inventory;
     try {
-      inv = await gatherInventory(this.kube, now);
+      inv = await gatherInventory(this.kube, now, { cache: this.cache, previous: this.snapshotValue.checkedAt ? this.inventory : null });
     } catch (err) {
       await this.publish(this.failedSnapshot(err, now), now);
       return;
@@ -269,6 +312,11 @@ export class StatusService {
   }
 
   private record(now: Date, o: Overview): void {
+    // One point per interval: early runs (after a watch event) would otherwise shorten the six hours the buffer covers.
+    const last = this.historyBuffer.at(-1);
+    if (last && now.getTime() - last.t < this.config.intervalSeconds * 900) {
+      return;
+    }
     this.historyBuffer.push({
       t: now.getTime(),
       cpu: o.cpu && o.cpu.allocatableMilli > 0 ? o.cpu.usedMilli / o.cpu.allocatableMilli : null,

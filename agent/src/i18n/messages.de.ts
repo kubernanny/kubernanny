@@ -44,6 +44,7 @@ export const de = {
 
   // ---------- run loop, workload health ----------
   'module.checkFailed': 'Prüfung fehlgeschlagen',
+  'module.staleRead': (p: { kinds: string }) => `Konnte ${p.kinds} nicht lesen. Gezeigt wird der letzte bekannte Stand.`,
   'workloadHealth.scheduled': 'Läuft nach Zeitplan',
   'workloadHealth.none': 'Keine Pods geplant',
   'workloadHealth.ready': (p: { n: number }) => n1(p.n, 'Pod', 'Pods') + ' bereit',

@@ -5,6 +5,7 @@ import { ModuleContext, ModuleResult } from '../types';
 
 export class PdbCheck extends CoreCheck {
   readonly id = 'pdb';
+  override readonly uses = [] as const;
   readonly name = t('module.pdb.name');
   readonly icon = 'shield-outline';
   readonly description = t('module.pdb.description');
