@@ -64,7 +64,7 @@ async function openSheet(page, labels) {
 async function showClusters(page) {
   await page.goto(`${new URL(page.url()).origin}/#/clusters`);
   await page.reload();
-  await page.waitForSelector('app-clusters app-heartbeat', { timeout: 15000 });
+  await page.waitForSelector('app-clusters app-nanny-eye', { timeout: 15000 });
   await page.waitForTimeout(2500);
 }
 

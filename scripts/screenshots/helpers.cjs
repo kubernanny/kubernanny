@@ -11,7 +11,7 @@ const LABELS = {
   en: {
     logs: 'Logs before the crash', close: 'Close', restart: 'Restart social-importer', silence: 'Silence',
     services: 'Services', nodes: 'Nodes', workloads: 'Workloads', storage: 'Storage', backups: 'Backups', network: 'Network', events: 'Events',
-    problems: 'Issues', all: 'All', newCode: 'Create pairing code', modules: 'Modules and actions', showAll: /Show all/,
+    problems: 'Issues', all: 'All', restarted: 'Restarted', newCode: 'Create pairing code', modules: 'Modules and actions', showAll: /Show all/,
   },
   de: { close: 'Schließen', services: 'Dienste', backups: 'Backups', showAll: /Alle \d+ zeigen|Alle/ },
 };
@@ -48,7 +48,7 @@ async function confirmPairing(page) {
 async function pairAll(page) {
   await page.goto(`${BASE}/#/pair?code=${CODE}&name=homelab&key=${await keyOf(8081)}`);
   await confirmPairing(page);
-  await page.waitForSelector('app-heartbeat', { timeout: 15000 });
+  await page.waitForSelector('app-nanny-eye', { timeout: 15000 });
   for (const [port, name] of [[8082, 'office'], [8083, 'staging']]) {
     await page.goto(`${BASE}/#/pair?url=http://localhost:${port}&code=${CODE}&name=${name}&key=${await keyOf(port)}`);
     await confirmPairing(page);
@@ -57,7 +57,7 @@ async function pairAll(page) {
   await page.goto(`${BASE}/#/clusters`);
   // A fresh load, so no page transition is still running in the picture.
   await page.reload();
-  await page.waitForSelector('app-clusters app-heartbeat', { timeout: 15000 });
+  await page.waitForSelector('app-clusters app-nanny-eye', { timeout: 15000 });
   await page.waitForTimeout(2500);
 }
 

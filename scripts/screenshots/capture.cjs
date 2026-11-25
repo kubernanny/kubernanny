@@ -1,5 +1,20 @@
 const { chromium, devices } = require('playwright');
 
+/** The module sheet scrolled to its first list of objects (app-detail-section). */
+async function detailShot(page, file) {
+  const section = page.locator('app-module-sheet app-detail-section').first();
+  if ((await section.count()) === 0) {
+    return;
+  }
+  await page.locator('app-module-sheet ion-content').evaluate(async (el) => {
+    const target = el.querySelector('app-detail-section');
+    const scroller = await el.getScrollElement();
+    await el.scrollToPoint(0, target.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 24);
+  });
+  await page.waitForTimeout(500);
+  await shot(page, file);
+}
+
 const { BASE, LABELS, scroll, scrollTo, tab, closeSheet, pairAll, openCluster } = require('./helpers.cjs');
 
 const OUT = process.env.OUT ?? 'raw';
@@ -49,6 +64,15 @@ async function phoneDark(browser, L) {
   await shot(page, '08-overview-more-charts');
   await scroll(page, 7400);
   await shot(page, '09-overview-kpis');
+  // Use, requests and limits per node, under the cluster's figures.
+  const perNode = page.locator('app-overview-tab .per-node').last();
+  if ((await perNode.count()) > 0) {
+    await perNode.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(400);
+    await shot(page, '84-overview-per-node');
+  } else {
+    errors.push('no per-node section for 84-overview-per-node');
+  }
 
   // actions: logs, confirm, toast, silence
   await scroll(page, 900);
@@ -85,6 +109,7 @@ async function phoneDark(browser, L) {
   await page.locator('app-module-sheet ion-content').evaluate((el) => el.scrollToPoint(0, 900));
   await page.waitForTimeout(500);
   await shot(page, '17-sheet-argocd-issues');
+  await detailShot(page, '77-sheet-argocd-apps');
   await closeSheet(page, L);
   for (const [name, file] of [
     ['Longhorn', '18-sheet-longhorn'],
@@ -94,6 +119,8 @@ async function phoneDark(browser, L) {
     ['kured', '22-sheet-kured'],
     ['Known vulnerabilities', '64-sheet-vulnerabilities'],
     ['Security', '65-sheet-security'],
+    ['Alertmanager', '80-sheet-alertmanager'],
+    ['Redis / Valkey', '81-sheet-redis'],
   ]) {
     await scroll(page, 0);
     const target = page.locator('app-services-tab button', { hasText: name }).first();
@@ -105,6 +132,16 @@ async function phoneDark(browser, L) {
     await target.click();
     await page.waitForTimeout(1100);
     await shot(page, file);
+    const details = {
+      '18-sheet-longhorn': '76-sheet-longhorn-volumes',
+      '19-sheet-cnpg': '75-sheet-cnpg-clusters',
+      '20-sheet-prometheus': '78-sheet-prometheus-targets',
+      '80-sheet-alertmanager': '82-sheet-alertmanager-alerts',
+      '81-sheet-redis': '83-sheet-redis-pods',
+    }[file];
+    if (details) {
+      await detailShot(page, details);
+    }
     await closeSheet(page, L);
   }
 
@@ -123,6 +160,18 @@ async function phoneDark(browser, L) {
   await page.locator('app-workloads-tab .filters button', { hasText: L.problems }).click();
   await page.waitForTimeout(600);
   await shot(page, '28-workloads-problems');
+  // Restarted: why and when the last run ended, an OOMKill with its limit, requests and limits.
+  await page.locator('app-workloads-tab .filters button', { hasText: L.restarted }).click();
+  await page.waitForTimeout(400);
+  const oom = page.locator('app-workloads-tab li', { has: page.locator('.restart.oom') }).first();
+  if ((await oom.count()) > 0) {
+    await oom.locator('.row').click();
+    await page.waitForTimeout(500);
+    await oom.scrollIntoViewIfNeeded();
+    await shot(page, '79-workloads-restarts');
+  } else {
+    errors.push('no OOMKilled workload for 79-workloads-restarts');
+  }
   await page.locator('app-workloads-tab .filters button', { hasText: L.all }).click();
   await page.locator('app-workloads-tab input[type=search]').fill('grafana');
   await page.waitForTimeout(600);
@@ -188,7 +237,7 @@ async function phoneLight(browser, L) {
 async function demo(browser) {
   const { ctx, page } = await context(browser, { ...PHONE, colorScheme: 'dark' }, 'demo');
   await page.goto(`${BASE}/#/demo`);
-  await page.waitForSelector('app-clusters app-heartbeat', { timeout: 15000 });
+  await page.waitForSelector('app-clusters app-nanny-eye', { timeout: 15000 });
   await page.waitForTimeout(2500);
   await shot(page, '60-demo');
   await ctx.close();

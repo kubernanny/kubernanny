@@ -22,6 +22,6 @@ Also published at https://kubernanny.app/docs, built from this folder by `websit
 | [API.md](API.md) | The agent's HTTP API and Prometheus metrics |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Local setup, demo mode, tests, adding components, integrations and actions, native builds, releases |
 | [RELEASING.md](RELEASING.md) | Native iOS/Android projects, one-time store setup, release commands and versioning |
-| [DESIGN.md](DESIGN.md) | Principles, the heartbeat, tokens, type, layout, charts, copy |
+| [DESIGN.md](DESIGN.md) | Principles, the nanny's eye, module sheets, tokens, type, layout, charts, copy |
 | [SCREENSHOTS.md](SCREENSHOTS.md) | Every screen, phone, tablet, desktop, dark and light |
 | [ROADMAP.md](ROADMAP.md) | What comes next, and what will not |

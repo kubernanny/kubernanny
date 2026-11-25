@@ -7,21 +7,34 @@ Kubernanny is looked at in two situations: a glance to confirm all is well, and 
 1. **One answer first.** The top of every cluster says, in one sentence, whether something needs you ("3 Ausfälle und 13 Warnungen", "Alles läuft"). Everything else is below the fold.
 2. **Only what is broken.** The overview lists problems, not resources. Healthy components appear in the Dienste tab, quietly.
 3. **Cause and remedy together.** Every problem says why, and offers the one action that usually fixes it right where it is described.
-4. **Colour repeats, never carries.** Status is always also a word or an icon. The heartbeat has an accessible label.
-5. **One memorable element.** The heartbeat line. Everything around it stays calm.
+4. **Colour repeats, never carries.** Status is always also a word or an icon. The nanny's eye has an accessible label.
+5. **One memorable element.** The nanny's eye, from the app icon. Everything around it stays calm.
+6. **No score.** The headline with its counts says how a cluster is; a number out of 100 only invites a second question.
 
-## The heartbeat
+## The nanny's eye
 
-An ECG-like trace under the cluster name, in the status colour (`ui/heartbeat.ts`):
+The nanny's glasses from the app icon (`branding/kubernanny-*.svg`, `ui/nanny-eye.ts`): the left lens has a dark pupil, the right one is the cluster's light with a soft glow. It sits next to the headline in the hero and in the top right of each cluster card.
 
-| State | Trace | Kubernanny travels in |
-|---|---|---|
-| green | regular beats | 3.4 s |
-| yellow | an early, smaller extra beat per cycle | 2.6 s |
-| red | fast, uneven, higher spikes | 1.5 s |
-| unknown | flat line | no movement |
+| State | Right lens |
+|---|---|
+| green | mint `#36d6a8` (`--ok`) |
+| yellow | amber `#f5b83d` (`--warn`) |
+| red | coral `#ff5d73` (`--crit`) |
+| unknown | an empty grey ring, no glow |
 
-The path is generated deterministically, so it never jumps between renders. With `prefers-reduced-motion` the bright pulse does not move.
+It only moves while a check runs: the glow breathes slowly. With `prefers-reduced-motion` it stays still.
+
+## Module sheets
+
+A component's sheet answers "what is it doing?" in three layers:
+
+1. **Key figures**: one row of two to four numbers (`stats`), never a half-filled grid. Four become two by two on a phone. A module that has more to say puts it in a list.
+2. **Problems**: the module's issues, with their actions.
+3. **Its objects** (`details`): a list per kind (database clusters, volumes, apps, certificates) or a short table (targets per job, Longhorn nodes). Problems come first, tinted with a coloured rail; healthy rows are compact, and after five of them the rest folds behind "Show all". Facts under a name (last backup, WAL archiving, replicas) are small text, coloured only when they are the problem.
+
+## Resources
+
+CPU and RAM always show use against what is asked for: a bar of the use, the requests hatched behind it, a tick where the limits end (dashed at the edge when they add up to more than there is), and the numbers in words: "1,2 / 4 Kerne", "Requests 2,5, Limits 6". The same on the overview's vitals, on every node and in an opened workload.
 
 ## Tokens
 
@@ -50,7 +63,7 @@ Status colours are reserved for status. Charts use `--chart`, never a status col
 ## Layout
 
 - **Phone**: one column. Hero, sticky tab bar, the tab's content.
-- **From 980 px**: the hero (name, heartbeat, headline, score, six vital numbers) stays on the left; the tabs scroll on the right.
+- **From 980 px**: the hero (name, eye, headline, six vital numbers) stays on the left; the tabs scroll on the right.
 - Cards use three radii by role: 20 px for list containers and node cards, 14 px for tiles, 8 px for small controls. Problems are a single list with a coloured left rail, not separate cards.
 
 ## Charts

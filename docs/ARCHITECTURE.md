@@ -8,7 +8,7 @@ Kubernanny has three parts and no backend of its own:
 
 <p><img src="screenshots/05-overview-red.png" alt="Overview" width="260"> <img src="screenshots/61-history.png" alt="Last 7 days" width="260"> <img src="screenshots/66-backups.png" alt="Backups" width="260"></p>
 
-*What the app shows: the heartbeat and issues, the last seven days, the backups.*
+*What the app shows: the cluster's light and issues, the last seven days, the backups.*
 
 ```mermaid
 flowchart LR
@@ -142,7 +142,9 @@ The first catalog entry that matches wins, so specific entries (Argo CD Image Up
 
 ### Modules
 
-Everything Kubernanny reports comes from a module. A module produces `issues` (what is broken), `stats` (numbers shown on its detail sheet) and a one-line `summary`.
+Everything Kubernanny reports comes from a module. A module produces `issues` (what is broken), `stats` (two to four key figures for its sheet), `details` (its objects as lists or short tables, problems first) and a one-line `summary`.
+
+`details` is a list of sections (`modules/types.ts`): `{ title, kind: 'list', rows: [{ name, sub?, tone, value?, meta?: [{ text, tone? }] }], more? }` or `{ title, kind: 'table', columns, rows: [{ cells, tone }], more? }`. The builders live in `modules/details.ts` (CNPG clusters, Longhorn volumes and nodes, Argo CD apps, certificates, Prometheus targets per job, operator objects with their last reconcile, ingress routes); a row's tone mirrors the object's own state, the judgement stays with the checks. `keyFigures()` keeps four stats and moves the rest into a plain list. Every recognised component also gets, after its integration's sections, what the inventory alone tells (`modules/component-details.ts`): its pods (node, ready, restarts, why the last run ended), CPU and RAM per workload against requests and limits, and the volumes its pods mount; a component without an integration gets pods ready, restarts, CPU and RAM as key figures. The overview carries `perNode` (use, requests, limits and pods without a limit per node) for the app's per-node breakdown. A component installed more than once also carries `instances` (`{ namespace, name, version, ready, desired }`). Untrusted integrations go through `boundDetails` (6 sections, 50 rows, strings cut). How the app shows them: [DESIGN.md](DESIGN.md#module-sheets).
 
 | Kind | Where | Runs when |
 |---|---|---|
@@ -177,7 +179,7 @@ flowchart LR
   i --> s["score = 100 · 0.82^critical · 0.95^warning"]
 ```
 
-The score is multiplicative on purpose: a linear penalty sat at 0 for most real clusters and could not tell "16 problems" from "6". One warning costs 5, one critical issue costs 18 points, and many issues still differ.
+The score is multiplicative on purpose: a linear penalty sat at 0 for most real clusters and could not tell "16 problems" from "6". One warning costs 5, one critical issue costs 18 points, and many issues still differ. It is kept for the API and the Prometheus metric (`kubernanny_health_score`) only: the app does not show it, because a number like "1 of 100" read as alarming and said less than the headline with its counts.
 
 Severity follows one rule: **critical** means something is down or data is at risk now (no ready replica, quorum lost, WAL archiving failing, certificate expired or expiring within 3 days); **warning** means it will become critical if nobody acts (backup older than 26 h, volume degraded, certificate within 14 days, an automated Argo CD app drifting); **hint** (`info`) is worth knowing but not a problem (a manual Argo CD app with a change waiting). Hints never change the light or the score and are never sent.
 
@@ -302,7 +304,7 @@ app/src/app
 ├── cluster/     one cluster: hero + seven tabs, module sheet, view models
 ├── pair/        pairing from a link, QR code or typed code
 ├── cluster-form/settings: address, agent key fingerprint, agent info, devices, test notification, pair another device
-└── ui/          heartbeat, area chart, meter, issue list, logs modal
+└── ui/          nanny's eye, area chart, meter, usage bar, issue list, logs modal
 ```
 
 ```mermaid
@@ -310,7 +312,7 @@ flowchart TB
   CS["ClusterStore<br/>(device storage)"] --> SS["StatusStore<br/>snapshot per cluster, 30 s poll"]
   SS --> CV["buildClusterView()<br/>pure view model"]
   CDS["ClusterDataStore<br/>nodes · workloads · storage · network · events · history"] --> Tabs
-  CV --> Hero["Hero: heartbeat, headline, score, vitals"]
+  CV --> Hero["Hero: eye, headline, vitals"]
   CV --> Tabs["Tabs"]
   SS -- "new checkedAt" --> CDS
 ```

@@ -6,7 +6,7 @@
 
 [Website and docs](https://kubernanny.app) · [Live demo](https://demo.kubernanny.app) · iOS · Android · web · English and German · free and open source
 
-Kubernanny answers that one question for self-hosted Kubernetes. A small agent in your cluster recognises what you run (Longhorn, Argo CD, cert-manager, CloudNativePG, Prometheus, Loki, kured and [about 70 more](docs/COMPONENTS.md)), checks each of them the way you would by hand, and shows a heartbeat per cluster. Below it: only what is broken right now, why, and the one action that usually fixes it.
+Kubernanny answers that one question for self-hosted Kubernetes. A small agent in your cluster recognises what you run (Longhorn, Argo CD, cert-manager, CloudNativePG, Prometheus, Loki, kured and [about 70 more](docs/COMPONENTS.md)), checks each of them the way you would by hand, and shows each cluster's light in the nanny's eye. Below it: only what is broken right now, why, and the one action that usually fixes it.
 
 <table>
 <tr>
