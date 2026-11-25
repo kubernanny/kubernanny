@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 import { generateKeyPair, Initiator, Responder } from '../src/noise.js';
+import { cipherKey } from './cipher-key.js';
 
 /** The independent implementation: emilbayes/noise-protocol on libsodium. */
 const noise = createRequire(import.meta.url)('noise-protocol') as {
@@ -38,8 +39,8 @@ describe('Noise IK against libsodium (noise-protocol)', () => {
       expect(new TextDecoder().decode(p2)).toBe(`answer ${round}`);
       // Same Split() outputs. noise-protocol names them from the side that
       // finished the handshake (writer: tx = c1), so compare c1 and c2 directly.
-      expect(Buffer.from(transport.send.keyForTesting()!)).toEqual(split.tx.subarray(0, 32));
-      expect(Buffer.from(transport.receive.keyForTesting()!)).toEqual(split.rx.subarray(0, 32));
+      expect(Buffer.from(cipherKey(transport.send)!)).toEqual(split.tx.subarray(0, 32));
+      expect(Buffer.from(cipherKey(transport.receive)!)).toEqual(split.rx.subarray(0, 32));
     });
 
     it(`their initiator, our responder (${round})`, () => {
@@ -59,8 +60,8 @@ describe('Noise IK against libsodium (noise-protocol)', () => {
       const split = noise.readMessage(initiator, Buffer.from(message), p2)!;
       expect(p2.subarray(0, noise.readMessage.bytes).toString()).toBe(`answer ${round}`);
       // Reader side: noise-protocol's rx = c1 (initiator to responder), tx = c2.
-      expect(Buffer.from(transport.receive.keyForTesting()!)).toEqual(split.rx.subarray(0, 32));
-      expect(Buffer.from(transport.send.keyForTesting()!)).toEqual(split.tx.subarray(0, 32));
+      expect(Buffer.from(cipherKey(transport.receive)!)).toEqual(split.rx.subarray(0, 32));
+      expect(Buffer.from(cipherKey(transport.send)!)).toEqual(split.tx.subarray(0, 32));
     });
   }
 

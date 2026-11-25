@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { generateKeyPair } from '../src/noise.js';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { generateKeyPair, keyPairFromSecret } from '../src/noise.js';
 import { fromBase64Url } from '../src/keys.js';
 import { blake2b } from '@noble/hashes/blake2.js';
 import {
@@ -13,6 +14,7 @@ import {
   encodeReply,
   isAgentId,
   relayAgentId,
+  relayOrigin,
 } from '../src/relay.js';
 
 describe('relay agent id', () => {
@@ -78,70 +80,111 @@ describe('relay frames', () => {
   });
 });
 
+const ORIGIN = 'wss://relay.example';
+
 describe('registration proof', () => {
   function register(agent = generateKeyPair()) {
     const challenge = new RegistrationChallenge();
     const sent = decodeFrame(challenge.frame());
     expect(sent.type).toBe(FrameType.Challenge);
-    const proof = decodeFrame(answerChallenge(agent, sent.payload));
+    const proof = decodeFrame(answerChallenge(agent, sent.payload, ORIGIN));
     expect(proof.type).toBe(FrameType.Proof);
     return { agent, challenge, proof: proof.payload, id: relayAgentId(agent.publicKey) };
   }
 
   it('passes for the key behind the id', () => {
     const { challenge, proof, id } = register();
-    expect(challenge.verify(proof, id)).toBe(true);
+    expect(challenge.verify(proof, id, ORIGIN)).toBe(true);
   });
 
   it('fails for another key claiming the id', () => {
     const victim = generateKeyPair();
     const { challenge, proof } = register(generateKeyPair());
-    expect(challenge.verify(proof, relayAgentId(victim.publicKey))).toBe(false);
+    expect(challenge.verify(proof, relayAgentId(victim.publicKey), ORIGIN)).toBe(false);
   });
 
   it('fails for the victim public key with a proof made without its private key', () => {
     const victim = generateKeyPair();
     const challenge = new RegistrationChallenge();
     const attacker = generateKeyPair();
-    const forged = decodeFrame(answerChallenge(attacker, decodeFrame(challenge.frame()).payload)).payload.slice();
+    const forged = decodeFrame(answerChallenge(attacker, decodeFrame(challenge.frame()).payload, ORIGIN)).payload.slice();
     forged.set(victim.publicKey, 0);
-    expect(challenge.verify(forged, relayAgentId(victim.publicKey))).toBe(false);
+    expect(challenge.verify(forged, relayAgentId(victim.publicKey), ORIGIN)).toBe(false);
   });
 
   it('fails for a proof under the wrong id', () => {
     const { challenge, proof } = register();
-    expect(challenge.verify(proof, relayAgentId(generateKeyPair().publicKey))).toBe(false);
+    expect(challenge.verify(proof, relayAgentId(generateKeyPair().publicKey), ORIGIN)).toBe(false);
   });
 
   it('fails for a proof replayed from an earlier registration', () => {
     const { agent, proof, id } = register();
     const fresh = new RegistrationChallenge();
-    expect(fresh.verify(proof, id)).toBe(false);
+    expect(fresh.verify(proof, id, ORIGIN)).toBe(false);
     // The genuine agent still gets in on the fresh challenge.
     const again = new RegistrationChallenge();
-    expect(again.verify(decodeFrame(answerChallenge(agent, decodeFrame(again.frame()).payload)).payload, id)).toBe(true);
+    expect(again.verify(decodeFrame(answerChallenge(agent, decodeFrame(again.frame()).payload, ORIGIN)).payload, id, ORIGIN)).toBe(true);
   });
 
   it('verifies only once per challenge', () => {
     const { challenge, proof, id } = register();
-    expect(challenge.verify(proof, id)).toBe(true);
-    expect(challenge.verify(proof, id)).toBe(false);
+    expect(challenge.verify(proof, id, ORIGIN)).toBe(true);
+    expect(challenge.verify(proof, id, ORIGIN)).toBe(false);
   });
 
   it('fails for a tampered or short proof', () => {
     const { challenge, proof, id } = register();
     const tampered = proof.slice();
     tampered[63] ^= 1;
-    expect(challenge.verify(tampered, id)).toBe(false);
-    expect(new RegistrationChallenge().verify(proof.subarray(0, 63), id)).toBe(false);
+    expect(challenge.verify(tampered, id, ORIGIN)).toBe(false);
+    expect(new RegistrationChallenge().verify(proof.subarray(0, 63), id, ORIGIN)).toBe(false);
   });
 
   it('is deterministic for a fixed nonce and ephemeral key', () => {
     const agent = generateKeyPair();
     const nonce = new Uint8Array(32).fill(7);
     const secret = new Uint8Array(32).fill(9);
-    const a = answerChallenge(agent, decodeFrame(new RegistrationChallenge(nonce, secret).frame()).payload);
-    const b = answerChallenge(agent, decodeFrame(new RegistrationChallenge(nonce, secret).frame()).payload);
+    const a = answerChallenge(agent, decodeFrame(new RegistrationChallenge(nonce, secret).frame()).payload, ORIGIN);
+    const b = answerChallenge(agent, decodeFrame(new RegistrationChallenge(nonce, secret).frame()).payload, ORIGIN);
     expect(a).toEqual(b);
+  });
+});
+
+describe('registration proof bound to the relay (review L3)', () => {
+  it('normalises the origin: scheme, host, non-default port', () => {
+    expect(relayOrigin('wss://Relay.Example/')).toBe('https://relay.example');
+    expect(relayOrigin('https://relay.example:443/x')).toBe('https://relay.example');
+    expect(relayOrigin('ws://127.0.0.1:8080')).toBe('http://127.0.0.1:8080');
+    expect(relayOrigin('http://relay.example:80')).toBe('http://relay.example');
+    expect(() => relayOrigin('ftp://relay.example')).toThrow();
+  });
+
+  it('a proof made for one relay does not register at another', () => {
+    const agent = generateKeyPair();
+    const id = relayAgentId(agent.publicKey);
+    // A hostile relay forwards relay B's challenge to an agent connected to it and passes the answer back to B.
+    const atB = new RegistrationChallenge();
+    const proof = decodeFrame(answerChallenge(agent, decodeFrame(atB.frame()).payload, 'wss://hostile.example')).payload;
+    expect(atB.verify(proof, id, 'https://relay-b.example')).toBe(false);
+    const again = new RegistrationChallenge();
+    const honest = decodeFrame(answerChallenge(agent, decodeFrame(again.frame()).payload, 'wss://relay-b.example')).payload;
+    expect(again.verify(honest, id, 'https://relay-b.example')).toBe(true);
+  });
+
+  it('reproduces the relay proof test vector (test/relay-vectors.json)', () => {
+    const vector = JSON.parse(readFileSync(new URL('./relay-vectors.json', import.meta.url), 'utf8')) as Record<string, string>;
+    const hex = (t: string) => Uint8Array.from(Buffer.from(t, 'hex'));
+    const agent = keyPairFromSecret(hex(vector['agentStaticSecret']!));
+    const challenge = new RegistrationChallenge(hex(vector['nonce']!), hex(vector['relayEphemeralSecret']!));
+    const challengeFrame = challenge.frame();
+    const proofFrame = answerChallenge(agent, decodeFrame(challengeFrame).payload, vector['dialledUrl']!);
+    if (process.env['UPDATE_VECTORS']) {
+      vector['challengeFrame'] = Buffer.from(challengeFrame).toString('hex');
+      vector['proofFrame'] = Buffer.from(proofFrame).toString('hex');
+      writeFileSync(new URL('./relay-vectors.json', import.meta.url), `${JSON.stringify(vector, null, 2)}\n`);
+    }
+    expect(Buffer.from(challengeFrame).toString('hex')).toBe(vector['challengeFrame']);
+    expect(Buffer.from(proofFrame).toString('hex')).toBe(vector['proofFrame']);
+    expect(challenge.verify(decodeFrame(proofFrame).payload, relayAgentId(agent.publicKey), vector['relayPublicUrl']!)).toBe(true);
   });
 });

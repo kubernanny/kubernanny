@@ -158,8 +158,19 @@ export function pushKeyId(publicKey: Uint8Array): string {
 }
 
 /** An FCM registration token as the agent and the relay accept it: printable, no spaces, bounded. */
+export const PUSH_TOKEN_PATTERN = /^[A-Za-z0-9:_\-.]{20,4096}$/;
+
 export function isPushToken(token: unknown): token is string {
-  return typeof token === 'string' && /^[A-Za-z0-9:_\-.]{20,4096}$/.test(token);
+  return typeof token === 'string' && PUSH_TOKEN_PATTERN.test(token);
+}
+
+/**
+ * A short digest of an FCM token (BLAKE2b-128, base64url): what the relay
+ * keeps to count pushes per token, so its memory and a Worker's storage
+ * hold no phone's address.
+ */
+export function pushTokenDigest(token: string): string {
+  return toBase64Url(blake2b(new TextEncoder().encode(token), { dkLen: 16 }));
 }
 
 export type PushPlatform = 'ios' | 'android';

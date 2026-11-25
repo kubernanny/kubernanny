@@ -18,6 +18,7 @@ export {
   sealRequest,
   validPath,
 } from './envelope.js';
+export { constantTimeEqual, randomBytes } from './bytes.js';
 export { fingerprint, fromBase64Url, parsePublicKey, toBase64Url } from './keys.js';
 export {
   Frame,
@@ -33,6 +34,7 @@ export {
   encodePushResult,
   HEARTBEAT_PONG,
   RELAY_LABEL,
+  RELAY_PROTOCOL_VERSION,
   REPLY_CHUNK,
   RegistrationChallenge,
   RelayClose,
@@ -46,6 +48,7 @@ export {
   encodeReplyEnd,
   isAgentId,
   relayAgentId,
+  relayOrigin,
 } from './relay.js';
 export {
   MAX_PUSH_PLAINTEXT,
@@ -56,8 +59,10 @@ export {
   PushPlatform,
   decodePushContent,
   encodePushContent,
+  PUSH_TOKEN_PATTERN,
   isPushToken,
   openPush,
   pushKeyId,
+  pushTokenDigest,
   sealPush,
 } from './push.js';

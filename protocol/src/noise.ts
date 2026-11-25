@@ -112,11 +112,6 @@ export class CipherState {
     this.n++;
     return out;
   }
-
-  /** Only for tests and the test vectors: the raw key after Split. */
-  keyForTesting(): Uint8Array | null {
-    return this.k;
-  }
 }
 
 /** SymmetricState (section 5.2). */

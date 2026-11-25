@@ -15,8 +15,10 @@
 import { x25519 } from '@noble/curves/ed25519.js';
 import { blake2b } from '@noble/hashes/blake2.js';
 import { hmac } from '@noble/hashes/hmac.js';
+import { constantTimeEqual, randomBytes } from './bytes.js';
 import { toBase64Url } from './keys.js';
 import { KeyPair, concat } from './noise.js';
+import { isPushToken } from './push.js';
 
 export const FrameType = {
   /** relay -> agent: one sealed request body (`0x01 | message 1`). */
@@ -58,8 +60,13 @@ export const RelayClose = {
 
 export const HEARTBEAT_PING = 'ping';
 export const HEARTBEAT_PONG = 'pong';
+/**
+ * The relay protocol's version. 2 binds the registration proof to the
+ * relay's origin (security review L3); nothing of version 1 was released.
+ */
+export const RELAY_PROTOCOL_VERSION = 2;
 /** Domain separation for everything the registration proof derives. */
-export const RELAY_LABEL = 'kubernanny-relay/1';
+export const RELAY_LABEL = `kubernanny-relay/${RELAY_PROTOCOL_VERSION}`;
 /** Response parts the agent sends: small enough for every WebSocket implementation's message limit. */
 export const REPLY_CHUNK = 256 * 1024;
 const HEADER = 5;
@@ -122,8 +129,7 @@ export function decodePushRequest(payload: Uint8Array): PushRequest | null {
     const raw = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(payload)) as Record<string, unknown> | null;
     const { t, o, k, m, l } = raw ?? {};
     if (
-      typeof t !== 'string' ||
-      !/^[A-Za-z0-9:_\-.]{20,4096}$/.test(t) ||
+      !isPushToken(t) ||
       (o !== 'ios' && o !== 'android') ||
       typeof k !== 'string' ||
       !/^[A-Za-z0-9_-]{16}$/.test(k) ||
@@ -227,35 +233,41 @@ export function encodeReply(callId: number, status: number, body: Uint8Array, ch
 }
 
 /**
- * The key the proof is made with. Hashed with a label and both public keys
- * rather than using the raw DH output: the relay picks the "ephemeral" key,
- * and a hostile relay could pick a device's Noise ephemeral key from a
- * message 1 it carried. It would then learn a labelled hash of that call's
- * `es` value, which is useless for opening it (that needs `es` itself).
+ * The relay's origin as both sides put it into the proof: `http(s)://host[:port]`,
+ * lowercase, default port left out, `ws`/`wss` read as `http`/`https`. The
+ * agent uses the URL it dialled, the relay its configured public URL, so a
+ * proof made for one relay does not register at another (security review L3:
+ * a hostile relay could otherwise forward another relay's challenge to an
+ * agent connected to it and register the agent's id there).
  */
-function proofKey(shared: Uint8Array, relayEphemeral: Uint8Array, agentPublic: Uint8Array): Uint8Array {
-  return blake2b(concat(encoder.encode(RELAY_LABEL), shared, relayEphemeral, agentPublic), { dkLen: 32 });
+export function relayOrigin(url: string): string {
+  const parsed = new URL(url.trim());
+  const scheme = { 'ws:': 'http:', 'wss:': 'https:', 'http:': 'http:', 'https:': 'https:' }[parsed.protocol];
+  if (!scheme || !parsed.hostname) {
+    throw new Error('a relay URL is http(s) or ws(s) with a host');
+  }
+  const port = parsed.port && !((scheme === 'http:' && parsed.port === '80') || (scheme === 'https:' && parsed.port === '443')) ? `:${parsed.port}` : '';
+  return `${scheme}//${parsed.hostname.toLowerCase()}${port}`;
+}
+
+/**
+ * The key the proof is made with. Hashed with a label, the relay's origin
+ * (length-prefixed) and both public keys rather than using the raw DH output:
+ * the relay picks the "ephemeral" key, and a hostile relay could pick a
+ * device's Noise ephemeral key from a message 1 it carried. It would then
+ * learn a labelled hash of that call's `es` value, which is useless for
+ * opening it (that needs `es` itself).
+ */
+function proofKey(shared: Uint8Array, relayEphemeral: Uint8Array, agentPublic: Uint8Array, origin: string): Uint8Array {
+  const originBytes = encoder.encode(relayOrigin(origin));
+  if (originBytes.length > 0xffff) {
+    throw new Error('relay origin too long');
+  }
+  return blake2b(concat(encoder.encode(RELAY_LABEL), Uint8Array.of(originBytes.length >> 8, originBytes.length & 0xff), originBytes, shared, relayEphemeral, agentPublic), { dkLen: 32 });
 }
 
 function proofMac(key: Uint8Array, nonce: Uint8Array): Uint8Array {
   return hmac(blake2b, key, concat(encoder.encode(RELAY_LABEL), nonce)).subarray(0, 32);
-}
-
-function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a[i]! ^ b[i]!;
-  }
-  return diff === 0;
-}
-
-function randomBytes(length: number): Uint8Array {
-  const out = new Uint8Array(length);
-  globalThis.crypto.getRandomValues(out);
-  return out;
 }
 
 /**
@@ -281,8 +293,8 @@ export class RegistrationChallenge {
     return encodeFrame(FrameType.Challenge, 0, concat(this.nonce, this.ephemeral.publicKey));
   }
 
-  /** True when the Proof payload comes from the holder of the private key whose public key hashes to `agentId`. */
-  verify(proof: Uint8Array, agentId: string): boolean {
+  /** True when the Proof payload comes from the holder of the private key whose public key hashes to `agentId`, made for this relay's `origin`. */
+  verify(proof: Uint8Array, agentId: string, origin: string): boolean {
     if (this.used || proof.length !== 64) {
       return false;
     }
@@ -297,18 +309,24 @@ export class RegistrationChallenge {
     } catch {
       return false; // a low-order point
     }
-    return constantTimeEqual(proofMac(proofKey(shared, this.ephemeral.publicKey, agentPublic), this.nonce), proof.subarray(32));
+    let key: Uint8Array;
+    try {
+      key = proofKey(shared, this.ephemeral.publicKey, agentPublic, origin);
+    } catch {
+      return false; // a misconfigured origin never verifies
+    }
+    return constantTimeEqual(proofMac(key, this.nonce), proof.subarray(32));
   }
 }
 
-/** The agent's side: the Proof frame answering a Challenge payload. */
-export function answerChallenge(agent: KeyPair, challenge: Uint8Array): Uint8Array {
+/** The agent's side: the Proof frame answering a Challenge payload from the relay at `origin` (the URL the agent dialled). */
+export function answerChallenge(agent: KeyPair, challenge: Uint8Array, origin: string): Uint8Array {
   if (challenge.length !== 64) {
     throw new RelayFrameError('challenge must be 64 bytes');
   }
   const nonce = challenge.subarray(0, 32);
   const relayEphemeral = challenge.subarray(32);
   const shared = x25519.getSharedSecret(agent.secretKey, relayEphemeral);
-  const mac = proofMac(proofKey(shared, relayEphemeral, agent.publicKey), nonce);
+  const mac = proofMac(proofKey(shared, relayEphemeral, agent.publicKey, origin), nonce);
   return encodeFrame(FrameType.Proof, 0, concat(agent.publicKey, mac));
 }
