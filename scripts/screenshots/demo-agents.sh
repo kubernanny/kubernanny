@@ -14,7 +14,8 @@ fi
 ORIGINS=http://localhost:8081
 PIDS=()
 start() { # port metrics-port scenario name [web]
-  (cd "$ROOT/agent" && exec env DEMO="$3" CLUSTER_NAME="$4" PORT="$1" METRICS_PORT="$2" PUBLIC_URL="http://localhost:$1" \
+  # A build tag and commit as CI bakes them into the image, so the screenshots show where they appear.
+  (cd "$ROOT/agent" && exec env DEMO="$3" CLUSTER_NAME="$4" PORT="$1" METRICS_PORT="$2" PUBLIC_URL="http://localhost:$1" KUBERNANNY_BUILD=2026-11-25-16 KUBERNANNY_COMMIT=3d36a32c1f0e \
     CORS_ORIGINS="$ORIGINS" INTERNAL_SOCKET="$SOCKETS/$4.sock" ${5:+WEB_ROOT="$ROOT/app/dist/app/browser"} node dist/main.js) >"$OUT/agent-$4.log" 2>&1 &
   PIDS+=($!)
 }
