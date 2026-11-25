@@ -91,7 +91,7 @@ agent/src
 
 ### One run
 
-`StatusService` runs every `CHECK_INTERVAL_SECONDS` (60), on `POST /api/status/refresh`, and 3 s after a watched change that can open or close an issue (a pod into CrashLoopBackOff or an image pull error, a node condition changing, a workload losing or regaining its replicas, a PVC phase, a failed job), at most every 15 s, so the app sees it within seconds. Concurrent triggers share one run. Every status answer carries `nextCheckAt`, the next interval tick or the pending early run if that comes first (`nextRunAt`), which the app counts down to. Notifications keep their own rules (`NOTIFY_AFTER_SECONDS`, each change sent once), so an early run never sends more.
+`StatusService` runs every `CHECK_INTERVAL_SECONDS` (60), on `POST /api/status/refresh`, and 3 s after a watched change that can open or close an issue (a pod into CrashLoopBackOff or an image pull error, a node condition changing, a workload losing or regaining its replicas, a PVC phase, a failed job), at most every 15 s, so the app sees it within seconds. Concurrent triggers share one run. Each run records where its time went (reading the cluster, the integrations in parallel, then the core checks, and every Prometheus query, at most 8 at a time); the Kubernanny component's sheet lists it as "Letzte Prüfung" with the slowest modules and queries (`status/run-timing.ts`). Every status answer carries `nextCheckAt`, the next interval tick or the pending early run if that comes first (`nextRunAt`), which the app counts down to. Notifications keep their own rules (`NOTIFY_AFTER_SECONDS`, each change sent once), so an early run never sends more.
 
 ```mermaid
 sequenceDiagram

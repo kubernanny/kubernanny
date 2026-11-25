@@ -94,11 +94,45 @@ function promResult(answer: unknown): unknown[] {
   return list(record(res.data).result, MAX_PROM_SERIES);
 }
 
+/** Queries one run sends to Prometheus at the same time; the rest wait their turn (the API server proxies them all). */
+export const PROM_CONCURRENCY = 8;
+
 export class Prometheus {
+  /** Every query of this run with how long it took, for the run's timing on the Kubernanny sheet. */
+  readonly timings: { expr: string; ms: number }[] = [];
+  private active = 0;
+  private readonly waiting: (() => void)[] = [];
+
   constructor(private readonly http: ServiceHttp) {}
 
+  private async slot<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.active >= PROM_CONCURRENCY) {
+      // Woken by a finishing query, which hands its slot over: the count stays.
+      await new Promise<void>((resolve) => this.waiting.push(resolve));
+    } else {
+      this.active++;
+    }
+    try {
+      return await fn();
+    } finally {
+      const next = this.waiting.shift();
+      if (next) {
+        next();
+      } else {
+        this.active--;
+      }
+    }
+  }
+
   async query(expr: string): Promise<PromSample[]> {
-    const result = promResult(await this.http.get<unknown>(`/api/v1/query?query=${encodeURIComponent(expr)}`));
+    const started = Date.now();
+    const answer = await this.slot(() => this.http.get<unknown>(`/api/v1/query?query=${encodeURIComponent(expr)}`)).finally(() => {
+      // The client outlives its run (the history views use it until the next one): keep the list bounded.
+      if (this.timings.length < 500) {
+        this.timings.push({ expr, ms: Date.now() - started });
+      }
+    });
+    const result = promResult(answer);
     return result
       .map((r) => ({ metric: strings(record(r).metric), value: num(list(record(r).value, 2)[1]) ?? NaN }))
       .filter((s) => Number.isFinite(s.value));

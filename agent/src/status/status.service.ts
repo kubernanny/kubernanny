@@ -18,6 +18,7 @@ import { Notifier } from '../notify/notifier';
 import { SettingsService } from '../settings/settings.service';
 import { SilenceService } from '../silence/silence.service';
 import { AGENT_BUILD, AGENT_COMMIT, AGENT_VERSION } from '../version';
+import { runTiming } from './run-timing';
 import { mergeIssues, runComponent, runCoreCheck } from './run-modules';
 import { dedupeAlerts } from '../modules/core/standard-alerts/alertmanager-dedupe';
 import { buildOverview, HistoryPoint, IssueView, lightFor, Overview, scoreFor, SEVERITY_RANK, Snapshot } from './snapshot';
@@ -217,11 +218,11 @@ export class StatusService {
     }
     this.failures = 0;
     this.failingSince = null;
-    await this.publish(await this.buildSnapshot(inv, now, started), now);
+    await this.publish(await this.buildSnapshot(inv, now, started, Date.now() - started), now);
   }
 
   /** The snapshot of a run that read the cluster: every enabled module, merged, ordered and judged. */
-  private async buildSnapshot(inv: Inventory, now: Date, started: number): Promise<Snapshot> {
+  private async buildSnapshot(inv: Inventory, now: Date, started: number, inventoryMs = 0): Promise<Snapshot> {
     const detected = discover(inv, this.config.customComponents);
     const data: RunData = {};
     const base = { inv, kube: this.kube, config: this.config, now, data };
@@ -230,15 +231,37 @@ export class StatusService {
     const allowed = this.settings.actionOn;
 
     // Components first: some fill RunData the core checks read (kured lock, certificates).
+    const moduleMs = new Map<string, number>();
+    const timed = async <T>(id: string, fn: () => Promise<T>): Promise<T> => {
+      const t0 = Date.now();
+      try {
+        return await fn();
+      } finally {
+        moduleMs.set(id, Date.now() - t0);
+      }
+    };
+    const t0 = Date.now();
     const components = await Promise.all(
-      detected.filter((d) => this.settings.moduleOn(d.entry.id)).map((d) => runComponent(ctx, d, INTEGRATIONS.find((i) => i.id === d.entry.id), allowed)),
+      detected
+        .filter((d) => this.settings.moduleOn(d.entry.id))
+        .map((d) => timed(d.entry.id, () => runComponent(ctx, d, INTEGRATIONS.find((i) => i.id === d.entry.id), allowed))),
     );
-    const core = await Promise.all(CORE_CHECKS.filter((m) => this.settings.moduleOn(m.id)).map((m) => runCoreCheck(ctx, m, allowed)));
+    const t1 = Date.now();
+    const core = await Promise.all(CORE_CHECKS.filter((m) => this.settings.moduleOn(m.id)).map((m) => timed(m.id, () => runCoreCheck(ctx, m, allowed))));
+    const t2 = Date.now();
     const byId = mergeIssues(core, components);
     // An Alertmanager alert that is the same as a built-in issue shows once, as the built-in one.
     dedupeAlerts(byId, [...core, ...components].map((o) => o.view), data, inv);
     const issues = this.withHistory([...byId.values()], now);
     const modules = [...core, ...components].map((a) => a.view);
+    // How this run spent its time, on Kubernanny's own sheet: why a run takes a second on a real cluster.
+    const own = modules.find((m) => m.id === 'kubernanny');
+    if (own) {
+      own.details = [
+        ...(own.details ?? []),
+        ...runTiming({ inventoryMs, componentsMs: t1 - t0, coreMs: t2 - t1, totalMs: Date.now() - started, moduleMs, prometheus: prom?.timings ?? null }),
+      ];
+    }
     const overview = buildOverview(inv, detected.length, prom !== null);
     this.inventory = inv;
     this.detected = detected;
