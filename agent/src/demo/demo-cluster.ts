@@ -59,6 +59,7 @@ const W: WorkloadSpec[] = [
   { kind: 'DaemonSet', ns: 'longhorn-system', name: 'longhorn-manager', image: 'longhornio/longhorn-manager:v1.9.0', ports: [{ port: 9500, name: 'manager' }] },
   { kind: 'Deployment', ns: 'longhorn-system', name: 'longhorn-ui', image: 'longhornio/longhorn-ui:v1.9.0', replicas: 2, ports: [{ port: 80, name: 'http' }], host: 'longhorn.home.example' },
   { kind: 'Deployment', ns: 'local-path-storage', name: 'local-path-provisioner', image: 'rancher/local-path-provisioner:v0.0.31' },
+  { kind: 'Deployment', ns: 'rook-ceph', name: 'rook-ceph-operator', image: 'docker.io/rook/ceph:v1.17.7', brokenOnly: true },
   // gitops
   { kind: 'StatefulSet', ns: 'argocd', name: 'argocd-application-controller', image: 'quay.io/argoproj/argocd:v3.1.2' },
   { kind: 'Deployment', ns: 'argocd', name: 'argocd-server', image: 'quay.io/argoproj/argocd:v3.1.2', ports: [{ port: 80, name: 'http' }], host: 'argo.home.example' },
@@ -68,6 +69,9 @@ const W: WorkloadSpec[] = [
   { kind: 'Deployment', ns: 'cert-manager', name: 'cert-manager', image: 'quay.io/jetstack/cert-manager-controller:v1.18.2' },
   { kind: 'Deployment', ns: 'infisical', name: 'infisical', image: 'infisical/infisical:v0.130.0', ports: [{ port: 8080 }], host: 'secrets.home.example' },
   { kind: 'Deployment', ns: 'infisical', name: 'infisical-operator', image: 'infisical/kubernetes-operator:v0.9.4' },
+  { kind: 'Deployment', ns: 'kyverno', name: 'kyverno-admission-controller', image: 'ghcr.io/kyverno/kyverno:v1.15.1', brokenOnly: true },
+  { kind: 'Deployment', ns: 'gatekeeper-system', name: 'gatekeeper-controller-manager', image: 'openpolicyagent/gatekeeper:v3.20.1', brokenOnly: true },
+  { kind: 'Deployment', ns: 'trivy-system', name: 'trivy-operator', image: 'mirror.gcr.io/aquasec/trivy-operator:0.36.1', brokenOnly: true },
   // databases
   // 1.26.1 has a known critical advisory (fixed in 1.28.3): the broken scenario runs it, the others the fix.
   { kind: 'Deployment', ns: 'cnpg-system', name: 'cnpg-controller-manager', image: 'ghcr.io/cloudnative-pg/cloudnative-pg:1.26.1' },
@@ -539,6 +543,55 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
     spec: { storageLocation: 'default' },
     status: { phase, startTimestamp: iso(hoursAgo * H), completionTimestamp: iso(hoursAgo * H - 9 * 60_000), errors: 0, warnings: 0, ...extra },
   });
+  if (broken) {
+    // Rook Ceph, Kyverno and Gatekeeper run in the broken cluster only: Ceph remembers a crashed daemon, one Kyverno policy finds pgadmin running as root.
+    list('/apis/ceph.rook.io/v1/cephclusters', [
+      {
+        metadata: { name: 'rook-ceph', namespace: 'rook-ceph' },
+        status: {
+          phase: 'Ready',
+          conditions: [{ type: 'Ready', status: 'True', reason: 'ClusterCreated', message: 'Cluster created successfully' }],
+          ceph: {
+            health: 'HEALTH_WARN',
+            lastChecked: iso(40_000),
+            details: { RECENT_CRASH: { message: '1 daemons have recently crashed', severity: 'HEALTH_WARN' } },
+            capacity: { bytesTotal: 6 * 2 ** 40, bytesUsed: 3.4 * 2 ** 40, bytesAvailable: 2.6 * 2 ** 40 },
+          },
+        },
+      },
+    ]);
+    const kyvernoPolicy = (name: string, mode: string) => ({ metadata: { name }, spec: { validationFailureAction: mode, rules: [{ name }] }, status: { conditions: ready() } });
+    list('/apis/kyverno.io/v1/clusterpolicies', [kyvernoPolicy('require-run-as-nonroot', 'Audit'), kyvernoPolicy('disallow-latest-tag', 'Audit'), kyvernoPolicy('restrict-image-registries', 'Enforce')]);
+    list('/apis/kyverno.io/v1/policies', []);
+    list('/apis/wgpolicyk8s.io/v1alpha2/policyreports', [
+      {
+        metadata: { name: 'pgadmin-report', namespace: 'pgadmin' },
+        results: [
+          { policy: 'require-run-as-nonroot', rule: 'run-as-non-root', result: 'fail', message: 'validation error: Running as root is not allowed. Set runAsNonRoot to true. rule run-as-non-root failed at path /spec/securityContext/runAsNonRoot/' },
+          { policy: 'disallow-latest-tag', rule: 'require-image-tag', result: 'pass' },
+          { policy: 'restrict-image-registries', rule: 'validate-registries', result: 'pass' },
+        ],
+      },
+    ]);
+    list('/apis/wgpolicyk8s.io/v1alpha2/clusterpolicyreports', []);
+    // Trivy Operator scanned two workloads the built-in lookup cannot see: the own-image app (a fixable high,
+    // a warning) and Valkey (an unfixed medium, a hint). The third report is of an image social-importer no
+    // longer runs and is skipped. Advisory records trimmed to the fields Kubernanny reads.
+    list('/apis/aquasecurity.github.io/v1alpha1/vulnerabilityreports', [
+      trivyReport('default', 'ReplicaSet', 'social-importer-7d9f8b6c5', 'social', { server: 'ghcr.io', repository: 'acme/social-importer', tag: '2026-11-20-3' }, iso(5 * H), [
+        { vulnerabilityID: 'CVE-2024-21538', severity: 'HIGH', score: 7.5, resource: 'cross-spawn', installedVersion: '7.0.3', fixedVersion: '7.0.5' },
+      ]),
+      trivyReport('default', 'ReplicaSet', 'social-importer-5c4b9d7f8', 'social', { server: 'ghcr.io', repository: 'acme/social-importer', tag: '2026-11-02-1' }, iso(6 * H), [
+        { vulnerabilityID: 'CVE-2024-21538', severity: 'HIGH', score: 7.5, resource: 'cross-spawn', installedVersion: '7.0.3', fixedVersion: '7.0.5' },
+      ]),
+      trivyReport('default', 'StatefulSet', 'shop-api-valkey', 'shop', { server: 'index.docker.io', repository: 'valkey/valkey', tag: '8.1-alpine' }, iso(7 * H), [
+        { vulnerabilityID: 'CVE-2023-42363', severity: 'MEDIUM', score: 5.5, resource: 'busybox', installedVersion: '1.37.0-r18', fixedVersion: '' },
+      ]),
+    ]);
+    list('/apis/aquasecurity.github.io/v1alpha1/clustervulnerabilityreports', []);
+    list('/apis/templates.gatekeeper.sh/v1/constrainttemplates', [{ metadata: { name: 'k8srequiredlabels' }, spec: { crd: { spec: { names: { kind: 'K8sRequiredLabels' } } } }, status: { created: true, byPod: [{ id: 'gatekeeper-audit' }] } }]);
+    list('/apis/constraints.gatekeeper.sh/v1beta1/k8srequiredlabels', [{ kind: 'K8sRequiredLabels', metadata: { name: 'ns-must-have-owner' }, spec: { enforcementAction: 'dryrun' }, status: { totalViolations: 0, byPod: [{ id: 'gatekeeper-audit' }] } }]);
+  }
   list('/apis/velero.io/v1/backups', [
     velero('daily-apps', 1, 52),
     velero('daily-apps', 2, 28),
@@ -547,6 +600,35 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
     velero('weekly-full', 2, 20),
   ]);
   return paths;
+}
+
+/** A Trivy Operator VulnerabilityReport for one container, with the summary counted from its advisories. */
+function trivyReport(
+  ns: string,
+  kind: string,
+  name: string,
+  container: string,
+  artifact: { server: string; repository: string; tag: string },
+  updated: string,
+  vulnerabilities: { vulnerabilityID: string; severity: string; score: number; resource: string; installedVersion: string; fixedVersion: string }[],
+): Obj {
+  const count = (s: string) => vulnerabilities.filter((v) => v.severity === s).length;
+  return {
+    metadata: {
+      name: `${kind.toLowerCase()}-${name}-${container}`,
+      namespace: ns,
+      creationTimestamp: updated,
+      labels: { 'trivy-operator.resource.kind': kind, 'trivy-operator.resource.name': name, 'trivy-operator.resource.namespace': ns, 'trivy-operator.container.name': container },
+    },
+    report: {
+      updateTimestamp: updated,
+      registry: { server: artifact.server },
+      artifact: { repository: artifact.repository, tag: artifact.tag },
+      scanner: { name: 'Trivy', vendor: 'Aqua Security', version: '0.76.1' },
+      summary: { criticalCount: count('CRITICAL'), highCount: count('HIGH'), mediumCount: count('MEDIUM'), lowCount: count('LOW'), unknownCount: count('UNKNOWN'), noneCount: 0 },
+      vulnerabilities,
+    },
+  };
 }
 
 /** Prometheus answers good enough to fill every chart and stat in the app. */
@@ -634,6 +716,26 @@ function prometheusAnswer(path: string, now: Date, scenario: DemoScenario): unkn
   }
   if (query.includes('loki_distributor_lines_received_total')) {
     return vector([{ metric: {}, value: 84.2 }]);
+  }
+  if (query.includes('traefik_router_requests_total')) {
+    // Requests per router over 15 minutes; the forum, half down when broken, answers one request in nine with a 5xx.
+    const errors = query.includes('5..');
+    const routers: [string, number, number][] = [
+      ['default-shop-api-chart-api-shop-example@kubernetes', 5210, 3],
+      ['default-shop-web-app-chart-shop-example@kubernetes', 8930, 1],
+      ['discourse-discourse-community-shop-example@kubernetes', 1840, broken ? 212 : 2],
+      ['weblate-weblate-translate-shop-example@kubernetes', 96, 2],
+    ];
+    return vector(routers.map(([router, total, failed]) => ({ metric: { router }, value: errors ? failed : total })));
+  }
+  if (query.includes('node_timex_offset_seconds')) {
+    return vector(NODES.map((n, i) => ({ metric: { instance: `${n.ip}:9100` }, value: [0.0021, -0.0007, 0.0034][i] })));
+  }
+  if (query.includes('node_timex_sync_status')) {
+    return vector(NODES.map((n) => ({ metric: { instance: `${n.ip}:9100` }, value: 1 })));
+  }
+  if (query.includes('node_timex_maxerror_seconds')) {
+    return vector(NODES.map((n) => ({ metric: { instance: `${n.ip}:9100` }, value: 0.012 })));
   }
   return vector([]);
 }
@@ -736,6 +838,12 @@ export class DemoKubeClient extends KubeClient {
     this.paths = buildDemoCluster(this.now(), this.scenario);
     const hit = this.paths.get(path) as { items?: T[] } | undefined;
     return hit ? (hit.items ?? []) : null;
+  }
+
+  /** The demo has no pages: the whole list, recorded like `list`. */
+  override async listPage<T>(path: string): Promise<{ items: T[]; continue?: string } | null> {
+    const items = await this.list<T>(path.split('?')[0]);
+    return items ? { items } : null;
   }
 
   override async get<T>(path: string): Promise<T> {

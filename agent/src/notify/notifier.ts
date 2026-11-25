@@ -1,9 +1,11 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { CONFIG, Config } from '../config';
 import { Lang, Text, render, t } from '../i18n/text';
 import type { IssueView, Snapshot } from '../status/status.service';
 import { IncidentsService } from '../incidents/incidents.service';
+import { AppPushService } from '../push/app-push.service';
 import { digestDue, formatDigest, weekKey } from './digest';
+import { NotifiedStore } from './notified-store';
 
 export interface NotifyPlan {
   opened: IssueView[];
@@ -110,7 +112,8 @@ export type SecurityEvent =
   | { kind: 'actionOff'; id: string }
   | { kind: 'maintenance'; hours: number }
   | { kind: 'deviceRevoked'; device: string }
-  | { kind: 'devicePaired' };
+  | { kind: 'devicePaired' }
+  | { kind: 'advisoryAccepted'; component: string; advisory: string; days: number };
 
 const SECURITY_LINE: { [K in SecurityEvent['kind']]: (by: string, e: Extract<SecurityEvent, { kind: K }>) => Text } = {
   notificationsOff: (by) => t('push.security.notificationsOff', { by }),
@@ -119,6 +122,7 @@ const SECURITY_LINE: { [K in SecurityEvent['kind']]: (by: string, e: Extract<Sec
   maintenance: (by, e) => t('push.security.maintenance', { by, hours: e.hours }),
   deviceRevoked: (by, e) => t('push.security.deviceRevoked', { by, device: e.device }),
   devicePaired: (by) => t('push.security.devicePaired', { by }),
+  advisoryAccepted: (by, e) => t('push.security.advisoryAccepted', { by, advisory: e.advisory, component: e.component, days: e.days }),
 };
 
 /** One short message naming the device (`by`) and what it changed; `minimal` names neither. */
@@ -185,29 +189,50 @@ export function webhookBody(format: WebhookFormat | 'json-minimal', cluster: str
   }
 }
 
-/** Pushes status changes to ntfy and/or a webhook (Discord, Slack, Gotify, JSON). No-op without either. */
+/** Pushes status changes to ntfy, a webhook (Discord, Slack, Gotify, JSON) and the app's native push. No-op without any. */
 @Injectable()
 export class Notifier {
   private readonly logger = new Logger(Notifier.name);
   private readonly pushed = new Map<string, Pushed>();
   private digestSentFor: string | null = null;
+  /** The issues already pushed, read back from the ConfigMap once, before the first run plans anything. */
+  private restored: Promise<void> | null = null;
 
   constructor(
     @Inject(CONFIG) private readonly config: Config,
     /** The episodes of the week; the run loop records them, whether notifications are on or not. */
     @Inject(IncidentsService) private readonly incidents: IncidentsService = new IncidentsService(),
+    /** The "app" channel: native push to registered devices. Absent in tests that do not care. */
+    @Optional() @Inject(AppPushService) private readonly appPush?: AppPushService,
+    /** Keeps `pushed` across restarts (ConfigMap key `notified`). Absent in tests that do not care. */
+    @Optional() @Inject(NotifiedStore) private readonly store?: NotifiedStore,
   ) {}
 
   get channels(): string[] {
-    return [this.config.ntfyUrl ? 'ntfy' : null, this.config.webhookUrl ? detectFormat(this.config.webhookUrl, this.config.webhookFormat) : null].filter(
-      (c): c is string => c !== null,
-    );
+    return [
+      this.config.ntfyUrl ? 'ntfy' : null,
+      this.config.webhookUrl ? detectFormat(this.config.webhookUrl, this.config.webhookFormat) : null,
+      this.appPush?.hasTargets() ? 'app' : null,
+    ].filter((c): c is string => c !== null);
+  }
+
+  /** Before the first plan: what an earlier run of the agent already sent counts as sent. */
+  private restore(): Promise<void> {
+    this.restored ??= (async () => {
+      for (const [id, pushed] of (await this.store?.load()) ?? new Map<string, Pushed>()) {
+        if (!this.pushed.has(id)) {
+          this.pushed.set(id, pushed);
+        }
+      }
+    })();
+    return this.restored;
   }
 
   async update(snapshot: Snapshot, now: Date): Promise<void> {
-    if (!this.config.ntfyUrl && !this.config.webhookUrl) {
+    if (this.channels.length === 0) {
       return;
     }
+    await this.restore();
     await this.maybeSendDigest(snapshot.cluster, now);
     const plan = planNotifications(this.pushed, snapshot.issues, now, this.config.notifyAfterSeconds * 1000);
     const push = formatPush(snapshot.cluster, plan, this.config.notifyDetail, this.config.language);
@@ -224,6 +249,7 @@ export class Notifier {
     for (const r of plan.resolved) {
       this.pushed.delete(r.id);
     }
+    await this.store?.save(this.pushed);
   }
 
   /**
@@ -258,6 +284,9 @@ export class Notifier {
       const body = format === 'json' && this.config.notifyDetail === 'minimal' ? 'json-minimal' : format;
       sends.push(this.post(this.config.webhookUrl, webhookBody(body, cluster, push, plan, this.config.language)));
     }
+    if (this.appPush?.hasTargets()) {
+      sends.push(this.sendApp(this.appPush, push));
+    }
     const results = await Promise.allSettled(sends);
     const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
     if (failed.length > 0) {
@@ -273,7 +302,7 @@ export class Notifier {
    * Never throws: a channel that is down must not block the change itself.
    */
   async securityAlert(by: string, events: SecurityEvent[]): Promise<void> {
-    if (events.length === 0 || this.config.disabledModules.includes('notifications') || (!this.config.ntfyUrl && !this.config.webhookUrl)) {
+    if (events.length === 0 || this.config.disabledModules.includes('notifications') || this.channels.length === 0) {
       return;
     }
     const push = formatSecurityAlert(this.config.clusterName, by, events, this.config.notifyDetail, this.config.language);
@@ -299,7 +328,18 @@ export class Notifier {
       await this.post(this.config.webhookUrl, webhookBody(format, cluster, push, plan, lang));
       done.push(format);
     }
+    if (this.appPush?.hasTargets()) {
+      await this.sendApp(this.appPush, push);
+      done.push('app');
+    }
     return done;
+  }
+
+  /** The same title and body as every channel, `minimal` included; sealed per device by AppPushService. */
+  private async sendApp(appPush: AppPushService, push: Push): Promise<void> {
+    if (!(await appPush.deliver({ title: push.title, body: push.body, priority: push.priority }))) {
+      throw new Error('app push reached no device');
+    }
   }
 
   private async sendNtfy(url: string, push: Push): Promise<void> {

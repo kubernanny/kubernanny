@@ -17,9 +17,16 @@ export const SETTINGS_CONFIGMAP = 'kubernanny-settings';
 /** Modules that stay off until someone switches them on: those sending data out of the cluster. */
 const DEFAULT_OFF: ReadonlySet<string> = new Set(CORE_CHECKS.filter((c) => c.defaultOff).map((c) => c.id));
 
-const action = (type: IssueActionType, write: boolean) => ({ type, label: t(`action.${type}.label`), description: t(`action.${type}.description`), write });
+const action = (type: IssueActionType, write: boolean) => ({
+  type,
+  label: t(`action.${type}.label`),
+  description: t(`action.${type}.description`),
+  effect: t(`action.${type}.effect`),
+  write,
+});
 
-export const ACTION_TYPES: readonly { type: IssueActionType; label: Text; description: Text; write: boolean }[] = [
+/** `effect`: what the action may change in the cluster, in one line (docs/PERMISSIONS.md has the details). */
+export const ACTION_TYPES: readonly { type: IssueActionType; label: Text; description: Text; effect: Text; write: boolean }[] = [
   action('restart', true),
   action('argocd-sync', true),
   action('argocd-refresh', true),
@@ -50,7 +57,7 @@ export interface ModuleSetting {
 
 export interface SettingsView {
   modules: ModuleSetting[];
-  actions: { type: IssueActionType; label: Text; description: Text; state: ToggleState }[];
+  actions: { type: IssueActionType; label: Text; description: Text; effect: Text; state: ToggleState }[];
   notifications: ToggleState;
 }
 
@@ -162,7 +169,7 @@ export class SettingsService implements OnModuleInit {
       .map((entry) => this.componentModuleSetting(entry, detected.has(entry.id)));
     return {
       modules: [...CORE_CHECKS.map((c) => this.coreModuleSetting(c)), ...components],
-      actions: ACTION_TYPES.map((a) => ({ type: a.type, label: a.label, description: a.description, state: this.actionState(a.type) })),
+      actions: ACTION_TYPES.map((a) => ({ type: a.type, label: a.label, description: a.description, effect: a.effect, state: this.actionState(a.type) })),
       notifications: this.config.disabledModules.includes('notifications') ? 'locked' : this.stored.notificationsPaused ? 'off' : 'on',
     };
   }

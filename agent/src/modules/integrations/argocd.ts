@@ -6,7 +6,7 @@ import { ModuleContext, ModuleResult } from '../types';
 export class ArgoCdIntegration extends Integration {
   readonly id = 'argocd';
   override readonly actions = ['argocd-sync', 'argocd-refresh', 'restart'] as const;
-  readonly reads = [{ group: 'argoproj.io', resource: 'applications' }];
+  readonly reads = [{ group: 'argoproj.io', resource: 'applications', why: 'sync and health status of every app' }];
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
     const apps = (await ctx.kube.list<ArgoApplication>('/apis/argoproj.io/v1alpha1/applications')) ?? [];
     const issues = evaluateArgoApps(apps);

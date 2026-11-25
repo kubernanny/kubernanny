@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { parsePublicKey, toBase64Url } from '@kubernanny/protocol';
+import { PushPlatform, parsePublicKey, pushKeyId, toBase64Url } from '@kubernanny/protocol';
 import { CONFIG, Config } from '../config';
 import { KubeClient, KubeError } from '../kube/kube-client';
 import { Serial } from '../util/serial';
@@ -14,6 +14,25 @@ export interface Device {
   /** The device's static X25519 public key, base64url. Its private key never leaves the device. */
   publicKey: string;
   createdAt: string;
+  /** Native push to this device (docs/NOTIFICATIONS.md), set by the device itself. The token is its address at FCM: never logged, never listed. */
+  push?: DevicePush;
+}
+
+export interface DevicePush {
+  /** FCM registration token. */
+  token: string;
+  platform: PushPlatform;
+  /** The device's push public key (base64url), made for this cluster only; pushes are sealed for it. */
+  key: string;
+  /** pushKeyId(key), sent next to each message so the phone picks the key. */
+  kid: string;
+  since: string;
+}
+
+/** A device to push to: its id and push registration. */
+export interface PushTarget {
+  deviceId: string;
+  push: DevicePush;
 }
 
 export interface Principal {
@@ -28,6 +47,8 @@ export interface DeviceView {
   name: string;
   createdAt: string;
   lastSeenAt: string | null;
+  /** Native push is registered for this device; never the token itself. */
+  push: boolean;
 }
 
 export const ADMIN: Principal = { kind: 'admin', id: 'admin', name: 'Admin (kubectl)' };
@@ -62,7 +83,7 @@ export class DevicesService implements OnModuleInit {
     try {
       const secret = await this.kube.get<{ data?: { devices?: string } }>(`${this.path}/${DEVICES_SECRET}`);
       const parsed = JSON.parse(Buffer.from(secret.data?.devices ?? '', 'base64').toString('utf8') || '[]') as Device[];
-      this.devices = parsed.filter((d) => typeof d.id === 'string' && validKey(d.publicKey));
+      this.devices = parsed.filter((d) => typeof d.id === 'string' && validKey(d.publicKey)).map((d) => (d.push && !validPush(d.push) ? withoutPush(d) : d));
     } catch (err) {
       if (err instanceof KubeError && err.status === 404) {
         this.devices = [];
@@ -127,8 +148,40 @@ export class DevicesService implements OnModuleInit {
     return this.devices.map((d) => this.view(d));
   }
 
+  /** Stores (or replaces) a device's push registration. The caller checked the token, the key and APP_PUSH. */
+  setPush(id: string, push: Omit<DevicePush, 'kid' | 'since'>): Promise<boolean> {
+    return this.writes.run(async () => {
+      const device = this.devices.find((d) => d.id === id);
+      if (!device) {
+        return false;
+      }
+      const entry: DevicePush = { ...push, kid: pushKeyId(parsePublicKey(push.key)), since: new Date().toISOString() };
+      await this.save(this.devices.map((d) => (d.id === id ? { ...d, push: entry } : d)));
+      return true;
+    });
+  }
+
+  /** Forgets push for the given devices (all of them without ids); a no-op write is skipped. */
+  clearPush(ids?: readonly string[]): Promise<number> {
+    return this.writes.run(async () => {
+      const affected = this.devices.filter((d) => d.push && (!ids || ids.includes(d.id)));
+      if (affected.length > 0) {
+        await this.save(this.devices.map((d) => (affected.includes(d) ? withoutPush(d) : d)));
+      }
+      return affected.length;
+    });
+  }
+
+  pushTargets(): PushTarget[] {
+    return this.devices.filter((d): d is Device & { push: DevicePush } => d.push !== undefined).map((d) => ({ deviceId: d.id, push: d.push }));
+  }
+
+  hasPush(id: string): boolean {
+    return this.devices.some((d) => d.id === id && d.push !== undefined);
+  }
+
   private view(d: Device): DeviceView {
-    return { id: d.id, name: d.name, createdAt: d.createdAt, lastSeenAt: this.lastSeen.get(d.id)?.toISOString() ?? null };
+    return { id: d.id, name: d.name, createdAt: d.createdAt, lastSeenAt: this.lastSeen.get(d.id)?.toISOString() ?? null, push: d.push !== undefined };
   }
 
   private async save(next: Device[]): Promise<void> {
@@ -153,6 +206,15 @@ export class DevicesService implements OnModuleInit {
     // Only after the write succeeded: a device that is not stored must not work.
     this.devices = next;
   }
+}
+
+function withoutPush(device: Device): Device {
+  const { push: _gone, ...rest } = device;
+  return rest;
+}
+
+function validPush(push: DevicePush): boolean {
+  return typeof push.token === 'string' && (push.platform === 'ios' || push.platform === 'android') && validKey(push.key) && typeof push.kid === 'string';
 }
 
 function validKey(key: unknown): boolean {

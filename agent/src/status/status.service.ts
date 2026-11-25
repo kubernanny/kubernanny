@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown, Optional } from '@nestjs/common';
 import { Issue } from '../checks/types';
 import { CONFIG, Config } from '../config';
 import { Detected, discover, distribution } from '../discovery/discovery';
@@ -12,6 +12,7 @@ import { Prometheus } from '../modules/service-proxy';
 import { ModuleContext, RunData } from '../modules/types';
 import { VulnDb } from '../modules/vulnerabilities/osv-client';
 import { vulnDbFor } from '../modules/vulnerabilities/vuln-db';
+import { AcceptanceService } from '../modules/vulnerabilities/acceptance.service';
 import { Notifier } from '../notify/notifier';
 import { SettingsService } from '../settings/settings.service';
 import { SilenceService } from '../silence/silence.service';
@@ -52,6 +53,8 @@ export class StatusService implements OnApplicationBootstrap, OnApplicationShutd
     @Inject(SettingsService) private readonly settings: SettingsService,
     @Inject(SilenceService) private readonly silences: SilenceService,
     @Inject(IncidentsService) private readonly incidents: IncidentsService,
+    /** Advisories marked as not applicable; absent where nobody wires it (they then all count). */
+    @Optional() @Inject(AcceptanceService) private readonly acceptance?: AcceptanceService,
   ) {
     // A switch in the app takes effect at once, not with the next run.
     settings.onChange(() => void this.refreshAfterChange());
@@ -135,7 +138,7 @@ export class StatusService implements OnApplicationBootstrap, OnApplicationShutd
     const data: RunData = {};
     const base = { inv, kube: this.kube, config: this.config, now, data };
     const prom = findPrometheus(base, detected);
-    const ctx: ModuleContext = { ...base, prom, detected, vulnDb: this.vulnDb };
+    const ctx: ModuleContext = { ...base, prom, detected, vulnDb: this.vulnDb, vulnAcceptance: this.acceptance?.state(now.getTime()) };
     const allowed = this.settings.actionOn;
 
     // Components first: some fill RunData the core checks read (kured lock, certificates).

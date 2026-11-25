@@ -14,7 +14,7 @@ export const MANUAL = '(manuell)';
 
 export class VeleroIntegration extends Integration {
   readonly id = 'velero';
-  readonly reads = [{ group: 'velero.io', resource: 'backups' }];
+  readonly reads = [{ group: 'velero.io', resource: 'backups', why: 'phase and age of the newest backup per schedule' }];
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
     const backups = (await ctx.kube.list<VeleroBackup>('/apis/velero.io/v1/backups')) ?? [];
     ctx.data.veleroBackups = backups;

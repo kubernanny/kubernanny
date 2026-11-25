@@ -72,6 +72,42 @@ export class KubeClient {
     return body.items ?? [];
   }
 
+  /**
+   * One page of a list (`limit`/`continue` in `path`), or null when the
+   * resource type does not exist. Public so test clients can delegate it.
+   */
+  async listPage<T>(path: string): Promise<{ items: T[]; continue?: string } | null> {
+    const res = await this.request(path);
+    if (res.status === 404) {
+      return null;
+    }
+    await this.assertOk(res, path);
+    const body = (await res.json()) as { items?: T[]; metadata?: { continue?: string } };
+    return { items: body.items ?? [], continue: body.metadata?.continue || undefined };
+  }
+
+  /**
+   * Pages through a list and hands each page to `each`, so a module can keep
+   * a small digest of thousands of large objects (vulnerability reports)
+   * instead of holding all of them at once. Stops after `maxItems`. False when
+   * the resource type does not exist.
+   */
+  async listEach<T>(path: string, each: (items: T[]) => void, { pageSize = 100, maxItems = 5000 }: { pageSize?: number; maxItems?: number } = {}): Promise<boolean> {
+    let token: string | undefined;
+    let seen = 0;
+    do {
+      const query = `limit=${pageSize}${token ? `&continue=${encodeURIComponent(token)}` : ''}`;
+      const page = await this.listPage<T>(`${path}${path.includes('?') ? '&' : '?'}${query}`);
+      if (!page) {
+        return false;
+      }
+      each(page.items.slice(0, maxItems - seen));
+      seen += page.items.length;
+      token = page.continue;
+    } while (token && seen < maxItems);
+    return true;
+  }
+
   async get<T>(path: string): Promise<T> {
     const res = await this.request(path);
     await this.assertOk(res, path);

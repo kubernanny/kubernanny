@@ -8,7 +8,7 @@ export class PdbCheck extends CoreCheck {
   readonly name = t('module.pdb.name');
   readonly icon = 'shield-outline';
   readonly description = t('module.pdb.description');
-  readonly reads = [{ group: 'policy', resource: 'poddisruptionbudgets' }];
+  readonly reads = [{ group: 'policy', resource: 'poddisruptionbudgets', why: 'budgets that allow no disruption and block node drains' }];
 
   protected async check(ctx: ModuleContext): Promise<ModuleResult> {
     const list = (await ctx.kube.list<Pdb>('/apis/policy/v1/poddisruptionbudgets')) ?? [];

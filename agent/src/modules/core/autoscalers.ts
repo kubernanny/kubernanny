@@ -8,7 +8,7 @@ export class HpaCheck extends CoreCheck {
   readonly name = t('module.hpa.name');
   readonly icon = 'swap-vertical-outline';
   readonly description = t('module.hpa.description');
-  readonly reads = [{ group: 'autoscaling', resource: 'horizontalpodautoscalers' }];
+  readonly reads = [{ group: 'autoscaling', resource: 'horizontalpodautoscalers', why: 'autoscalers that cannot read metrics or are stuck at their maximum' }];
 
   protected async check(ctx: ModuleContext): Promise<ModuleResult> {
     const list = (await ctx.kube.list<Hpa>('/apis/autoscaling/v2/horizontalpodautoscalers')) ?? [];

@@ -68,6 +68,23 @@ export function parseDemo(raw: string | undefined): DemoScenario | null {
   throw new Error(`DEMO must be off (unset, 0, false, off) or one of 1, true, broken, warning, healthy; got "${raw}"`);
 }
 
+/**
+ * APP_PUSH: native push to the Kubernanny app through the relay. On by
+ * default (unset, on, true, 1); off, false or 0 switches it off for good:
+ * no push routes, no stored tokens, no push to the relay, and the app cannot
+ * switch it back on. Anything else stops the start, as for DEMO.
+ */
+export function parseAppPush(raw: string | undefined): boolean {
+  const value = (raw ?? '').trim().toLowerCase();
+  if (['', 'on', 'true', '1'].includes(value)) {
+    return true;
+  }
+  if (['off', 'false', '0'].includes(value)) {
+    return false;
+  }
+  throw new Error(`APP_PUSH must be on or off, got "${raw}"`);
+}
+
 /** A component of your own, recognised by image prefix: `{ "name": "Shop API", "images": ["ghcr.io/acme/shop-api"] }`. */
 export interface CustomComponent {
   id: string;
@@ -153,12 +170,16 @@ export interface Config {
   enabledModules: string[];
   /** OSV-compatible vulnerability database: api.osv.dev or a self-hosted mirror. Only the `vulnerabilities` module calls it. */
   vulnDbUrl: string;
+  /** VULN_ACCEPT=off (Helm `vulnerabilities.allowAccept: false`): nobody can accept an advisory, stored acceptances are ignored. */
+  vulnAcceptLocked?: boolean;
   /** Namespaces the security posture check leaves alone, on top of the built-in system namespaces. */
   securitySystemNamespaces: string[];
   customComponents: CustomComponent[];
   corsOrigins: string[];
   /** RELAY_URL (wss://…): the agent holds one outbound WebSocket there. Unset: no outbound connection at all. */
   relayUrl?: string;
+  /** APP_PUSH: native push to the app through the relay (docs/NOTIFICATIONS.md). False: switched off in the deployment. */
+  appPush: boolean;
   /** UPTIME_KUMA_STATUS_PAGE: slug of a published Uptime Kuma status page whose monitors the `uptime-kuma` module reads. */
   uptimeKumaStatusPage?: string;
 }
@@ -208,6 +229,7 @@ export function loadConfig(): Config {
     disabledActions: list('DISABLED_ACTIONS', []),
     enabledModules: list('ENABLED_MODULES', []),
     vulnDbUrl: (checkNotifyUrl('VULN_DB_URL', process.env.VULN_DB_URL || undefined) ?? 'https://api.osv.dev').replace(/\/+$/, ''),
+    vulnAcceptLocked: process.env.VULN_ACCEPT === 'off',
     securitySystemNamespaces: list('SECURITY_SYSTEM_NAMESPACES', []),
     customComponents: parseCustomComponents(process.env.CUSTOM_COMPONENTS),
     // Capacitor's WebView origins plus `ionic serve`.
@@ -220,6 +242,7 @@ export function loadConfig(): Config {
       'http://localhost:8100',
     ]),
     relayUrl: checkRelayUrl(process.env.RELAY_URL || undefined),
+    appPush: parseAppPush(process.env.APP_PUSH),
     // The demo cluster publishes a status page under this slug, so the module has something to show.
     uptimeKumaStatusPage: checkStatusPageSlug(process.env.UPTIME_KUMA_STATUS_PAGE || (demo ? 'homelab' : undefined)),
   };

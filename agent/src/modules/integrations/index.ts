@@ -19,6 +19,12 @@ import { PrometheusIntegration } from './prometheus';
 import { SystemUpgradeControllerIntegration } from './system-upgrade-controller';
 import { UptimeKumaIntegration } from './uptime-kuma';
 import { VeleroIntegration } from './velero';
+import { RookCephIntegration } from './rook-ceph';
+import { TraefikIntegration } from './traefik';
+import { IngressNginxIntegration } from './ingress-nginx';
+import { TrivyIntegration } from './trivy';
+import { KyvernoIntegration } from './kyverno';
+import { GatekeeperIntegration } from './gatekeeper';
 
 /**
  * Every deep check, one subclass of Integration per file. Adding one:
@@ -44,6 +50,12 @@ export const INTEGRATIONS: readonly Integration[] = [
   new InfisicalIntegration(),
   new GatusIntegration(),
   new UptimeKumaIntegration(),
+  new RookCephIntegration(),
+  new TraefikIntegration(),
+  new IngressNginxIntegration(),
+  new KyvernoIntegration(),
+  new GatekeeperIntegration(),
+  new TrivyIntegration(),
 ];
 
 export function findPrometheus(ctx: Omit<ModuleContext, 'prom'>, detected: Detected[]): Prometheus | null {

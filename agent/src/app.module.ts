@@ -14,14 +14,20 @@ import { DemoKubeClient } from './demo/demo-cluster';
 import { IncidentsService } from './incidents/incidents.service';
 import { KubeClient } from './kube/kube-client';
 import { Notifier } from './notify/notifier';
+import { NotifiedStore } from './notify/notified-store';
+import { AppPushService } from './push/app-push.service';
+import { PushController } from './push/push.controller';
+import { PushTransport } from './push/push-transport';
 import { PairingService } from './pairing/pairing';
 import { RelayClient } from './relay/relay-client';
 import { SettingsService } from './settings/settings.service';
 import { SilenceService } from './silence/silence.service';
 import { StatusService } from './status/status.service';
+import { AcceptanceController } from './modules/vulnerabilities/acceptance.controller';
+import { AcceptanceService } from './modules/vulnerabilities/acceptance.service';
 
 @Module({
-  controllers: [AppController, E2eController],
+  controllers: [AppController, E2eController, AcceptanceController, PushController],
   providers: [
     { provide: CONFIG, useFactory: loadConfig },
     // Texts leave the agent rendered in the request's language (docs/decisions/0006-agent-languages.md).
@@ -37,8 +43,13 @@ import { StatusService } from './status/status.service';
     PairingService,
     SettingsService,
     SilenceService,
+    AcceptanceService,
     IncidentsService,
     Notifier,
+    // Native push to the app through the relay (docs/NOTIFICATIONS.md); APP_PUSH=off refuses it entirely.
+    PushTransport,
+    AppPushService,
+    NotifiedStore,
     StatusService,
     ActionsService,
     // Every route needs a device proven by the end-to-end channel, unless it is marked @Public() (fail closed).

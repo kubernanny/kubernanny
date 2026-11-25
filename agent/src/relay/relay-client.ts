@@ -1,12 +1,16 @@
-import { Inject, Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, Optional } from '@nestjs/common';
 import {
   FrameType,
   HEARTBEAT_PING,
   MAX_SEALED_REQUEST,
   RelayClose,
+  PushOutcome,
+  PushRequest,
   RelayFrameError,
   answerChallenge,
   decodeFrame,
+  decodePushResult,
+  encodePushRequest,
   encodeReply,
   relayAgentId,
 } from '@kubernanny/protocol';
@@ -14,6 +18,7 @@ import { RawData, WebSocket } from 'ws';
 import { IdentityService } from '../auth/identity.service';
 import { CONFIG, Config } from '../config';
 import { E2eService } from '../e2e/e2e.service';
+import { PushCarrier, PushTransport } from '../push/push-transport';
 import { relayHttpUrl, relaySocketUrl } from './relay-url';
 
 export const RECONNECT_MIN_MS = 1_000;
@@ -35,6 +40,10 @@ export const MAX_IN_FLIGHT = 16;
 const MAX_BUFFERED_BYTES = 16 * 1024 * 1024;
 /** A connection must have lasted this long before the backoff starts over: a relay that accepts and drops at once cannot make the agent reconnect every second. */
 const STABLE_AFTER_MS = 30_000;
+/** Pushes waiting for the relay's answer; more are refused at once (the notifier sends one per device and run). */
+const MAX_PUSHES_IN_FLIGHT = 16;
+/** A push the relay has not answered by then counts as `unavailable`. */
+const PUSH_TIMEOUT_MS = 20_000;
 
 /**
  * How long to wait before reconnecting: exponential from 1 s to 60 s with
@@ -67,6 +76,10 @@ interface Session {
   /** Calls the agent is working on: only these can be cancelled, and their ids are not taken twice. */
   inFlight: Set<number>;
   cancelled: Set<number>;
+  /** The relay's Ready said it delivers native push. */
+  push: boolean;
+  /** Pushes sent on this connection, waiting for their PushResult. */
+  pushes: Map<number, (outcome: PushOutcome) => void>;
 }
 
 /**
@@ -85,7 +98,7 @@ interface Session {
  * more out of the agent than a direct caller could.
  */
 @Injectable()
-export class RelayClient implements OnApplicationBootstrap, OnModuleDestroy {
+export class RelayClient implements OnApplicationBootstrap, OnModuleDestroy, PushCarrier {
   private readonly logger = new Logger('relay');
   private session: Session | null = null;
   private connected = false;
@@ -94,11 +107,14 @@ export class RelayClient implements OnApplicationBootstrap, OnModuleDestroy {
   private stopped = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeat: ReturnType<typeof setInterval> | null = null;
+  private nextPushId = 0;
 
   constructor(
     @Inject(CONFIG) private readonly config: Config,
     @Inject(IdentityService) private readonly identity: IdentityService,
     @Inject(E2eService) private readonly e2e: E2eService,
+    /** Where AppPushService finds this connection; absent in tests that do not push. */
+    @Optional() @Inject(PushTransport) private readonly transport?: PushTransport,
   ) {}
 
   status(): RelayStatus | null {
@@ -112,8 +128,58 @@ export class RelayClient implements OnApplicationBootstrap, OnModuleDestroy {
 
   onApplicationBootstrap(): void {
     if (this.config.relayUrl) {
+      // With APP_PUSH off the relay is never offered as a push carrier, so no Push frame can leave.
+      if (this.config.appPush) {
+        this.transport?.attach(this);
+      }
       this.connect();
     }
+  }
+
+  /** Whether the relay offers native push on the live connection; null while not connected. */
+  available(): boolean | null {
+    return this.session?.readyAt ? this.session.push : null;
+  }
+
+  /**
+   * Hands one sealed push to the relay (docs/RELAY.md, "Native push").
+   * Never throws: without a connection, a relay without push or APP_PUSH off
+   * the answer is `disabled` or `unavailable`, and the notifier tries the
+   * other channels.
+   */
+  send(push: PushRequest): Promise<PushOutcome> {
+    const session = this.session;
+    if (!this.config.appPush) {
+      return Promise.resolve('disabled');
+    }
+    if (!session?.readyAt || session.socket.readyState !== WebSocket.OPEN) {
+      return Promise.resolve('unavailable');
+    }
+    if (!session.push) {
+      return Promise.resolve('disabled');
+    }
+    if (session.pushes.size >= MAX_PUSHES_IN_FLIGHT) {
+      return Promise.resolve('rate_limited');
+    }
+    do {
+      this.nextPushId = this.nextPushId >= 0xffffffff ? 1 : this.nextPushId + 1;
+    } while (session.pushes.has(this.nextPushId));
+    const id = this.nextPushId;
+    return new Promise<PushOutcome>((resolve) => {
+      const timer = setTimeout(() => finish('unavailable'), PUSH_TIMEOUT_MS);
+      timer.unref();
+      const finish = (outcome: PushOutcome) => {
+        clearTimeout(timer);
+        session.pushes.delete(id);
+        resolve(outcome);
+      };
+      session.pushes.set(id, finish);
+      try {
+        session.socket.send(encodePushRequest(id, push));
+      } catch {
+        finish('unavailable');
+      }
+    });
   }
 
   onModuleDestroy(): void {
@@ -129,7 +195,7 @@ export class RelayClient implements OnApplicationBootstrap, OnModuleDestroy {
     }
     const agentId = relayAgentId(this.identity.keyPair.publicKey);
     const socket = new WebSocket(relaySocketUrl(this.config.relayUrl!, agentId), { maxPayload: MAX_RELAY_MESSAGE, perMessageDeflate: false, handshakeTimeout: 10_000 });
-    const session: Session = { socket, answered: false, readyAt: 0, inFlight: new Set(), cancelled: new Set() };
+    const session: Session = { socket, answered: false, readyAt: 0, inFlight: new Set(), cancelled: new Set(), push: false, pushes: new Map() };
     this.session = session;
     this.lastHeard = Date.now();
     // Every handler checks that it still belongs to the current session (isCurrent): a dead one may report late.
@@ -178,6 +244,7 @@ export class RelayClient implements OnApplicationBootstrap, OnModuleDestroy {
       case FrameType.Ready:
         if (session.answered && !session.readyAt) {
           session.readyAt = Date.now();
+          session.push = readyOffersPush(frame.payload);
           this.connected = true;
           this.logger.log(`connected to the relay ${relayHttpUrl(this.config.relayUrl!)}`);
         }
@@ -186,6 +253,10 @@ export class RelayClient implements OnApplicationBootstrap, OnModuleDestroy {
         if (session.readyAt) {
           this.call(session, frame.callId, frame.payload);
         }
+        return;
+      case FrameType.PushResult:
+        // Only an id this connection sent and still waits for; anything else is ignored.
+        session.pushes.get(frame.callId)?.(decodePushResult(frame.payload));
         return;
       case FrameType.Cancel:
         // Only a call in flight can be cancelled; any other id is ignored, so the set is bounded by MAX_IN_FLIGHT.
@@ -203,7 +274,7 @@ export class RelayClient implements OnApplicationBootstrap, OnModuleDestroy {
       return; // an id still in use: the relay is confused or hostile, and one answer per id is all it gets
     }
     if (session.inFlight.size >= MAX_IN_FLIGHT) {
-      this.send(session, callId, 429, json({ code: 'E2E_RATE_LIMITED' }));
+      this.reply(session, callId, 429, json({ code: 'E2E_RATE_LIMITED' }));
       return;
     }
     session.inFlight.add(callId);
@@ -227,10 +298,10 @@ export class RelayClient implements OnApplicationBootstrap, OnModuleDestroy {
     if (session.cancelled.delete(callId)) {
       return;
     }
-    this.send(session, callId, status, payload);
+    this.reply(session, callId, status, payload);
   }
 
-  private send(session: Session, callId: number, status: number, payload: Uint8Array): void {
+  private reply(session: Session, callId: number, status: number, payload: Uint8Array): void {
     const { socket } = session;
     if (!this.isCurrent(session) || socket.readyState !== WebSocket.OPEN) {
       return;
@@ -274,6 +345,9 @@ export class RelayClient implements OnApplicationBootstrap, OnModuleDestroy {
     const wasConnected = this.connected;
     this.connected = false;
     this.session = null;
+    for (const finish of [...session.pushes.values()]) {
+      finish('unavailable');
+    }
     this.clearTimers();
     if (this.stopped) {
       return;
@@ -308,6 +382,15 @@ function toBytes(data: RawData): Uint8Array {
     return new Uint8Array(Buffer.concat(data));
   }
   return data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+}
+
+/** The Ready payload's `push` flag (RelayLimitsInfo); a relay that does not say so offers none. */
+function readyOffersPush(payload: Uint8Array): boolean {
+  try {
+    return (JSON.parse(new TextDecoder().decode(payload)) as { push?: unknown } | null)?.push === true;
+  } catch {
+    return false;
+  }
 }
 
 const json = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));

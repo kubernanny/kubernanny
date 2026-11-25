@@ -11,7 +11,7 @@ interface UpgradePlan extends Conditioned {
 
 export class SystemUpgradeControllerIntegration extends Integration {
   readonly id = 'system-upgrade-controller';
-  readonly reads = [{ group: 'upgrade.cattle.io', resource: 'plans' }];
+  readonly reads = [{ group: 'upgrade.cattle.io', resource: 'plans', why: 'plans that cannot resolve a version, and which nodes are upgrading' }];
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
     const plans = (await ctx.kube.list<UpgradePlan>('/apis/upgrade.cattle.io/v1/plans')) ?? [];
     const issues: Issue[] = [];

@@ -26,7 +26,7 @@ export abstract class ReadyConditionIntegration extends Integration {
     super();
     this.reads = kinds.map((k) => {
       const [, , group, , resource] = k.path.split('/');
-      return { group: group!, resource: resource! };
+      return { group: group!, resource: resource!, why: `the Ready condition of every ${k.kind}` };
     });
   }
 

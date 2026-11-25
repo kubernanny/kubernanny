@@ -10,7 +10,8 @@
     "start:dev": "tsc -p tsconfig.build.json && node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "rbac": "UPDATE_RBAC=1 vitest run src/rbac.spec.ts",
+    "rbac": "UPDATE_RBAC=1 UPDATE_DOCS=1 vitest run src/rbac.spec.ts src/permissions-doc.spec.ts",
+    "docs:permissions": "UPDATE_DOCS=1 vitest run src/permissions-doc.spec.ts",
     "start:demo": "npm run build && DEMO=broken node dist/main.js",
     "demo:export": "npm run build && node scripts/export-demo.mjs"
   },

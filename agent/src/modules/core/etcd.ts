@@ -11,7 +11,7 @@ export class EtcdCheck extends CoreCheck {
   readonly name = t('module.etcd.name');
   readonly icon = 'layers-outline';
   readonly description = t('module.etcd.description');
-  readonly reads = [{ group: 'k3s.cattle.io', resource: 'etcdsnapshotfiles' }];
+  readonly reads = [{ group: 'k3s.cattle.io', resource: 'etcdsnapshotfiles', why: 'age of the newest etcd snapshot (k3s, RKE2)' }];
   override readonly actions = ['logs'] as const;
 
   protected async check(ctx: ModuleContext): Promise<ModuleResult> {

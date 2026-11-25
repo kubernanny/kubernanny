@@ -65,6 +65,8 @@ export async function runComponent(ctx: ModuleContext, d: Detected, integration:
       workloads: { ready, total, items: d.workloads },
       issueIds: result.issues.map((i) => i.id),
       error: result.error,
+      ...(result.accepted ? { accepted: result.accepted } : {}),
+      ...(result.canAccept !== undefined ? { canAccept: result.canAccept } : {}),
     },
   };
 }
@@ -86,14 +88,17 @@ export async function runCoreCheck(ctx: ModuleContext, check: CoreCheck, allowed
       workloads: { ready: 0, total: 0, items: [] },
       issueIds: result.issues.map((i) => i.id),
       error: result.error,
+      ...(result.accepted ? { accepted: result.accepted } : {}),
+      ...(result.canAccept !== undefined ? { canAccept: result.canAccept } : {}),
     },
   };
 }
 
 /**
  * One issue per id across all modules (the first module wins), and every
- * workload issue and known vulnerability also listed on the component it is
- * about, so the Argo CD sheet shows a crashing argocd-repo-server.
+ * workload issue and known vulnerability (built-in lookup per component,
+ * Trivy Operator per workload) also listed on the component it is about, so
+ * the Argo CD sheet shows a crashing argocd-repo-server.
  */
 export function mergeIssues(core: ModuleOutcome[], components: ModuleOutcome[]): Map<string, IssueView> {
   const byId = new Map<string, IssueView>();
@@ -105,7 +110,11 @@ export function mergeIssues(core: ModuleOutcome[], components: ModuleOutcome[]):
     }
   }
   for (const { view } of components) {
-    const ids = [...view.workloads.items.flatMap((w) => ['pods', 'workloads'].map((prefix) => `${prefix}/${w.namespace}/${w.kind}/${w.name}`)), `vulnerabilities/${view.id}`];
+    const ids = [
+      ...view.workloads.items.flatMap((w) => ['pods', 'workloads', 'trivy'].map((prefix) => `${prefix}/${w.namespace}/${w.kind}/${w.name}`)),
+      `vulnerabilities/${view.id}`,
+      `image-updates/${view.id}`,
+    ];
     for (const id of ids) {
       if (byId.has(id) && !view.issueIds.includes(id)) {
         view.issueIds.push(id);

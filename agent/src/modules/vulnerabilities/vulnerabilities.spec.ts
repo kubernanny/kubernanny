@@ -310,6 +310,6 @@ describe('vulnerabilities check', () => {
   it('says so when it shows older answers', async () => {
     const stale = { host: 'api.osv.dev', lookup: async () => ({ results: [[], []], staleSince: new Date(NOW.getTime() - 3 * 3_600_000) }) };
     const result = de(await check.run(ctx(stale, [cnpg]), () => true));
-    expect(result.summary).toBe('Keine bekannten Schwachstellen in 2 Versionen (Stand vor 3 h, api.osv.dev gerade nicht erreichbar)');
+    expect(result.summary).toBe('Keine bekannten Schwachstellen in 2 Versionen, nur Kubernetes und erkannte Komponenten (Stand vor 3 h, api.osv.dev gerade nicht erreichbar)');
   });
 });

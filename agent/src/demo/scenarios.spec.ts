@@ -53,6 +53,18 @@ describe('demo scenarios', () => {
     ]);
   });
 
+  it('broken runs Trivy Operator: a fixable high in the own-image app, an unfixed medium as a hint on Valkey', async () => {
+    const s = await run('broken');
+    expect(s.issues.filter((i) => i.module === 'trivy').map((i) => [i.id, i.severity, i.title, i.advisories])).toEqual([
+      ['trivy/default/Deployment/social-importer', 'warning', 'social-importer (default): 1 bekannte Schwachstelle', ['CVE-2024-21538']],
+      ['trivy/default/StatefulSet/shop-api-valkey', 'info', 'shop-api-valkey (default): 1 bekannte Schwachstelle', ['CVE-2023-42363']],
+    ]);
+    expect(s.modules.find((m) => m.id === 'redis')?.issueIds).toContain('trivy/default/StatefulSet/shop-api-valkey');
+    const trivy = s.modules.find((m) => m.id === 'trivy')!;
+    expect(trivy.stats.find((st) => st.label === 'Alte Berichte übergangen')?.value).toBe('1');
+    expect(s.modules.find((m) => m.id === 'vulnerabilities')?.stats.find((st) => st.label === 'Jedes Image')?.value).toBe('Trivy Operator gefunden: jedes Image wird geprüft');
+  });
+
   it('healthy and warning check vulnerabilities and security too, and find nothing', async () => {
     for (const scenario of ['healthy', 'warning'] as const) {
       const s = await run(scenario);

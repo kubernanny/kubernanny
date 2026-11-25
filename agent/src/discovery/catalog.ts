@@ -86,6 +86,8 @@ export const CATALOG: CatalogEntry[] = [
   { id: 'external-secrets', name: 'External Secrets', category: 'security', icon: 'key-outline', images: img('external-secrets/external-secrets'), description: t('component.external-secrets'), osv: { ecosystem: 'Go', name: 'github.com/external-secrets/external-secrets' } },
   { id: 'sealed-secrets', name: 'Sealed Secrets', category: 'security', icon: 'lock-closed-outline', images: img('bitnami-labs/sealed-secrets-controller', 'bitnami/sealed-secrets-controller', 'sealed-secrets-controller'), description: t('component.sealed-secrets') },
   { id: 'vault', name: 'Vault', category: 'security', icon: 'lock-closed-outline', images: img('hashicorp/vault', 'vault'), description: t('component.vault') },
+  { id: 'gatekeeper', name: 'OPA Gatekeeper', category: 'security', icon: 'shield-checkmark-outline', images: img('openpolicyagent/gatekeeper'), description: t('component.gatekeeper') },
+  { id: 'trivy', name: 'Trivy Operator', category: 'security', icon: 'scan-outline', images: img('aquasec/trivy-operator', 'aquasecurity/trivy-operator'), description: t('component.trivy') },
   { id: 'kyverno', name: 'Kyverno', category: 'security', icon: 'shield-checkmark-outline', images: img('kyverno/kyverno'), description: t('component.kyverno'), osv: { ecosystem: 'Go', name: 'github.com/kyverno/kyverno' } },
   { id: 'authentik', name: 'authentik', category: 'security', icon: 'finger-print-outline', images: img('goauthentik/server', 'authentik/server'), description: t('component.authentik') },
   { id: 'keycloak', name: 'Keycloak', category: 'security', icon: 'finger-print-outline', images: img('keycloak/keycloak', 'bitnami/keycloak'), description: t('component.keycloak') },

@@ -1,12 +1,14 @@
 import { Issue, IssueSeverity } from '../../checks/types';
 import { Text, t } from '../../i18n/text';
 import { cvss3Score } from './cvss';
+import type { AcceptedAdvisory } from '../types';
+import { Acceptance, acceptanceKey } from './acceptance';
 import { OsvVuln } from './osv-client';
 import { compareVersions, isPseudoVersion } from './versions';
 
 export type Level = 'critical' | 'high' | 'medium' | 'low' | 'unknown';
 
-const LEVEL_RANK: Record<Level, number> = { critical: 4, high: 3, medium: 2, low: 1, unknown: 0 };
+export const LEVEL_RANK: Record<Level, number> = { critical: 4, high: 3, medium: 2, low: 1, unknown: 0 };
 export const LEVEL_LABEL: Record<Level, Text> = {
   critical: t('vulnerabilities.level.critical'),
   high: t('vulnerabilities.level.high'),
@@ -125,9 +127,37 @@ export interface ComponentFindings {
   /** Has an ingress, HTTPRoute or IngressRoute: reachable from outside the cluster network. */
   reachable: boolean;
   findings: Finding[];
+  /** Advisories of this component someone marked as not applicable; they no longer count. */
+  accepted?: number;
 }
 
-const scoreText = (f: Finding): Text => (f.score !== undefined ? t('vulnerabilities.rated', { level: LEVEL_LABEL[f.level], score: f.score }) : LEVEL_LABEL[f.level]);
+/**
+ * Takes the accepted advisories out of each component's findings. They stop
+ * counting for the issue, the light and the stats, and come back as a list
+ * for the module sheet. Expired acceptances are not in `accepted` any more.
+ */
+export function applyAcceptance(
+  components: ComponentFindings[],
+  accepted: ReadonlyMap<string, Acceptance>,
+): { components: ComponentFindings[]; accepted: AcceptedAdvisory[] } {
+  const list: AcceptedAdvisory[] = [];
+  const kept = components.map((c) => {
+    const remaining: Finding[] = [];
+    for (const f of c.findings) {
+      const a = accepted.get(acceptanceKey(c.key, f.id));
+      if (a) {
+        list.push({ component: c.key, name: c.name, advisory: f.id, until: new Date(a.until).toISOString(), by: a.by, ...(a.reason ? { reason: a.reason } : {}) });
+      } else {
+        remaining.push(f);
+      }
+    }
+    const n = c.findings.length - remaining.length;
+    return n > 0 ? { ...c, findings: remaining, accepted: n } : c;
+  });
+  return { components: kept, accepted: list };
+}
+
+export const scoreText = (f: Finding): Text => (f.score !== undefined ? t('vulnerabilities.rated', { level: LEVEL_LABEL[f.level], score: f.score }) : LEVEL_LABEL[f.level]);
 
 /** One issue per component with advisories. */
 export function vulnerabilityIssue(c: ComponentFindings): Issue | null {
@@ -148,6 +178,9 @@ export function vulnerabilityIssue(c: ComponentFindings): Issue | null {
   }
   if (severity === 'critical') {
     parts.push(t('vulnerabilities.exposed'));
+  }
+  if (c.accepted) {
+    parts.push(t('vulnerabilities.acceptedNote', { n: c.accepted }));
   }
   return {
     id: `vulnerabilities/${c.key}`,

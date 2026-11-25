@@ -7,7 +7,7 @@ import { raw, t } from '../../i18n/text';
 export class CnpgIntegration extends Integration {
   readonly id = 'cnpg';
   override readonly actions = ['cnpg-backup', 'logs'] as const;
-  readonly reads = [{ group: 'postgresql.cnpg.io', resource: 'clusters' }];
+  readonly reads = [{ group: 'postgresql.cnpg.io', resource: 'clusters', why: 'instances, failover state and last backup per database cluster' }];
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
     const clusters = (await ctx.kube.list<CnpgCluster>('/apis/postgresql.cnpg.io/v1/clusters')) ?? [];
     ctx.data.cnpgClusters = clusters;

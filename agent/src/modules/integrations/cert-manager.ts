@@ -11,7 +11,7 @@ interface Issuer extends Conditioned {
 
 export class CertManagerIntegration extends Integration {
   readonly id = 'cert-manager';
-  readonly reads = [{ group: 'cert-manager.io', resource: 'certificates' }, { group: 'cert-manager.io', resource: 'clusterissuers' }];
+  readonly reads = [{ group: 'cert-manager.io', resource: 'certificates', why: 'expiry and Ready condition of every certificate' }, { group: 'cert-manager.io', resource: 'clusterissuers', why: 'whether the issuers are ready' }];
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
     const [certs, issuers] = await Promise.all([
       ctx.kube.list<Certificate>('/apis/cert-manager.io/v1/certificates'),

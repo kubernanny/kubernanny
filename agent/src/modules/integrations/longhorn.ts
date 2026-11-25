@@ -9,10 +9,10 @@ import { LonghornNode, ModuleContext, ModuleResult, Stat } from '../types';
 export class LonghornIntegration extends Integration {
   readonly id = 'longhorn';
   readonly reads = [
-    { group: 'longhorn.io', resource: 'volumes' },
-    { group: 'longhorn.io', resource: 'nodes' },
-    { group: 'longhorn.io', resource: 'backups' },
-    { group: 'longhorn.io', resource: 'backuptargets' },
+    { group: 'longhorn.io', resource: 'volumes', why: 'robustness (degraded, faulted) and size of every volume' },
+    { group: 'longhorn.io', resource: 'nodes', why: 'disk space and schedulability per storage node' },
+    { group: 'longhorn.io', resource: 'backups', why: 'age of the newest backup per volume' },
+    { group: 'longhorn.io', resource: 'backuptargets', why: 'whether the backup target is reachable' },
   ];
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
     const [volumes, nodes, backups, targets] = await Promise.all([

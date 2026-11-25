@@ -2,6 +2,8 @@ import { CoreCheck } from '../module';
 import { KubernetesSupportCheck } from '../kubernetes-support/kubernetes-support.check';
 import { SecurityCheck } from '../security/security.check';
 import { VulnerabilitiesCheck } from '../vulnerabilities/vulnerabilities.check';
+import { ImageUpdatesCheck } from '../image-updates/image-updates.check';
+import { NodeClocksCheck } from './node-clocks';
 import { ApiServerCheck } from './api-server';
 import { HpaCheck } from './autoscalers';
 import { PdbCheck } from './disruption-budgets';
@@ -22,6 +24,7 @@ export { bytes, pct } from '../format';
  */
 export const CORE_CHECKS: readonly CoreCheck[] = [
   new NodesCheck(),
+  new NodeClocksCheck(),
   new EtcdCheck(),
   new ApiServerCheck(),
   new KubernetesSupportCheck(),
@@ -31,4 +34,5 @@ export const CORE_CHECKS: readonly CoreCheck[] = [
   new VolumesCheck(),
   new SecurityCheck(),
   new VulnerabilitiesCheck(),
+  new ImageUpdatesCheck(),
 ];

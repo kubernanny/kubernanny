@@ -12,6 +12,7 @@ import type { CnpgCluster } from '../checks/cnpg.check';
 import type { EtcdSnapshot, LonghornBackup, LonghornBackupTarget } from '../checks/maintenance.check';
 import type { VeleroBackup } from './integrations/velero';
 import type { VulnDb } from './vulnerabilities/osv-client';
+import type { AcceptanceState } from './vulnerabilities/acceptance';
 
 export type Tone = 'ok' | 'warning' | 'critical' | 'muted';
 
@@ -27,6 +28,19 @@ export interface ModuleResult {
   stats: Stat[];
   /** One line under the name: what is going on right now. */
   summary: Text;
+  /** Vulnerabilities only: advisories someone marked as not applicable, shown on the module sheet. */
+  accepted?: AcceptedAdvisory[];
+  canAccept?: boolean;
+}
+
+/** An accepted advisory as the app shows it: which component, until when, why and by whom. */
+export interface AcceptedAdvisory {
+  component: string;
+  name: string;
+  advisory: string;
+  until: string;
+  by: string;
+  reason?: string;
 }
 
 /** Data one module reads that the detail views reuse, so nothing is fetched twice. */
@@ -45,6 +59,8 @@ export interface RunData {
   longhornBackupTargets?: LonghornBackupTarget[];
   etcdSnapshots?: EtcdSnapshot[];
   veleroBackups?: VeleroBackup[];
+  /** Workloads (`<ns>/<kind>/<name>`) with a fresh Trivy Operator report; the built-in vulnerability lookup steps back for components they cover. */
+  trivy?: { covered: Set<string> };
 }
 
 export interface LonghornNode {
@@ -68,6 +84,8 @@ export interface ModuleContext {
   detected?: Detected[];
   /** The vulnerability database; set by the run loop, kept across runs for its cache. */
   vulnDb?: VulnDb;
+  /** Advisories accepted per component, and whether accepting is possible at all (Helm `vulnerabilities.allowAccept`). */
+  vulnAcceptance?: AcceptanceState;
 }
 
 /** An API resource a module reads; the RBAC test checks the chart and install.yaml grant it. */
@@ -75,6 +93,8 @@ export interface ApiRead {
   /** '' for the core group. */
   group: string;
   resource: string;
+  /** Why the module reads it, one short line; docs/PERMISSIONS.md is generated from it. */
+  why: string;
 }
 
 export interface ModuleView {
@@ -92,4 +112,8 @@ export interface ModuleView {
   workloads: { ready: number; total: number; items: { kind: string; namespace: string; name: string; ready: number; desired: number }[] };
   issueIds: string[];
   error?: Text;
+  /** Vulnerabilities only: accepted advisories, listed on the sheet with a way to take them back. */
+  accepted?: AcceptedAdvisory[];
+  /** Vulnerabilities only: advisories can be accepted (not locked in Helm). */
+  canAccept?: boolean;
 }
