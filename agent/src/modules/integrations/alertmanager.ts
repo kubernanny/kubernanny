@@ -69,7 +69,7 @@ export function alertmanagerDetails(firing: AmAlert[], silences: Record<string, 
     return {
       name,
       ...(summary ? { sub: raw(summary) } : {}),
-      value: raw(severity ? `${list.length} × ${severity}` : String(list.length)),
+      value: severity ? t('detail.alertmanager.count', { n: list.length, severity: t('state.severity', { s: severity }) }) : String(list.length),
       tone: SEVERITY_TONE[severity] ?? 'muted',
       ...(where.length ? { meta: [{ text: raw(where.join(', ')) }] } : {}),
     };

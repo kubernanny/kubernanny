@@ -1,6 +1,6 @@
 import { Integration } from '../module';
 import { Condition, Issue, ageText } from '../../checks/types';
-import { DetailRow, ModuleContext, ModuleResult, Stat } from '../types';
+import { DetailMeta, DetailRow, ModuleContext, ModuleResult, Stat } from '../types';
 import { listSection, sections } from '../details';
 import { raw, rawOr, t } from '../../i18n/text';
 import { Conditioned } from './util';
@@ -29,14 +29,26 @@ export class VeleroIntegration extends Integration {
       const phase = b.status?.phase ?? '?';
       const at = Date.parse(b.status?.completionTimestamp ?? b.metadata.creationTimestamp ?? '');
       const age = ctx.now.getTime() - at;
-      rows.push({ name, value: raw(phase), tone: phase === 'Completed' ? 'ok' : phase === 'Failed' ? 'critical' : 'warning', ...(Number.isFinite(at) ? { meta: [{ text: t('detail.backupAgo', { age: ageText(age) }) }] } : {}) });
+      // The newest run, and when it did not complete, the last one that did: "Lauf vor 4 h" and "letzter Erfolg vor 28 h" are both true.
+      const meta: DetailMeta[] = [];
+      if (Number.isFinite(at)) {
+        meta.push({ text: phase === 'Completed' ? t('detail.backupAgo', { age: ageText(age) }) : t('detail.velero.ran', { age: ageText(age) }) });
+      }
+      if (phase !== 'Completed') {
+        const ok = backups
+          .filter((x) => (x.metadata.labels?.['velero.io/schedule-name'] ?? MANUAL) === schedule && x.status?.phase === 'Completed')
+          .map((x) => Date.parse(x.status?.completionTimestamp ?? x.metadata.creationTimestamp ?? ''))
+          .filter(Number.isFinite);
+        meta.push(ok.length ? { text: t('detail.velero.lastSuccess', { age: ageText(ctx.now.getTime() - Math.max(...ok)) }) } : { text: t('detail.noBackup'), tone: 'warning' });
+      }
+      rows.push({ name, value: t('state.veleroPhase', { s: phase }), tone: phase === 'Completed' ? 'ok' : phase === 'Failed' ? 'critical' : 'warning', ...(meta.length ? { meta } : {}) });
       newest = Math.max(newest, Number.isFinite(at) ? at : -Infinity);
       if (phase === 'Failed' || phase === 'PartiallyFailed') {
         issues.push({
           id: `velero/${schedule}`,
           check: 'cnpg',
           severity: phase === 'Failed' ? 'critical' : 'warning',
-          title: t('velero.failed.title', { schedule: name, phase }),
+          title: t('velero.failed.title', { schedule: name, phase: t('state.veleroPhase', { s: phase }) }),
           cause: rawOr(b.status?.failureReason, t('velero.failed.cause', { errors: b.status?.errors ?? 0, warnings: b.status?.warnings ?? 0, backup: b.metadata.name })),
           actions: [],
         });
