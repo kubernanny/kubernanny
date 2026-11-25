@@ -15,7 +15,7 @@ export class KubernetesSupportCheck extends CoreCheck {
   readonly id = 'kubernetes-support';
   readonly name = t('module.kubernetes-support.name');
   // Already registered in the app (time-outline is one of its own icons), so no app change is needed.
-  readonly icon = 'time-outline';
+  readonly icon = 'calendar-outline';
   readonly description = t('module.kubernetes-support.description');
   readonly reads = [];
 

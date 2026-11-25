@@ -11,7 +11,8 @@ import type { CnpgCluster } from '../checks/cnpg.check';
 import type { LonghornVolume } from '../checks/longhorn.check';
 import { Condition, ageText, condition } from '../checks/types';
 import { MessageKey, raw, t, Text } from '../i18n/text';
-import { bytes, pct } from './format';
+import { bytes, cronText, pct } from './format';
+import { parseQuantity } from '../inventory/inventory';
 import type { DetailMeta, DetailRow, DetailSection, LonghornNode, Stat, Tone } from './types';
 
 /** Rows one section carries at most; the app folds healthy rows anyway. */
@@ -78,16 +79,19 @@ export function cnpgDetails(clusters: CnpgCluster[], now: Date, maxAgeHours: num
     if (archiving) {
       meta.push(archiving.status === 'True' ? { text: t('detail.cnpg.walOk') } : { text: t('detail.cnpg.walFailing'), tone: 'critical' });
     }
+    if (!healthy && c.status?.currentPrimary && c.status.phase) {
+      meta.unshift({ text: t('state.cnpgPhase', { s: c.status.phase }), tone: 'warning' });
+    }
     const extra = c as CnpgClusterDetail;
     if (extra.status?.pgDataImageInfo?.majorVersion) {
       meta.push({ text: t('detail.cnpg.postgres', { version: String(extra.status.pgDataImageInfo.majorVersion) }) });
     }
     if (extra.spec?.storage?.size) {
-      meta.push({ text: t('detail.cnpg.storage', { size: extra.spec.storage.size }) });
+      meta.push({ text: t('detail.cnpg.storage', { size: bytes(parseQuantity(extra.spec.storage.size)) }) });
     }
     return {
       name: nsName(c.metadata),
-      sub: c.status?.currentPrimary ? t('detail.cnpg.primary', { pod: c.status.currentPrimary }) : raw(c.status?.phase ?? '?'),
+      sub: c.status?.currentPrimary ? t('detail.cnpg.primary', { pod: c.status.currentPrimary }) : t('state.cnpgPhase', { s: c.status?.phase ?? '?' }),
       value: `${ready}/${want}`,
       tone: ready === 0 && want > 0 ? 'critical' : archiving?.status === 'False' ? 'critical' : !healthy || ready < want ? 'warning' : 'ok',
       ...(meta.length ? { meta } : {}),
@@ -105,7 +109,7 @@ export function cnpgDetails(clusters: CnpgCluster[], now: Date, maxAgeHours: num
     }
     return {
       name: nsName(b.metadata),
-      sub: raw(b.spec?.schedule ?? '?'),
+      sub: b.spec?.schedule ? cronText(b.spec.schedule) : raw('?'),
       value: b.spec?.suspend ? t('detail.cnpg.suspended') : Number.isFinite(next) ? t('detail.cert.left', { age: ageText(Math.max(60_000, next - now.getTime())) }) : t('detail.unknown'),
       tone: b.spec?.suspend ? 'warning' : 'ok',
       ...(meta.length ? { meta } : {}),
@@ -206,10 +210,10 @@ export function argoDetails(apps: ArgoApplication[], now: Date = new Date()): De
     return {
       name: a.metadata.name,
       ...(a.spec?.destination?.namespace ? { sub: t('detail.argocd.into', { namespace: a.spec.destination.namespace }) } : {}),
-      value: health,
+      value: t('state.argoHealth', { s: health }),
       tone,
       meta: [
-        { text: sync, ...(sync === 'OutOfSync' ? { tone: auto ? ('warning' as const) : ('muted' as const) } : {}) },
+        { text: t('state.argoSync', { s: sync }), ...(sync === 'OutOfSync' ? { tone: auto ? ('warning' as const) : ('muted' as const) } : {}) },
         { text: auto ? t('detail.argocd.auto') : t('detail.argocd.manual') },
         ...(Number.isFinite(synced)
           ? [{ text: t('detail.argocd.lastSync', { phase: op?.phase ?? '?', age: ageText(Math.max(0, now.getTime() - synced)) }), ...(op?.phase && op.phase !== 'Succeeded' && op.phase !== 'Running' ? { tone: 'warning' as const } : {}) }]

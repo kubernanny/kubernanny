@@ -30,7 +30,12 @@ export class ArgoCdIntegration extends Integration {
       details: argoDetails(apps, ctx.now),
       // Only while the action is on: a locked install shows no history at all.
       ...(ctx.rollbackOn ? { rollbacks: rollbackApps(apps) } : {}),
-      summary: issues.length === 0 ? t('argocd.summary.ok', { n: apps.length }) : t('argocd.summary.problems', { outOfSync: apps.length - synced, unhealthy: apps.length - healthy }),
+      // Hints (a manual app with a change waiting) are no problem: the line says they wait, in the same words as the list.
+      summary: issues.some((i) => i.severity !== 'info')
+        ? t('argocd.summary.problems', { outOfSync: drifting, unhealthy: apps.length - healthy - progressing })
+        : synced < apps.length
+          ? t('argocd.summary.waiting', { n: apps.length - synced })
+          : t('argocd.summary.ok', { n: apps.length }),
     };
   }
 }

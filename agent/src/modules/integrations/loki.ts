@@ -3,7 +3,7 @@ import { Integration } from '../module';
 import { raw, t } from '../../i18n/text';
 import { ModuleContext, ModuleResult, Stat } from '../types';
 import { str } from '../untrusted';
-import { bytes } from '../format';
+import { bytes, decimal } from '../format';
 
 export class LokiIntegration extends Integration {
   readonly id = 'loki';
@@ -24,14 +24,14 @@ export class LokiIntegration extends Integration {
         ctx.prom.scalar('sum(rate(loki_request_duration_seconds_count{status_code=~"5.."}[5m]))').catch(() => null),
       ]);
       if (rate !== null) {
-        stats.push({ label: t('loki.stat.linesPerSecond'), value: rate.toFixed(1) });
+        stats.push({ label: t('loki.stat.linesPerSecond'), value: decimal(rate) });
       }
       if (bytesRate !== null) {
         stats.push({ label: t('loki.stat.ingestion'), value: t('loki.perSecond', { size: bytes(bytesRate) }) });
       }
       if (errors !== null) {
         // Server errors per minute over the last 5 minutes: queries or pushes Loki failed.
-        stats.push({ label: t('loki.stat.errors'), value: (errors * 60).toFixed(1), tone: errors > 0 ? 'warning' : 'ok' });
+        stats.push({ label: t('loki.stat.errors'), value: decimal(errors * 60), tone: errors > 0 ? 'warning' : 'ok' });
       }
     }
     return {

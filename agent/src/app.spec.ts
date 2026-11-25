@@ -244,8 +244,8 @@ describe('agent against the demo cluster', () => {
     expect(byId.grafana.version).toBe('12.1.0');
     expect(byId.argocd.stats).toEqual(expect.arrayContaining([{ label: 'Apps', value: '14' }]));
     expect(byId.longhorn.stats.find((s: { label: string }) => s.label === 'Platte frei').value).toBe('271 GiB von 640 GiB');
-    expect(byId.prometheus.summary).toBe('1 von 37 Zielen down');
-    expect(byId.kured.summary).toBe('Startet rke2-node-5 neu');
+    expect(byId.prometheus.summary).toBe('Scrape-Ziel blackbox down (1)');
+    expect(byId.kured.summary).toBe('kured-Sperre hängt seit 3 h');
   });
 
   it('finds the problems a homelab really has', async () => {
@@ -434,8 +434,8 @@ describe('agent against the demo cluster', () => {
       const english = new E2eClient(app.getHttpServer(), app.get(IdentityService).publicKey, phone.device, 'en');
       const { body } = await english.get('/status', 200);
       const byId = Object.fromEntries(body.modules.map((m: { id: string }) => [m.id, m]));
-      expect(byId.prometheus.summary).toBe('1 of 37 targets down');
-      expect(byId.kured.summary).toBe('Rebooting rke2-node-5');
+      expect(byId.prometheus.summary).toBe('Scrape target blackbox down (1)');
+      expect(byId.kured.summary).toBe('kured lock held for 3 h');
       expect(byId.nodes).toMatchObject({ name: 'Nodes', description: 'Reachability, pressure and load of the machines.' });
       expect(byId.longhorn.stats.find((s: { label: string }) => s.label === 'Disk free').value).toBe('271 GiB of 640 GiB');
       const titles = Object.fromEntries(body.issues.map((i: { id: string; title: string }) => [i.id, i.title]));
@@ -444,7 +444,7 @@ describe('agent against the demo cluster', () => {
       // Ids and machine fields do not change with the language.
       const german = (await phone.get('/status', 200)).body;
       expect(body.issues.map((i: { id: string; severity: string }) => [i.id, i.severity])).toEqual(german.issues.map((i: { id: string; severity: string }) => [i.id, i.severity]));
-      expect(german.modules.find((m: { id: string }) => m.id === 'prometheus').summary).toBe('1 von 37 Zielen down');
+      expect(german.modules.find((m: { id: string }) => m.id === 'prometheus').summary).toBe('Scrape-Ziel blackbox down (1)');
     });
 
     it('renders settings, history, action errors and channel errors in the request language', async () => {

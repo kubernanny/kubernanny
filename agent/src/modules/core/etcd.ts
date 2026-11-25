@@ -5,7 +5,7 @@ import { ageText } from '../../checks/types';
 import { t } from '../../i18n/text';
 import { CoreCheck } from '../module';
 import { DetailMeta, DetailRow, ModuleContext, ModuleResult, Stat } from '../types';
-import { bytes } from '../format';
+import { bytes, decimal, withUnit } from '../format';
 import { listSection, sections } from '../details';
 
 export class EtcdCheck extends CoreCheck {
@@ -32,7 +32,7 @@ export class EtcdCheck extends CoreCheck {
         .scalar('histogram_quantile(0.99, sum by (le) (rate(etcd_disk_wal_fsync_duration_seconds_bucket[5m])))')
         .catch(() => null);
       if (fsync !== null) {
-        stats.push({ label: t('etcd.stat.walFsync'), value: `${(fsync * 1000).toFixed(1)} ms`, tone: fsync > 0.01 ? 'warning' : 'ok' });
+        stats.push({ label: t('etcd.stat.walFsync'), value: withUnit(fsync * 1000, 'ms'), tone: fsync > 0.01 ? 'warning' : 'ok' });
       }
       const leaderChanges = await ctx.prom.scalar('max(increase(etcd_server_leader_changes_seen_total[1h]))').catch(() => null);
       if (leaderChanges !== null) {
@@ -63,7 +63,7 @@ export class EtcdCheck extends CoreCheck {
       }
       const f = fsyncByPod.get(name);
       if (f !== undefined && Number.isFinite(f)) {
-        meta.push({ text: t('detail.etcd.fsync', { ms: (f * 1000).toFixed(1) }), ...(f > 0.01 ? { tone: 'warning' as const } : {}) });
+        meta.push({ text: t('detail.etcd.fsync', { ms: decimal(f * 1000) }), ...(f > 0.01 ? { tone: 'warning' as const } : {}) });
       }
       return {
         name: p.spec?.nodeName ?? name,

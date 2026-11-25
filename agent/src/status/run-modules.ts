@@ -23,6 +23,19 @@ async function safe(fn: () => Promise<ModuleResult>): Promise<ModuleResult & { e
   }
 }
 
+/**
+ * A module that is not fine says why in its line: the worst open problem's
+ * title, plus how many more there are. Its own summary stays when nothing is
+ * wrong or it already names the problem (the same text as an issue title).
+ */
+export function summaryFor(summary: Text, issues: Pick<Issue, 'severity' | 'title'>[]): Text {
+  const problems = issues.filter((i) => i.severity !== 'info').sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'critical' ? -1 : 1));
+  if (problems.length === 0 || problems.some((p) => JSON.stringify(p.title) === JSON.stringify(summary))) {
+    return problems.length > 1 && problems.some((p) => JSON.stringify(p.title) === JSON.stringify(summary)) ? t('module.summary.more', { first: summary, n: problems.length - 1 }) : summary;
+  }
+  return problems.length === 1 ? problems[0]!.title : t('module.summary.more', { first: problems[0]!.title, n: problems.length - 1 });
+}
+
 /** The line under a component without a deep check: how many of its pods are ready. */
 function workloadSummary(workloads: { kind: string }[], ready: number, total: number): Text {
   if (workloads.every((w) => w.kind === 'CronJob')) {
@@ -62,7 +75,7 @@ export async function runComponent(ctx: ModuleContext, d: Detected, integration:
       namespace: d.namespace,
       version: d.version,
       status,
-      summary: result.summary,
+      summary: result.error ? result.summary : summaryFor(result.summary, result.issues),
       // The version sits in the sheet's header (`version`), not among the key figures.
       stats: result.stats.filter((s) => s.label.$t !== 'stat.version'),
       ...(details.length ? { details } : {}),
@@ -90,7 +103,7 @@ export async function runCoreCheck(ctx: ModuleContext, check: CoreCheck, allowed
       icon: check.icon,
       description: check.description,
       status: result.error ? 'error' : worst(result.issues.map((i) => i.severity)),
-      summary: result.summary,
+      summary: result.error ? result.summary : summaryFor(result.summary, result.issues),
       stats: result.stats,
       ...(result.details?.length ? { details: result.details } : {}),
       links: [],
@@ -132,6 +145,10 @@ export function mergeIssues(core: ModuleOutcome[], components: ModuleOutcome[]):
           view.status = severity;
         }
       }
+    }
+    // A crashing workload or a known vulnerability makes the component's line say so too.
+    if (view.status === 'warning' || view.status === 'critical') {
+      view.summary = summaryFor(view.summary, view.issueIds.map((id) => byId.get(id)).filter((i): i is IssueView => i !== undefined && !i.silencedUntil));
     }
   }
   return byId;

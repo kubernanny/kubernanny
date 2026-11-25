@@ -132,8 +132,8 @@ describe('longhorn', () => {
       { metadata: { name: 'pvc-4' }, status: { robustness: 'faulted' } },
     ]));
     expect(issues.map((i) => [i.title, i.severity])).toEqual([
-      ['Volume weblate/data degraded', 'warning'],
-      ['Volume pvc-4 faulted', 'critical'],
+      ['Volume weblate/data beeinträchtigt', 'warning'],
+      ['Volume pvc-4 ausgefallen', 'critical'],
     ]);
   });
 });

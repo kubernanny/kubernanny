@@ -40,6 +40,8 @@ export interface DetailRow {
   /** Short value on the right: "3/3", "20 GiB", "41 days". */
   value?: string | Text;
   meta?: DetailMeta[];
+  /** Rows that belong to this one (a workload's pods), shown indented under it. */
+  children?: DetailRow[];
 }
 
 /**
@@ -49,7 +51,7 @@ export interface DetailRow {
  * `more` counts the rows left out above the cap.
  */
 export type DetailSection =
-  | { title: Text; kind: 'list'; rows: DetailRow[]; more?: number }
+  | { title: Text; kind: 'list'; rows: DetailRow[]; more?: number; role?: 'runtime' }
   | { title: Text; kind: 'table'; columns: Text[]; rows: { cells: (string | Text)[]; tone: Tone }[]; more?: number };
 
 /** One running copy of a component that people install several times (Redis/Valkey per app). */

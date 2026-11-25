@@ -71,43 +71,60 @@ function podRows(pods: FullPod[], inv: Inventory, now: Date): DetailRow[] {
   });
 }
 
-/** Per workload: use against requests and limits, amber from 90 % of a memory limit. */
-function resourceRows(d: Pick<Detected, 'workloads'>, pods: FullPod[], inv: Inventory): DetailRow[] {
-  return d.workloads
-    .filter((w) => w.kind !== 'CronJob')
-    .map((w) => {
-      const own = pods.filter((p) => {
-        const o = podOwner(p);
-        return p.metadata.namespace === w.namespace && o.kind === w.kind && o.name === w.name && p.status?.phase !== 'Succeeded' && p.status?.phase !== 'Failed';
-      });
-      const res = own.map(podResources).reduce(addResources, NO_RESOURCES);
-      let cpu: number | null = inv.podUsage ? 0 : null;
-      let mem: number | null = inv.podUsage ? 0 : null;
-      for (const p of own) {
-        const u = inv.podUsage?.get(`${p.metadata.namespace}/${p.metadata.name}`);
-        if (u && cpu !== null && mem !== null) {
-          cpu += u.cpuMilli;
-          mem += u.memBytes;
-        }
+/**
+ * One row per workload: replicas ready, CPU and RAM against requests and
+ * limits, and its pods underneath (node, ready, restarts, why the last run
+ * ended). Amber from 90 % of a memory limit, or when a pod is not well.
+ */
+function runtimeRows(d: Pick<Detected, 'workloads'>, pods: FullPod[], inv: Inventory, now: Date): DetailRow[] {
+  return d.workloads.map((w) => {
+    const own = pods.filter((p) => {
+      const o = podOwner(p);
+      return p.metadata.namespace === w.namespace && o.kind === w.kind && o.name === w.name;
+    });
+    const running = own.filter((p) => p.status?.phase !== 'Succeeded' && p.status?.phase !== 'Failed');
+    const res = running.map(podResources).reduce(addResources, NO_RESOURCES);
+    let cpu: number | null = inv.podUsage ? 0 : null;
+    let mem: number | null = inv.podUsage ? 0 : null;
+    for (const p of running) {
+      const u = inv.podUsage?.get(`${p.metadata.namespace}/${p.metadata.name}`);
+      if (u && cpu !== null && mem !== null) {
+        cpu += u.cpuMilli;
+        mem += u.memBytes;
       }
-      const memShare = mem !== null && res.memLimit > 0 && res.memUnlimited === 0 ? mem / res.memLimit : null;
-      const meta: DetailMeta[] = [
-        { text: t('detail.res.requests', { cpu: cores(res.cpuRequestMilli), mem: bytes(res.memRequest) }) },
+    }
+    const memShare = mem !== null && res.memLimit > 0 && res.memUnlimited === 0 ? mem / res.memLimit : null;
+    const children = podRows(own, inv, now);
+    const meta: DetailMeta[] = [];
+    if (cpu !== null && mem !== null && running.length > 0) {
+      meta.push({ text: t('detail.cpuMem', { cpu: cores(cpu), mem: bytes(mem) }) });
+    }
+    if (running.length > 0) {
+      meta.push({ text: t('detail.res.requests', { cpu: cores(res.cpuRequestMilli), mem: bytes(res.memRequest) }) });
+      meta.push(
         res.cpuLimitMilli === 0 && res.memLimit === 0
           ? { text: t('detail.res.noLimits') }
           : {
-              text: t('detail.res.limits', { cpu: res.cpuUnlimited ? t('detail.res.none') : cores(res.cpuLimitMilli), mem: res.memUnlimited ? t('detail.res.none') : bytes(res.memLimit) }),
+              text: t('detail.res.limits', { cpu: res.cpuUnlimited ? undefined : cores(res.cpuLimitMilli), mem: res.memUnlimited ? undefined : bytes(res.memLimit) }),
               ...(memShare !== null && memShare >= 0.9 ? { tone: 'warning' as const } : {}),
             },
-      ];
-      return {
-        name: `${w.namespace}/${w.name}`,
-        sub: raw(w.kind),
-        ...(cpu !== null && mem !== null ? { value: t('detail.cpuMem', { cpu: cores(cpu), mem: bytes(mem) }) } : {}),
-        tone: (memShare !== null && memShare >= 0.9 ? 'warning' : 'ok') as Tone,
-        meta,
-      };
-    });
+      );
+    }
+    const tone: Tone =
+      w.desired > 0 && w.ready === 0 && w.kind !== 'CronJob'
+        ? 'critical'
+        : w.ready < w.desired || children.some((c) => c.tone === 'critical' || c.tone === 'warning') || (memShare !== null && memShare >= 0.9)
+          ? 'warning'
+          : 'ok';
+    return {
+      name: `${w.namespace}/${w.name}`,
+      sub: raw(w.kind),
+      ...(w.kind !== 'CronJob' ? { value: `${w.ready}/${w.desired}` } : {}),
+      tone,
+      ...(meta.length ? { meta } : {}),
+      ...(children.length ? { children } : {}),
+    };
+  });
 }
 
 /** The PVCs the component's pods mount, with size and fill. */
@@ -141,11 +158,8 @@ function volumeRows(pods: FullPod[], inv: Inventory, data: RunData): DetailRow[]
 /** Pods, resources and volumes of one recognised component. */
 export function componentDetails(inv: Inventory, data: RunData, d: Pick<Detected, 'workloads'>, now: Date): DetailSection[] {
   const pods = podsOf(inv, d);
-  return sections(
-    listSection(t('detail.pods'), podRows(pods, inv, now)),
-    listSection(t('detail.resources'), resourceRows(d, pods, inv)),
-    listSection(t('detail.volumes'), volumeRows(pods, inv, data)),
-  );
+  const runtime = listSection(t('detail.runtime'), runtimeRows(d, pods, inv, now));
+  return sections(runtime && runtime.kind === 'list' ? { ...runtime, role: 'runtime' } : null, listSection(t('detail.volumes'), volumeRows(pods, inv, data)));
 }
 
 /** Key figures of a component without an integration: pods ready, restarts, and what it uses. */

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { de } from '../testing/i18n';
+import { de, en } from '../testing/i18n';
+import { cronText } from './format';
 import { checkNotifyUrl, loadConfig } from '../config';
 import { CATALOG } from '../discovery/catalog';
 import { distribution, imageVersion } from '../discovery/discovery';
@@ -63,7 +64,12 @@ describe('discovery helpers', () => {
     expect(parseQuantity('250m')).toBe(0.25);
     expect(parseQuantity('2')).toBe(2);
     expect(parseQuantity('1.5G')).toBe(1.5e9);
-    expect(bytes(1536 * 2 ** 20)).toBe('1.5 GiB');
+    expect(en(bytes(1536 * 2 ** 20))).toBe('1.5 GiB');
+    expect(de(bytes(1536 * 2 ** 20))).toBe('1,5 GiB');
+    expect(de(bytes(15 * 2 ** 30))).toBe('15 GiB');
+    expect(de(cronText('0 0 2 * * *'))).toBe('täglich 02:00');
+    expect(en(cronText('30 4 * * 1'))).toBe('every Monday at 04:30');
+    expect(de(cronText('*/5 * * * *'))).toBe('*/5 * * * *');
   });
 });
 

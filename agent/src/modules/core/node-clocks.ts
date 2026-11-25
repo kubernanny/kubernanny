@@ -1,5 +1,6 @@
 import { Issue } from '../../checks/types';
-import { t } from '../../i18n/text';
+import { t, Text } from '../../i18n/text';
+import { withUnit } from '../format';
 import { Inventory } from '../../inventory/inventory';
 import { PromSample } from '../service-proxy';
 import { CoreCheck } from '../module';
@@ -121,7 +122,7 @@ export class NodeClocksCheck extends CoreCheck {
     const issues = evaluateNodeClocks(clocks);
     const measured = clocks.filter((c) => c.offset !== undefined);
     const worst = measured.reduce((m, c) => Math.max(m, Math.abs(c.offset!)), 0);
-    const ms = (v: number) => (v < 0.001 ? '< 1 ms' : v < 1 ? `${Math.round(v * 1000)} ms` : `${v.toFixed(1)} s`);
+    const ms = (v: number): string | Text => (v < 0.001 ? '< 1 ms' : v < 1 ? `${Math.round(v * 1000)} ms` : withUnit(v, 's'));
     if (measured.length === 0) {
       // No offset (chrony): the kernel still says whether the clock is synchronised, and the daemon how far off it may be.
       const known = clocks.filter((c) => c.synchronised !== undefined);
