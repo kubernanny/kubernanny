@@ -22,7 +22,7 @@ The nanny's glasses from the app icon (`branding/kubernanny-*.svg`, `ui/nanny-ey
 | red | coral `#ff5d73` (`--crit`) |
 | unknown | an empty grey ring, no glow |
 
-It only moves while a check runs: the glow breathes slowly. With `prefers-reduced-motion` it stays still.
+It only moves while a check runs: the glow breathes slowly. In the hero a thin ring around the right lens fills towards the next scheduled check (`nextCheckAt`); tapping the eye checks at once. With `prefers-reduced-motion` the glow stays still and the ring moves in five-second steps.
 
 ## Module sheets
 
@@ -71,7 +71,7 @@ Status colours are reserved for status. Charts use `--chart`, never a status col
 ## Layout
 
 - **Phone**: one column. Hero, sticky tab bar, the tab's content.
-- **From 980 px**: the hero (name, eye, headline, six vital numbers) stays on the left; the tabs scroll on the right.
+- **From 980 px**: the hero stays on the left as a rail (name, eye with the countdown ring, headline, "Geprüft vor 12 s · nächste in 48 s"; then nodes, pods, volumes and addresses in one row, two by two where the rail is narrow; then CPU and RAM across the full width with a one-line legend and a thin bar per node, problem nodes first). The tabs scroll on the right; the overview's own figures and per-node section are for phones only.
 - Cards use three radii by role: 20 px for list containers and node cards, 14 px for tiles, 8 px for small controls. Problems are a single list with a coloured left rail, not separate cards.
 
 ## Charts
