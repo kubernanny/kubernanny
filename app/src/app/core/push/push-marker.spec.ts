@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AgentPushView, ClusterConfig } from '../agent.model';
 import { translatorFor } from '../../i18n/translator';
-import { MARKER_CHOICES, markedTitle, normalizeMarker, suggestMarker } from './push-marker';
+import { MARKER_POOL, markedTitle, normalizeMarker, suggestMarker } from './push-marker';
 import { clusterIdForPushKey, knownClusterId } from './push-tap';
 import { pushView } from './push-view';
 
@@ -13,19 +13,25 @@ describe('the push authenticity marker', () => {
     expect(markedTitle('  ', 'homelab: ok')).toBe('homelab: ok');
   });
 
-  it('suggests one of the quick choices at random', () => {
-    expect(suggestMarker(() => 0)).toBe(MARKER_CHOICES[0]);
-    expect(suggestMarker(() => 0.999999)).toBe(MARKER_CHOICES.at(-1));
-    expect(MARKER_CHOICES).toContain(suggestMarker());
+  it('suggests three different emoji from a pool of 64, drawn at random', () => {
+    expect(new Set(MARKER_POOL).size).toBe(64);
+    expect(suggestMarker(() => 0)).toBe(MARKER_POOL.slice(0, 3).join(''));
+    const drawn = new Set(Array.from({ length: 200 }, () => suggestMarker()));
+    expect(drawn.size).toBeGreaterThan(190);
+    for (const m of drawn) {
+      expect(normalizeMarker(m)).toBe(m);
+    }
   });
 
-  it('accepts a short word or emoji, at most 12 characters as a person counts them', () => {
+  it('accepts a word or emoji of 3 to 12 characters as a person counts them', () => {
     expect(normalizeMarker('  Kiwi  ')).toBe('Kiwi');
+    expect(normalizeMarker('🦉')).toBeNull(); // one emoji: guessed too easily
+    expect(normalizeMarker('ab')).toBeNull();
     expect(normalizeMarker('rote   Katze')).toBe('rote Katze');
     expect(normalizeMarker('123456789012')).toBe('123456789012');
     expect(normalizeMarker('1234567890123')).toBeNull();
     // A family emoji is one character on screen, built of seven code points with zero width joiners.
-    expect(normalizeMarker('👨‍👩‍👧‍👦')).toBe('👨‍👩‍👧‍👦');
+    expect(normalizeMarker('👨‍👩‍👧‍👦🦉🌵')).toBe('👨‍👩‍👧‍👦🦉🌵');
     expect(normalizeMarker('🦉'.repeat(12))).toBe('🦉'.repeat(12));
   });
 

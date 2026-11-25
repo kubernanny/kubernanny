@@ -1,12 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 import { IonButton } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
-import { MARKER_CHOICES, MAX_MARKER_LENGTH, markedTitle, normalizeMarker, suggestMarker } from '../core/push/push-marker';
+import { MAX_MARKER_LENGTH, markedTitle, normalizeMarker, suggestMarker } from '../core/push/push-marker';
 
 /**
  * Picks the authenticity marker for native push (core/push/push-marker.ts):
- * a few emoji or an own word, with a random emoji suggested so not every
- * phone starts with the same one. Emits the normalised marker.
+ * three random emoji (a new draw on request), the sign in use, or an own
+ * word of at least three characters. Emits the normalised marker.
  */
 @Component({
   selector: 'app-push-marker-picker',
@@ -23,6 +23,9 @@ import { MARKER_CHOICES, MAX_MARKER_LENGTH, markedTitle, normalizeMarker, sugges
           }
           <button type="button" role="radio" class="chip own" [class.selected]="vm().own" [attr.aria-checked]="vm().own" (click)="useOwn()">{{ t('push.markerOwn') }}</button>
         </div>
+        @if (!vm().own) {
+          <ion-button fill="clear" size="small" (click)="reroll()">{{ t('push.markerAnother') }}</ion-button>
+        }
         @if (vm().own) {
           <label>
             <span>{{ t('push.markerOwn') }}</span>
@@ -110,17 +113,18 @@ export class PushMarkerPickerComponent {
   private readonly picked = signal<string | null>(null);
   private readonly own = signal<boolean | null>(null);
   readonly ownWord = signal<string | null>(null);
-  private readonly suggestion = suggestMarker();
+  private readonly suggestion = signal(suggestMarker());
 
   readonly vm = computed(() => {
     const current = this.current();
-    const currentIsChoice = !!current && (MARKER_CHOICES as readonly string[]).includes(current);
-    const own = this.own() ?? (!!current && !currentIsChoice);
-    const choice = this.picked() ?? (currentIsChoice ? current : this.suggestion);
-    const word = this.ownWord() ?? (own ? (current ?? '') : '');
+    // The sign in use stays offered next to a fresh suggestion, so keeping it is one tap.
+    const choices = [...new Set([...(current ? [current] : []), this.suggestion()])];
+    const own = this.own() ?? false;
+    const choice = this.picked() ?? current ?? this.suggestion();
+    const word = this.ownWord() ?? '';
     const marker = own ? normalizeMarker(word) : choice;
     return {
-      chips: MARKER_CHOICES.map((value) => ({ value, selected: !own && value === choice })),
+      chips: choices.map((value) => ({ value, selected: !own && value === choice })),
       own,
       marker,
       invalid: own && word.trim() !== '' && marker === null,
@@ -135,9 +139,16 @@ export class PushMarkerPickerComponent {
 
   useOwn(): void {
     if (this.ownWord() === null) {
-      this.ownWord.set(this.vm().own ? (this.current() ?? '') : '');
+      this.ownWord.set('');
     }
     this.own.set(true);
+  }
+
+  reroll(): void {
+    const next = suggestMarker();
+    this.suggestion.set(next);
+    this.picked.set(next);
+    this.own.set(false);
   }
 
   typed(event: Event): void {
