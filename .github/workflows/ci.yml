@@ -13,7 +13,57 @@ permissions:
   contents: read
 
 jobs:
+  # Which parts a push or pull request touches, so a docs fix does not run the
+  # app and relay suites. Tags, the first push and changes to this workflow run
+  # everything. Plain git, no third-party action.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      protocol: ${{ steps.paths.outputs.protocol }}
+      agent: ${{ steps.paths.outputs.agent }}
+      app: ${{ steps.paths.outputs.app }}
+      relay: ${{ steps.paths.outputs.relay }}
+      chart: ${{ steps.paths.outputs.chart }}
+      e2e: ${{ steps.paths.outputs.e2e }}
+      image: ${{ steps.paths.outputs.image }}
+      relay_image: ${{ steps.paths.outputs.relay_image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: paths
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.sha }}
+        run: |
+          base="$BEFORE"
+          if [ "$EVENT" = pull_request ]; then base="$PR_BASE"; fi
+          all=false
+          case "$REF" in refs/tags/*) all=true ;; esac
+          if [ -z "$base" ] || [ "$base" = 0000000000000000000000000000000000000000 ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then all=true; fi
+          files=""
+          if [ "$all" = false ]; then files=$(git diff --name-only "$base" "$HEAD"); fi
+          if printf '%s\n' "$files" | grep -q '^\.github/workflows/ci\.yml$'; then all=true; fi
+          # Each part with what its tests read: agent tests check docs/ and the chart, the app's icon test reads the agent's modules,
+          # the relay's end-to-end test starts a real agent.
+          hit() { if [ "$all" = true ] || printf '%s\n' "$files" | grep -Eq "$1"; then echo "$2=true"; else echo "$2=false"; fi; }
+          {
+            hit '^protocol/' protocol
+            hit '^(protocol|agent|deploy|docs)/' agent
+            hit '^(protocol|app|agent/src)/' app
+            hit '^(protocol|relay|agent|deploy/relay)/' relay
+            hit '^deploy/' chart
+            hit '^(protocol|agent|app|e2e)/' e2e
+            hit '^(protocol|agent|app)/|^Dockerfile$|^\.dockerignore$' image
+            hit '^(protocol|relay)/' relay_image
+          } | tee -a "$GITHUB_OUTPUT"
+
   protocol:
+    needs: changes
+    if: needs.changes.outputs.protocol == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -31,6 +81,8 @@ jobs:
       - run: npm test
 
   agent:
+    needs: changes
+    if: needs.changes.outputs.agent == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -49,6 +101,8 @@ jobs:
       - run: npm test
 
   app:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -73,6 +127,8 @@ jobs:
       - run: npm run build:demo
 
   relay:
+    needs: changes
+    if: needs.changes.outputs.relay == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -100,6 +156,8 @@ jobs:
           npx wrangler deploy --dry-run --outdir dist
 
   chart:
+    needs: changes
+    if: needs.changes.outputs.chart == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -143,6 +201,8 @@ jobs:
           ! np --set imageUpdates.enabled=true --set 'checks.disabled={image-updates}' | grep -q 'image-updates module'
 
   e2e:
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -167,8 +227,9 @@ jobs:
           path: e2e/playwright-report
 
   image:
-    needs: [protocol, agent, app, chart, e2e]
-    if: github.event_name == 'push'
+    needs: [changes, protocol, agent, app, chart, e2e]
+    # Skipped test jobs (nothing of theirs changed) do not block it; a failed or cancelled one does.
+    if: github.event_name == 'push' && !cancelled() && !failure() && needs.changes.outputs.image == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -219,8 +280,8 @@ jobs:
           cosign sign --yes "ghcr.io/$OWNER/agent@$DIGEST"
 
   relay-image:
-    needs: [protocol, relay]
-    if: github.event_name == 'push'
+    needs: [changes, protocol, relay]
+    if: github.event_name == 'push' && !cancelled() && !failure() && needs.changes.outputs.relay_image == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
