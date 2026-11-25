@@ -2,6 +2,8 @@ import { Condition, ObjectMeta } from '../checks/types';
 import type { Node } from '../checks/nodes.check';
 import type { Pod } from '../checks/pods.check';
 import { KubeClient } from '../kube/kube-client';
+import { ClusterCache, EVENT_MAX_AGE_MS, EVENT_MAX_ITEMS, WatchedKind } from './cluster-cache';
+import { eventTime } from './strip';
 
 export interface PodSpecLite {
   nodeName?: string;
@@ -152,7 +154,18 @@ export interface Inventory {
   /** null when metrics-server is not installed. */
   nodeUsage: Map<string, Usage> | null;
   podUsage: Map<string, Usage> | null;
+  /**
+   * Kinds whose read failed in this run (timeout, 429, 5xx, 403 after an RBAC
+   * change). Their lists hold the last known objects instead, so issues do
+   * not vanish (and no "resolved" goes out) because of a failed read, and
+   * the modules that read them report `error`, which keeps the light from
+   * turning green. A kind that does not exist (404) is not stale: it is empty.
+   */
+  stale: InventoryKind[];
 }
+
+/** The lists of an inventory that come from the API, by name. */
+export type InventoryKind = WatchedKind | 'httpRoutes' | 'ingressRoutes';
 
 // ---- quantities ----
 
@@ -186,15 +199,22 @@ interface MetricsItem {
   containers?: { usage?: { cpu?: string; memory?: string } }[];
 }
 
-async function optional<T>(p: Promise<T[] | null>): Promise<T[]> {
-  try {
-    return (await p) ?? [];
-  } catch {
-    return [];
-  }
+export interface GatherOptions {
+  /** The watch caches; a kind whose cache is current is read from memory, the rest is listed. */
+  cache?: ClusterCache | null;
+  /** The last inventory, whose objects stand in for a kind that cannot be read now. */
+  previous?: Inventory | null;
 }
 
-export async function gatherInventory(kube: KubeClient, now: Date): Promise<Inventory> {
+/** Newest first, at most EVENT_MAX_ITEMS, none older than EVENT_MAX_AGE_MS: the same bound with or without a watch. */
+function boundEvents(events: KubeEvent[], now: Date): KubeEvent[] {
+  const fresh = events.filter((e) => now.getTime() - eventTime(e) <= EVENT_MAX_AGE_MS);
+  return fresh.length <= EVENT_MAX_ITEMS ? fresh : fresh.sort((a, b) => eventTime(b) - eventTime(a)).slice(0, EVENT_MAX_ITEMS);
+}
+
+export async function gatherInventory(kube: KubeClient, now: Date, options: GatherOptions = {}): Promise<Inventory> {
+  const { cache, previous } = options;
+  const stale: InventoryKind[] = [];
   const [groupList, version] = await Promise.all([
     kube.get<{ groups?: { name: string }[] }>('/apis'),
     kube.get<{ gitVersion?: string; platform?: string }>('/version').catch(() => null),
@@ -202,8 +222,31 @@ export async function gatherInventory(kube: KubeClient, now: Date): Promise<Inve
   const groups = new Set((groupList.groups ?? []).map((g) => g.name));
   groups.add('');
 
-  // Core lists must work, the rest may be missing or forbidden.
-  const [nodes, pods] = await Promise.all([kube.list<FullNode>('/api/v1/nodes'), kube.list<FullPod>('/api/v1/pods')]);
+  /**
+   * One kind: from its watch cache when that is current, else listed. A
+   * failed list of a required kind fails the run (the cluster counts as
+   * unreachable); of any other kind it marks the kind stale and keeps the
+   * last known objects.
+   */
+  async function read<T>(kind: InventoryKind, path: string, last: T[] | undefined, required = false): Promise<T[]> {
+    const watched = cache && kind !== 'httpRoutes' && kind !== 'ingressRoutes' ? cache.get(kind) : null;
+    if (watched?.usable) {
+      return watched.items() as unknown as T[];
+    }
+    try {
+      return (await kube.list<T>(path)) ?? [];
+    } catch (err) {
+      if (required) {
+        throw err;
+      }
+      stale.push(kind);
+      return last ?? ((watched?.items() as unknown as T[] | undefined) ?? []);
+    }
+  }
+
+  // Core lists must work, the rest may be missing (404: empty) or fail (stale: the last known objects).
+  const [nodes, pods] = await Promise.all([read<FullNode>('nodes', '/api/v1/nodes', previous?.nodes, true), read<FullPod>('pods', '/api/v1/pods', previous?.pods, true)]);
+  const lastNamespaces = previous?.namespaces.map((name) => ({ metadata: { name } }));
   const [
     namespaces,
     deployments,
@@ -221,27 +264,26 @@ export async function gatherInventory(kube: KubeClient, now: Date): Promise<Inve
     nodeMetrics,
     podMetrics,
   ] = await Promise.all([
-    optional(kube.list<{ metadata: ObjectMeta }>('/api/v1/namespaces')),
-    optional(kube.list<Workload>('/apis/apps/v1/deployments')),
-    optional(kube.list<Workload>('/apis/apps/v1/statefulsets')),
-    optional(kube.list<Workload>('/apis/apps/v1/daemonsets')),
-    optional(kube.list<Job>('/apis/batch/v1/jobs')),
-    optional(kube.list<CronJob>('/apis/batch/v1/cronjobs')),
-    optional(kube.list<Service>('/api/v1/services')),
-    optional(kube.list<Ingress>('/apis/networking.k8s.io/v1/ingresses')),
-    groups.has('gateway.networking.k8s.io') ? optional(kube.list<HttpRoute>('/apis/gateway.networking.k8s.io/v1/httproutes')) : Promise.resolve([] as HttpRoute[]),
+    read<{ metadata: ObjectMeta }>('namespaces', '/api/v1/namespaces', lastNamespaces),
+    read<Workload>('deployments', '/apis/apps/v1/deployments', previous?.deployments),
+    read<Workload>('statefulsets', '/apis/apps/v1/statefulsets', previous?.statefulsets),
+    read<Workload>('daemonsets', '/apis/apps/v1/daemonsets', previous?.daemonsets),
+    read<Job>('jobs', '/apis/batch/v1/jobs', previous?.jobs),
+    read<CronJob>('cronjobs', '/apis/batch/v1/cronjobs', previous?.cronjobs),
+    read<Service>('services', '/api/v1/services', previous?.services),
+    read<Ingress>('ingresses', '/apis/networking.k8s.io/v1/ingresses', previous?.ingresses),
+    groups.has('gateway.networking.k8s.io') ? read<HttpRoute>('httpRoutes', '/apis/gateway.networking.k8s.io/v1/httproutes', previous?.httpRoutes) : Promise.resolve([] as HttpRoute[]),
     groups.has('traefik.io')
-      ? optional(kube.list<IngressRoute>('/apis/traefik.io/v1alpha1/ingressroutes'))
+      ? read<IngressRoute>('ingressRoutes', '/apis/traefik.io/v1alpha1/ingressroutes', previous?.ingressRoutes)
       : groups.has('traefik.containo.us')
-        ? optional(kube.list<IngressRoute>('/apis/traefik.containo.us/v1alpha1/ingressroutes'))
+        ? read<IngressRoute>('ingressRoutes', '/apis/traefik.containo.us/v1alpha1/ingressroutes', previous?.ingressRoutes)
         : Promise.resolve([] as IngressRoute[]),
-    optional(kube.list<Pvc>('/api/v1/persistentvolumeclaims')),
-    optional(kube.list<StorageClass>('/apis/storage.k8s.io/v1/storageclasses')),
-    optional(kube.list<KubeEvent>('/api/v1/events?fieldSelector=type%3DWarning')),
+    read<Pvc>('pvcs', '/api/v1/persistentvolumeclaims', previous?.pvcs),
+    read<StorageClass>('storageClasses', '/apis/storage.k8s.io/v1/storageclasses', previous?.storageClasses),
+    read<KubeEvent>('events', '/api/v1/events?fieldSelector=type%3DWarning', previous?.events),
     groups.has('metrics.k8s.io') ? kube.list<MetricsItem>('/apis/metrics.k8s.io/v1beta1/nodes').catch(() => null) : Promise.resolve(null),
     groups.has('metrics.k8s.io') ? kube.list<MetricsItem>('/apis/metrics.k8s.io/v1beta1/pods').catch(() => null) : Promise.resolve(null),
   ]);
-
   const nodeUsage = nodeMetrics
     ? new Map(nodeMetrics.map((m) => [m.metadata.name, { cpuMilli: cpuMilli(m.usage?.cpu), memBytes: parseQuantity(m.usage?.memory) }]))
     : null;
@@ -264,8 +306,8 @@ export async function gatherInventory(kube: KubeClient, now: Date): Promise<Inve
     version,
     groups,
     namespaces: namespaces.map((n) => n.metadata.name),
-    nodes: nodes ?? [],
-    pods: pods ?? [],
+    nodes,
+    pods,
     deployments,
     statefulsets,
     daemonsets,
@@ -277,9 +319,10 @@ export async function gatherInventory(kube: KubeClient, now: Date): Promise<Inve
     ingressRoutes,
     pvcs,
     storageClasses,
-    events,
+    events: boundEvents(events, now),
     nodeUsage,
     podUsage,
+    stale,
   };
 }
 
@@ -305,5 +348,6 @@ export function emptyInventory(now: Date): Inventory {
     events: [],
     nodeUsage: null,
     podUsage: null,
+    stale: [],
   };
 }

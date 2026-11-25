@@ -12,13 +12,17 @@ export interface ExplainedRule extends Rule {
   why: string;
 }
 
-/** The static ClusterRole lines of `templates/rbac.yaml`: what every run reads, whatever is switched off. */
+/**
+ * The static ClusterRole lines of `templates/rbac.yaml`: what every run reads, whatever is switched off.
+ * `watch` on the kinds the agent keeps current with watches (`inventory/cluster-cache.ts`); without it
+ * the agent falls back to listing them every run.
+ */
 export const INVENTORY_READS: readonly ExplainedRule[] = [
-  { group: '', resources: ['nodes', 'pods', 'services', 'namespaces', 'events', 'persistentvolumeclaims'], verbs: ['get', 'list'], why: 'nodes, pod health, which service belongs to a component, warning events, volumes' },
-  { group: 'apps', resources: ['deployments', 'statefulsets', 'daemonsets'], verbs: ['get', 'list'], why: 'workload readiness, the owner of a crashing pod, component recognition by image' },
-  { group: 'batch', resources: ['jobs', 'cronjobs'], verbs: ['get', 'list'], why: 'failed jobs and missed schedules' },
-  { group: 'networking.k8s.io', resources: ['ingresses'], verbs: ['get', 'list'], why: 'which component is reachable under which address' },
-  { group: 'storage.k8s.io', resources: ['storageclasses'], verbs: ['get', 'list'], why: 'the Storage tab' },
+  { group: '', resources: ['nodes', 'pods', 'services', 'namespaces', 'events', 'persistentvolumeclaims'], verbs: ['get', 'list', 'watch'], why: 'nodes, pod health, which service belongs to a component, warning events, volumes' },
+  { group: 'apps', resources: ['deployments', 'statefulsets', 'daemonsets'], verbs: ['get', 'list', 'watch'], why: 'workload readiness, the owner of a crashing pod, component recognition by image' },
+  { group: 'batch', resources: ['jobs', 'cronjobs'], verbs: ['get', 'list', 'watch'], why: 'failed jobs and missed schedules' },
+  { group: 'networking.k8s.io', resources: ['ingresses'], verbs: ['get', 'list', 'watch'], why: 'which component is reachable under which address' },
+  { group: 'storage.k8s.io', resources: ['storageclasses'], verbs: ['get', 'list', 'watch'], why: 'the Storage tab' },
   { group: 'metrics.k8s.io', resources: ['nodes', 'pods'], verbs: ['get', 'list'], why: 'CPU and memory, when metrics-server runs' },
   { group: 'gateway.networking.k8s.io', resources: ['httproutes'], verbs: ['get', 'list'], why: 'addresses published through the Gateway API' },
   { group: 'traefik.io', resources: ['ingressroutes'], verbs: ['get', 'list'], why: 'addresses published as Traefik IngressRoutes' },
@@ -103,5 +107,5 @@ export const NEVER: readonly { what: string; matches: (r: RbacRule, kind: 'Clust
   { what: '`services/proxy`, `nodes/proxy`, `pods/proxy` (the API server proxy into the cluster network)', matches: (r) => r.resources.some((x) => x.endsWith('/proxy')) },
   { what: '`escalate`, `bind`, `impersonate`, or any write on RBAC objects', matches: (r) => r.verbs.some((v) => ['escalate', 'bind', 'impersonate'].includes(v)) || (r.apiGroups.includes('rbac.authorization.k8s.io') && r.verbs.some((v) => v !== 'get' && v !== 'list')) },
   { what: '`create` of pods or workloads, `update` of anything', matches: (r) => r.verbs.includes('update') || (r.verbs.includes('create') && r.resources.some((x) => ['pods', 'deployments', 'statefulsets', 'daemonsets', 'jobs', 'cronjobs'].includes(x))) },
-  { what: 'anything on nodes but reading them (no cordon, drain or label)', matches: (r) => r.apiGroups.includes('') && r.resources.includes('nodes') && r.verbs.some((v) => v !== 'get' && v !== 'list') },
+  { what: 'anything on nodes but reading them (no cordon, drain or label)', matches: (r) => r.apiGroups.includes('') && r.resources.includes('nodes') && r.verbs.some((v) => v !== 'get' && v !== 'list' && v !== 'watch') },
 ];

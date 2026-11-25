@@ -13,6 +13,7 @@ import { KUBERNETES_EOL } from './releases';
  */
 export class KubernetesSupportCheck extends CoreCheck {
   readonly id = 'kubernetes-support';
+  override readonly uses = ['nodes'] as const;
   readonly name = t('module.kubernetes-support.name');
   // Already registered in the app (time-outline is one of its own icons), so no app change is needed.
   readonly icon = 'calendar-outline';

@@ -4,6 +4,7 @@ import type { Text } from '../i18n/text';
 import { Detected } from '../discovery/discovery';
 import { ServiceHttp } from './service-proxy';
 import { boundDetails, boundStats, capIssues } from './untrusted';
+import type { InventoryKind } from '../inventory/inventory';
 import { ApiRead, ModuleContext, ModuleResult } from './types';
 
 /**
@@ -21,6 +22,14 @@ export abstract class CheckModule {
   abstract readonly id: string;
   abstract readonly reads: readonly ApiRead[];
   readonly actions: readonly ActionType[] = [];
+  /**
+   * The inventory lists its judgement rests on. When one of them could not be
+   * read in a run (Inventory.stale) the module reports `error`: its issues
+   * come from the last known objects, and the light must not turn green on
+   * them. By default the lists most checks look at; events and routes only
+   * feed the views and component links.
+   */
+  readonly uses: readonly InventoryKind[] = ['nodes', 'pods', 'deployments', 'statefulsets', 'daemonsets', 'jobs', 'cronjobs', 'services', 'pvcs'];
 
   /** Drops every action this module did not declare or that is switched off. */
   protected keepActions(issues: Issue[], allowed: (type: IssueActionType) => boolean): Issue[] {

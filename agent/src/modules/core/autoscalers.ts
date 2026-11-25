@@ -5,6 +5,7 @@ import { ModuleContext, ModuleResult } from '../types';
 
 export class HpaCheck extends CoreCheck {
   readonly id = 'hpa';
+  override readonly uses = [] as const;
   readonly name = t('module.hpa.name');
   readonly icon = 'swap-vertical-outline';
   readonly description = t('module.hpa.description');

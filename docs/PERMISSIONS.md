@@ -98,11 +98,11 @@ These lines are in the ClusterRole whatever is switched off: every check builds 
 <!-- generated:inventory -->
 | Resources | Verbs | Why |
 |---|---|---|
-| `nodes`, `pods`, `services`, `namespaces`, `events`, `persistentvolumeclaims` | get, list | nodes, pod health, which service belongs to a component, warning events, volumes |
-| `apps/deployments`, `apps/statefulsets`, `apps/daemonsets` | get, list | workload readiness, the owner of a crashing pod, component recognition by image |
-| `batch/jobs`, `batch/cronjobs` | get, list | failed jobs and missed schedules |
-| `networking.k8s.io/ingresses` | get, list | which component is reachable under which address |
-| `storage.k8s.io/storageclasses` | get, list | the Storage tab |
+| `nodes`, `pods`, `services`, `namespaces`, `events`, `persistentvolumeclaims` | get, list, watch | nodes, pod health, which service belongs to a component, warning events, volumes |
+| `apps/deployments`, `apps/statefulsets`, `apps/daemonsets` | get, list, watch | workload readiness, the owner of a crashing pod, component recognition by image |
+| `batch/jobs`, `batch/cronjobs` | get, list, watch | failed jobs and missed schedules |
+| `networking.k8s.io/ingresses` | get, list, watch | which component is reachable under which address |
+| `storage.k8s.io/storageclasses` | get, list, watch | the Storage tab |
 | `metrics.k8s.io/nodes`, `metrics.k8s.io/pods` | get, list | CPU and memory, when metrics-server runs |
 | `gateway.networking.k8s.io/httproutes` | get, list | addresses published through the Gateway API |
 | `traefik.io/ingressroutes` | get, list | addresses published as Traefik IngressRoutes |

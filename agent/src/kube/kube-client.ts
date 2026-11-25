@@ -150,6 +150,20 @@ export class KubeClient {
     await this.assertOk(res, path);
   }
 
+  /** Whether this client can hold watch streams (the demo and test clients answer lists only). */
+  get supportsWatch(): boolean {
+    return this.baseUrl !== null;
+  }
+
+  /**
+   * A watch: the open response whose body streams newline-delimited events.
+   * No timeout of its own (the server ends it after `timeoutSeconds`); the
+   * caller aborts it with `signal`.
+   */
+  watch(path: string, signal: AbortSignal): Promise<Response> {
+    return this.request(path, { signal });
+  }
+
   private request(path: string, init: RequestInit = {}): Promise<Response> {
     if (this.baseUrl === null) {
       return Promise.reject(new Error('not running in a cluster: KUBERNETES_SERVICE_HOST is unset. Outside a cluster set K8S_API_URL (e.g. http://127.0.0.1:8001 with `kubectl proxy`), or DEMO=1.'));
@@ -160,7 +174,7 @@ export class KubeClient {
       headers.set('authorization', `Bearer ${token}`);
     }
     headers.set('accept', 'application/json');
-    return fetch(`${this.baseUrl}${path}`, { ...init, headers, signal: AbortSignal.timeout(15_000) });
+    return fetch(`${this.baseUrl}${path}`, { ...init, headers, signal: init.signal ?? AbortSignal.timeout(15_000) });
   }
 
   private token(): string | undefined {

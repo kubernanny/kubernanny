@@ -906,6 +906,11 @@ const LOG = `2026-11-24T04:02:11.093Z INFO  importer starting, feeds=3
 
 /** KubeClient answering from the demo cluster. Writes are recorded, not applied. */
 export class DemoKubeClient extends KubeClient {
+  /** The demo answers lists only: the inventory polls it, never watches (even in a pod). */
+  override get supportsWatch(): boolean {
+    return false;
+  }
+
   private paths: Map<string, unknown>;
   readonly writes: { method: string; path: string; body: unknown }[] = [];
   /** Every list path asked for, so tests can see what a switched-off module no longer reads. */

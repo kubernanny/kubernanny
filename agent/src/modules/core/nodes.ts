@@ -68,6 +68,7 @@ function nodesStats(inv: Inventory): Stat[] {
 
 export class NodesCheck extends CoreCheck {
   readonly id = 'nodes';
+  override readonly uses = ['nodes'] as const;
   readonly name = t('module.nodes.name');
   readonly icon = 'hardware-chip-outline';
   readonly description = t('module.nodes.description');

@@ -42,6 +42,7 @@ export function evaluateVolumes(inv: Inventory, usage: Map<string, { used: numbe
 
 export class VolumesCheck extends CoreCheck {
   readonly id = 'volumes';
+  override readonly uses = ['pvcs', 'pods'] as const;
   readonly name = t('module.volumes.name');
   readonly icon = 'albums-outline';
   readonly description = t('module.volumes.description');
