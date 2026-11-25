@@ -5,15 +5,52 @@ import { Condition, Issue, ObjectMeta, ageText, condition } from './types';
 
 export interface Pdb {
   metadata: ObjectMeta;
-  spec?: { minAvailable?: number | string; maxUnavailable?: number | string };
+  spec?: { minAvailable?: number | string; maxUnavailable?: number | string; selector?: { matchLabels?: Record<string, string> } };
   status?: { disruptionsAllowed?: number; currentHealthy?: number; desiredHealthy?: number; expectedPods?: number };
+}
+
+const cnpgOwner = (pdb: Pdb) => pdb.metadata.ownerReferences?.find((o) => o.kind === 'Cluster' && (o.apiVersion ?? '').startsWith('postgresql.cnpg.io/'));
+
+/**
+ * PDBs an operator creates to steer drains itself, and that therefore never
+ * hold a drain up for good:
+ *
+ * - CloudNativePG's `<cluster>-primary` (minAvailable 1 on the primary). When
+ *   the primary's node is cordoned, the operator switches the primary over to
+ *   a replica, after which the old primary is an ordinary replica and can be
+ *   evicted (CNPG docs, "Kubernetes upgrade and maintenance"). That needs a
+ *   replica: CNPG then also creates the `<cluster>` PDB for the replicas, so a
+ *   sibling PDB of the same Cluster with pods is the sign. A one-instance
+ *   cluster with enablePDB has no replica to switch to and really blocks.
+ * - Longhorn's per-node `instance-manager-*` PDBs, created and removed by
+ *   longhorn-manager according to its node-drain-policy (e.g.
+ *   block-for-eviction-if-contains-last-replica): Longhorn first moves the
+ *   replicas off the node and then deletes the PDB. Blocking until then is the
+ *   point; Longhorn's own volume checks report a replica that cannot move.
+ */
+function managedByDrainAwareOperator(pdb: Pdb, all: Pdb[]): boolean {
+  const labels = pdb.spec?.selector?.matchLabels ?? {};
+  if (labels['longhorn.io/component'] === 'instance-manager' && labels['longhorn.io/managed-by'] === 'longhorn-manager') {
+    return true;
+  }
+  const owner = cnpgOwner(pdb);
+  if (owner && pdb.metadata.name.endsWith('-primary')) {
+    const sameCluster = (o: Pdb) =>
+      o !== pdb &&
+      o.metadata.namespace === pdb.metadata.namespace &&
+      cnpgOwner(o)?.name === owner.name &&
+      (owner.uid === undefined || cnpgOwner(o)?.uid === owner.uid);
+    return all.some((o) => sameCluster(o) && (o.status?.expectedPods ?? 0) > 0);
+  }
+  return false;
 }
 
 /**
  * A PDB that allows no disruption while all its pods are healthy blocks every
  * node drain: kured's nightly reboot, a system upgrade, a cordon by hand. The
- * drain waits forever and the node never reboots. (When pods are unhealthy
- * the Workloads check already reports them.)
+ * drain waits until it gives up (kured: --drain-timeout, after which the node
+ * is uncordoned and not rebooted; kubectl drain without a timeout: forever).
+ * (When pods are unhealthy the Workloads check already reports them.)
  */
 export function evaluatePdbs(pdbs: Pdb[]): Issue[] {
   const issues: Issue[] = [];
@@ -27,14 +64,18 @@ export function evaluatePdbs(pdbs: Pdb[]): Issue[] {
     if (healthy < (s?.desiredHealthy ?? 0)) {
       continue;
     }
+    if (managedByDrainAwareOperator(pdb, pdbs)) {
+      continue;
+    }
     const ns = pdb.metadata.namespace ?? 'default';
     const rule = pdb.spec?.minAvailable !== undefined ? `minAvailable: ${pdb.spec.minAvailable}` : `maxUnavailable: ${pdb.spec?.maxUnavailable}`;
+    const cnpg = cnpgOwner(pdb);
     issues.push({
       id: `pdb/${ns}/${pdb.metadata.name}`,
       check: 'pdb',
       severity: 'warning',
       title: t('pdb.title', { pdb: `${ns}/${pdb.metadata.name}` }),
-      cause: t('pdb.cause', { rule, pods: expected }),
+      cause: cnpg ? t('pdb.cause.cnpgSingle', { cluster: cnpg.name }) : t('pdb.cause', { rule, pods: expected }),
       actions: [],
     });
   }
@@ -180,7 +221,59 @@ export interface LonghornBackupTarget {
   status?: { available?: boolean; conditions?: { type: string; status: string; message?: string }[] };
 }
 
-export function evaluateLonghornBackups(targets: LonghornBackupTarget[], backups: LonghornBackup[], now: Date, maxAgeHours: number): Issue[] {
+/** A Longhorn volume as the backup checks see it: name, attachment, the PVC it serves. */
+export interface LonghornBackupVolume {
+  metadata: ObjectMeta;
+  status?: { state?: string; kubernetesStatus?: { namespace?: string; pvcName?: string } };
+}
+
+/** `namespace/pvc` for a volume a PVC uses, else the Longhorn volume name (pvc-<uuid>). */
+export function longhornVolumeLabel(v: LonghornBackupVolume): string {
+  const k8s = v.status?.kubernetesStatus;
+  return k8s?.pvcName ? `${k8s.namespace ?? 'default'}/${k8s.pvcName}` : v.metadata.name;
+}
+
+export interface LonghornBackupGroups {
+  /** Backups of every volume that exists now, by volume name (volumes without a backup are absent). */
+  byVolume: Map<string, LonghornBackup[]>;
+  /** Backups the target still holds for volumes that were deleted. */
+  orphaned: { volumes: number; backups: number };
+}
+
+/**
+ * Longhorn keeps every backup in the target after its volume is deleted (a
+ * BackupVolume per deleted volume, until someone removes it). Those are no
+ * longer protecting anything, so only volumes that exist now are judged.
+ */
+export function groupLonghornBackups(volumes: LonghornBackupVolume[], backups: LonghornBackup[]): LonghornBackupGroups {
+  const existing = new Set(volumes.map((v) => v.metadata.name));
+  const byVolume = new Map<string, LonghornBackup[]>();
+  const orphanVolumes = new Set<string>();
+  let orphanBackups = 0;
+  for (const b of backups) {
+    const v = b.status?.volumeName;
+    if (!v) {
+      continue;
+    }
+    if (existing.has(v)) {
+      byVolume.set(v, [...(byVolume.get(v) ?? []), b]);
+    } else {
+      orphanVolumes.add(v);
+      orphanBackups++;
+    }
+  }
+  return { byVolume, orphaned: { volumes: orphanVolumes.size, backups: orphanBackups } };
+}
+
+export const longhornBackupTime = (b: LonghornBackup) => Date.parse(b.status?.backupCreatedAt || b.status?.snapshotCreatedAt || b.metadata.creationTimestamp || '');
+
+export function evaluateLonghornBackups(
+  targets: LonghornBackupTarget[],
+  backups: LonghornBackup[],
+  volumes: LonghornBackupVolume[],
+  now: Date,
+  maxAgeHours: number,
+): Issue[] {
   const issues: Issue[] = [];
   for (const target of targets) {
     if (target.spec?.backupTargetURL && target.status?.available === false) {
@@ -195,24 +288,29 @@ export function evaluateLonghornBackups(targets: LonghornBackupTarget[], backups
       });
     }
   }
-  const byVolume = new Map<string, LonghornBackup[]>();
-  for (const b of backups) {
-    const v = b.status?.volumeName;
-    if (v) {
-      byVolume.set(v, [...(byVolume.get(v) ?? []), b]);
+  const { byVolume } = groupLonghornBackups(volumes, backups);
+  const time = longhornBackupTime;
+  for (const volume of volumes) {
+    const list = byVolume.get(volume.metadata.name);
+    if (!list) {
+      // Not every volume needs a backup; the Backups view lists these as unprotected.
+      continue;
     }
-  }
-  const time = (b: LonghornBackup) => Date.parse(b.status?.backupCreatedAt || b.status?.snapshotCreatedAt || b.metadata.creationTimestamp || '');
-  for (const [volume, list] of byVolume) {
+    const name = volume.metadata.name;
+    const label = longhornVolumeLabel(volume);
+    // Longhorn's recurring jobs skip a detached volume (unless the setting
+    // allow-recurring-job-while-volume-detached is on), so its backups age by
+    // design: nothing writes to it either. Worth knowing, not a fault.
+    const detached = volume.status?.state === 'detached';
     const sorted = list.filter((b) => Number.isFinite(time(b))).sort((a, b) => time(b) - time(a));
     const lastOk = sorted.find((b) => b.status?.state === 'Completed');
     const newest = sorted[0];
     if (newest?.status?.state === 'Error') {
       issues.push({
-        id: `longhorn/backup/${volume}`,
+        id: `longhorn/backup/${name}`,
         check: 'longhorn',
         severity: 'warning',
-        title: t('longhorn.backup.failed.title', { volume }),
+        title: t('longhorn.backup.failed.title', { volume: label }),
         cause: rawOr(newest.status.error || Object.values(newest.status.messages ?? {})[0], t('longhorn.backup.failed.cause')),
         actions: [],
       });
@@ -221,11 +319,11 @@ export function evaluateLonghornBackups(targets: LonghornBackupTarget[], backups
     const age = lastOk ? now.getTime() - time(lastOk) : Infinity;
     if (age > maxAgeHours * 3_600_000) {
       issues.push({
-        id: `longhorn/backup/${volume}`,
+        id: `longhorn/backup/${name}`,
         check: 'longhorn',
-        severity: age > 2 * maxAgeHours * 3_600_000 ? 'critical' : 'warning',
-        title: lastOk ? t('longhorn.backup.old.title', { volume, age: ageText(age) }) : t('longhorn.backup.none.title', { volume }),
-        cause: t('longhorn.backup.old.cause'),
+        severity: detached ? 'info' : age > 2 * maxAgeHours * 3_600_000 ? 'critical' : 'warning',
+        title: lastOk ? t('longhorn.backup.old.title', { volume: label, age: ageText(age) }) : t('longhorn.backup.none.title', { volume: label }),
+        cause: detached ? t('longhorn.backup.detached.cause') : t('longhorn.backup.old.cause'),
         actions: [],
       });
     }

@@ -12,6 +12,16 @@ interface AppResource {
   health?: { status?: string; message?: string };
 }
 
+/**
+ * Whether Argo CD syncs the app by itself. `automated: {}` turns it on;
+ * Argo CD 3 also knows `automated: { enabled: false }`, which keeps the
+ * settings but syncs manually (IsAutomatedSyncEnabled in Argo CD's types).
+ */
+export function isAutomated(app: Pick<ArgoApplication, 'spec'>): boolean {
+  const a = app.spec?.syncPolicy?.automated;
+  return a !== undefined && a !== null && (a as { enabled?: boolean }).enabled !== false;
+}
+
 export interface ArgoApplication {
   metadata: ObjectMeta;
   spec?: { syncPolicy?: { automated?: unknown }; destination?: { namespace?: string }; source?: ArgoSource; sources?: ArgoSource[] };
@@ -118,7 +128,7 @@ export function evaluateArgoApps(apps: ArgoApplication[], inv?: Inventory): Issu
       // sync someone chooses to run. Automated: Argo should have fixed it
       // within minutes, so a sync is stuck or something edits the cluster
       // behind Git's back.
-      const automated = app.spec?.syncPolicy?.automated !== undefined;
+      const automated = isAutomated(app);
       issues.push({
         id: `${id}/sync`,
         check: 'argocd',

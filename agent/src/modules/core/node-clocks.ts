@@ -25,6 +25,8 @@ export interface NodeClock {
   offset?: number;
   /** False when the kernel says the clock is not synchronised and its maximum error has grown to 16 s (kube-prometheus' NodeClockNotSynchronising). */
   synchronised?: boolean;
+  /** node_timex_estimated_error_seconds: the time daemon's own estimate of how far off the clock may be. */
+  estimatedError?: number;
 }
 
 export function evaluateNodeClocks(clocks: NodeClock[]): Issue[] {
@@ -61,11 +63,12 @@ export function nodeOf(inv: Inventory, s: PromSample): string | undefined {
 
 export async function readNodeClocks(ctx: ModuleContext): Promise<NodeClock[]> {
   const prom = ctx.prom!;
-  const [timex, ntp, status, maxError] = await Promise.all([
+  const [timex, ntp, status, maxError, estimated] = await Promise.all([
     prom.query('max by (instance) (node_timex_offset_seconds)').catch(() => []),
     prom.query('max by (instance) (node_ntp_offset_seconds)').catch(() => []),
     prom.query('min by (instance) (min_over_time(node_timex_sync_status[5m]))').catch(() => []),
     prom.query('max by (instance) (node_timex_maxerror_seconds)').catch(() => []),
+    prom.query('max by (instance) (node_timex_estimated_error_seconds)').catch(() => []),
   ]);
   const clocks = new Map<string, NodeClock>();
   const at = (s: PromSample) => {
@@ -78,11 +81,19 @@ export async function readNodeClocks(ctx: ModuleContext): Promise<NodeClock[]> {
       c.offset = s.value;
     }
   }
-  // timex wins: it is what the kernel itself applies.
+  // timex wins: it is what the kernel itself applies. But chrony (the default
+  // on most distributions) disciplines the clock without the kernel PLL and
+  // leaves the timex offset at exactly 0: that is "not reported", not "0 ms off".
   for (const s of timex) {
     const c = at(s);
-    if (c) {
+    if (c && s.value !== 0) {
       c.offset = s.value;
+    }
+  }
+  for (const s of estimated) {
+    const c = at(s);
+    if (c) {
+      c.estimatedError = s.value;
     }
   }
   const errors = new Map(maxError.map((s) => [nodeOf(ctx.inv, s), s.value]));
@@ -110,14 +121,29 @@ export class NodeClocksCheck extends CoreCheck {
     const issues = evaluateNodeClocks(clocks);
     const measured = clocks.filter((c) => c.offset !== undefined);
     const worst = measured.reduce((m, c) => Math.max(m, Math.abs(c.offset!)), 0);
+    const ms = (v: number) => (v < 0.001 ? '< 1 ms' : v < 1 ? `${Math.round(v * 1000)} ms` : `${v.toFixed(1)} s`);
     if (measured.length === 0) {
-      return { issues, stats: [{ label: t('nodeClocks.stat.source'), value: t('nodeClocks.noMetrics'), tone: 'muted' }], summary: issues[0]?.title ?? t('nodeClocks.summary.noMetrics') };
+      // No offset (chrony): the kernel still says whether the clock is synchronised, and the daemon how far off it may be.
+      const known = clocks.filter((c) => c.synchronised !== undefined);
+      if (known.length === 0) {
+        return { issues, stats: [{ label: t('nodeClocks.stat.source'), value: t('nodeClocks.noMetrics'), tone: 'muted' }], summary: issues[0]?.title ?? t('nodeClocks.summary.noMetrics') };
+      }
+      const synced = known.filter((c) => c.synchronised).length;
+      const errors = clocks.map((c) => c.estimatedError).filter((v): v is number => v !== undefined);
+      return {
+        issues,
+        stats: [
+          { label: t('nodeClocks.stat.synced'), value: `${synced}/${ctx.inv.nodes.length}`, tone: synced === known.length ? 'ok' : 'warning' },
+          ...(errors.length ? [{ label: t('nodeClocks.stat.estimatedError'), value: ms(Math.max(...errors)) }] : []),
+        ],
+        summary: issues[0]?.title ?? t('nodeClocks.summary.synced', { n: synced }),
+      };
     }
     return {
       issues,
       stats: [
         { label: t('nodeClocks.stat.measured'), value: `${measured.length}/${ctx.inv.nodes.length}` },
-        { label: t('nodeClocks.stat.worst'), value: worst < 1 ? `${Math.round(worst * 1000)} ms` : `${worst.toFixed(1)} s`, tone: worst > CLOCK_CRITICAL_S ? 'critical' : worst > CLOCK_WARNING_S ? 'warning' : 'ok' },
+        { label: t('nodeClocks.stat.worst'), value: ms(worst), tone: worst > CLOCK_CRITICAL_S ? 'critical' : worst > CLOCK_WARNING_S ? 'warning' : 'ok' },
       ],
       summary: issues[0]?.title ?? t('nodeClocks.summary.ok', { n: measured.length }),
     };

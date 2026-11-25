@@ -117,7 +117,7 @@ export interface ObjectMeta {
   labels?: Record<string, string>;
   annotations?: Record<string, string>;
   creationTimestamp?: string;
-  ownerReferences?: { kind: string; name: string }[];
+  ownerReferences?: { kind: string; name: string; apiVersion?: string; uid?: string }[];
 }
 
 /** A duration as people say it: minutes, then hours, from two days on days. */
