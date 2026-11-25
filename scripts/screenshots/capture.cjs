@@ -274,6 +274,12 @@ async function desktop(browser, L, scheme) {
   await openCluster(page, 'homelab');
   await shot(page, `${scheme === 'dark' ? 46 : 55}-${p}-overview`);
   if (scheme === 'dark') {
+    // The rail at a full-HD width too, and the eye with its countdown ring close up.
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.waitForTimeout(500);
+    await shot(page, '85-desktop-1920-overview');
+    await page.locator('.hero').last().screenshot({ path: `${OUT}/86-hero-ring.png` });
+    await page.setViewportSize({ width: 1440, height: 960 });
     await scroll(page, 2200);
     await shot(page, '47-desktop-charts');
     for (const [label, file] of [
@@ -293,6 +299,20 @@ async function desktop(browser, L, scheme) {
   await ctx.close();
 }
 
+/** The phone with the root font at the app's cap (23 px, what Dynamic Type reaches): nothing cut, nothing on top of each other. */
+async function largeText(browser, L) {
+  const { ctx, page } = await context(browser, { ...PHONE, colorScheme: 'dark' }, 'large text');
+  await pairAll(page);
+  await page.addStyleTag({ content: 'html { font-size: 23px !important; }' });
+  await openCluster(page, 'homelab');
+  await page.addStyleTag({ content: 'html { font-size: 23px !important; }' });
+  await page.waitForTimeout(500);
+  await shot(page, '87-phone-23px-overview');
+  await tab(page, L.nodes);
+  await shot(page, '88-phone-23px-nodes');
+  await ctx.close();
+}
+
 (async () => {
   const browser = await chromium.launch();
   const en = LABELS.en;
@@ -305,6 +325,7 @@ async function desktop(browser, L, scheme) {
     ['tablet', () => tablet(browser, en)],
     ['desktop dark', () => desktop(browser, en, 'dark')],
     ['desktop light', () => desktop(browser, en, 'light')],
+    ['large text', () => largeText(browser, en)],
   ]) {
     // One broken step must not cost every other screenshot.
     await run().catch((e) => errors.push(`${name}: ${e.message.split('\n')[0]}`));
