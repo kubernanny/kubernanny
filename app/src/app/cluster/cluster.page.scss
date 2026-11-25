@@ -50,9 +50,15 @@ ion-toolbar {
   letter-spacing: 0.02em;
 }
 
-app-heartbeat {
-  margin: 1.25rem -16px 0.75rem;
-  --heartbeat-height: 76px;
+.state {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1.25rem 0 0;
+}
+
+app-nanny-eye {
+  --eye-width: 76px;
 }
 
 .headline {
@@ -70,11 +76,6 @@ app-heartbeat {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem 1rem;
-}
-
-.score {
-  color: var(--ink-2);
-  font-weight: 600;
 }
 
 .tabs {
@@ -137,9 +138,12 @@ ion-segment-button {
     padding-top: 1.5rem;
   }
 
-  app-heartbeat {
-    margin: 1.75rem 0 1rem;
-    --heartbeat-height: 110px;
+  .state {
+    margin-top: 1.75rem;
+  }
+
+  app-nanny-eye {
+    --eye-width: 92px;
   }
 
   .tabs {
@@ -179,6 +183,10 @@ ion-segment-button {
   .vitals .note {
     color: var(--mute);
     font-size: 0.8125rem;
+  }
+
+  .vitals .bar {
+    margin: 0.4rem 0 0.25rem;
   }
 
   :host ::ng-deep app-overview-tab .kpi-section {

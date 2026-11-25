@@ -1,9 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { IonIcon, IonSpinner } from '@ionic/angular/standalone';
-import { Tone, WorkloadView } from '../../core/agent.model';
+import { Termination, Tone, WorkloadView } from '../../core/agent.model';
+import { resourceNote } from '../../core/resources-text';
+import { UsageBar } from '../../ui/usage-bar';
+import { usageTone } from '../../ui/meter';
 import { Loadable } from '../../core/cluster-data.store';
-import { age, bytes, cores } from '../../core/format';
+import { age, bytes, cores, ratio, relativeTime } from '../../core/format';
 import { LanguageService } from '../../i18n/language.service';
 import { Translator } from '../../i18n/translator';
 
@@ -16,7 +19,58 @@ export interface WorkloadRow {
   readyText: string;
   usage: string;
   detail: string;
-  pods: { name: string; tone: Tone; text: string }[];
+  /** "last 2 h ago: OOMKilled at the limit of 512 MiB", when it restarted; `oom` tints it. */
+  restart: { text: string; oom: boolean } | null;
+  /** CPU and RAM: use against requests and limits (agents from 0.4 on). */
+  resources: { label: string; text: string; note: string; used: number | null; reserved: number | null; tone: Tone }[];
+  pods: { name: string; tone: Tone; text: string; containers: { name: string; text: string; oom: boolean }[] }[];
+}
+
+/** Why a container's last run ended, and when: "OOMKilled at the limit of 512 MiB, exit code 137, 2 h ago". */
+export function terminationText(term: Termination, now: Date, tr: Translator): string {
+  const lang = tr.lang;
+  const parts: string[] = [];
+  if (term.reason === 'OOMKilled') {
+    parts.push(term.memLimit ? tr.t('workloads.oomLimit', { limit: bytes(term.memLimit, lang) }) : tr.t('workloads.oomNoLimit'));
+  } else if (term.reason) {
+    parts.push(term.reason);
+  }
+  if (term.exitCode !== undefined && term.exitCode !== 0) {
+    parts.push(tr.t('workloads.exitCode', { code: term.exitCode }));
+  }
+  if (term.signal) {
+    parts.push(tr.t('workloads.signal', { n: term.signal }));
+  }
+  if (term.finishedAt) {
+    parts.push(relativeTime(term.finishedAt, now, lang));
+  }
+  return parts.join(', ');
+}
+
+/**
+ * Use against what a workload asks for: the bar runs to the limit (amber from
+ * 80 %, coral from 90 %); without a limit to the request or the use, whichever
+ * is larger, in a neutral tone, since nothing caps it.
+ */
+function resourceRows(w: WorkloadView, tr: Translator): WorkloadRow['resources'] {
+  const r = w.resources;
+  if (!r) {
+    return [];
+  }
+  const lang = tr.lang;
+  const row = (kind: 'cpu' | 'memory', used: number | null, request: number, limit: number | null, unlimited: number) => {
+    const scale = limit ?? Math.max(request, used ?? 0);
+    const share = ratio(used, scale > 0 ? scale : null);
+    return {
+      label: tr.t(kind === 'cpu' ? 'nodes.cpu' : 'nodes.ram'),
+      text: used === null ? '' : kind === 'cpu' ? cores(used, lang) : bytes(used, lang),
+      note: resourceNote(kind, request, limit, limit ? unlimited : 0, tr),
+      used: share,
+      reserved: ratio(request, scale > 0 ? scale : null),
+      tone: (limit ? usageTone(share) : 'muted') as Tone,
+    };
+  };
+  return [row('cpu', w.cpuMilli, r.cpuRequestMilli, r.cpuLimitMilli, r.cpuUnlimited), row('memory', w.memBytes, r.memRequest, r.memLimit, r.memUnlimited)];
 }
 
 export interface NamespaceGroup {
@@ -38,10 +92,22 @@ export function workloadGroups(list: WorkloadView[], query: string, filter: Work
       readyText: `${w.ready}/${w.desired}`,
       usage: w.cpuMilli === null ? '' : tr.t('workloads.cpu', { cores: cores(w.cpuMilli, lang), memory: bytes(w.memBytes, lang) }),
       detail: [w.kind, w.component, w.restarts > 0 ? tr.n('workloads.restarts', w.restarts) : null, w.createdAt ? age(w.createdAt, now, lang) : null].filter(Boolean).join(', '),
+      restart:
+        w.restarts > 0 && w.lastRestart
+          ? { text: tr.t('workloads.lastRestart', { why: terminationText(w.lastRestart, now, tr) }), oom: w.lastRestart.reason === 'OOMKilled' }
+          : null,
+      resources: resourceRows(w, tr),
       pods: w.pods.map((p) => ({
         name: p.name,
         tone: (p.ready ? 'ok' : p.phase === 'Pending' ? 'warning' : 'critical') as Tone,
         text: [p.phase, p.node, p.restarts > 0 ? tr.n('workloads.restarts', p.restarts) : null].filter(Boolean).join(', '),
+        containers: (p.containers ?? [])
+          .filter((c) => c.restarts > 0 || c.waiting || !c.ready)
+          .map((c) => ({
+            name: c.name,
+            text: [c.waiting, c.restarts > 0 ? tr.n('workloads.restarts', c.restarts) : null, c.lastTermination ? terminationText(c.lastTermination, now, tr) : null].filter(Boolean).join(', '),
+            oom: c.lastTermination?.reason === 'OOMKilled',
+          })),
       })),
     }));
   const byNs = new Map<string, WorkloadRow[]>();
@@ -56,7 +122,7 @@ export function workloadGroups(list: WorkloadView[], query: string, filter: Work
 @Component({
   selector: 'app-workloads-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, IonIcon, IonSpinner],
+  imports: [TranslocoDirective, IonIcon, IonSpinner, UsageBar],
   template: `
     <ng-container *transloco="let t">
       <div class="tools">
@@ -87,6 +153,9 @@ export function workloadGroups(list: WorkloadView[], query: string, filter: Work
                   <span class="main">
                     <strong>{{ r.w.name }}</strong>
                     <span class="muted">{{ r.detail }}</span>
+                    @if (r.restart; as rs) {
+                      <span class="restart" [class.oom]="rs.oom">{{ rs.text }}</span>
+                    }
                   </span>
                   <span class="usage muted">{{ r.usage }}</span>
                   <ion-icon [name]="open() === r.key ? 'chevron-down' : 'chevron-forward'" aria-hidden="true" />
@@ -96,9 +165,27 @@ export function workloadGroups(list: WorkloadView[], query: string, filter: Work
                     @for (img of r.w.images; track img) {
                       <code>{{ img }}</code>
                     }
+                    @if (r.resources.length > 0) {
+                      <div class="res">
+                        @for (x of r.resources; track x.label) {
+                          <div [class]="'tone-' + x.tone">
+                            <span class="rlabel">{{ x.label }} <strong>{{ x.text }}</strong></span>
+                            @if (x.used !== null) {
+                              <app-usage-bar [used]="x.used" [reserved]="x.reserved" />
+                            }
+                            <span class="muted">{{ x.note }}</span>
+                          </div>
+                        }
+                      </div>
+                    }
                     <ul class="pods">
                       @for (p of r.pods; track p.name) {
-                        <li [class]="'tone-' + p.tone"><span class="dot" aria-hidden="true"></span><span>{{ p.name }}</span><span class="muted">{{ p.text }}</span></li>
+                        <li [class]="'tone-' + p.tone">
+                          <span class="dot" aria-hidden="true"></span><span>{{ p.name }}</span><span class="muted">{{ p.text }}</span>
+                          @for (c of p.containers; track c.name) {
+                            <span class="container" [class.oom]="c.oom">{{ c.name }}: {{ c.text }}</span>
+                          }
+                        </li>
                       } @empty {
                         <li class="muted">{{ t('workloads.noPods') }}</li>
                       }
@@ -248,6 +335,43 @@ export function workloadGroups(list: WorkloadView[], query: string, filter: Work
       flex-wrap: wrap;
       font-size: 0.8125rem;
       padding: 0.2rem 0;
+    }
+    .restart {
+      font-size: 0.8125rem;
+      color: var(--ink-2);
+      overflow-wrap: anywhere;
+    }
+    .oom {
+      color: var(--warn);
+      font-weight: 600;
+    }
+    .res {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+      gap: 0.6rem 1rem;
+      margin: 0.3rem 0;
+      font-size: 0.8125rem;
+    }
+    .res > div {
+      display: grid;
+      gap: 0.25rem;
+    }
+    .rlabel {
+      color: var(--mute);
+      font-weight: 600;
+    }
+    .rlabel strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+    .container {
+      flex-basis: 100%;
+      padding-left: 1rem;
+      color: var(--ink-2);
+      overflow-wrap: anywhere;
+    }
+    .container.oom {
+      color: var(--warn);
     }
     .dot {
       width: 0.5rem;

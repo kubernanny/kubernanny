@@ -35,7 +35,7 @@ describe('statusReport', () => {
   it('writes what the screen shows as plain text, in German', () => {
     const tr = translatorFor('de');
     const text = statusReport({ name: 'homelab', view: buildClusterView(snapshot, null, NOW, tr), checkedAt: snapshot.checkedAt, agentVersion: '0.4.0', error: null }, tr);
-    expect(text.split('\n').slice(0, 2)).toEqual(['Kubernanny: Zustand von homelab', 'Zustand: 1 Ausfall (Ampel rot, 78 von 100)']);
+    expect(text.split('\n').slice(0, 2)).toEqual(['Kubernanny: Zustand von homelab', 'Zustand: 1 Ausfall (Ampel rot)']);
     expect(text).toContain('Agent 0.4.0');
     expect(text).toContain('Offene Probleme (1):\n- [Ausfall] App web Degraded\n  Deployment web exceeded its progress deadline\n  Argo CD, seit 1 h');
     expect(text).toContain('Hinweise (1):\n- [Hinweis] Change waits for sync\n  Argo CD, seit 2 h');
@@ -47,7 +47,7 @@ describe('statusReport', () => {
     const tr = translatorFor('en');
     const text = statusReport({ name: 'homelab', view: buildClusterView(snapshot, null, NOW, tr), checkedAt: snapshot.checkedAt, agentVersion: null, error: null }, tr);
     expect(text).not.toMatch(/argocd\/web\/health|hint\/1|quiet\/1|https?:\/\//);
-    expect(text).toContain('State: 1 outage (traffic light red, health 78 of 100)');
+    expect(text).toContain('State: 1 outage (traffic light red)');
     expect(text).toContain('- [Outage] App web Degraded');
   });
 

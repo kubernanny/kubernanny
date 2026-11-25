@@ -35,7 +35,7 @@ export function statusReport({ name, view, checkedAt, agentVersion, error }: Rep
   const light = tr.t(LIGHT[view.stale ? 'unknown' : view.light]);
   const lines = [
     tr.t('report.heading', { cluster: name }),
-    view.score !== null ? tr.t('report.state', { headline: view.headline, light, score: view.score }) : tr.t('report.stateNoScore', { headline: view.headline, light }),
+    tr.t('report.state', { headline: view.headline, light }),
     ...(view.subline ? [view.subline] : []),
     ...(checkedAt ? [tr.t('report.asOf', { time: dateTime(checkedAt, tr.lang) })] : []),
     ...(agentVersion ? [tr.t('report.agent', { version: agentVersion })] : []),

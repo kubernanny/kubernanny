@@ -93,11 +93,19 @@ import { backupsView } from '../backups-view';
               </ul>
             </section>
           }
+
+          @if (v.orphaned) {
+            <p class="muted orphaned">{{ v.orphaned }}</p>
+          }
         }
       }
     </ng-container>
   `,
   styles: `
+    .orphaned {
+      font-size: 0.8125rem;
+      margin: 1.25rem 0 0;
+    }
     .summary {
       font-family: var(--font-display);
       font-size: 1.15rem;
