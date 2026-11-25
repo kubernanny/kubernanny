@@ -60,7 +60,7 @@ containers:
       - { name: tmp, mountPath: /tmp }   # emptyDir, medium: Memory, sizeLimit: 1Mi
 ```
 
-One process: `node dist/main.js`. It runs the checks once a minute (`CHECK_INTERVAL_SECONDS`), keeps the result in memory and answers the app. There is no database, no sidecar, no init container, no CRD, no webhook, no DaemonSet: Kubernanny never runs anything on your nodes. The only cluster-scoped objects besides the RBAC are the ValidatingAdmissionPolicies described below (Kubernetes 1.30+), which the API server evaluates itself: no webhook, no extra pod.
+One process: `node dist/main.js`. It keeps what it reads from the API current with watches, runs the checks once a minute (`CHECK_INTERVAL_SECONDS`, and within seconds of a change such as a pod going into CrashLoopBackOff), keeps the result in memory and answers the app. During a rolling update two pods run for a few seconds; only the one holding the Lease `kubernanny` sends notifications and runs actions. There is no database, no sidecar, no init container, no CRD, no webhook, no DaemonSet: Kubernanny never runs anything on your nodes. The only cluster-scoped objects besides the RBAC are the ValidatingAdmissionPolicies described below (Kubernetes 1.30+), which the API server evaluates itself: no webhook, no extra pod.
 
 Check it:
 
@@ -78,7 +78,7 @@ sequenceDiagram
   participant P as Phone
   participant A as Agent
   participant K as Kubernetes API
-  A->>K: list pods (every minute)
+  A->>K: watch pods (always current)
   A->>A: issue pods/default/Deployment/web: CrashLoopBackOff<br/>action stored: restart Deployment default/web
   P->>A: run "restart" for issue pods/default/Deployment/web
   A->>A: issue still open? action offered? action switched on?

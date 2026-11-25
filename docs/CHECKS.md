@@ -8,7 +8,9 @@ Severity rule: **critical** = down or data at risk now; **warning** = becomes cr
 
 *Issues as the app shows them, and a component's detail sheet.*
 
-A module that cannot run (API error, missing RBAC) shows as *not checkable* and keeps the light from being green. A component that is not installed is skipped silently.
+A module that cannot run (API error, missing RBAC) shows as *not checkable* and keeps the light from being green. So does a module whose input could not be read in this run (say Deployments timed out): it keeps the issues of the last known objects and says which list it could not read, so nothing is reported as resolved because of a failed read. A component that is not installed is skipped silently.
+
+**When checks run**: every `CHECK_INTERVAL_SECONDS` (60), on a pull in the app, and 3 s after a watched change that can open or close an issue (a pod into CrashLoopBackOff or an image pull error, a node condition changing, a workload losing or regaining replicas, a PVC phase, a failed Job), at most every 15 s. The thresholds below measure time since an issue was first seen, not runs, and notifications still wait `NOTIFY_AFTER_SECONDS`, so the earlier runs only make the app current sooner.
 
 ## Core checks (on unless switched off)
 

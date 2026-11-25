@@ -36,6 +36,10 @@ Outside a pod the agent reaches Prometheus and friends through the API server's 
 
 The web UI the agent serves: build the app (`cd app && npx ng build`) and start the agent with `WEB_ROOT=../app/dist/app/browser`.
 
+`npm run build` compiles with tsc to `dist/` (what the e2e tests, the demo export and local runs use). The image runs `npm run bundle` instead: esbuild packs `src/main.ts` and `src/cli.ts` into `bundle/main.js` and `bundle/cli.js` with every dependency inside, and the Dockerfile copies them to `/app/dist`, so the image has no `node_modules`.
+
+Against a real cluster the agent watches its inventory (`inventory/cluster-cache.ts`); `kubectl proxy` passes watches through. To be sure nothing is written while you try it, start the proxy with `--reject-methods='^(POST|PUT|PATCH|DELETE)$'`: the agent then keeps its key pair in memory and logs that it cannot store it.
+
 ## Tests
 
 ```sh
@@ -78,7 +82,7 @@ Screenshots: `docs/SCREENSHOTS.md` explains how they are made.
 ## Project layout
 
 ```
-agent/            NestJS agent (see ARCHITECTURE.md for the module map)
+agent/            the agent, Node without a framework (see ARCHITECTURE.md for the module map); `npm run bundle` builds what the image runs
 app/              Angular + Ionic + Capacitor app; its web build ships in the agent image
 relay/            the relay (NestJS + ws), relay/cloudflare/ the same as a Cloudflare Worker (docs/RELAY.md)
 deploy/

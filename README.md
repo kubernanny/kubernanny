@@ -89,7 +89,7 @@ Straight to the Kubernanny app (sealed per device: the relay and Google cannot r
 ```mermaid
 flowchart LR
   subgraph cluster["Your cluster"]
-    agent["kubernanny"] -- "reads every 60 s" --> api["Kubernetes API"]
+    agent["kubernanny"] -- "watches, checks every 60 s" --> api["Kubernetes API"]
     agent -- "cluster DNS" --> prom["Prometheus · Alertmanager · Grafana · Loki"]
   end
   app["App (iOS · Android · web)"] -- "end-to-end encrypted (Noise), direct" --> agent
@@ -129,7 +129,7 @@ No account, no telemetry, nothing to sign up for. Nothing leaves your network ex
 ## Repository
 
 ```
-agent/     NestJS agent: discovery, checks, actions, notifications, API, demo cluster
+agent/     the agent (Node, plain node:http): discovery, checks, actions, notifications, API, demo cluster
 app/       Angular + Ionic + Capacitor app (iOS, Android, web); its web build ships inside the agent image
 protocol/  the end-to-end protocol shared by agent, app and relay
 relay/     the optional relay: Node (NestJS) and a Cloudflare Worker

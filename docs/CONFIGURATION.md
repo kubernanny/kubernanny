@@ -103,6 +103,10 @@ The chart sets these; set them yourself with `deploy/install.yaml` or `docker ru
 | `PROMETHEUS_URL`, `ALERTMANAGER_URL` | | Override discovery |
 | `CORS_ORIGINS` | Capacitor, Ionic and localhost dev origins | Comma-separated; the web UI served by the agent needs none |
 | `PAIRING_LOG` | `true` | `false`: no pairing banner in the log |
+| `POD_NAME` | (the chart sets it) | The holder name in the Lease that decides which pod notifies, runs actions and holds the relay during a rolling update. Unset (outside a pod): always in charge, no Lease |
+| `LEASE_NAME` | `kubernanny` | Name of that Lease in the agent's namespace (the Role grants exactly this name) |
+| `SHUTDOWN_DELAY_SECONDS` | `5` | After SIGTERM: unready and handed over at once, but still answering this long while the endpoints are removed; then requests in flight get up to 10 s |
+| `READY_TIMEOUT_SECONDS` | `90` | `/readyz` turns ready after the first check run, or after this long without one |
 | `NODE_EXTRA_CA_CERTS` | ServiceAccount CA (chart) | Lets Node trust the API server |
 | `DEMO` | | Built-in demo cluster, every device counts as paired and any pairing code works: `broken`, `warning`, `healthy`, `1` or `true` (= `broken`) turn it on; unset, empty, `0`, `false` or `off` turn it off; any other value stops the agent at start |
 | `K8S_API_URL`, `K8S_TOKEN` | | Development outside a cluster, e.g. `kubectl proxy` on `http://127.0.0.1:8001` |
