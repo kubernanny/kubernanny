@@ -118,28 +118,25 @@ export class SettingsService {
   }
 
   /** Reads the stored switches, retrying transient errors; throws when they stay unreadable, so the process ends and restarts. */
-  async onModuleInit(): Promise<void> {
+  async onModuleInit(delaysMs?: readonly number[]): Promise<void> {
     const log = new Logger(SettingsService.name);
     const cm = await readAtStartup(`ConfigMap ${SETTINGS_CONFIGMAP}`, () => this.kube.get<{ data?: { settings?: string } }>(`${this.path}/${SETTINGS_CONFIGMAP}`), {
       onRetry: (err, attempt) => log.warn(`cannot read ConfigMap ${SETTINGS_CONFIGMAP} (${err instanceof Error ? err.message : err}), attempt ${attempt}; retrying`),
+      ...(delaysMs ? { delaysMs } : {}),
     });
     this.stored = parseStored(cm?.data?.settings);
     this.loaded = true;
   }
-
-  /** Reads the switches again and throws on any failure but 404, keeping nothing old (lease handover, agent.ts). */
-  async reload(): Promise<void> {
-    let raw: string | undefined;
-    try {
-      const cm = await this.kube.get<{ data?: { settings?: string } }>(`${this.path}/${SETTINGS_CONFIGMAP}`);
-      raw = cm.data?.settings;
-    } catch (err) {
-      if (!(err instanceof KubeError && err.status === 404)) {
-        throw err;
-      }
-    }
-    this.stored = parseStored(raw);
+  /**
+   * Reads it again once, throwing on any failure but 404 and keeping nothing
+   * old: a pod taking over the lease, or answering next to the pod in charge
+   * during a rolling update, must not act on state the other pod changed
+   * (a revoked device, an action switched off). See agent.ts.
+   */
+  reload(): Promise<void> {
+    return this.onModuleInit([]);
   }
+
 
   /** Called after every change, e.g. to start a new run. */
   onChange(listener: () => void): void {
