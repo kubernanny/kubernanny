@@ -146,7 +146,7 @@ export class StatusService implements OnApplicationBootstrap, OnApplicationShutd
     const data: RunData = {};
     const base = { inv, kube: this.kube, config: this.config, now, data };
     const prom = findPrometheus(base, detected);
-    const ctx: ModuleContext = { ...base, prom, detected, vulnDb: this.vulnDb, vulnAcceptance: this.acceptance?.state(now.getTime()) };
+    const ctx: ModuleContext = { ...base, prom, detected, vulnDb: this.vulnDb, vulnAcceptance: this.acceptance?.state(now.getTime()), rollbackOn: this.settings.actionOn('argocd-rollback') };
     const allowed = this.settings.actionOn;
 
     // Components first: some fill RunData the core checks read (kured lock, certificates).

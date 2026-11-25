@@ -1,4 +1,4 @@
-import { IssueActionType } from '../checks/types';
+import { ActionType, OPT_IN_ACTIONS } from '../checks/types';
 import { CATALOG } from '../discovery/catalog';
 import { CORE_CHECKS } from '../modules/core';
 import { INTEGRATIONS } from '../modules/integrations';
@@ -13,10 +13,12 @@ export interface Rule {
  * What each action type needs beyond reading. The chart grants a line only
  * while the action is enabled (`actions.disabled`, `rbac.allowActions`).
  */
-export const ACTION_PERMISSIONS: Record<IssueActionType, Rule[]> = {
+export const ACTION_PERMISSIONS: Record<ActionType, Rule[]> = {
   restart: [{ group: 'apps', resources: ['deployments', 'statefulsets', 'daemonsets'], verbs: ['patch'] }],
   'argocd-sync': [{ group: 'argoproj.io', resources: ['applications'], verbs: ['patch'] }],
   'argocd-refresh': [{ group: 'argoproj.io', resources: ['applications'], verbs: ['patch'] }],
+  // The same verb as a sync: what a rollback adds is a branch of the admission policy, not RBAC.
+  'argocd-rollback': [{ group: 'argoproj.io', resources: ['applications'], verbs: ['patch'] }],
   'cnpg-backup': [{ group: 'postgresql.cnpg.io', resources: ['backups'], verbs: ['create'] }],
   logs: [{ group: '', resources: ['pods/log'], verbs: ['get'] }],
 };
@@ -30,7 +32,7 @@ export function knownModuleIds(): string[] {
 }
 
 /** Action types that change the cluster: `rbac.allowActions: false` switches all of them off. */
-export const WRITE_ACTIONS: IssueActionType[] = ['restart', 'argocd-sync', 'argocd-refresh', 'cnpg-backup'];
+export const WRITE_ACTIONS: ActionType[] = ['restart', 'argocd-sync', 'argocd-refresh', 'argocd-rollback', 'cnpg-backup'];
 
 /**
  * deploy/helm/kubernanny/files/rbac.json, generated from the modules'
@@ -52,7 +54,8 @@ export interface ActionGrant {
 /**
  * `knownModules` and `actionTypes` let the chart refuse a typo in
  * `checks.disabled` / `actions.disabled` with `fail` instead of rendering a
- * switch that switches nothing off.
+ * switch that switches nothing off. `optInActions` are granted only while
+ * named in `actions.enabled`.
  */
 export function rbacExport(): {
   modules: Record<string, Rule[]>;
@@ -60,6 +63,7 @@ export function rbacExport(): {
   writeActions: string[];
   knownModules: string[];
   actionTypes: string[];
+  optInActions: string[];
 } {
   const modules: Record<string, Rule[]> = {};
   for (const m of [...CORE_CHECKS, ...INTEGRATIONS]) {
@@ -74,12 +78,12 @@ export function rbacExport(): {
   }
   const all = [...CORE_CHECKS, ...INTEGRATIONS];
   const actions = Object.fromEntries(
-    (Object.keys(ACTION_PERMISSIONS) as IssueActionType[]).map((type) => [
+    (Object.keys(ACTION_PERMISSIONS) as ActionType[]).map((type) => [
       type,
       { modules: all.filter((m) => m.actions.includes(type)).map((m) => m.id).sort(), rules: ACTION_PERMISSIONS[type] },
     ]),
   );
-  return { modules: sortKeys(modules), actions: sortKeys(actions), writeActions: WRITE_ACTIONS, knownModules: knownModuleIds(), actionTypes: Object.keys(ACTION_PERMISSIONS).sort() };
+  return { modules: sortKeys(modules), actions: sortKeys(actions), writeActions: WRITE_ACTIONS, knownModules: knownModuleIds(), actionTypes: Object.keys(ACTION_PERMISSIONS).sort(), optInActions: [...OPT_IN_ACTIONS].sort() };
 }
 
 function sortKeys<T>(o: Record<string, T>): Record<string, T> {

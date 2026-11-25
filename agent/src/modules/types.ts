@@ -13,6 +13,7 @@ import type { EtcdSnapshot, LonghornBackup, LonghornBackupTarget } from '../chec
 import type { VeleroBackup } from './integrations/velero';
 import type { VulnDb } from './vulnerabilities/osv-client';
 import type { AcceptanceState } from './vulnerabilities/acceptance';
+import type { RollbackApp } from '../checks/argocd-rollback';
 
 export type Tone = 'ok' | 'warning' | 'critical' | 'muted';
 
@@ -31,6 +32,8 @@ export interface ModuleResult {
   /** Vulnerabilities only: advisories someone marked as not applicable, shown on the module sheet. */
   accepted?: AcceptedAdvisory[];
   canAccept?: boolean;
+  /** Argo CD only, while `argocd-rollback` is on: manual-sync apps and the earlier deployments they can go back to. */
+  rollbacks?: RollbackApp[];
 }
 
 /** An accepted advisory as the app shows it: which component, until when, why and by whom. */
@@ -86,6 +89,8 @@ export interface ModuleContext {
   vulnDb?: VulnDb;
   /** Advisories accepted per component, and whether accepting is possible at all (Helm `vulnerabilities.allowAccept`). */
   vulnAcceptance?: AcceptanceState;
+  /** `argocd-rollback` is on: the Argo CD module lists what can be rolled back. */
+  rollbackOn?: boolean;
 }
 
 /** An API resource a module reads; the RBAC test checks the chart and install.yaml grant it. */
@@ -116,4 +121,6 @@ export interface ModuleView {
   accepted?: AcceptedAdvisory[];
   /** Vulnerabilities only: advisories can be accepted (not locked in Helm). */
   canAccept?: boolean;
+  /** Argo CD only, while `argocd-rollback` is on. */
+  rollbacks?: RollbackApp[];
 }

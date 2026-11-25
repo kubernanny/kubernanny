@@ -1,4 +1,4 @@
-import { IssueActionType } from '../checks/types';
+import { ActionType, OPT_IN_ACTIONS } from '../checks/types';
 import { CATALOG } from '../discovery/catalog';
 import type { Config } from '../config';
 import { render } from '../i18n/text';
@@ -60,23 +60,30 @@ function moduleName(m: CheckModule): string {
 }
 
 /** Actions whose permission another enabled action shares: disabling one alone keeps the rule. */
-function sharedWith(type: IssueActionType): IssueActionType[] {
+function sharedWith(type: ActionType): ActionType[] {
   const key = (r: Rule) => `${r.group}|${r.resources.join(',')}|${r.verbs.join(',')}`;
   const mine = new Set(rbacExport().actions[type]!.rules.map(key));
-  return (Object.entries(rbacExport().actions) as [IssueActionType, { rules: Rule[] }][])
+  return (Object.entries(rbacExport().actions) as [ActionType, { rules: Rule[] }][])
     .filter(([other, g]) => other !== type && g.rules.some((r) => mine.has(key(r))))
     .map(([other]) => other);
 }
 
-function impossible(type: IssueActionType): string {
+function impossible(type: ActionType): string {
   const shared = sharedWith(type);
   const grant = rbacExport().actions[type]!;
   const modules = grant.modules.map(code).join(', ');
-  const rule = shared.length
-    ? `removes the rule only together with ${shared.map((s) => code(`actions.disabled: [${s}]`)).join(', ')}, or with ${code('checks.disabled')} for ${modules}`
+  // Opt-in actions are off unless enabled, so they keep a shared rule only when someone switched them on.
+  const sharedOn = shared.filter((s) => !OPT_IN_ACTIONS.includes(s));
+  const sharedOptIn = shared.filter((s) => OPT_IN_ACTIONS.includes(s));
+  const optInNote = sharedOptIn.length ? ` (and ${sharedOptIn.map(code).join(', ')} not named in ${code('actions.enabled')}, as by default)` : '';
+  const rule = sharedOn.length
+    ? `removes the rule only together with ${sharedOn.map((s) => code(`actions.disabled: [${s}]`)).join(', ')}${optInNote}, or with ${code('checks.disabled')} for ${modules}`
+    : shared.length
+      ? `removes the rule${optInNote}; so does ${code('checks.disabled')} for ${modules}`
     : `removes the rule; so does ${code('checks.disabled')} for ${grant.modules.length > 1 ? `all of ${modules}` : modules}`;
   const all = WRITE_ACTIONS.includes(type) ? `, or ${code('rbac.allowActions: false')} for every write action` : '';
-  return `${code(`actions.disabled: [${type}]`)}: the route answers 403 and ${rule}${all}`;
+  const optIn = OPT_IN_ACTIONS.includes(type) ? `Off by default: leave it out of ${code('actions.enabled')} (the default). Also ` : '';
+  return `${optIn}${code(`actions.disabled: [${type}]`)}: the route answers 403 and ${rule}${all}`;
 }
 
 function writeTable(): string {
@@ -97,7 +104,7 @@ function moduleTable(): string {
     const reads = m.reads.length ? m.reads.map((r) => `get, list ${resource(r.group, r.resource)}: ${r.why}`).join('<br>') : 'nothing of its own (the inventory)';
     const other = [outboundOf(m)].filter((o) => o !== undefined);
     const actions = m.actions.length ? m.actions.map(code).join(', ') : '';
-    const sole = (Object.entries(rbacExport().actions) as [IssueActionType, { modules: string[] }][]).filter(([, g]) => g.modules.length === 1 && g.modules[0] === m.id).map(([type]) => code(type));
+    const sole = (Object.entries(rbacExport().actions) as [ActionType, { modules: string[] }][]).filter(([, g]) => g.modules.length === 1 && g.modules[0] === m.id).map(([type]) => code(type));
     const removed = [m.reads.length ? 'its RBAC rules' : '', sole.length ? `the permissions of ${sole.join(', ')}` : '', other.length ? 'its outbound requests' : '', 'its issues'].filter(Boolean).join(', ');
     return `| ${code(m.id)} | ${moduleName(m)} | ${onByDefault} | ${reads} | ${actions} | ${other.join('; ')} | ${code(`checks.disabled: [${m.id}]`)}: not run; removes ${removed} |`;
   });
@@ -117,18 +124,23 @@ function switchMatrix(valuesPaths: ReadonlySet<string>): string {
   const cell = (s?: string) => s ?? '';
   const general = SWITCHES.filter((s) => valuesPaths.has(s.value)).map((s) => `| ${code(s.set)} | ${s.hard ? 'yes' : 'no'} | ${cell(s.rbac)} | ${cell(s.routes)} | ${cell(s.outbound)} | ${cell(s.other)} |`);
   const exported = rbacExport();
-  const actions = (Object.keys(exported.actions) as IssueActionType[]).map((type) => {
+  const actions = (Object.keys(exported.actions) as ActionType[]).map((type) => {
     const shared = sharedWith(type);
     const rules = exported.actions[type]!.rules.map(ruleText).join('; ');
     const rbac = shared.length ? `${rules}, once ${shared.map(code).join(', ')} is disabled too` : rules;
-    const route = type === 'logs' ? '`GET /api/logs` answers 403 `ACTION_DISABLED`' : `${code(`POST /api/actions/${type}`)} answers 403 ${code('ACTION_DISABLED')}`;
+    const route =
+      type === 'logs'
+        ? '`GET /api/logs` answers 403 `ACTION_DISABLED`'
+        : type === 'argocd-rollback'
+          ? '`POST /api/argocd/rollback` answers 403 `ACTION_DISABLED`'
+          : `${code(`POST /api/actions/${type}`)} answers 403 ${code('ACTION_DISABLED')}`;
     return `| ${code(`actions.disabled: [${type}]`)} | yes | ${rbac} | ${route} | | |`;
   });
   const modules = [...CORE_CHECKS, ...INTEGRATIONS]
     .filter((m) => m.reads.length > 0 || outboundOf(m) !== undefined || m.actions.length > 0)
     .map((m) => {
       const own = exported.modules[m.id]?.map(ruleText) ?? [];
-      const onlyHere = (Object.entries(exported.actions) as [IssueActionType, { modules: string[]; rules: Rule[] }][])
+      const onlyHere = (Object.entries(exported.actions) as [ActionType, { modules: string[]; rules: Rule[] }][])
         .filter(([, g]) => g.modules.length === 1 && g.modules[0] === m.id)
         .map(([type]) => code(type));
       const rbac = [...own, ...(onlyHere.length ? [`the permissions of ${onlyHere.join(', ')}`] : [])].join('; ');

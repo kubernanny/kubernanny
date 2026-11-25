@@ -1,4 +1,4 @@
-import { Issue, IssueActionType } from '../checks/types';
+import { ActionType, Issue, IssueActionType } from '../checks/types';
 import type { Config } from '../config';
 import type { Text } from '../i18n/text';
 import { Detected } from '../discovery/discovery';
@@ -20,7 +20,7 @@ export abstract class CheckModule {
   /** Stable id: catalog id for integrations, e.g. "argocd". Used in settings, Helm values and issue grouping. */
   abstract readonly id: string;
   abstract readonly reads: readonly ApiRead[];
-  readonly actions: readonly IssueActionType[] = [];
+  readonly actions: readonly ActionType[] = [];
 
   /** Drops every action this module did not declare or that is switched off. */
   protected keepActions(issues: Issue[], allowed: (type: IssueActionType) => boolean): Issue[] {

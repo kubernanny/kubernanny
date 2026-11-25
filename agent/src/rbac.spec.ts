@@ -122,7 +122,10 @@ describe('declared reads of the modules', () => {
 
   it('gives every action type a permission line, and only the declared modules offer it', () => {
     const generated = rbacExport();
-    expect(Object.keys(generated.actions).sort()).toEqual(['argocd-refresh', 'argocd-sync', 'cnpg-backup', 'logs', 'restart']);
+    expect(Object.keys(generated.actions).sort()).toEqual(['argocd-refresh', 'argocd-rollback', 'argocd-sync', 'cnpg-backup', 'logs', 'restart']);
+    // The rollback shares the sync's verb; what it adds is an admission branch, and only on opt-in.
+    expect(generated.actions['argocd-rollback']!.rules).toEqual(generated.actions['argocd-sync']!.rules);
+    expect(generated.optInActions).toEqual(['argocd-rollback']);
     expect(INTEGRATIONS.find((i) => i.id === 'argocd')!.actions).toContain('argocd-sync');
     // An action's permission is tied to the modules offering it: switching off Argo CD also drops its patch.
     expect(generated.actions['argocd-sync']!.modules).toEqual(['argocd']);

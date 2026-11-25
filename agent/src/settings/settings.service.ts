@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Principal } from '../auth/devices.service';
-import { IssueActionType } from '../checks/types';
+import { ActionType, OPT_IN_ACTIONS } from '../checks/types';
 import { CONFIG, Config } from '../config';
 import { DemoKubeClient } from '../demo/demo-cluster';
 import { CATALOG, CatalogEntry, Category } from '../discovery/catalog';
@@ -18,7 +18,7 @@ export const SETTINGS_CONFIGMAP = 'kubernanny-settings';
 /** Modules that stay off until someone switches them on: those sending data out of the cluster. */
 const DEFAULT_OFF: ReadonlySet<string> = new Set(CORE_CHECKS.filter((c) => c.defaultOff).map((c) => c.id));
 
-const action = (type: IssueActionType, write: boolean) => ({
+const action = (type: ActionType, write: boolean) => ({
   type,
   label: t(`action.${type}.label`),
   description: t(`action.${type}.description`),
@@ -27,10 +27,11 @@ const action = (type: IssueActionType, write: boolean) => ({
 });
 
 /** `effect`: what the action may change in the cluster, in one line (docs/PERMISSIONS.md has the details). */
-export const ACTION_TYPES: readonly { type: IssueActionType; label: Text; description: Text; effect: Text; write: boolean }[] = [
+export const ACTION_TYPES: readonly { type: ActionType; label: Text; description: Text; effect: Text; write: boolean }[] = [
   action('restart', true),
   action('argocd-sync', true),
   action('argocd-refresh', true),
+  action('argocd-rollback', true),
   action('cnpg-backup', true),
   action('logs', false),
 ];
@@ -58,7 +59,7 @@ export interface ModuleSetting {
 
 export interface SettingsView {
   modules: ModuleSetting[];
-  actions: { type: IssueActionType; label: Text; description: Text; effect: Text; state: ToggleState }[];
+  actions: { type: ActionType; label: Text; description: Text; effect: Text; state: ToggleState }[];
   notifications: ToggleState;
 }
 
@@ -80,7 +81,8 @@ interface Stored {
  * What runs, in two layers:
  *
  * 1. **The deployment** (Helm values `checks.disabled`, `actions.disabled`,
- *    `rbac.allowActions`; env `DISABLED_MODULES`, `DISABLED_ACTIONS`). This is
+ *    `actions.enabled`, `rbac.allowActions`; env `DISABLED_MODULES`,
+ *    `DISABLED_ACTIONS`, `ENABLED_ACTIONS`). This is
  *    the security boundary: the chart also drops the RBAC rules of a
  *    disabled module, so the agent could not read it even if asked.
  * 2. **The app**, within those limits: any paired device can switch modules,
@@ -144,14 +146,18 @@ export class SettingsService implements OnModuleInit {
     return this.moduleState(id) === 'on';
   }
 
-  actionState(type: IssueActionType): ToggleState {
+  actionState(type: ActionType): ToggleState {
     if (this.config.disabledActions.includes(type)) {
+      return 'locked';
+    }
+    // Opt-in types (argocd-rollback) stay locked until the deployment names them; the demo shows them.
+    if (OPT_IN_ACTIONS.includes(type) && !(this.config.enabledActions ?? []).includes(type) && !this.config.demo) {
       return 'locked';
     }
     return this.stored.disabledActions.includes(type) ? 'off' : 'on';
   }
 
-  actionOn = (type: IssueActionType): boolean => this.actionState(type) === 'on';
+  actionOn = (type: ActionType): boolean => this.actionState(type) === 'on';
 
   notificationsOn(): boolean {
     return !this.stored.notificationsPaused && !this.config.disabledModules.includes('notifications');
@@ -232,7 +238,7 @@ export class SettingsService implements OnModuleInit {
       if (!ACTION_TYPES.some((a) => a.type === type) || typeof on !== 'boolean') {
         throw new BadRequestException({ code: 'SETTING_UNKNOWN', message: t('error.actionUnknown', { type }) });
       }
-      if (this.config.disabledActions.includes(type)) {
+      if (this.actionState(type as ActionType) === 'locked') {
         throw new ForbiddenException({ code: 'SETTING_LOCKED', message: t('error.settingLocked', { id: type }) });
       }
       next.disabledActions = toggle(next.disabledActions, type, !on);
@@ -264,7 +270,7 @@ export class SettingsService implements OnModuleInit {
       }
     }
     for (const type of next.disabledActions.filter((type) => !this.stored.disabledActions.includes(type))) {
-      if (this.actionOn(type as IssueActionType)) {
+      if (this.actionOn(type as ActionType)) {
         events.push({ kind: 'actionOff', id: type });
       }
     }

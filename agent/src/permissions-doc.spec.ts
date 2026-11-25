@@ -98,8 +98,8 @@ describe('docs/PERMISSIONS.md', () => {
     }
   });
 
-  it('describes write actions with what actions.service.ts really sends', () => {
-    const source = readFileSync(join(__dirname, 'actions/actions.service.ts'), 'utf8');
+  it('describes write actions with what actions.service.ts (and rollback.service.ts) really sends', () => {
+    const source = ['actions/actions.service.ts', 'actions/rollback.service.ts'].map((f) => readFileSync(join(__dirname, f), 'utf8')).join('\n');
     for (const [type, effect] of Object.entries(WRITE_EFFECTS)) {
       expect(source, type).toContain(effect.marker);
     }

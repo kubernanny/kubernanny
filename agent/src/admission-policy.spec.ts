@@ -43,6 +43,20 @@ describe('admission policy for the agent (security review M4)', () => {
     }
   });
 
+  it('keeps the rollback branch out of install.yaml (argocd-rollback is off by default) and renders it only on opt-in', () => {
+    const argo = JSON.stringify(policies.find((p) => p.metadata.name === 'kubernanny-argocd-applications'));
+    expect(argo).not.toContain('status.?history');
+    const template = chart('templates/admission-policy.yaml');
+    expect(template).toContain('{{- $rollback := has "argocd-rollback" $writes }}');
+    expect(template).toContain('{{- if $rollback }} || (');
+    expect(template).toContain("oldObject.?status.?history.orValue([]).exists(h,");
+    expect(template).toContain('oldObject.?spec.?syncPolicy.?automated == optional.none()');
+    const helpers = chart('templates/_helpers.tpl');
+    expect(helpers).toContain('define "kubernanny.offActions"');
+    expect(helpers).toContain('actions.enabled: %q cannot be enabled');
+    expect(chart('values.yaml')).toMatch(/\n  enabled: \[\]\n/);
+  });
+
   it('is rendered by the chart only on clusters that have the API, and while a write action is on', () => {
     const template = chart('templates/admission-policy.yaml');
     expect(template).toContain('.Capabilities.APIVersions.Has "admissionregistration.k8s.io/v1/ValidatingAdmissionPolicy"');
@@ -71,7 +85,7 @@ describe('chart hardening (security review H3, M1, M2, LOW)', () => {
     expect(deployment).toContain('include "kubernanny.validateSwitches"');
     const rbac = JSON.parse(chart('files/rbac.json')) as { knownModules: string[]; actionTypes: string[] };
     expect(rbac.knownModules).toEqual(expect.arrayContaining(['notifications', 'prometheus', 'vulnerabilities', 'argocd']));
-    expect(rbac.actionTypes).toEqual(['argocd-refresh', 'argocd-sync', 'cnpg-backup', 'logs', 'restart']);
+    expect(rbac.actionTypes).toEqual(['argocd-refresh', 'argocd-rollback', 'argocd-sync', 'cnpg-backup', 'logs', 'restart']);
   });
 
   it('can limit the API-server egress rule to its addresses', () => {

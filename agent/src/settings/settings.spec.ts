@@ -27,6 +27,19 @@ describe('settings', () => {
     expect(s.view(['argocd']).modules.find((m) => m.id === 'argocd')?.state).toBe('locked');
   });
 
+  it('keeps argocd-rollback locked until ENABLED_ACTIONS names it; DISABLED_ACTIONS wins; the demo shows it', async () => {
+    expect(service({}).actionState('argocd-rollback')).toBe('locked');
+    await expect(service({}).update({ actions: { 'argocd-rollback': true } }, who)).rejects.toMatchObject({ status: 403 });
+    const on = service({ ENABLED_ACTIONS: 'argocd-rollback' });
+    expect(on.actionState('argocd-rollback')).toBe('on');
+    await on.update({ actions: { 'argocd-rollback': false } }, who);
+    expect(on.actionState('argocd-rollback')).toBe('off');
+    expect(service({ ENABLED_ACTIONS: 'argocd-rollback', DISABLED_ACTIONS: 'argocd-rollback' }).actionState('argocd-rollback')).toBe('locked');
+    expect(service({ DEMO: 'broken' }).actionState('argocd-rollback')).toBe('on');
+    // The other action types are not opt-in.
+    expect(service({}).actionState('argocd-sync')).toBe('on');
+  });
+
   it('reads DISABLED_CHECKS, the name before 0.3, as well', () => {
     expect(service({ DISABLED_CHECKS: 'loki' }).moduleState('loki')).toBe('locked');
   });

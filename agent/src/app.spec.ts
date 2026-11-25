@@ -366,7 +366,11 @@ describe('agent against the demo cluster', () => {
     const before = (await phone.get('/settings', 200)).body;
     expect(before.modules.find((m: { id: string }) => m.id === 'argocd')).toMatchObject({ state: 'on', detected: true, deep: true });
     expect(before.modules.find((m: { id: string }) => m.id === 'nodes')).toMatchObject({ category: 'core', state: 'on' });
-    expect(before.actions.map((a: { type: string }) => a.type)).toEqual(['restart', 'argocd-sync', 'argocd-refresh', 'cnpg-backup', 'logs']);
+    expect(before.actions.map((a: { type: string }) => a.type)).toEqual(['restart', 'argocd-sync', 'argocd-refresh', 'argocd-rollback', 'cnpg-backup', 'logs']);
+    // Opt-in: locked until the deployment names it, and the app cannot switch it on.
+    expect(before.actions.find((a: { type: string }) => a.type === 'argocd-rollback').state).toBe('locked');
+    expect((await phone.post('/settings', { actions: { 'argocd-rollback': true } })).status).toBe(403);
+    expect(before.modules.find((m: { id: string }) => m.id === 'argocd').rollbacks).toBeUndefined();
 
     await phone.post('/settings', { modules: { argocd: false }, actions: { restart: false } }, 200);
     await app.get(StatusService).refresh();

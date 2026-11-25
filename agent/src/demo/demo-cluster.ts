@@ -105,6 +105,15 @@ const CNPG = [
   { ns: 'discourse', name: 'discourse-pg', instances: 2, ready: 1, backupHoursAgo: 10, archiving: true },
 ];
 
+/** The manual-sync app of the demo with three deployments in its history (argocd-rollback). */
+export const ROLLBACK_APP = 'shop-web-app-chart';
+const ROLLBACK_SOURCE = { repoURL: 'https://git.example/homelab/gitops.git', path: 'apps/shop-web-app', targetRevision: 'main' };
+const ROLLBACK_HISTORY = [
+  { id: 7, revision: '3f9c2a1d8e7b6a5c4d3e2f1a0b9c8d7e6f5a4b3c' },
+  { id: 8, revision: 'a71e0c9b8d7f6e5a4b3c2d1e0f9a8b7c6d5e4f3a' },
+  { id: 9, revision: 'c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3' },
+];
+
 const ARGO_APPS: [string, string, string, boolean][] = [
   ['argocd-chart', 'Synced', 'Healthy', true],
   ['cert-manager-chart', 'Synced', 'Healthy', false],
@@ -438,9 +447,11 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
     '/apis/argoproj.io/v1alpha1/applications',
     ARGO_APPS.map(([name, s0, h0, auto]) => [name, broken ? s0 : name === 'weblate-chart' && warn ? 'OutOfSync' : 'Synced', broken ? h0 : 'Healthy', auto] as const).map(([name, sync, health, auto]) => ({
       metadata: { name, namespace: 'argocd' },
-      spec: { destination: { namespace: 'default' }, syncPolicy: auto ? { automated: { prune: true, selfHeal: true } } : {} },
+      spec: { destination: { namespace: 'default' }, syncPolicy: auto ? { automated: { prune: true, selfHeal: true } } : {}, ...(name === ROLLBACK_APP ? { source: ROLLBACK_SOURCE } : {}) },
       status: {
-        sync: { status: sync },
+        sync: { status: sync, ...(name === ROLLBACK_APP ? { revision: ROLLBACK_HISTORY[2]!.revision } : {}) },
+        // One manual-sync app with a history, so the rollback (on in the demo) has something to show.
+        ...(name === ROLLBACK_APP ? { history: ROLLBACK_HISTORY.map((h, i) => ({ ...h, deployedAt: iso([9 * D, 3 * D, 5 * H][i]!), source: ROLLBACK_SOURCE })) } : {}),
         health: { status: health },
         resources:
           health === 'Degraded'
@@ -889,6 +900,17 @@ export class DemoKubeClient extends KubeClient {
         throw new KubeError(404, 'secret not found');
       }
       return s as T;
+    }
+    // One Argo CD Application, read by the rollback before it patches.
+    const app = /^\/apis\/argoproj\.io\/v1alpha1\/namespaces\/([^/]+)\/applications\/([^/]+)$/.exec(path);
+    if (app) {
+      this.paths = buildDemoCluster(this.now(), this.scenario);
+      const items = (this.paths.get('/apis/argoproj.io/v1alpha1/applications') as { items: { metadata: { name: string; namespace?: string } }[] }).items;
+      const found = items.find((a) => a.metadata.namespace === decodeURIComponent(app[1]!) && a.metadata.name === decodeURIComponent(app[2]!));
+      if (!found) {
+        throw new KubeError(404, `not found: ${path}`);
+      }
+      return found as T;
     }
     const hit = this.paths.get(path);
     if (hit === undefined) {

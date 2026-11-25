@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ActionsService } from './actions/actions.service';
+import { RollbackController } from './actions/rollback.controller';
+import { RollbackService } from './actions/rollback.service';
 import { LocalizeExceptionFilter, LocalizeInterceptor } from './i18n/localize';
 import { AppController } from './app.controller';
 import { DevicesService } from './auth/devices.service';
@@ -28,7 +30,7 @@ import { AcceptanceController } from './modules/vulnerabilities/acceptance.contr
 import { AcceptanceService } from './modules/vulnerabilities/acceptance.service';
 
 @Module({
-  controllers: [AppController, E2eController, AcceptanceController, PushController],
+  controllers: [AppController, E2eController, AcceptanceController, PushController, RollbackController],
   providers: [
     // Unknown module ids or action types in the hard switches stop the start (switch-ids.ts).
     { provide: CONFIG, useFactory: () => checkSwitchIds(loadConfig()) },
@@ -54,6 +56,7 @@ import { AcceptanceService } from './modules/vulnerabilities/acceptance.service'
     NotifiedStore,
     StatusService,
     ActionsService,
+    RollbackService,
     // Every route needs a device proven by the end-to-end channel, unless it is marked @Public() (fail closed).
     { provide: APP_GUARD, useClass: PrincipalGuard },
   ],

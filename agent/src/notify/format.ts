@@ -108,7 +108,8 @@ export type SecurityEvent =
   | { kind: 'deviceRevoked'; device: string }
   | { kind: 'devicePaired' }
   | { kind: 'advisoryAccepted'; component: string; advisory: string; days: number }
-  | { kind: 'silenced'; issue: string; hours: number };
+  | { kind: 'silenced'; issue: string; hours: number }
+  | { kind: 'rolledBack'; app: string; from: string; to: string };
 
 const SECURITY_LINE: { [K in SecurityEvent['kind']]: (by: string, e: Extract<SecurityEvent, { kind: K }>) => Text } = {
   notificationsOff: (by) => t('push.security.notificationsOff', { by }),
@@ -119,6 +120,7 @@ const SECURITY_LINE: { [K in SecurityEvent['kind']]: (by: string, e: Extract<Sec
   devicePaired: (by) => t('push.security.devicePaired', { by }),
   advisoryAccepted: (by, e) => t('push.security.advisoryAccepted', { by, advisory: e.advisory, component: e.component, days: e.days }),
   silenced: (by, e) => t('push.security.silenced', { by, issue: e.issue, hours: e.hours }),
+  rolledBack: (by, e) => t('push.security.rolledBack', { by, app: e.app, from: e.from, to: e.to }),
 };
 
 /** One short message naming the device (`by`) and what it changed; `minimal` names neither. */

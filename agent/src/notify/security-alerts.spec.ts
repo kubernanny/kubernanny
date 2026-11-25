@@ -71,6 +71,30 @@ describe('security notifications (review: a stolen device could blind the owner)
     expect(sent).toEqual([]);
   });
 
+  it('announces a rollback with the app and both short revisions, in both languages', () => {
+    const event: SecurityEvent = { kind: 'rolledBack', app: 'argocd/shop', from: 'c4d5e6f', to: '3f9c2a1' };
+    expect(formatSecurityAlert('home', 'Nicos iPhone', [event], 'full', 'en').body).toContain('Nicos iPhone rolled the Argo CD app argocd/shop back from c4d5e6f to 3f9c2a1.');
+    expect(formatSecurityAlert('home', 'Nicos iPhone', [event], 'full', 'de').body).toContain('Nicos iPhone hat die Argo-CD-App argocd/shop von c4d5e6f auf 3f9c2a1 zurückgerollt.');
+    expect(formatSecurityAlert('home', 'Nicos iPhone', [event], 'minimal', 'en').body).not.toContain('shop');
+  });
+
+  it('sends a rollback alert while notifications are paused in the app and during maintenance', async () => {
+    const sent: string[] = [];
+    vi.stubGlobal('fetch', async (_url: string, init: { body: string }) => {
+      sent.push(init.body);
+      return new Response(null, { status: 204 });
+    });
+    const config: Config = { ...loadConfig(), clusterName: 'home', language: 'en', webhookUrl: 'https://hooks.example.org/k', webhookFormat: 'json' };
+    const kube = new DemoKubeClient();
+    const notifier = new Notifier(config);
+    const settings = new SettingsService(config, kube, notifier);
+    await settings.update({ notifications: false }, who);
+    await new SilenceService(config, kube as KubeClient, notifier).startMaintenance(4, who);
+    sent.length = 0;
+    await notifier.securityAlert('Nicos iPhone', [{ kind: 'rolledBack', app: 'argocd/shop', from: 'c4d5e6f', to: '3f9c2a1' }]);
+    expect(sent.map((b) => JSON.parse(b).body)).toEqual([expect.stringContaining('back from c4d5e6f to 3f9c2a1')]);
+  });
+
   it('never blocks the change when a channel is down', async () => {
     vi.stubGlobal('fetch', async () => {
       throw new Error('ECONNREFUSED');

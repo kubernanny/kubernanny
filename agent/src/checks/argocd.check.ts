@@ -1,6 +1,7 @@
 import { allWorkloads, readiness } from '../discovery/discovery';
 import { raw, rawOr, t } from '../i18n/text';
 import type { Inventory } from '../inventory/inventory';
+import type { ArgoHistoryEntry, ArgoSource } from './argocd-rollback';
 import { Issue, IssueAction, ObjectMeta, WorkloadKind } from './types';
 
 interface AppResource {
@@ -13,8 +14,12 @@ interface AppResource {
 
 export interface ArgoApplication {
   metadata: ObjectMeta;
-  spec?: { syncPolicy?: { automated?: unknown }; destination?: { namespace?: string } };
+  spec?: { syncPolicy?: { automated?: unknown }; destination?: { namespace?: string }; source?: ArgoSource; sources?: ArgoSource[] };
+  /** Set while an operation (a sync) is requested and not yet picked up. */
+  operation?: unknown;
   status?: {
+    /** The deployments Argo CD remembers (`revisionHistoryLimit`, 10 by default), oldest first. */
+    history?: ArgoHistoryEntry[];
     sync?: { status?: string; revision?: string };
     health?: { status?: string; message?: string };
     operationState?: { phase?: string; message?: string };

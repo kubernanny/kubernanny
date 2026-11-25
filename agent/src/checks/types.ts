@@ -37,6 +37,19 @@ export type IssueAction =
 
 export type IssueActionType = IssueAction['type'];
 
+/**
+ * Every action type with a switch: the ones issues offer, plus actions that
+ * stand on their own (`argocd-rollback`, offered on the Argo CD sheet for any
+ * manual-sync app, whether or not something is wrong with it).
+ */
+export type ActionType = IssueActionType | 'argocd-rollback';
+
+/**
+ * Action types that stay locked until the deployment opts in (Helm
+ * `actions.enabled`, env `ENABLED_ACTIONS`). The app cannot switch them on.
+ */
+export const OPT_IN_ACTIONS: readonly ActionType[] = ['argocd-rollback'];
+
 export interface Issue {
   /** Stable across runs, so the app and the notifier can follow one problem. */
   id: string;

@@ -67,6 +67,7 @@ export async function runComponent(ctx: ModuleContext, d: Detected, integration:
       error: result.error,
       ...(result.accepted ? { accepted: result.accepted } : {}),
       ...(result.canAccept !== undefined ? { canAccept: result.canAccept } : {}),
+      ...(result.rollbacks ? { rollbacks: result.rollbacks } : {}),
     },
   };
 }

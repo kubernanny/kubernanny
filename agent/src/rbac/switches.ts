@@ -25,8 +25,8 @@ export const SWITCHES: readonly HardSwitch[] = [
     value: 'rbac.allowActions',
     set: 'rbac.allowActions: false',
     hard: true,
-    rbac: 'every `patch` and `create` in the ClusterRole (the four write actions are added to `actions.disabled`)',
-    routes: '`POST /api/actions/<type>` answers 403 `ACTION_DISABLED` for restart, argocd-sync, argocd-refresh, cnpg-backup',
+    rbac: 'every `patch` and `create` in the ClusterRole (every write action is added to `actions.disabled`, `argocd-rollback` too, whatever `actions.enabled` says)',
+    routes: '`POST /api/actions/<type>` answers 403 `ACTION_DISABLED` for restart, argocd-sync, argocd-refresh, cnpg-backup; `POST /api/argocd/rollback` likewise',
     other: 'the app shows those action switches as locked',
   },
   {
@@ -50,6 +50,14 @@ export const SWITCHES: readonly HardSwitch[] = [
     hard: true,
     rbac: 'the permission of that action, unless another enabled action needs the same one (see the per-action table)',
     routes: 'the action route answers 403 `ACTION_DISABLED`; issues no longer offer the action',
+  },
+  {
+    value: 'actions.enabled',
+    set: 'actions.enabled: [] (default)',
+    hard: true,
+    routes: '`POST /api/argocd/rollback` answers 403 `ACTION_DISABLED` before reading anything; the Argo CD sheet lists no history',
+    other:
+      'the opt-in action types stay locked in the app. `[argocd-rollback]` turns the rollback on: no new RBAC verb (it shares `patch` on Applications with `argocd-sync`), but the admission policy gains the branch that lets the agent sync a manual-sync app to a revision from its own history; without it that branch is not rendered and a sync with a `revision` is denied. `actions.disabled` and `rbac.allowActions: false` win over it. Ids other than the opt-in ones fail the install',
   },
   {
     value: 'vulnerabilities.enabled',

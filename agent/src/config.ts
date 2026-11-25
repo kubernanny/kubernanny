@@ -205,8 +205,10 @@ export interface Config {
   backupMaxAgeHours: number;
   /** Modules (core checks and integrations) switched off in the deployment; the app cannot switch them on. */
   disabledModules: string[];
-  /** Action types switched off in the deployment (`rbac.allowActions: false` adds the four write actions). */
+  /** Action types switched off in the deployment (`rbac.allowActions: false` adds every write action, argocd-rollback included). */
   disabledActions: string[];
+  /** Action types that stay locked until named here (`argocd-rollback`; Helm `actions.enabled`). `disabledActions` wins. */
+  enabledActions?: string[];
   /** Modules that are off until switched on (vulnerabilities), switched on by default for this install (Helm `vulnerabilities.enabled`). */
   enabledModules: string[];
   /** OSV-compatible vulnerability database: api.osv.dev or a self-hosted mirror. Only the `vulnerabilities` module calls it. */
@@ -270,6 +272,7 @@ export function loadConfig(): Config {
     // DISABLED_CHECKS is the name before 0.3; both count.
     disabledModules: [...list('DISABLED_MODULES', []), ...list('DISABLED_CHECKS', [])],
     disabledActions: list('DISABLED_ACTIONS', []),
+    enabledActions: list('ENABLED_ACTIONS', []),
     enabledModules: list('ENABLED_MODULES', []),
     vulnDbUrl: (checkNotifyUrl('VULN_DB_URL', process.env.VULN_DB_URL || undefined) ?? 'https://api.osv.dev').replace(/\/+$/, ''),
     vulnAcceptLocked: !parseSwitch('VULN_ACCEPT', process.env.VULN_ACCEPT, true),

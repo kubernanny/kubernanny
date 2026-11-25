@@ -1,11 +1,13 @@
 import { Integration } from '../module';
 import { ArgoApplication, evaluateArgoApps } from '../../checks/argocd.check';
+import { rollbackApps } from '../../checks/argocd-rollback';
 import { t } from '../../i18n/text';
 import { ModuleContext, ModuleResult } from '../types';
 
 export class ArgoCdIntegration extends Integration {
   readonly id = 'argocd';
-  override readonly actions = ['argocd-sync', 'argocd-refresh', 'restart'] as const;
+  // argocd-rollback is no issue action: it is offered on the sheet (`rollbacks`), for apps without a problem too.
+  override readonly actions = ['argocd-sync', 'argocd-refresh', 'argocd-rollback', 'restart'] as const;
   readonly reads = [{ group: 'argoproj.io', resource: 'applications', why: 'sync and health status of every app' }];
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
     const apps = (await ctx.kube.list<ArgoApplication>('/apis/argoproj.io/v1alpha1/applications')) ?? [];
@@ -22,6 +24,8 @@ export class ArgoCdIntegration extends Integration {
         { label: t('argocd.stat.healthy'), value: `${healthy}/${apps.length}`, tone: healthy === apps.length ? 'ok' : progressing > 0 && healthy + progressing === apps.length ? 'muted' : 'critical' },
         { label: t('argocd.stat.automated'), value: `${auto}/${apps.length}` },
       ],
+      // Only while the action is on: a locked install shows no history at all.
+      ...(ctx.rollbackOn ? { rollbacks: rollbackApps(apps) } : {}),
       summary: issues.length === 0 ? t('argocd.summary.ok', { n: apps.length }) : t('argocd.summary.problems', { outOfSync: apps.length - synced, unhealthy: apps.length - healthy }),
     };
   }

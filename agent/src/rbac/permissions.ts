@@ -1,4 +1,4 @@
-import { IssueActionType } from '../checks/types';
+import { ActionType } from '../checks/types';
 import { Rule } from './rules';
 
 /**
@@ -25,9 +25,9 @@ export const INVENTORY_READS: readonly ExplainedRule[] = [
   { group: 'traefik.containo.us', resources: ['ingressroutes'], verbs: ['get', 'list'], why: 'the same, older Traefik API group' },
 ];
 
-export type WriteActionType = Exclude<IssueActionType, 'logs'>;
+export type WriteActionType = Exclude<ActionType, 'logs'>;
 
-/** What each write action changes, exactly as `actions/actions.service.ts` sends it (the spec checks the strings are there). */
+/** What each write action changes, exactly as `actions/actions.service.ts` (`actions/rollback.service.ts`) sends it (the spec checks the strings are there). */
 /**
  * `admission`: what the chart's ValidatingAdmissionPolicy
  * (`templates/admission-policy.yaml`, `rbac.admissionPolicy.enabled`) still
@@ -45,6 +45,13 @@ export const WRITE_EFFECTS: Record<WriteActionType, { changes: string; marker: s
     changes: 'merge patch of `operation` (a sync with `initiatedBy.username: kubernanny`) on the Application the issue names: the same as pressing Sync in Argo CD',
     marker: "initiatedBy: { username: 'kubernanny' }",
     admission: 'only `operation` (a sync initiated by `kubernanny`, without `revision(s)`, `source(s)`, `manifests` or `resources`) and the refresh annotation; spec, status, labels, other annotations unchanged; no create, no delete',
+  },
+  'argocd-rollback': {
+    changes:
+      'off unless named in `actions.enabled`. Merge patch of `operation` (a sync with `initiatedBy.username: kubernanny` and `sync.revision` set to an earlier entry of the app\'s own `status.history`, no source, no prune, no options) on a manual-sync, single-source Application the request names: like `argocd app sync --revision`, the app\'s `spec.source` at that revision. Adds no RBAC verb (the same `patch` as `argocd-sync`), only a branch of the admission policy',
+    marker: "sync: { revision: decided.revision, syncStrategy: { hook: {} } }",
+    admission:
+      'rendered only with `actions.enabled: [argocd-rollback]`: additionally a sync initiated by `kubernanny` whose `revision` is the revision of an entry in the stored `status.history` with the same repository as `spec.source`, on an app without automated sync and with a single `spec.source`; no `revisions`, `source(s)`, `manifests`, `resources`, `prune`, `dryRun`, `syncOptions`, `retry`, `apply` or `force`, `info` only `Reason`',
   },
   'argocd-refresh': {
     changes: 'merge patch of the annotation `argocd.argoproj.io/refresh: hard` on the Application the issue names: the same as a hard refresh in Argo CD',
