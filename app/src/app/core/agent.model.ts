@@ -114,6 +114,25 @@ export interface ModuleView {
   canAccept?: boolean;
   /** Argo CD only, while the rollback is on: manual-sync apps and the deployments they can go back to. */
   rollbacks?: RollbackApp[];
+  /** Argo CD only: manual apps with a change waiting (agents from 0.5 on). */
+  pendingSyncs?: PendingSync[];
+}
+
+/** A manual Argo CD app with a change waiting in Git (agent/src/checks/argocd-pending.ts): routine, not an issue. */
+export interface PendingSync {
+  /** The id its sync runs under, as an action. */
+  id: string;
+  namespace: string;
+  app: string;
+  project?: string;
+  destination?: string;
+  lastSyncAt?: string;
+  syncedRevision?: string;
+  targetRevision?: string;
+  resources: { kind: string; name: string; namespace?: string; change: 'update' | 'new' | 'prune' }[];
+  images: { from: string; to: string }[];
+  /** The agent offers the sync (argocd-sync is on). */
+  canSync: boolean;
 }
 
 /** One manual-sync Argo CD app with its last deployments (agent/src/checks/argocd-rollback.ts). */
