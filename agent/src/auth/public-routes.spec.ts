@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DemoAgent, startDemoAgent } from '../testing/demo-agent';
 
 /** The only routes anyone on the network may call. Adding one here is a security decision. */
-const PUBLIC = ['GET /healthz', 'GET /api/identity', 'POST /api/e2e'];
+const PUBLIC = ['GET /healthz', 'GET /readyz', 'GET /api/identity', 'POST /api/e2e'];
 
 describe('every route is guarded unless marked public (fail closed)', () => {
   let agent: DemoAgent;

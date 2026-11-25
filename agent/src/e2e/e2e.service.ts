@@ -125,6 +125,8 @@ export class E2eService {
     private readonly internal: InternalServer,
     private readonly config: Config,
     private readonly notifier: Notifier,
+    /** Pairing writes the device list: only the pod holding the lease does it (lease/leader.ts). */
+    private readonly isLeader: () => boolean = () => true,
   ) {
     this.opens = new TokenBucket(OPEN_LIMIT.capacity, OPEN_LIMIT.perSecond);
     this.reserve = new TokenBucket(OPEN_RESERVE.capacity, OPEN_RESERVE.perSecond);
@@ -279,6 +281,9 @@ export class E2eService {
     }
     if (!this.identity.persistent || !this.devices.persistent) {
       return seal(503, error('PAIRING_UNAVAILABLE', t('error.pairingUnavailable'), lang));
+    }
+    if (!this.isLeader()) {
+      return seal(503, error('AGENT_HANDOVER', t('error.agentHandover'), lang));
     }
     const redeemed = this.pairing.redeem(code);
     if (redeemed === 'throttled') {

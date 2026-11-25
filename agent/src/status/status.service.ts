@@ -55,6 +55,14 @@ export class StatusService {
   private earlyTimer: ReturnType<typeof setTimeout> | null = null;
   private lastRunStarted = 0;
   private stopped = false;
+  /** True once the first run has finished, good or failed: what /readyz waits for. */
+  ranOnce = false;
+  /**
+   * Whether this pod sends notifications (it holds the lease, lease/leader.ts).
+   * The pod that does not still runs its checks, so it is ready to take over
+   * with a current snapshot; it only keeps quiet.
+   */
+  notifies: () => boolean = () => true;
 
   constructor(
     private readonly kube: KubeClient,
@@ -125,6 +133,7 @@ export class StatusService {
       })
       .finally(() => {
         this.running = null;
+        this.ranOnce = true;
       });
     return this.running;
   }
@@ -301,7 +310,7 @@ export class StatusService {
     // The incident history (and the weekly report built from it) follows every run, notifications paused or not.
     this.incidents.record(snapshot.issues, now.getTime());
     // During maintenance nothing is sent; what is still broken afterwards goes out on the first run after it.
-    if (this.settings.notificationsOn() && !snapshot.maintenanceUntil) {
+    if (this.notifies() && this.settings.notificationsOn() && !snapshot.maintenanceUntil) {
       try {
         await this.notifier.update(snapshot, now);
       } catch (err) {

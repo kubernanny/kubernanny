@@ -28,11 +28,15 @@ async function bootstrap(): Promise<void> {
     }).listen(config.metricsPort, '0.0.0.0');
   }
 
-  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
-    process.once(signal, () => {
-      void agent.close().finally(() => process.exit(0));
-    });
-  }
+  // Zero-downtime rollouts (docs/ARCHITECTURE.md, Deployment): hand over, keep answering while the
+  // endpoints go, finish what is in flight, then exit well within terminationGracePeriodSeconds (30).
+  process.once('SIGTERM', () => {
+    void agent.shutdown().finally(() => process.exit(0));
+  });
+  // Ctrl-C at a terminal: no endpoints to wait for.
+  process.once('SIGINT', () => {
+    void agent.close().finally(() => process.exit(0));
+  });
 }
 
 // A promise rejected where nobody awaits it (a fire-and-forget refresh, a

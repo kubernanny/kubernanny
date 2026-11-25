@@ -70,7 +70,7 @@ export const WRITE_EFFECTS: Record<WriteActionType, { changes: string; marker: s
 };
 
 /** The Role in the agent's own namespace, row by row (checked against the chart and install.yaml). */
-export const NAMESPACE_ROLE: readonly { resources: string[]; names: string[]; verbs: string[]; holds: string }[] = [
+export const NAMESPACE_ROLE: readonly { group?: string; resources: string[]; names: string[]; verbs: string[]; holds: string }[] = [
   { resources: ['secrets'], names: ['kubernanny-identity', 'kubernanny-devices'], verbs: ['get'], holds: 'the agent\'s X25519 key pair; the names and public keys of paired devices' },
   { resources: ['secrets'], names: ['kubernanny-devices'], verbs: ['patch'], holds: 'adds a device on pairing, removes it on revocation' },
   { resources: ['configmaps'], names: ['kubernanny-settings'], verbs: ['get', 'patch'], holds: 'the switches set in the app, silenced issues, accepted advisories' },
@@ -79,6 +79,20 @@ export const NAMESPACE_ROLE: readonly { resources: string[]; names: string[]; ve
     names: [],
     verbs: ['create'],
     holds: 'creates the three objects above on first start. Kubernetes RBAC cannot limit `create` by name (the name is not known before the object exists), so this line cannot carry `resourceNames`; the agent only ever creates those three',
+  },
+  {
+    group: 'coordination.k8s.io',
+    resources: ['leases'],
+    names: ['kubernanny'],
+    verbs: ['get', 'patch'],
+    holds: 'which pod is in charge during a rolling update (sends notifications, runs actions, holds the relay): renewed every 2 s, released on shutdown',
+  },
+  {
+    group: 'coordination.k8s.io',
+    resources: ['leases'],
+    names: [],
+    verbs: ['create'],
+    holds: 'creates that Lease on first start (again, `create` cannot be limited by name)',
   },
 ];
 

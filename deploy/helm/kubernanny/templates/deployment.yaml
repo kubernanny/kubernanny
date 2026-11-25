@@ -7,11 +7,17 @@ metadata:
   labels:
     {{- include "kubernanny.labels" . | nindent 4 }}
 spec:
-  # One replica: the agent remembers which issues it already notified about;
-  # two would notify twice. Recreate for the same reason during rollouts.
+  # One replica. During a rollout the new pod starts next to the old one and
+  # takes traffic once it has its first snapshot (/readyz); only the pod
+  # holding the Lease "kubernanny" sends notifications, runs actions and
+  # holds the relay, and the old one releases it on SIGTERM. So the page
+  # never goes dark and nothing is sent twice.
   replicas: 1
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       {{- include "kubernanny.selectorLabels" . | nindent 6 }}
@@ -21,6 +27,9 @@ spec:
         {{- include "kubernanny.labels" . | nindent 8 }}
     spec:
       serviceAccountName: {{ include "kubernanny.name" . }}
+      # SIGTERM: unready, lease and relay handed over, 5 s more of answers while
+      # the endpoints go, then in-flight requests finish (at most 10 s).
+      terminationGracePeriodSeconds: 30
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -50,6 +59,11 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            # The holder name in the Lease that decides which pod is in charge.
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
             - name: CLUSTER_NAME
               value: {{ .Values.clusterName | quote }}
             - name: LANGUAGE
@@ -168,16 +182,20 @@ spec:
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          # Liveness: the process answers (no cluster call behind it).
           livenessProbe:
             httpGet:
               path: /healthz
               port: http
             periodSeconds: 20
+          # Ready once the first check run is in memory (at most 90 s after
+          # start), unready from SIGTERM on: a new pod never serves an empty page.
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: /readyz
               port: http
-            periodSeconds: 10
+            periodSeconds: 2
+            failureThreshold: 1
           # The internal API socket (end-to-end channel, admin CLI) lives in /tmp.
           volumeMounts:
             - name: tmp

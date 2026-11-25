@@ -123,6 +123,15 @@ rules:
   - apiGroups: [""]
     resources: [secrets, configmaps]
     verbs: [create]
+  # Which pod is in charge during a rolling update (lease/leader.ts): one named
+  # Lease, renewed by the pod that sends notifications and runs actions.
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    resourceNames: [kubernanny]
+    verbs: [get, patch]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [create]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

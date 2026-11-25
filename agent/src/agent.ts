@@ -11,7 +11,9 @@ import { DemoKubeClient } from './demo/demo-cluster';
 import { E2eController, e2eRoutes } from './e2e/e2e.controller';
 import { E2eService } from './e2e/e2e.service';
 import { InternalServer } from './e2e/internal-server';
-import { Route, createHttpHandler } from './http/server';
+import { Reply, Route, createHttpHandler } from './http/server';
+import { Leader, LeaderElection, SoleLeader } from './lease/leader';
+import { Logger } from './logger';
 import { IncidentsService } from './incidents/incidents.service';
 import { KubeClient } from './kube/kube-client';
 import { AcceptanceController, acceptanceRoutes } from './modules/vulnerabilities/acceptance.controller';
@@ -35,6 +37,8 @@ export interface AgentOptions {
   notifier?: Notifier;
   /** Default: read from the environment, with the hard switches checked. */
   config?: Config;
+  /** Replaces the leader election (tests of the handover). */
+  leader?: Leader;
 }
 
 type Class<T> = abstract new (...args: never[]) => T;
@@ -65,12 +69,18 @@ export class Agent {
   readonly status: StatusService;
   readonly actions: ActionsService;
   readonly rollbacks: RollbackService;
+  /** Which pod is in charge during a rolling update (POD_NAME set: a Lease; else always this one). */
+  readonly leader: Leader;
   /** Every route the agent answers, public or guarded (`auth/public-routes.spec.ts` checks the public ones). */
   readonly routes: readonly Route[];
   readonly handler: ReturnType<typeof createHttpHandler>;
   private readonly registry = new Map<unknown, unknown>();
   private server: Server | null = null;
   private closed = false;
+  private shuttingDown = false;
+  private readonly startedAt = Date.now();
+  private initialized = false;
+  private readonly logger = new Logger('kubernanny');
 
   constructor(options: AgentOptions = {}) {
     // Unknown module ids or action types in the hard switches stop the start (switch-ids.ts).
@@ -79,6 +89,8 @@ export class Agent {
     // DEMO=1 (or broken | warning | healthy): a built-in made-up cluster, for trying Kubernanny without one.
     const kube = options.kube ?? (config.demo ? new DemoKubeClient(undefined, config.demo) : new KubeClient());
     this.kube = kube;
+    this.leader = options.leader ?? (config.podName && !config.demo ? new LeaderElection(kube, { namespace: config.namespace, name: config.leaseName ?? 'kubernanny', identity: config.podName }) : new SoleLeader());
+    const isLeader = () => this.leader.isLeader();
     this.identity = new IdentityService(config, kube);
     this.devices = new DevicesService(config, kube);
     this.internal = new InternalServer(config);
@@ -92,13 +104,16 @@ export class Agent {
     this.silences = new SilenceService(config, kube, this.notifier);
     this.acceptance = new AcceptanceService(config, kube, this.settings, this.notifier);
     this.pairing = new PairingService(config, this.identity);
-    this.e2e = new E2eService(this.identity, this.devices, this.pairing, this.internal, config, this.notifier);
+    this.e2e = new E2eService(this.identity, this.devices, this.pairing, this.internal, config, this.notifier, isLeader);
     this.relay = new RelayClient(config, this.identity, this.e2e, this.pushTransport);
     this.status = new StatusService(kube, config, this.notifier, this.settings, this.silences, this.incidents, this.acceptance);
     this.actions = new ActionsService(kube, this.status, this.settings);
     this.rollbacks = new RollbackService(kube, this.settings, this.status, this.notifier);
+    this.status.notifies = isLeader;
 
     this.routes = [
+      // Readiness, no data: ready once the first run is in memory (or READY_TIMEOUT_SECONDS passed), unready again on SIGTERM.
+      { method: 'GET', path: '/readyz', public: true, handle: () => (this.ready() ? { ok: true } : new Reply(503, JSON.stringify({ ok: false }), 'application/json; charset=utf-8')) },
       ...appRoutes(new AppController(this.status, this.actions, this.notifier, this.devices, this.identity, config, this.pairing, this.settings, this.relay, this.silences, this.incidents)),
       ...e2eRoutes(new E2eController(this.e2e, this.identity)),
       ...acceptanceRoutes(new AcceptanceController(this.acceptance, this.status)),
@@ -112,6 +127,7 @@ export class Agent {
       language: config.language,
       corsOrigins: config.corsOrigins,
       webRoot: config.webRoot,
+      isLeader,
     });
 
     for (const [cls, value] of [
@@ -147,13 +163,92 @@ export class Agent {
     return this.registry.get(key) as T;
   }
 
-  /** Loads the stored state (keys, devices, switches, silences), then starts the socket, the relay, push and the run loop. */
+  /**
+   * Loads the stored state (keys, devices, switches, silences), then starts
+   * the socket, the run loop and the lease; the relay and push housekeeping
+   * follow the lease (this pod in charge).
+   */
   async init(): Promise<void> {
-    await Promise.all([this.identity.onModuleInit(), this.devices.onModuleInit(), this.settings.onModuleInit(), this.silences.onModuleInit(), this.acceptance.onModuleInit()]);
+    await this.loadState();
     await this.internal.start(this.handler);
-    this.relay.onApplicationBootstrap();
-    await this.appPush.onApplicationBootstrap();
     this.status.onApplicationBootstrap();
+    // The first answer decides whether this pod starts in charge; state loaded above is current then.
+    const first = await this.leader.tryNow();
+    if (first) {
+      await this.takeCharge(false);
+    }
+    this.leader.onChange((leader) => {
+      if (this.shuttingDown || this.closed) {
+        return;
+      }
+      if (leader) {
+        void this.takeCharge(true);
+      } else {
+        this.logger.warn('no longer in charge: notifications, actions and the relay stop here');
+        this.relay.handOver();
+      }
+    });
+    this.leader.start();
+    this.initialized = true;
+  }
+
+  /** /readyz: the first run is in memory (or it took too long to wait for), and the pod is not shutting down. */
+  ready(): boolean {
+    if (this.shuttingDown || !this.initialized) {
+      return false;
+    }
+    return this.status.ranOnce || Date.now() - this.startedAt > (this.config.readyTimeoutSeconds ?? 90) * 1000;
+  }
+
+  private async loadState(): Promise<void> {
+    await Promise.all([this.identity.onModuleInit(), this.devices.onModuleInit(), this.settings.onModuleInit(), this.silences.onModuleInit(), this.acceptance.onModuleInit()]);
+  }
+
+  /**
+   * This pod holds the lease. After a handover the other pod may have
+   * written devices, switches or silences since this one started: read them
+   * again before acting. The notifier reads what was already sent on its
+   * first send (NotifiedStore), so nothing goes out twice.
+   */
+  private async takeCharge(takeover: boolean): Promise<void> {
+    if (takeover) {
+      this.logger.log('in charge now: reloading stored state');
+      try {
+        await Promise.all([this.devices.onModuleInit(), this.settings.onModuleInit(), this.silences.onModuleInit(), this.acceptance.onModuleInit()]);
+      } catch (err) {
+        this.logger.warn(`reloading state failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    await this.appPush.onApplicationBootstrap();
+    this.relay.onApplicationBootstrap();
+  }
+
+  /**
+   * SIGTERM: unready at once and out of charge (the lease is released, the
+   * relay connection closed with 1001), so the new pod takes over within
+   * seconds; the watches and timers stop. The listener keeps answering for
+   * SHUTDOWN_DELAY_SECONDS while the endpoints are removed, then closes and
+   * lets requests in flight finish (at most `drainMs`).
+   */
+  async shutdown(drainMs = 10_000): Promise<void> {
+    if (this.shuttingDown) {
+      return;
+    }
+    this.shuttingDown = true;
+    this.logger.log('shutting down: handing over');
+    this.relay.handOver();
+    this.status.onApplicationShutdown();
+    await this.leader.release();
+    await new Promise((resolve) => setTimeout(resolve, (this.config.shutdownDelaySeconds ?? 5) * 1000));
+    const server = this.server;
+    if (server?.listening) {
+      const closed = new Promise<void>((resolve) => server.close(() => resolve()));
+      server.closeIdleConnections();
+      const timer = setTimeout(() => server.closeAllConnections(), drainMs);
+      await closed;
+      clearTimeout(timer);
+    }
+    await this.close();
   }
 
   /** The public port's server (not listening until `listen`); supertest takes it as it is. */
@@ -172,6 +267,8 @@ export class Agent {
       return;
     }
     this.closed = true;
+    this.shuttingDown = true;
+    await this.leader.release();
     this.relay.onModuleDestroy();
     await this.internal.close();
     this.status.onApplicationShutdown();

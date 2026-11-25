@@ -47,6 +47,12 @@ export interface Route {
   textType?: string;
   /** Take the body as raw bytes up to MAX_SEALED_REQUEST, whatever its type (the e2e route). */
   raw?: boolean;
+  /**
+   * Changes something (cluster, stored state) or sends something: only the
+   * pod holding the lease runs it; another answers 503 AGENT_HANDOVER, which
+   * the app retries (a rolling update has two pods for a few seconds).
+   */
+  write?: boolean;
   handle(call: Call): unknown;
 }
 
@@ -67,6 +73,8 @@ export interface HttpOptions {
   corsOrigins: readonly string[];
   /** The web UI, served at / when set. */
   webRoot?: string | null;
+  /** Whether this pod may run `write` routes now (it holds the lease). Default: always. */
+  isLeader?(): boolean;
 }
 
 type Handler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -423,6 +431,9 @@ export function createHttpHandler(options: HttpOptions): Handler {
         if (!principal) {
           throw new UnauthorizedException({ code: 'E2E_REQUIRED', message: t('error.e2eRequired') });
         }
+      }
+      if (route.write && options.isLeader && !options.isLeader()) {
+        throw new HttpException({ code: 'AGENT_HANDOVER', message: t('error.agentHandover') }, 503);
       }
       const call: Call = {
         req,

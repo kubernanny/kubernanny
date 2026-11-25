@@ -44,8 +44,8 @@ export class PushController {
 export function pushRoutes(c: PushController): Route[] {
   return [
     { method: 'GET', path: '/api/push', handle: (r) => c.view(r.principal) },
-    { method: 'POST', path: '/api/push/register', status: 204, handle: (r) => c.register(r.principal, r.body) },
-    { method: 'DELETE', path: '/api/push/register', status: 204, handle: (r) => c.unregister(r.principal) },
-    { method: 'POST', path: '/api/push/test', handle: (r) => c.test(r.principal) },
+    { method: 'POST', write: true, path: '/api/push/register', status: 204, handle: (r) => c.register(r.principal, r.body) },
+    { method: 'DELETE', write: true, path: '/api/push/register', status: 204, handle: (r) => c.unregister(r.principal) },
+    { method: 'POST', write: true, path: '/api/push/test', handle: (r) => c.test(r.principal) },
   ];
 }

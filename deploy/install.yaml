@@ -152,6 +152,15 @@ rules:
   - apiGroups: [""]
     resources: [secrets, configmaps]
     verbs: [create]
+  # Which pod is in charge during a rolling update (lease/leader.ts): one named
+  # Lease, renewed by the pod that sends notifications and runs actions.
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    resourceNames: [kubernanny]
+    verbs: [get, patch]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [create]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -176,8 +185,13 @@ metadata:
     app.kubernetes.io/name: kubernanny
 spec:
   replicas: 1
+  # Zero-downtime rollouts: the old pod serves until the new one is ready (/readyz);
+  # a Lease decides which pod notifies, runs actions and holds the relay.
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: kubernanny
@@ -187,6 +201,7 @@ spec:
         app.kubernetes.io/name: kubernanny
     spec:
       serviceAccountName: kubernanny
+      terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -211,6 +226,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
             - name: CLUSTER_NAME
               value: homelab
             - name: LANGUAGE
@@ -225,8 +244,9 @@ spec:
             httpGet: { path: /healthz, port: http }
             periodSeconds: 20
           readinessProbe:
-            httpGet: { path: /healthz, port: http }
-            periodSeconds: 10
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 2
+            failureThreshold: 1
           # The internal API socket (end-to-end channel, admin CLI) lives in /tmp.
           volumeMounts:
             - name: tmp

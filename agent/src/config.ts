@@ -227,6 +227,18 @@ export interface Config {
   uptimeKumaStatusPage?: string;
   /** PAIRING_LOG: print a pairing code and QR code to the log on start (default on). */
   pairingLog?: boolean;
+  /**
+   * POD_NAME (the chart sets it): the holder name in the Lease that decides
+   * which pod sends notifications, runs actions and holds the relay during a
+   * rolling update. Unset (outside a pod, demo): this agent is always in charge.
+   */
+  podName?: string;
+  /** LEASE_NAME: the Lease in the agent's namespace (default kubernanny). */
+  leaseName?: string;
+  /** SHUTDOWN_DELAY_SECONDS: after SIGTERM, keep answering this long (unready) while the endpoints are removed (default 5). */
+  shutdownDelaySeconds?: number;
+  /** READY_TIMEOUT_SECONDS: /readyz turns ready after the first run, or after this long without one (default 90). */
+  readyTimeoutSeconds?: number;
 }
 
 /** A status page slug goes into a URL path: letters, digits and dashes only, as Uptime Kuma itself allows. */
@@ -292,6 +304,10 @@ export function loadConfig(): Config {
     // The demo cluster publishes a status page under this slug, so the module has something to show.
     uptimeKumaStatusPage: checkStatusPageSlug(process.env.UPTIME_KUMA_STATUS_PAGE || (demo ? 'homelab' : undefined)),
     pairingLog: parseSwitch('PAIRING_LOG', process.env.PAIRING_LOG, true),
+    podName: demo ? undefined : process.env.POD_NAME || undefined,
+    leaseName: process.env.LEASE_NAME || 'kubernanny',
+    shutdownDelaySeconds: num('SHUTDOWN_DELAY_SECONDS', 5),
+    readyTimeoutSeconds: num('READY_TIMEOUT_SECONDS', 90),
   };
 }
 
