@@ -40,7 +40,7 @@ helm install kubernanny oci://ghcr.io/kubernanny/charts/kubernanny -n kubernanny
 kubectl -n kubernanny logs deploy/kubernanny
 ```
 
-The log shows a QR code. Scan it with your phone's camera, or open the link in a browser. That's the whole setup. The log only carries a one-time pairing code (valid for an hour) and the agent's public key. Each device creates its own key pair, which never leaves it, and every call is end-to-end encrypted between device and agent, so it works the same over a VPN, the LAN or plain HTTP: [docs/PROTOCOL.md](docs/PROTOCOL.md).
+The log shows a QR code. Scan it in the app ("Scan QR code") or with your phone's camera, or open the link in a browser. That's the whole setup. The log only carries a one-time pairing code (valid for an hour) and the agent's public key. Each device creates its own key pair, which never leaves it, and every call is end-to-end encrypted between device and agent, so it works the same over a VPN, the LAN or plain HTTP: [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 <img src="docs/screenshots/56-terminal-pairing.png" alt="The agent's log with a QR code" width="520">
 
