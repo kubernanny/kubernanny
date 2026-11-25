@@ -15,6 +15,8 @@ export type IssueAction =
   | { type: 'cnpg-backup'; namespace: string; cluster: string };
 
 export type IssueActionType = IssueAction['type'];
+/** Every action type with a switch; `argocd-rollback` stands on its own (the Argo CD sheet), off unless the Helm chart opts in. */
+export type ActionType = IssueActionType | 'argocd-rollback';
 
 export interface Issue {
   id: string;
@@ -75,6 +77,18 @@ export interface ModuleView {
   accepted?: AcceptedAdvisory[];
   /** Vulnerabilities only: advisories can be accepted (not locked in Helm). */
   canAccept?: boolean;
+  /** Argo CD only, while the rollback is on: manual-sync apps and the deployments they can go back to. */
+  rollbacks?: RollbackApp[];
+}
+
+/** One manual-sync Argo CD app with its last deployments (agent/src/checks/argocd-rollback.ts). */
+export interface RollbackApp {
+  namespace: string;
+  app: string;
+  /** The revision deployed now, short. */
+  current?: string;
+  /** Newest first. */
+  entries: { id: number; revision: string; short: string; deployedAt?: string; current: boolean }[];
 }
 
 /** One advisory marked as "does not apply here" on one component, until it expires. */
@@ -353,12 +367,12 @@ export interface ModuleSetting {
 export interface SettingsView {
   modules: ModuleSetting[];
   /** `effect`: what the action may change in the cluster, one line from the agent (missing in agents before 0.4). */
-  actions: { type: IssueActionType; label: string; description: string; effect?: string; state: ToggleState }[];
+  actions: { type: ActionType; label: string; description: string; effect?: string; state: ToggleState }[];
   notifications: ToggleState;
 }
 
 export interface SettingsPatch {
   modules?: Record<string, boolean>;
-  actions?: Partial<Record<IssueActionType, boolean>>;
+  actions?: Partial<Record<ActionType, boolean>>;
   notifications?: boolean;
 }

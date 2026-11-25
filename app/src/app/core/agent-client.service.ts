@@ -162,6 +162,11 @@ export class AgentClient {
     return this.call(cluster, 'POST', `/actions/${type}?${new URLSearchParams({ issue: issueId, index: String(index) })}`);
   }
 
+  /** Rolls a manual-sync Argo CD app back to an entry of its history; the agent reads the revision itself. */
+  rollbackArgoApp(cluster: ClusterConfig, namespace: string, app: string, id: number): Promise<{ done: string; revision: string }> {
+    return this.call(cluster, 'POST', '/argocd/rollback', { namespace, app, id });
+  }
+
   logs(cluster: ClusterConfig, issueId: string, index: number): Promise<Logs> {
     return this.call(cluster, 'GET', `/logs?${new URLSearchParams({ issue: issueId, index: String(index) })}`);
   }

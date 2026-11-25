@@ -54,6 +54,32 @@ test.describe('web demo (no agent, nothing leaves the browser)', () => {
     expect(errors).toEqual([]);
   });
 
+  test('rolls a manual-sync Argo CD app back from its sheet, simulated', async ({ page }) => {
+    const errors = watchErrors(page, [/healthz/, /404/]);
+    await page.goto(`${DEMO}/#/demo`);
+    await page.locator('app-clusters a', { hasText: 'homelab' }).first().click();
+    const cluster = visiblePage(page);
+    await openTab(page, 'Dienste');
+    await cluster.locator('app-services-tab button').filter({ has: page.locator('strong', { hasText: /^Argo CD$/ }) }).first().click();
+    const sheet = page.locator('app-module-sheet');
+    await expect(sheet.getByRole('heading', { name: 'Zurückrollen' })).toBeVisible();
+    const row = sheet.locator('.rollbacks li', { hasText: 'shop-web-app-chart' });
+    await expect(row).toContainText('Jetzt ausgerollt: c4d5e6f');
+    await row.getByRole('button', { name: 'Zurückrollen' }).click();
+    const choices = page.locator('ion-action-sheet button');
+    await expect(choices.filter({ hasText: 'a71e0c9' })).toBeVisible();
+    await expect(choices.filter({ hasText: '3f9c2a1' })).toBeVisible();
+    await expect(choices.filter({ hasText: 'c4d5e6f' })).toHaveCount(0);
+    await choices.filter({ hasText: '3f9c2a1' }).click();
+    const alert = page.locator('ion-alert');
+    await expect(alert).toContainText('shop-web-app-chart geht von c4d5e6f zurück auf 3f9c2a1');
+    await expect(alert).toContainText('weicht danach von Git ab');
+    await alert.locator('button', { hasText: 'Zurückrollen' }).click();
+    await expectToast(page, /Demo: shop-web-app-chart würde jetzt auf 3f9c2a1 zurückgehen/);
+    await expect(row).toContainText('Jetzt ausgerollt: 3f9c2a1');
+    expect(errors).toEqual([]);
+  });
+
   test('silences an issue and lets it speak again', async ({ page }) => {
     await page.goto(`${DEMO}/#/demo`);
     await page.locator('app-clusters a', { hasText: 'office' }).first().click();

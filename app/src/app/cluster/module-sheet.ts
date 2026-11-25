@@ -1,5 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
-import { IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonToolbar, ModalController, ToastController } from '@ionic/angular/standalone';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ActionSheetController, AlertController, IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonToolbar, ModalController, ToastController } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { AgentClient, describeError } from '../core/agent-client.service';
 import { ClusterConfig, ModuleView, Tone } from '../core/agent.model';
@@ -8,6 +8,7 @@ import { LanguageService } from '../i18n/language.service';
 import { IssueList } from '../ui/issue-list';
 import { IssueCard, moduleRow } from './cluster-view';
 import { AcceptedRow, acceptedRows } from './vulnerability-acceptance';
+import { RollbackRow, markRolledBack, rollbackRows } from './argocd-rollback';
 
 /** Everything Kubernanny knows about one component: its numbers, its problems, its pods and where to open it. */
 @Component({
@@ -61,6 +62,24 @@ import { AcceptedRow, acceptedRows } from './vulnerability-acceptance';
         @if (issues().length > 0) {
           <h2>{{ t('module.issues') }}</h2>
           <app-issue-list [cards]="issues()" [cluster]="cluster" (changed)="changed.set(true)" />
+        }
+
+        @if (rollbacks().length > 0) {
+          <h2>{{ t('module.rollbackTitle') }}</h2>
+          <p class="muted hint">{{ t('module.rollbackHint') }}</p>
+          <ul class="accepted rollbacks">
+            @for (r of rollbacks(); track r.key) {
+              <li>
+                <div>
+                  <span class="wname">{{ r.app }}</span>
+                  @if (r.now) {
+                    <span class="muted">{{ r.now }}</span>
+                  }
+                </div>
+                <button type="button" [disabled]="busy() !== null" (click)="rollback(r)">{{ t('module.rollbackButton') }}</button>
+              </li>
+            }
+          </ul>
         }
 
         @if (accepted().length > 0) {
@@ -245,6 +264,10 @@ import { AcceptedRow, acceptedRows } from './vulnerability-acceptance';
     .accepted .reason {
       color: var(--ink-2);
     }
+    .hint {
+      font-size: 0.875rem;
+      margin: 0 0 0.4rem;
+    }
     .accepted button {
       flex: none;
       padding: 0.4rem 0.75rem;
@@ -277,6 +300,14 @@ export class ModuleSheet implements OnInit {
   private readonly language = inject(LanguageService);
   private readonly client = inject(AgentClient);
   private readonly toasts = inject(ToastController);
+  private readonly sheets = inject(ActionSheetController);
+  private readonly alerts = inject(AlertController);
+  /** The module as last known here; a rollback marks its new current deployment without waiting for the next run. */
+  private readonly view = signal<ModuleView | null>(null);
+  readonly rollbacks = computed<RollbackRow[]>(() => {
+    const m = this.view();
+    return m ? rollbackRows(m, this.language.translator()) : [];
+  });
   readonly issues = signal<IssueCard[]>([]);
   readonly accepted = signal<AcceptedRow[]>([]);
   readonly busy = signal<string | null>(null);
@@ -294,6 +325,46 @@ export class ModuleSheet implements OnInit {
     }));
     this.issues.set(this.issueCards);
     this.accepted.set(acceptedRows(this.module, this.language.translator()));
+    this.view.set(this.module);
+  }
+
+  /** Earlier deployments to pick from, then a confirmation naming from and to; the agent reads the revision itself. */
+  async rollback(row: RollbackRow): Promise<void> {
+    const tr = this.language.translator();
+    const sheet = await this.sheets.create({
+      header: row.sheetTitle,
+      subHeader: tr.t('module.rollbackSheetText'),
+      buttons: [...row.choices.map((c) => ({ text: c.label, data: c.id })), { text: tr.t('common.cancel'), role: 'cancel' }],
+    });
+    await sheet.present();
+    const { data: id } = await sheet.onDidDismiss<number>();
+    const choice = row.choices.find((c) => c.id === id);
+    if (!choice) {
+      return;
+    }
+    const alert = await this.alerts.create({
+      header: row.confirmTitle,
+      message: choice.confirm,
+      buttons: [
+        { text: tr.t('common.cancel'), role: 'cancel' },
+        { text: tr.t('module.rollbackConfirmButton'), role: 'confirm' },
+      ],
+    });
+    await alert.present();
+    if ((await alert.onDidDismiss()).role !== 'confirm') {
+      return;
+    }
+    this.busy.set(row.key);
+    try {
+      const { done } = await this.client.rollbackArgoApp(this.cluster, row.namespace, row.app, choice.id);
+      this.view.update((m) => (m ? markRolledBack(m, row, choice.id) : m));
+      this.changed.set(true);
+      await this.toast(done, 'success');
+    } catch (err) {
+      await this.toast(describeError(err, tr), 'danger');
+    } finally {
+      this.busy.set(null);
+    }
   }
 
   /** Lets the advisory count again; the page reloads the status when the sheet closes. */
@@ -320,3 +391,4 @@ export class ModuleSheet implements OnInit {
     return this.modals.dismiss({ changed: this.changed() });
   }
 }
+

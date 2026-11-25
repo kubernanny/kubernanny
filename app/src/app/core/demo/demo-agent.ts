@@ -5,6 +5,7 @@ import { Lang } from '../../i18n/lang';
 import { translatorFor } from '../../i18n/translator';
 import { MAINTENANCE_HOURS } from '../../cluster/maintenance-view';
 import { ACCEPTING_MODULES, componentOfIssueId } from '../../cluster/vulnerability-acceptance';
+import { markRolledBack } from '../../cluster/argocd-rollback';
 import { DEMO_LABELS, DemoData, DemoScenario, ageIssues, shiftTimes } from './demo-data';
 
 const SEVERITY_FACTOR = { critical: 0.82, warning: 0.95, info: 1 } as const;
@@ -27,6 +28,8 @@ interface DemoState {
   maintenanceUntil: number;
   /** "component|advisory" to the advisory marked as not applicable. */
   accepted: Map<string, { until: number; reason?: string }>;
+  /** "namespace/app" to the history id a simulated rollback went back to. */
+  rolledBack: Map<string, number>;
 }
 
 interface Demo {
@@ -109,6 +112,8 @@ export class DemoAgent {
         state.accepted.delete(`${component}|${advisory}`);
         return undefined as T;
       }
+      case route === 'POST /argocd/rollback':
+        return rollbackInDemo(demo, body, tr) as T;
       case method === 'POST' && url.pathname.startsWith('/actions/'):
         return this.act(demo, url.pathname.slice('/actions/'.length), q('issue'), lang) as T;
       case route === 'GET /settings':
@@ -128,7 +133,7 @@ export class DemoAgent {
   private stateOf(scenario: DemoScenario): DemoState {
     let state = this.states.get(scenario);
     if (!state) {
-      state = { fixed: new Map<string, number>(), silenced: new Map<string, number>(), toggles: {}, maintenanceUntil: 0, accepted: new Map() };
+      state = { fixed: new Map<string, number>(), silenced: new Map<string, number>(), toggles: {}, maintenanceUntil: 0, accepted: new Map(), rolledBack: new Map() };
       this.states.set(scenario, state);
     }
     return state;
@@ -164,6 +169,7 @@ export class DemoAgent {
       .map((i) => ((state.silenced.get(i.id) ?? 0) > now ? { ...i, silencedUntil: new Date(state.silenced.get(i.id)!).toISOString() } : i));
     const modules = accepted.modules
       .filter((m) => !off.has(m.id))
+      .map((m) => (m.id === 'argocd' ? withRollbacks(m, settings, state.rolledBack) : m))
       .map((m) => (m.issueIds.some((id) => state.fixed.has(id)) ? { ...m, issueIds: m.issueIds.filter((id) => !state.fixed.has(id)) } : m));
     const maintenance = state.maintenanceUntil > now ? { maintenanceUntil: new Date(state.maintenanceUntil).toISOString() } : {};
     return { ...data.status, ...judge(issues.filter((i) => !i.silencedUntil)), checkedAt: new Date().toISOString(), cluster: DEMO_LABELS[data.scenario].cluster, issues, modules, ...maintenance };
@@ -181,6 +187,42 @@ export class DemoAgent {
     state.fixed.set(issueId, Date.now());
     return { done: tr.t('demo.done', { title: issue.title }) };
   }
+}
+
+/**
+ * A simulated rollback: checked like the agent checks it (the action on, the
+ * app and history entry on the recorded sheet, not the current one), then
+ * remembered so the sheet shows the chosen deployment as current. Nothing
+ * else changes, and the answer says so.
+ */
+function rollbackInDemo({ data, state, settings }: Demo, body: unknown, tr: ReturnType<typeof translatorFor>): { done: string; revision: string } {
+  if (!settings.actions.some((a) => a.type === 'argocd-rollback' && a.state === 'on')) {
+    throw new AgentError(403, 'ACTION_DISABLED', tr.t('errors.actionDisabled'));
+  }
+  const { namespace, app, id } = (body ?? {}) as { namespace?: string; app?: string; id?: number };
+  const argocd = withRollbacks(data.status.modules.find((m) => m.id === 'argocd') ?? ({} as ModuleView), settings, state.rolledBack);
+  const target = argocd.rollbacks?.find((a) => a.namespace === namespace && a.app === app);
+  const entry = target?.entries.find((e) => e.id === id && !e.current);
+  if (!target || !entry) {
+    throw new AgentError(409, 'ROLLBACK_HISTORY_NOT_FOUND', tr.t('errors.status', { status: 409 }));
+  }
+  state.rolledBack.set(`${target.namespace}/${target.app}`, entry.id);
+  return { done: tr.t('demo.rolledBack', { app: target.app, revision: entry.short }), revision: entry.revision };
+}
+
+/** The recorded rollback list, hidden while the action is off and with every simulated rollback applied. */
+export function withRollbacks(m: ModuleView, settings: SettingsView, rolledBack: ReadonlyMap<string, number>): ModuleView {
+  if (!m.rollbacks) {
+    return m;
+  }
+  if (!settings.actions.some((a) => a.type === 'argocd-rollback' && a.state === 'on')) {
+    const { rollbacks: _hidden, ...rest } = m;
+    return rest;
+  }
+  return [...rolledBack].reduce((view, [key, id]) => {
+    const [namespace, app] = key.split('/');
+    return markRolledBack(view, { namespace: namespace!, app: app! }, id);
+  }, m);
 }
 
 /**
