@@ -7,6 +7,7 @@ Also published at https://kubernanny.app/docs, built from this folder by `websit
 | Document | For |
 |---|---|
 | [IN-CLUSTER.md](IN-CLUSTER.md) | Everything Kubernanny runs in your cluster: processes, ports, permissions, outbound connections, stored data, switches, how to verify |
+| [PERMISSIONS.md](PERMISSIONS.md) | Every permission the agent can hold (generated from the code): write access at a glance, reads per module and why, its own namespace, what it never has, switch -> what is removed, how to verify |
 | [RELAY.md](RELAY.md) | The optional relay: when you need it, what it can and cannot see, limits, running your own (Node or Cloudflare Worker) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | How the agent and the app work: the run loop, discovery, modules, actions, notifications, pairing, deployment, design decisions |
 | [CHECKS.md](CHECKS.md) | Every issue Kubernanny can raise, with id, severity, threshold and action |

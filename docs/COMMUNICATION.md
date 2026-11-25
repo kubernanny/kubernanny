@@ -28,6 +28,7 @@ Every connection Kubernanny makes or accepts, what protects it, and what an atta
 | 9 | Agent → vulnerability database (**off by default**) | HTTPS to api.osv.dev or your mirror (HTTP only to `*.svc`) | server certificate | network | component package names and versions, advisory ids; no cluster data |
 | 10 | Agent → relay, outbound WebSocket (**off by default**) | `wss://`, frames around the sealed bodies of channel 1 | the agent proves its key at registration; TLS for the relay's name | everyone but device and agent for content, the relay included; TLS for the metadata | channel 1's ciphertext, a heartbeat |
 | 11 | App / browser → relay (when the agent is out of reach) | HTTPS `POST /v1/agents/{agentId}/e2e` | nothing at the relay; inside, the same handshake as channel 1 | the same as channel 1 | the same bytes as channel 1 |
+| 12 | Agent → relay → FCM (→ APNs) → phone: native push (**off until a device opts in**; needs channel 10) | a `Push` frame on channel 10's socket; HTTPS from the relay to FCM with the relay's service account | the agent's registration proof (relay); `mode_auth` HPKE with the pinned agent key (phone) | everyone but the agent and the one device: relay, Google, Apple | title and body of a notification (or only counts with `detail: minimal`), sealed per device; FCM token, platform and key id in clear for the relay and FCM |
 
 ### 1. App / browser → agent
 
@@ -124,6 +125,15 @@ App ── HTTPS POST /v1/agents/{agentId}/e2e ──▶ Relay ◀── wss:// 
 - **The agent does not trust the relay with its resources**: a relay message is at most one request, one challenge per connection, cancels only for calls in flight, a cap on calls in flight and on unread answers. Pairing attempts follow the same rule whether they come through the relay or directly.
 - **The app learns the relay only from pinned or authenticated sources**: the pairing link (only together with the agent key in the same link) or the agent's sealed `/info`. It never fetches an agent key through the relay.
 
+### 12. Native push
+
+Only when a device taps "Push to this device" in a cluster's settings, and only with a relay that delivers push ([NOTIFICATIONS.md](NOTIFICATIONS.md#native-push), decision [0007](decisions/0007-native-push.md)). `notifications.appPush.enabled: false` removes it entirely.
+
+- **Sealed per device.** The agent seals each message with HPKE for that device's push key (a key pair of its own per cluster, [PROTOCOL.md](PROTOCOL.md#push-messages)), authenticated with the agent's static key. The relay, Google and Apple carry bytes they cannot read, and a message that does not come from the pinned agent does not open.
+- **What travels in clear**: the device's FCM token, its platform, a key id (a hash of the random push key) and the size and time of each push, for the relay and FCM. The token is stored with the device in `kubernanny-devices`, never logged, and goes when the device is revoked or turns push off.
+- **No new connection from the agent**: the push rides on the relay WebSocket. The relay talks to `oauth2.googleapis.com` and `fcm.googleapis.com`.
+- **Registration** is an ordinary sealed call (`POST /api/push/register`); a device registers only itself.
+
 ## What an attacker can do
 
 | Position | Can | Cannot |
@@ -140,6 +150,9 @@ App ── HTTPS POST /v1/agents/{agentId}/e2e ──▶ Relay ◀── wss:// 
 | Runs the relay (the public one, or yours if compromised) | see which agents are online, when and how much they are called, the IP addresses of agents and phones; tell kinds of calls apart by size (status, views, logs, actions, pairing); drop, delay or replay calls (replays are refused); use up the budget unknown keys share (never a paired device's) | read or change a call or an answer, learn which device calls, pose as the agent, register in an agent's place, burn a pairing code, make the agent spend more memory or CPU than a direct caller could |
 | Knows an agent's public key and can reach its relay | send calls through the relay; get `DEVICE_UNKNOWN` like at the agent's address; use up that agent's relay rate limit (calls fail with `RELAY_RATE_LIMITED` while it lasts; the direct path is unaffected) and the agent's budget for unknown keys | read anything, act, burn the pairing code, block the right code |
 | Anyone on the internet, against the relay itself | register agent ids of their own (20 per address); from one address hold at most a quarter of the relay's answer memory, for at most 15 s per answer; open unproven connections up to 8 per address; with many addresses, slow the relay down for everyone | crash the relay with a malformed request; take another agent's id; fill the relay or its answer memory from one or two addresses; keep real agents from registering from other addresses for longer than one proof round trip at a time |
+| Runs the relay with push, or holds its Firebase service account | everything in the relay row above; the FCM tokens of registered devices; send notifications of their own to those phones (iOS shows only a generic text for anything that does not open; Android shows a plain notification message as sent) | read or forge a Kubernanny push |
+| Google (FCM) or Apple (APNs) | that a phone gets Kubernanny pushes, when, how large; drop them | read them |
+| Extracts a phone's push key | open that cluster's pushes, recorded ones included | act as the device, call the agent |
 | Code execution in the agent pod | what the ServiceAccount may do | read other Secrets, escalate RBAC; the pod runs non-root, read-only, without capabilities |
 
 ## Residual risks, honestly
@@ -155,6 +168,7 @@ No system is 100 % secure. These are the risks that remain:
 - **In-cluster hops to monitoring are plain HTTP** unless your CNI encrypts.
 - **The relay sees metadata** when it is on: which agent, when, how much, and the IP addresses of agent and phone. Sizes are not padded, so it can tell kinds of calls apart (status, a log, an action, a pairing attempt). Run your own ([RELAY.md](RELAY.md)) if that matters, or leave it off and stay in the VPN.
 - **A stranger with the agent's public key can slow pairing down**: unknown keys share one small budget, so a flood of them delays other pairing attempts (`E2E_RATE_LIMITED`, the app retries). They can never burn the code or have the right code refused for their wrong ones, and paired devices are not affected.
+- **Native push trusts whoever holds the relay's Firebase service account not to send notifications of their own.** They cannot read or forge Kubernanny's sealed pushes, but on Android a plain FCM notification message is shown by the system without the app's code, so they could put a text of their choosing on the screen. A notification the app does not confirm when opened is unverified. Not switching push on, or `notifications.appPush.enabled: false`, avoids this entirely.
 
 ## Checklist for a new install
 

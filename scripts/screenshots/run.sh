@@ -9,26 +9,7 @@ ROOT=$(cd ../.. && pwd)
 OUT=$(pwd)/raw
 mkdir -p "$OUT"
 export OUT
-# Unix socket paths must stay short (about 100 bytes), so not under raw/.
-SOCKETS=$(mktemp -d)
-
-(cd "$ROOT/protocol" && npm run build >/dev/null)
-(cd "$ROOT/agent" && npm run build >/dev/null)
-(cd "$ROOT/app" && npx ng build >/dev/null)
-
-ORIGINS=http://localhost:8081
-PIDS=()
-start() { # port metrics-port scenario name [web]
-  (cd "$ROOT/agent" && exec env DEMO="$3" CLUSTER_NAME="$4" PORT="$1" METRICS_PORT="$2" PUBLIC_URL="http://localhost:$1" \
-    CORS_ORIGINS="$ORIGINS" INTERNAL_SOCKET="$SOCKETS/$4.sock" ${5:+WEB_ROOT="$ROOT/app/dist/app/browser"} node dist/main.js) >"$OUT/agent-$4.log" 2>&1 &
-  PIDS+=($!)
-}
-start 8081 9181 broken homelab web
-start 8082 9182 warning office
-start 8083 9183 healthy staging
-# Only the agents started here; a pattern kill would also hit unrelated processes.
-trap 'kill "${PIDS[@]}" 2>/dev/null || true; rm -rf "$SOCKETS"' EXIT
-sleep 4
+source ./demo-agents.sh
 
 sed 's/\x1b\[[0-9;]*m//g' "$OUT/agent-homelab.log" | sed -n '/Kubernanny for/,/cli.js pair/p' >"$OUT/term-pairing.txt"
 curl -s localhost:9181/metrics | head -30 >"$OUT/term-metrics.txt"

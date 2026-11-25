@@ -68,15 +68,40 @@ WebSocket, for the agent: `GET /v1/agents/{agentId}/ws`. Binary messages are fra
 | `0x02` ReplyChunk | agent → relay | part of the response body, more follows |
 | `0x03` ReplyEnd | agent → relay | `u16 status` and the last part |
 | `0x04` Cancel | relay → agent | none: the call timed out, its answer is not wanted |
+| `0x05` Push | agent → relay, the agent's own id | one native push as JSON (below) |
+| `0x06` PushResult | relay → agent, same id | `{"s": outcome}` |
 | `0x10` Challenge | relay → agent, id 0 | 32-byte nonce, relay's ephemeral X25519 public key |
 | `0x11` Proof | agent → relay, id 0 | agent's static public key, 32-byte MAC |
-| `0x12` Ready | relay → agent, id 0 | the relay's limits as JSON |
+| `0x12` Ready | relay → agent, id 0 | the relay's limits as JSON, with `push: true` when it delivers native push |
 
 What the relay passes on from an agent is only ever 200 with the sealed bytes (`application/octet-stream`) or one of the agent's plain refusals, 400, 413, 429 or 503 with a body the relay rebuilds itself as `{"code":"E2E_…"}`. Any other status or body becomes `502 RELAY_BAD_AGENT_RESPONSE`: anyone can register an agent id of their own, and the relay's origin must not serve whatever such an "agent" sends.
 
 Answers travel in parts of at most 256 KiB, so no platform's WebSocket message limit matters. Unknown frame types are ignored by both sides. Close codes: 4000 protocol error, 4001 proof failed, 4002 no proof in time, 4003 replaced by a newer connection, 4008 idle, 4029 full, 1001 relay restarting.
 
 The proof: `key = BLAKE2b-256("kubernanny-relay/1" ‖ X25519(agent secret, relay ephemeral) ‖ relay ephemeral ‖ agent public)`, `MAC = HMAC-BLAKE2b("kubernanny-relay/1" ‖ nonce)` with that key, first 32 bytes. The relay computes the same with its ephemeral secret and the agent's public key, and checks that the key hashes to the id in the URL. Each challenge verifies once. The code is `protocol/src/relay.ts`, shared by the agent, the Node relay and the Worker.
+
+## Native push
+
+Optional on the relay too: on only with a Firebase service account (`FCM_SERVICE_ACCOUNT`), and `RELAY_PUSH=off` keeps it off even then. What it is for and how the app uses it: [NOTIFICATIONS.md](NOTIFICATIONS.md#native-push); why: [decisions/0007](decisions/0007-native-push.md).
+
+The agent hands pushes over the WebSocket it already holds: the registration proof already says which agent is talking, so a push needs no proof of its own and adds no public route. The relay announces push in `Ready` (`push: true`); without it the agent sends no `Push` frame, and a `Push` frame to a relay without push is answered `disabled`.
+
+```
+Push        {"t": FCM token, "o": "ios" | "android", "k": key id (16 chars), "m": sealed message (base64url), "l": "en" | "de"}
+PushResult  {"s": "sent" | "unregistered" | "rate_limited" | "unavailable" | "invalid" | "failed" | "disabled"}
+```
+
+The relay sends it to FCM HTTP v1 (`POST https://fcm.googleapis.com/v1/projects/{project}/messages:send`) with an OAuth token it gets for its service account (a JWT signed with RS256 through WebCrypto, the same code on Node and the Worker, cached until five minutes before it expires). Android gets a data-only message (`data: {k, m}`, high priority); iOS the same data plus a generic APNs alert ("Kubernanny", "New status from a cluster" in `l`'s language) with `mutable-content`, which the app's Notification Service Extension replaces with the opened text. `unregistered` (FCM: the token is gone) makes the agent forget the token.
+
+| Limit | Default | |
+|---|---|---|
+| per agent | `RELAY_PUSHES_PER_HOUR` 60, `RELAY_PUSH_BURST` 20, 4 waiting for FCM | token bucket, kept across a Worker's hibernation like the call buckets |
+| per FCM token | `RELAY_PUSHES_PER_TOKEN_PER_HOUR` 30 | across every agent of a Node relay (20 000 tokens tracked, least recently used dropped); per agent object on the Worker |
+| per push | the sealed message at most 2048 bytes of plaintext (about 2.8 KiB on the wire), the frame at most 8 KiB | anything malformed is `invalid` |
+
+**What the relay learns from push**, beyond what it sees for calls: each registered device's FCM token and platform, a key id (a hash of a random push key, not of the device key), and when and how large each push is. Not a word of the message: it is sealed with HPKE for the device's push key ([PROTOCOL.md](PROTOCOL.md#push-messages)), and only opens if the agent sealed it. The Node relay logs no token and no key id; metrics count pushes by outcome only (`kubernanny_relay_pushes_total{outcome}`). A relay with push needs outbound HTTPS to `oauth2.googleapis.com` and `fcm.googleapis.com`.
+
+**What a hostile relay can do with push**: drop or delay pushes (the agent counts the channel as failed and tries again next run) and learn the metadata above. It cannot make a push that opens: that needs the agent's private key. Whoever holds the service account (the relay's operator, or someone who stole it) can send FCM messages of their own to tokens they know: on iOS the extension shows only the generic text for anything that does not open, whatever alert text came with it; on Android a data message that does not open is dropped, but a plain FCM *notification* message is shown by the system while the app is in the background, without the app's code, so such a person can put a text of their choosing on an Android phone. Treat a Kubernanny notification that the app does not confirm as unverified; keep the service account in a Secret.
 
 ## What the relay sees, and what it does not
 
@@ -159,10 +184,14 @@ Settings (environment variables of the Node relay, `[vars]` of the Worker):
 | `RELAY_IDLE_TIMEOUT_MS` | 90000 | no message, not even a ping, for this long: closed |
 | `CORS_ORIGINS` | `*` | comma-separated, to restrict browsers |
 | `LOG_LEVEL` | `log` | `debug` adds one line per call (id prefix, status, sizes, ms) |
+| `FCM_SERVICE_ACCOUNT` | unset | the JSON key of a Firebase service account: turns native push on ([Native push](#native-push)). On the Worker a secret. Node also reads `FCM_SERVICE_ACCOUNT_FILE` (a mounted Secret) |
+| `RELAY_PUSH` | on | `off` keeps native push off even with a service account |
+| `RELAY_PUSHES_PER_HOUR`, `RELAY_PUSH_BURST` | 60, 20 | pushes per agent |
+| `RELAY_PUSHES_PER_TOKEN_PER_HOUR` | 30 | pushes per FCM token |
 
 **`TRUST_PROXY` only helps if the proxy owns the header.** The per-address limits (unproven connections, registered agents, the share of the answer budget) are only as good as the address they read. The proxy in front must set the header itself from the connecting address, overwriting anything the client sent (`cf-connecting-ip` behind Cloudflare, `x-real-ip` behind most reverse proxies), or append to `x-forwarded-for`. A proxy that passes a client's own `x-forwarded-for` through unchanged lets every client pick its address, and with it a fresh set of limits. Prefer `cf-connecting-ip` or `x-real-ip` where the proxy sets them; check with a request carrying a made-up header that the relay does not see it.
 
-Metrics of the Node relay: `kubernanny_relay_agents`, `kubernanny_relay_pending_registrations`, `kubernanny_relay_calls_total{outcome}`, `kubernanny_relay_registrations_total{outcome}`, `kubernanny_relay_bytes_total{direction}`, `kubernanny_relay_call_duration_seconds`, `process_resident_memory_bytes`.
+Metrics of the Node relay: `kubernanny_relay_agents`, `kubernanny_relay_pending_registrations`, `kubernanny_relay_calls_total{outcome}`, `kubernanny_relay_pushes_total{outcome}`, `kubernanny_relay_registrations_total{outcome}`, `kubernanny_relay_bytes_total{direction}`, `kubernanny_relay_call_duration_seconds`, `process_resident_memory_bytes`.
 
 ## Sizing
 

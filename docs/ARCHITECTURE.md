@@ -320,6 +320,25 @@ flowchart TB
 
 **Routing** uses hash URLs, so the agent can serve the build as plain static files without a fallback rule, and pairing links (`/#/pair?code=…`) keep the code out of server logs.
 
+### Widgets
+
+Home-screen widgets on iOS (WidgetKit, small and medium) and Android (an `AppWidgetProvider` with plain RemoteViews, no Glance) show each cluster's light as the nanny's eye, its headline ("3 outages and 19 warnings"), "as of HH:MM" for the agent's last check, and a "Demo" mark for the built-in demo clusters. A tap opens that cluster (`kubernanny://cluster?id=…`, handled in `app.ts` with `clusterLinkId`, also as the launch URL of a cold start).
+
+```mermaid
+flowchart LR
+  SS["StatusStore<br/>new snapshot"] --> WS["WidgetSync<br/>nextWidgetList()"]
+  CS["ClusterStore<br/>names, widget switches"] --> WS
+  WS -- "whole list, only when it changed" --> WB["WidgetBridge plugin<br/>(app/native/widget-bridge)"]
+  WB --> ST["iOS: App Group UserDefaults group.app.kubernanny<br/>Android: SharedPreferences kubernanny_widget"]
+  ST --> W["Widget"]
+  WB -- "reload timelines / updateAppWidget" --> W
+```
+
+- **The widget never talks to an agent and holds no key.** The app writes a short list (`WidgetCluster` in `core/widget/widget-summary.ts`: id, name, light, number of outages and warnings counted like the headline, `checkedAt`, demo flag; nothing else, no issue texts) and the OS draws it. The headline sentence is built natively from the counts, in the widget's own localization files (English and German).
+- **Fresh only while the app is open.** `WidgetSync` writes whenever the list differs from the last write: a new snapshot, a renamed, removed or switched-off cluster. A cluster without an answer (app just started, agent out of reach) keeps its last entry. The app polls only in the foreground, so a cluster whose check is over 30 minutes old is drawn grey with a line saying so (iOS adds a timeline entry for that moment; Android redraws from the stored list every 30 minutes, Android's minimum, so it can turn grey up to 30 minutes late). Native push may later write from the background; until then this is the limit.
+- **Switches.** Per cluster in its settings ("Show this cluster on the home-screen widget", `ClusterConfig.widgetOff`) and for all clusters on the cluster list (`widgetsOff` in Preferences). Off removes the entries from the shared storage before the switch's promise resolves, and nothing is written for them afterwards. Both are shown only in the native apps.
+- **Code.** TypeScript: `app/src/app/core/widget/` (pure `widgetCluster` / `nextWidgetList`, unit-tested with a fake bridge; the web implementation of the plugin is a no-op). Plugin: `app/native/widget-bridge/`, a local npm package that `npx cap sync` wires in like any Capacitor plugin (Swift package `KubernannyWidgetBridge`, Android library with the widget provider, its layout, resources and receiver, which the manifest merger adds to the app). iOS widget extension: `app/ios/App/KubernannyWidget/`; its Xcode target is set up by hand once ([RELEASING.md](RELEASING.md#widgets)).
+
 **Design**: [DESIGN.md](DESIGN.md).
 
 ---

@@ -20,7 +20,7 @@ Chart: `deploy/helm/kubernanny` (OCI: `oci://ghcr.io/kubernanny/charts/kubernann
 | `checks.intervalSeconds` | `60` | |
 | `checks.certWarnDays` / `certCriticalDays` | `14` / `3` | |
 | `checks.backupMaxAgeHours` | `26` | CNPG and Velero; critical at twice |
-| `checks.disabled` | `[]` | Modules switched off for good, e.g. `[argocd, loki]`: not run, and no RBAC to read them. `notifications` switches all notifications off. The app cannot switch these on. |
+| `checks.disabled` | `[]` | Modules switched off for good by id, e.g. `[argocd, loki]` (ids in [CHECKS.md](CHECKS.md) and [COMPONENTS.md](COMPONENTS.md), e.g. `rook-ceph`, `traefik`, `ingress-nginx`, `kyverno`, `gatekeeper`, `trivy`, `node-clocks`, `image-updates`): not run, and no RBAC to read them. `notifications` switches all notifications off. The app cannot switch these on. |
 | `actions.disabled` | `[]` | Action types switched off for good: `restart`, `argocd-sync`, `argocd-refresh`, `cnpg-backup`, `logs`. A permission is dropped once no enabled action of an enabled module needs it (`argocd-sync` and `argocd-refresh` share theirs). |
 | `checks.prometheusUrl` / `alertmanagerUrl` | `""` | Override discovery |
 | `rbac.allowActions` | `true` | `false`: no write verbs at all, actions answer 403 |
@@ -33,14 +33,17 @@ Chart: `deploy/helm/kubernanny` (OCI: `oci://ghcr.io/kubernanny/charts/kubernann
 | `notifications.weeklyDigest` | `enabled: false, weekday: 1, hour: 9` | Weekly report through the configured channels ([NOTIFICATIONS.md](NOTIFICATIONS.md)) |
 | `timezone` | `""` (UTC) | `TZ` of the agent, for the weekly report, e.g. `Europe/Berlin` |
 | `checks.systemNamespaces` | `[]` | Namespaces the security posture check skips, on top of kube-system and the other system namespaces it knows |
-| `vulnerabilities.enabled` | `false` | Switches the `vulnerabilities` module on for this install: sends component package names and versions to api.osv.dev (or `dbUrl`). The app can still switch it off; `checks.disabled: [vulnerabilities]` locks it off. See [SECURITY-CHECKS.md](SECURITY-CHECKS.md) |
+| `vulnerabilities.enabled` | `false` | Switches the `vulnerabilities` module on for this install: sends component package names and versions to api.osv.dev (or `dbUrl`). It only covers the Kubernetes version and 13 recognised components, not your own images; Trivy Operator in the cluster covers every image (the `trivy` integration reads its reports, on by default when found). The app can still switch it off; `checks.disabled: [vulnerabilities]` locks it off. See [SECURITY-CHECKS.md](SECURITY-CHECKS.md) |
 | `vulnerabilities.dbUrl` | `""` | OSV-compatible mirror instead of `https://api.osv.dev` (https, or http to an in-cluster `*.svc` host) |
 | `vulnerabilities.dbNamespace` | `""` | With `networkPolicy.egress`: namespace of that mirror. Empty: HTTPS to anywhere is allowed while the module is enabled |
+| `vulnerabilities.allowAccept` | `true` | `false`: nobody can mark an advisory as not applicable (built-in lookup and Trivy Operator findings); the API refuses (403 `ACCEPT_LOCKED`) before touching anything, and stored acceptances are ignored |
+| `imageUpdates.enabled` | `false` | Switches on the lookup of newer image tags at the registries (`ENABLED_MODULES=image-updates`); sends repository names only. The app can still switch it off; `checks.disabled: [image-updates]` locks it off. Adds an HTTPS egress rule when `networkPolicy.egress.internetHttps` is false |
 | `language` | `en` | `en` or `de`: notifications, the weekly report, the pairing banner in the pod log, and answers to callers that name no language. The app asks for its own UI language with every call. |
 | `customComponents` | `[]` | Your own applications as components: `{ name, images: [prefix], category, icon, description }`, see [CHECKS.md](CHECKS.md#your-own-applications) |
 | `relay.enabled` | `false` | Reach the agent from outside the VPN without an inbound port: one outbound WebSocket to the relay, which carries only end-to-end encrypted bytes ([RELAY.md](RELAY.md)). Off: no outbound connection at all |
 | `relay.url` | `wss://relay.kubernanny.app` | The public relay, or your own (`deploy/relay/`, `relay/cloudflare/`) |
 | `relay.egressPort` | `443` | Port for the NetworkPolicy egress rule to the relay |
+| `notifications.appPush.enabled` | `true` | Push straight to the Kubernanny app, sealed per device, through the relay and Firebase ([NOTIFICATIONS.md](NOTIFICATIONS.md)). Nothing leaves until a device opts in, and that needs the relay. `false` (env `APP_PUSH=off`): the push routes answer 404, stored tokens are deleted on start, nothing is handed to the relay, the app shows it locked |
 | `extraEnv`, `nodeSelector`, `tolerations`, `affinity` | | |
 
 Example for a VPN-only Traefik setup with cert-manager and ntfy:
@@ -90,6 +93,7 @@ The chart sets these; set them yourself with `deploy/install.yaml` or `docker ru
 | `LANGUAGE` | `en` | `en` or `de`, see the Helm value `language`. glibc uses the same variable as a list (`de_DE:en`): the first entry counts; anything unknown means English. |
 | `UPTIME_KUMA_STATUS_PAGE` | | Slug of a published Uptime Kuma status page (letters, digits, dashes). The `uptime-kuma` module then reads its monitors; without it only the pods are checked. Helm: `extraEnv: [{ name: UPTIME_KUMA_STATUS_PAGE, value: homelab }]`. In demo mode it defaults to `homelab`. |
 | `RELAY_URL` | | `wss://` relay address (`ws://` only for localhost or an in-cluster `*.svc` host). Unset: no outbound connection. The chart sets it from `relay.enabled` / `relay.url`. The relay's own settings (limits, `TRUST_PROXY`) are in [RELAY.md](RELAY.md). |
+| `APP_PUSH` | `on` | `off` disables native push for good (Helm `notifications.appPush.enabled`) |
 | `CUSTOM_COMPONENTS` | | JSON array of your own components (the chart sets it from `customComponents`) |
 | `DISABLED_ACTIONS` | | Comma-separated action types switched off in the deployment. The chart sets it from `actions.disabled`, plus the four write actions without `rbac.allowActions`. |
 | `PROMETHEUS_URL`, `ALERTMANAGER_URL` | | Override discovery |

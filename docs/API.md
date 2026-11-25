@@ -32,6 +32,10 @@ Errors carry the HTTP status and a body with a stable `code` and a `message` in 
 | `ACTION_NOT_OFFERED` | 404 | the issue does not offer that action |
 | `ACTION_UNKNOWN` | 400 | not one of the four action types |
 | `NO_CHANNEL` | 400 | test notification without a configured channel |
+| `ACCEPT_LOCKED` | 403 | accepting advisories is switched off in the deployment (`vulnerabilities.allowAccept: false`) |
+| `MODULE_OFF` | 403 | accepting an advisory while neither the `vulnerabilities` module nor the `trivy` integration is running |
+| `ADVISORY_NOT_FOUND` | 404 | the advisory is not reported for that component right now |
+| `ACCEPT_DAYS`, `ACCEPT_TARGET`, `ACCEPT_REASON`, `ACCEPT_LIMIT` | 400 | duration other than 30, 90 or 365; component or advisory missing or malformed; reason not text; more than 500 accepted |
 
 ## On the public port
 
@@ -122,7 +126,7 @@ Texts above are shown in German (`l: "de"`); with `l: "en"` the same snapshot re
 
 When a run cannot read the cluster (API server unreachable, RBAC), the snapshot keeps the last good run, with its `checkedAt` (so the app and `kubernanny_last_run_timestamp_seconds` show how old it is), and adds `error` and `failingSince`. From the third failed run in a row the light is `red` and one critical issue `agent/cluster-unreachable` ("Kubernanny cannot read the cluster", with the error as cause) joins the issues; it is recorded and notified like any issue (silences, the notification switch and maintenance windows apply), and disappears with the first run that reads the cluster again.
 
-Issues are sorted critical first, then by age, then in the order the modules report them (never by title, so the order is the same in every language). `since` is when this agent process first saw the issue. Issues of the `vulnerabilities` module also carry `advisories`: OSV ids (`["GHSA-423p-g724-fr39"]`), which the app links to `https://osv.dev/vulnerability/<id>`; they never offer actions.
+Issues are sorted critical first, then by age, then in the order the modules report them (never by title, so the order is the same in every language). `since` is when this agent process first saw the issue. Issues of the `vulnerabilities` module and of the `trivy` integration also carry `advisories`: advisory ids (`["GHSA-423p-g724-fr39"]`, `["CVE-2024-21538"]`), which the app links to `https://osv.dev/vulnerability/<id>`; they never offer actions. The `vulnerabilities` module and the `trivy` integration carry `canAccept` (advisories can be marked as not applicable, see `POST /vulnerabilities/accept`) and `accepted`: `[{ component, name, advisory, until, by, reason? }]`.
 
 ### `POST /status/refresh`
 
@@ -231,7 +235,7 @@ The last 300 lines (with timestamps) of the pod named by the issue's `logs` acti
 
 | Route | Purpose |
 |---|---|
-| `GET /devices` | every paired device: `{ id, name, createdAt, lastSeenAt, current }[]` (`lastSeenAt` since the agent started; never the public key) |
+| `GET /devices` | every paired device: `{ id, name, createdAt, lastSeenAt, push, current }[]` (`lastSeenAt` since the agent started; `push`: native push is registered; never the public key or a push token) |
 | `DELETE /devices/:id` | revoke a device (204); its key stops working on the next call. Any paired device may revoke any other (the lost-phone case); each revocation is announced through the notification channels first. |
 | `POST /pair/code` | a new one-time code for another device: `{ code, app, web }` (links as in the log, with the agent key). The previous code stops working. |
 | `POST /pair/code/banner` | admin CLI only (`node dist/cli.js pair`): the start banner with a fresh code, as text |
@@ -239,9 +243,17 @@ The last 300 lines (with timestamps) of the pod named by the issue's `logs` acti
 | `POST /issues/unsilence?issue=<id>` | ends the silence at once (204) |
 | `POST /maintenance?hours=<1, 2, 4, 8 or 24>` | starts a maintenance window (or moves its end): checks go on, notifications wait until it ends; the snapshot carries `maintenanceUntil`. Starting one is announced through the notification channels first. `{ maintenanceUntil }`; 400 `MAINTENANCE_HOURS`. |
 | `POST /maintenance/end` | ends it at once (204) |
-| `GET /settings` | what runs: `{ modules: [{ id, name, icon, category, description, deep, detected, state, defaultOff?, privacy? }], actions: [{ type, label, description, state }], notifications }`, each `state` `on`, `off` (app) or `locked` (deployment). `defaultOff`: the module stays off until switched on (`vulnerabilities`); `privacy`: what it sends out of the cluster, shown next to its switch |
+| `POST /vulnerabilities/accept` | marks one advisory on one component as not applicable: `{ "component": "cnpg", "advisory": "GHSA-423p-g724-fr39", "days": 90, "reason": "operator not exposed" }`; for a Trivy Operator finding the component is the workload, `trivy:<namespace>:<kind>:<name>` in lower case (`trivy:default:deployment:social-importer` for the issue `trivy/default/Deployment/social-importer`), and it is listed in the `trivy` module's `accepted` (`days` 30, 90 or 365; `reason` optional, cleaned, at most 200 characters). Only an advisory the component's issue lists right now. It no longer counts for that issue (the issue goes when nothing remains) and appears in the vulnerabilities module's `accepted` until it expires. Announced through the notification channels first, written to the audit log. `{ acceptedUntil }`. Refused with 403 `ACCEPT_LOCKED` (Helm `vulnerabilities.allowAccept: false`) or `MODULE_OFF` before anything is read or written. |
+| `POST /vulnerabilities/unaccept` | `{ "component", "advisory" }`: counts again at once (204); the same 403s |
+| `GET /settings` | what runs: `{ modules: [{ id, name, icon, category, description, deep, detected, state, defaultOff?, privacy? }], actions: [{ type, label, description, effect, state }], notifications }`, each `state` `on`, `off` (app) or `locked` (deployment). `defaultOff`: the module stays off until switched on (`vulnerabilities`); `privacy`: what it sends out of the cluster, shown next to its switch; `effect`: what an action may change in the cluster, one line ([PERMISSIONS.md](PERMISSIONS.md) has the details) |
 | `POST /settings` | switch within the deployment's limits: `{ "modules": { "argocd": false }, "actions": { "restart": false }, "notifications": true }`. 403 `SETTING_LOCKED` for anything switched off in the deployment, 400 `SETTING_UNKNOWN` for unknown ids. Answers with the new view; a new run starts at once. Switching notifications, a module or an action off is announced through the notification channels first, naming the device, whatever the notification switch says. |
-| `POST /notify/test` | sends a test message through every channel: `{ channels: ["ntfy", "discord"] }` |
+| `POST /notify/test` | sends a test message through every channel: `{ channels: ["ntfy", "discord", "app"] }` (`app`: native push to every registered device) |
+| `GET /push` | native push for the calling device: `{ state, relay, registered }`; `state` `on`, `locked` (`APP_PUSH=off` in the deployment) or `no-relay`; `relay`: the relay is connected and delivers push now |
+| `POST /push/register` | `{ "token": "<FCM token>", "platform": "ios" \| "android", "key": "<push public key, base64url>" }`: native push to the calling device, sealed for that key (204). Replaces an earlier registration of the same device. 400 `PUSH_INVALID`, `PUSH_DEVICE_ONLY`; 409 `PUSH_NO_RELAY`. The token is never logged; `GET /devices` shows only `push: true`. |
+| `DELETE /push/register` | turns native push off for the calling device (204); its token and key are deleted |
+| `POST /push/test` | one test push to the calling device only: `{ outcome }` (`sent`, `unavailable`, `rate_limited`, …); 409 `PUSH_NOT_REGISTERED` |
+
+The three push writes answer `404 PUSH_OFF` before reading or writing anything when the deployment switched native push off (`notifications.appPush.enabled: false`).
 
 ## Metrics (port 9100)
 

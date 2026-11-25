@@ -10,3 +10,4 @@ Short records of choices that shape Kubernanny, with what was weighed. A decisio
 | [0004](0004-direct-and-relay.md) | Direct first, relay as fallback; the relay is optional and self-hostable | accepted |
 | [0005](0005-relay-protocol.md) | The relay protocol: opaque sealed bodies, agent id from the key, proof of possession, Nest with plain `ws` | accepted |
 | [0006](0006-agent-languages.md) | The agent speaks the app's language: texts as keys, rendered per request | accepted |
+| [0007](0007-native-push.md) | Native push through the relay and FCM, sealed per device with HPKE; off for good with `APP_PUSH=off` | accepted |

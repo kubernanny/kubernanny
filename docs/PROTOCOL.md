@@ -168,6 +168,36 @@ bebd6be62c44c8d5ea60235e3421dbe19cc8a00321773a80ebd1ffd0172ca95ccf13
 
 The JSON payloads are serialised without spaces, keys in the order `m, p, t, b` and `s, t`. A different serialisation is still valid protocol, but will not reproduce the vectors.
 
+## Push messages
+
+Native push ([NOTIFICATIONS.md](NOTIFICATIONS.md#native-push), [decisions/0007](decisions/0007-native-push.md)) is one-way, from the agent to one device, and is opened by code that runs without the app (the iOS Notification Service Extension, the Android messaging service). It is not a Noise handshake: there is no answer and no round trip. The implementation is `protocol/src/push.ts`, with copies in Swift (`app/ios/App/KubernannyPushExtension/PushCrypto.swift`) and Java (`app/native/push/android/.../PushCrypto.java`).
+
+| | |
+|---|---|
+| Construction | HPKE ([RFC 9180](https://www.rfc-editor.org/rfc/rfc9180)), `mode_auth`, single shot |
+| Suite | DHKEM(X25519, HKDF-SHA256) `0x0020`, HKDF-SHA256 `0x0001`, ChaCha20-Poly1305 `0x0003` |
+| Recipient key | the device's **push key** for this cluster: a separate X25519 pair the app makes when push is switched on; only its public half reaches the agent, in a sealed `POST /push/register` |
+| Sender key | the agent's static key, pinned by the device at pairing |
+| `info` | the ASCII bytes `kubernanny-push/1` (domain separation from the Noise prologue `kubernanny-e2e/1` and the relay label `kubernanny-relay/1`) |
+| `aad` | empty |
+| Message | `0x01` (version) ‖ `enc` (the ephemeral public key, 32 bytes) ‖ ciphertext and tag |
+| Cross-check | both directions against [`@hpke/core`](https://github.com/dajiaji/hpke-js) in the test suite |
+
+The plaintext is JSON, keys in this order, at most 2048 bytes (the agent shortens the body to fit): `{"t": title, "b": body, "p": priority, "s": agent clock in ms}`. Next to the message travels the **key id** `k`: the first 16 characters of `base64url(BLAKE2b-256(push public key))`, so the phone picks the right key without trying each.
+
+Properties: only the holder of the push secret key opens a message (`DH(eph, push)`); it opens only if the agent made it (`mode_auth` mixes `DH(agent static, push)` in), so neither the relay nor Google nor anyone who learns the push public key can forge one; every message has a fresh ephemeral key. Not given: forward secrecy against a later theft of the push secret key (it opens every recorded push for that cluster, which is why it is a key of its own and not the device key), and replay protection (a replayed push shows an old message again; the plaintext carries the agent's time). Using the agent's static key in a second construction is safe here: HPKE feeds both DH results through its own labelled HKDF (`HPKE-v1` ‖ suite ‖ label), apart from Noise's HKDF over BLAKE2b, and the agent only ever computes `DH(agent static, push public)` for push keys that paired devices registered.
+
+### Push test vector
+
+All of them in [`protocol/test/push-vectors.json`](../protocol/test/push-vectors.json). The first: agent static secret `8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0` (the same agent key as the call vectors), push secret `2122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40`, push public `5869aff450549732cbaaed5e5df9b30a6da31cb0e5742bad5ad4a1a768f1a67b`, ephemeral secret `6162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80`, key id `LbUGLxX9BNGEjdbP`, plaintext `{"t":"homelab: 2 problems","b":"🔴 default/api: CrashLoopBackOff","p":5,"s":1795000000000}`, message (141 bytes):
+
+```
+01244fe3b963e899dd295baffce248d3530f3a9a7479ba063002680ebfe7adad4927773b1cba3e12
+01b3634c526a0f09d99222c2d5dcea3c0cb0bd989084dcfec79585c9cbee88f1a455032dde3c51c5
+1cf226cf23ba91837341053214d97f1b3f4463695b0e5ca40942a35a878bcc136021b04f586b5938
+aa9c471e69fec6b33756624a2ba4d517df6f45bac9
+```
+
 ## Versioning
 
 The first byte of both bodies is the version, and the prologue names it. A future version gets a new byte and prologue; an agent may accept several, the app uses the highest the pinned agent accepts. Never reuse a version for different bytes.

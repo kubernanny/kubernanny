@@ -24,6 +24,15 @@ A module that cannot run (API error, missing RBAC) shows as *not checkable* and 
 
 Stats: nodes ready, cluster CPU and RAM %, cores, memory.
 
+### Node clocks (`node-clocks`)
+
+| Issue id | Severity | When |
+|---|---|---|
+| `node-clocks/<node>` | warning > 0.5 s, critical > 5 s | offset from `node_timex_offset_seconds` (else `node_ntp_offset_seconds`), via Prometheus |
+| `node-clocks/<node>` | warning | `node_timex_sync_status` 0 for 5 min and max error ≥ 16 s |
+
+0.5 s is half of etcd's 1 s peer clock-drift warning. Above 5 s the clock is not being corrected: new certificates are "not yet valid" and JWTs fail beyond the API server's one-minute leeway. Without Prometheus: no issue. Off: `checks.disabled: [node-clocks]`.
+
 ### etcd (`etcd`)
 
 Reads the static pods labelled `component=etcd` in `kube-system` (RKE2, kubeadm). Skipped for external etcd or kine (k3s with SQLite).
@@ -122,7 +131,7 @@ Stats: findings, namespaces with privileged containers, namespaces with findings
 
 ### Known vulnerabilities (`vulnerabilities`, off by default)
 
-Matches the Kubernetes version and the image-tag versions of mapped components against OSV.dev (or `VULN_DB_URL`), cached 12 h. Sends package names and versions, nothing else; switch on with `vulnerabilities.enabled` or in the app. One issue per component, never with actions; the app links each advisory id to osv.dev. Details and the list of mapped components: [SECURITY-CHECKS.md](SECURITY-CHECKS.md).
+**Limited by design:** matches only the Kubernetes version and the image-tag versions of the 13 mapped components against OSV.dev (or `VULN_DB_URL`), cached 12 h. It does not see your own images, other components, or the libraries and base layer inside any image; for those, run Trivy Operator (`trivy` below), which scans every image. The module's sheet says so, and says whether Trivy Operator was found. Sends package names and versions, nothing else; switch on with `vulnerabilities.enabled` or in the app. One issue per component, never with actions; the app links each advisory id to osv.dev. Details and the list of mapped components: [SECURITY-CHECKS.md](SECURITY-CHECKS.md).
 
 | Issue id | Severity | When |
 |---|---|---|
@@ -130,7 +139,13 @@ Matches the Kubernetes version and the image-tag versions of mapped components a
 | | warning | a critical advisory with a fix on a component without one, or a high one (≥ 7.0) with a fix |
 | | hint | medium, low, or no released fix yet |
 
-Database unreachable: answers up to 7 days old are shown and marked, and OSV.dev is left alone for 15 minutes before the next try; without any, the module is *not checkable* (yellow, never red). Stats: versions checked, advisories per level, components without a lookup, database host.
+Database unreachable: answers up to 7 days old are shown and marked, and OSV.dev is left alone for 15 minutes before the next try; without any, the module is *not checkable* (yellow, never red). Stats: what it compares, whether every image is covered (Trivy Operator found or not), versions checked, components left to Trivy, advisories per level, components without a lookup, database host.
+
+A component whose every workload has a fresh Trivy Operator report is left to Trivy: no lookup, no `vulnerabilities/<component>` issue, so the same advisories never show twice.
+
+### Available updates (`image-updates`, off by default)
+
+`image-updates/<component>` (hint): a newer patch, minor or major tag of a recognised component with a plain `x.y.z` tag on Docker Hub, ghcr.io, quay.io or registry.k8s.io. Cached 12 h. Sends repository names only. Details: [SECURITY-CHECKS.md](SECURITY-CHECKS.md). Locked off: `checks.disabled: [image-updates]` (no registry contact, no egress rule).
 
 ## Integrations (when the component is detected and switched on)
 
@@ -232,6 +247,30 @@ Reads `GET /api/v1/endpoints/statuses` on Gatus' service (port 8080) over cluste
 
 Uptime Kuma has no read API without credentials (`/metrics` needs an API key in 2.x and can be switched off). With `UPTIME_KUMA_STATUS_PAGE` set to a published status page's slug, the agent reads that page like a browser does (`GET /api/status-page/<slug>` and `/api/status-page/heartbeat/<slug>`, port 3001): a monitor whose newest heartbeat is down counts; one **warning** per status page group (`uptime-kuma/group/<group id>`). Only monitors on that page are seen. Without the setting: workload health only, plus a stat explaining how to enable it. Untrusted: never offers actions.
 
+### Rook Ceph (`rook-ceph`)
+
+`…/<ns>/<name>/health`: warning on HEALTH_WARN, critical on HEALTH_ERR (with Ceph's own messages). `…/capacity`: warning ≥ 75 %, critical ≥ 85 % raw use. Ceph's own per-OSD defaults are nearfull 85 %, backfillfull 90 % and full 95 %; the cluster average runs behind the fullest OSD, hence earlier. `…/operator`: warning on a Failure phase or condition, or a status older than 15 min. Off: `checks.disabled: [rook-ceph]`.
+
+### Traefik, ingress-nginx (`traefik`, `ingress-nginx`)
+
+`<id>/errors/<route>`: the 5xx share over 15 min, only with ≥ 200 requests and ≥ 10 errors, so a quiet homelab never alarms. Warning > 5 % (far beyond a 0.1 to 1 % error budget and rollout blips), critical > 25 %. Without Prometheus: workload health only.
+
+### Kyverno, Gatekeeper (`kyverno`, `gatekeeper`)
+
+`kyverno/policy/<policy>` and `gatekeeper/<Kind>/<name>`: a hint with the violation count (security posture, not an outage). A warning only for Enforce/deny policies whose engine reports errors (`…/errors`), or a Kyverno policy that is not Ready (`…/not-ready`). Gatekeeper makes one CRD per constraint kind, so `constraints.gatekeeper.sh` is read with `*` (read only).
+
+### Trivy Operator (`trivy`)
+
+Reads Trivy Operator's `VulnerabilityReport`s (and `ClusterVulnerabilityReport`s where they exist), read only, nothing leaves the cluster. One issue per workload with the built-in lookup's severity rules:
+
+| Issue id | Severity | When |
+|---|---|---|
+| `trivy/<ns>/<kind>/<name>` | critical | a critical advisory with a `fixedVersion` on a workload reachable through an ingress |
+| | warning | a fixable critical on a workload without one, or a fixable high |
+| | hint | no fix yet, medium, low |
+
+Reports older than 14 days or of an image the workload no longer runs are skipped; only counts and the worst advisories are kept. Shown on the component's sheet too. Advisories can be marked as not applicable per workload. Off: `checks.disabled: [trivy]`. Details and suggested Trivy settings: [SECURITY-CHECKS.md](SECURITY-CHECKS.md#trivy-operator-trivy).
+
 ### metrics-server (`metrics-server`)
 
 `metrics-server/api` (warning) when it is installed but delivers no node values (often `--kubelet-insecure-tls` missing, or the APIService unavailable).
@@ -257,4 +296,4 @@ An image prefix matches only at a boundary: `ghcr.io/acme/api` matches `ghcr.io/
 
 ## Not checked (yet)
 
-Controller-manager and scheduler health beyond what the workloads show, ingress reachability from outside (use the Blackbox Exporter, Kubernanny reports its alerts), node-level hardware (SMART), vulnerabilities of components without an OSV mapping and of your own images (the `vulnerabilities` module only knows recognised components' versions). See [ROADMAP.md](ROADMAP.md).
+Controller-manager and scheduler health beyond what the workloads show, ingress reachability from outside (use the Blackbox Exporter, Kubernanny reports its alerts), node-level hardware (SMART), vulnerabilities of components without an OSV mapping and of your own images without Trivy Operator (the `vulnerabilities` module only knows the versions of Kubernetes and 13 recognised components; with Trivy Operator in the cluster every image is covered). See [ROADMAP.md](ROADMAP.md).

@@ -14,7 +14,7 @@ Everything Kubernanny puts into your cluster, everything it may do there, every 
 | Stores | two Secrets and one ConfigMap it creates itself, nothing else |
 | Inbound | port 8080 (web UI and the end-to-end encrypted API), port 9100 (numbers for Prometheus) |
 | Outbound, always | the Kubernetes API; Prometheus, Alertmanager, Grafana, Loki, Gatus and Uptime Kuma inside the cluster (GET only), when found |
-| Outbound, only if you configure it | your notification URLs; the relay; OSV.dev for the vulnerability check |
+| Outbound, only if you configure it | your notification URLs; the relay (which also carries native push); OSV.dev for the vulnerability check |
 | Default memory | requests 128 Mi, limit 256 Mi (about 100 MB used on a 3-node homelab) |
 
 ```mermaid
@@ -70,38 +70,7 @@ kubectl -n kubernanny get pod -l app.kubernetes.io/name=kubernanny -o jsonpath='
 
 ## What it may do in the Kubernetes API
 
-The ClusterRole is generated from the code: each module declares the resources it reads, each action the permission it needs (`agent/src/rbac/rules.ts` → `deploy/helm/kubernanny/files/rbac.json` → `templates/rbac.yaml`). Anything you switch off in the Helm values is left out of the ClusterRole, not just unused. CI renders the chart with the switches and fails if a switched-off permission is still granted.
-
-### Always (the inventory every run reads)
-
-| Resources | Verbs | Why |
-|---|---|---|
-| nodes, pods, services, namespaces, events, persistentvolumeclaims | get, list | nodes, workloads, volumes, events |
-| deployments, statefulsets, daemonsets, jobs, cronjobs | get, list | workload health, owner of a pod |
-| ingresses, httproutes (Gateway API), ingressroutes (Traefik) | get, list | which component is reachable under which address |
-| storageclasses | get, list | the Storage tab |
-| metrics.k8s.io nodes, pods | get, list | CPU and memory, if metrics-server runs |
-
-### Per module (dropped with `checks.disabled: [<id>]`)
-
-| Module | Resources (get, list) |
-|---|---|
-| `argocd` | argoproj.io applications |
-| `cert-manager` | certificates, clusterissuers |
-| `cnpg` | postgresql.cnpg.io clusters |
-| `etcd` | k3s.cattle.io etcdsnapshotfiles (RKE2, k3s) |
-| `external-secrets` | externalsecrets, clustersecretstores |
-| `flux` | kustomizations, helmreleases, gitrepositories |
-| `hpa` | horizontalpodautoscalers |
-| `infisical` | infisicalsecrets, infisicalstaticsecrets |
-| `longhorn` | longhorn.io volumes, nodes, backups, backuptargets |
-| `pdb` | poddisruptionbudgets |
-| `system-upgrade-controller` | upgrade.cattle.io plans |
-| `velero` | velero.io backups |
-
-Note what is **not** there: no Secrets of any other namespace, no ConfigMaps of other namespaces, no `services/proxy`, no `pods/exec`, no `delete` on anything, no RBAC objects, no node access.
-
-### Actions (dropped with `actions.disabled: [<type>]` or `rbac.allowActions: false`)
+**[PERMISSIONS.md](PERMISSIONS.md)** lists every permission, generated from the code: what each module reads and why, the four write actions and exactly what each changes, the Role in its own namespace, what it never has, and which Helm value removes what. Anything you switch off in the Helm values is left out of the ClusterRole, not just unused. CI renders the chart with the switches and fails if a switched-off permission is still granted.
 
 ```mermaid
 sequenceDiagram
@@ -117,25 +86,7 @@ sequenceDiagram
   Note over A: audit log: who, which action, which object
 ```
 
-An action never names its target in the request: the app says "run `restart` for issue X", and the agent takes namespace, kind and name from its own check result. It can only touch what is broken right now. Each action's permission is granted only while the action is enabled **and** a module offering it is enabled.
-
-| Action | Permission | Offered by |
-|---|---|---|
-| `restart` | patch deployments, statefulsets, daemonsets (sets the `restartedAt` annotation, like `kubectl rollout restart`) | `pods`, `argocd` |
-| `argocd-sync`, `argocd-refresh` | patch argoproj.io applications (they share it: disable both, or the module, to drop it) | `argocd` |
-| `cnpg-backup` | create postgresql.cnpg.io backups | `cnpg` |
-| `logs` | get pods/log (the last 300 lines of the pod an issue names) | `pods`, `cnpg`, `etcd` |
-
-Every action and every log read is written to the agent's log with the device that asked (`kubectl -n kubernanny logs deploy/kubernanny | grep audit`).
-
-### In its own namespace (Role)
-
-| Resource | Names | Verbs | Holds |
-|---|---|---|---|
-| Secret | `kubernanny-identity` | get | the agent's X25519 key pair |
-| Secret | `kubernanny-devices` | get, patch | public keys and names of paired devices |
-| ConfigMap | `kubernanny-settings` | get, patch | the switches set in the app, silenced issues |
-| Secrets, ConfigMaps | | create | Kubernetes cannot limit `create` by name; the agent creates only the three above |
+An action never names its target in the request: the app says "run `restart` for issue X", and the agent takes namespace, kind and name from its own check result. It can only touch what is broken right now. Every action and every log read is written to the agent's log with the device that asked (`kubectl -n kubernanny logs deploy/kubernanny | grep audit`).
 
 Check it yourself, as the agent's ServiceAccount:
 
@@ -172,21 +123,22 @@ The chart's NetworkPolicy (`networkPolicy.enabled: true`) lets 8080 accept conne
 | Prometheus, Alertmanager, Grafana, Loki over cluster DNS | when detected (or `PROMETHEUS_URL` / `ALERTMANAGER_URL`) | GET of read endpoints only, no credentials, no redirects, max 8 MB; their answers never trigger actions | `checks.disabled: [prometheus, alertmanager, grafana, loki]` |
 | Gatus, Uptime Kuma over cluster DNS | when detected; Uptime Kuma only with `UPTIME_KUMA_STATUS_PAGE` set | the same rules: GET `/api/v1/endpoints/statuses` (Gatus), GET `/api/status-page/<slug>` and `/api/status-page/heartbeat/<slug>` (Uptime Kuma's public status page) | `checks.disabled: [gatus, uptime-kuma]` |
 | your ntfy / webhook URL | when you set one and an issue opens, escalates or resolves (plus the optional weekly report) | cluster name, issue titles and causes, or only counts with `notifications.detail: minimal` | leave the URLs empty, or `checks.disabled: [notifications]` |
-| the relay (`relay.url`) | only with `relay.enabled: true` | one outbound WebSocket: a registration proof, then encrypted calls it cannot read ([RELAY.md](RELAY.md)) | `relay.enabled: false` (default) |
+| the relay (`relay.url`) | only with `relay.enabled: true` | one outbound WebSocket: a registration proof, then encrypted calls it cannot read ([RELAY.md](RELAY.md)); with native push, also pushes sealed for each registered device, over the same connection | `relay.enabled: false` (default); push alone: `notifications.appPush.enabled: false` |
 | api.osv.dev (or your mirror) | only when the `vulnerabilities` module is on (off by default) | package names and versions of recognised components, nothing else ([SECURITY-CHECKS.md](SECURITY-CHECKS.md)) | leave it off, or `checks.disabled: [vulnerabilities]` |
+| registry-1.docker.io + auth.docker.io, ghcr.io, quay.io, registry.k8s.io (+ the `*.pkg.dev` mirror it redirects to) | only when the `image-updates` module is on (off by default), at most every 12 h per image | the repository name of recognised components' images (`GET /v2/<name>/tags/list` and an anonymous pull token for that name); no tag, no cluster data, no credentials ([SECURITY-CHECKS.md](SECURITY-CHECKS.md#available-updates-image-updates)) | leave it off, or `checks.disabled: [image-updates]` |
 
-Nothing else: no telemetry, no update check, no analytics, no font or script downloads. With the default values, the only connections leaving the cluster are the notifications you configure.
+Nothing else: no telemetry, no update check, no analytics, no font or script downloads. Native push adds no connection: the agent never talks to Firebase or Apple, the relay does ([NOTIFICATIONS.md](NOTIFICATIONS.md#native-push)). With the default values, the only connections leaving the cluster are the notifications you configure.
 
-Optional egress policy (`networkPolicy.egress.enabled: true`) limits outbound traffic to DNS, the API server, the monitoring namespace and, if needed, HTTPS for notifications, the relay and the vulnerability database. Test it on your cluster first: the API server's address and port differ between distributions. Gatus, Uptime Kuma, Grafana or Loki outside the monitoring namespace are then unreachable and show as not checkable.
+Optional egress policy (`networkPolicy.egress.enabled: true`) limits outbound traffic to DNS, the API server, the monitoring namespace and, if needed, HTTPS for notifications, the relay, the vulnerability database and the registries of `image-updates` (only while `imageUpdates.enabled` is set and `checks.disabled` does not name it). Test it on your cluster first: the API server's address and port differ between distributions. Gatus, Uptime Kuma, Grafana or Loki outside the monitoring namespace are then unreachable and show as not checkable.
 
 ## What it stores
 
 | Where | What | Who can read it |
 |---|---|---|
 | Secret `kubernanny-identity` | the agent's private key (32 bytes) | whoever can read Secrets in the namespace |
-| Secret `kubernanny-devices` | per device: id, name, public key, pairing date | same; nothing in it is secret |
-| ConfigMap `kubernanny-settings` | switched-off modules and actions, modules switched on (vulnerabilities), notifications paused, silenced issues with their end time | whoever can read ConfigMaps in the namespace |
-| memory only | the last snapshot, 6 hours of CPU/RAM points, issues already notified, the replay cache of the end-to-end channel (10 min), the week of issue episodes for the incident history and the weekly report | lost on restart; the snapshot is rebuilt within a minute, the history starts again |
+| Secret `kubernanny-devices` | per device: id, name, public key, pairing date; with native push switched on by that device, its FCM token, platform and push public key | same; the FCM token is the phone's address at Firebase (it lets the holder of the relay's Firebase credentials send to that phone), so it is never logged or listed |
+| ConfigMap `kubernanny-settings` | switched-off modules and actions, modules switched on (vulnerabilities), notifications paused, silenced issues with their end time, advisories accepted as not applicable (component, advisory, end, device name, optional reason), issues already notified (`notified`: id, severity, title, at most 300 and 96 KiB) | whoever can read ConfigMaps in the namespace |
+| memory only | the last snapshot, 6 hours of CPU/RAM points, the replay cache of the end-to-end channel (10 min), the week of issue episodes for the incident history and the weekly report | lost on restart; the snapshot is rebuilt within a minute, the history starts again |
 
 None of these is created by Helm, so `helm uninstall` leaves them (and your paired devices) in place. `kubectl delete namespace kubernanny` removes everything.
 
@@ -198,10 +150,15 @@ None of these is created by Helm, so `helm uninstall` leaves them (and your pair
 | Kubernanny never to look at a tool (e.g. Argo CD) | `checks.disabled: [argocd]`: not run, no RBAC |
 | one action never to be possible | `actions.disabled: [restart]` |
 | no logs readable from the app | `actions.disabled: [logs]` |
-| nothing to leave the cluster | leave notifications, relay and the vulnerability check unset (the default) |
+| nothing to leave the cluster | leave notifications, relay, the vulnerability check and image updates unset (the default) |
+| image updates never to contact a registry | `checks.disabled: [image-updates]`: not run, the app cannot switch it on, no NetworkPolicy egress rule for it |
+| no look at Rook Ceph, Kyverno or Gatekeeper | `checks.disabled: [rook-ceph]`, `[kyverno]`, `[gatekeeper]`: not run, their reads leave the ClusterRole |
+| no error rates of the ingress controller | `checks.disabled: [traefik]` / `[ingress-nginx]`: no Prometheus query (the component then shows nothing at all, not even workload health) |
+| no clock check | `checks.disabled: [node-clocks]`: no Prometheus query |
 | fewer details in notifications | `notifications.detail: minimal` |
+| no native push to the app, ever | `notifications.appPush.enabled: false` (`APP_PUSH=off`): the push routes answer 404 before touching anything, stored push tokens are deleted on start, nothing is handed to the relay for push, and the app shows push as locked |
 
-Everything not locked in the Helm values can also be switched in the app: cluster settings → "What is checked". Those switches are softer: they stop the agent from using a permission, the permission stays granted.
+Everything not locked in the Helm values can also be switched in the app: cluster settings → "What is checked". Those switches are softer: they stop the agent from using a permission, the permission stays granted. Every Helm switch and exactly what it removes: [PERMISSIONS.md, "Switch -> what is removed"](PERMISSIONS.md#switch---what-is-removed).
 
 ## Updating and removing
 

@@ -12,7 +12,7 @@ This file is checked against the catalog by `agent/src/docs.spec.ts`: a componen
 |---|---|---|---|
 | `longhorn` | Longhorn | Repliziertes Block-Storage über alle Nodes. | yes |
 | `local-path` | Local Path Provisioner | Volumes direkt auf der Platte eines Nodes. |  |
-| `rook-ceph` | Rook Ceph | Ceph-Cluster als Operator. |  |
+| `rook-ceph` | Rook Ceph | Ceph-Cluster als Operator. | yes |
 | `openebs` | OpenEBS | Container Attached Storage. |  |
 | `minio` | MinIO | S3-kompatibler Objektspeicher. |  |
 | `nfs-provisioner` | NFS Provisioner | Volumes auf einem NFS-Share. |  |
@@ -65,8 +65,8 @@ This file is checked against the catalog by `agent/src/docs.spec.ts`: a componen
 
 | Id | Component | What it is | Deep check |
 |---|---|---|---|
-| `traefik` | Traefik | Ingress-Controller und Reverse Proxy. |  |
-| `ingress-nginx` | ingress-nginx | Ingress-Controller. |  |
+| `traefik` | Traefik | Ingress-Controller und Reverse Proxy. | yes (with Prometheus) |
+| `ingress-nginx` | ingress-nginx | Ingress-Controller. | yes (with Prometheus) |
 | `coredns` | CoreDNS | DNS im Cluster. |  |
 | `cilium` | Cilium | Netzwerk-Plugin (CNI). |  |
 | `calico` | Calico / Canal | Netzwerk-Plugin (CNI). |  |
@@ -87,7 +87,9 @@ This file is checked against the catalog by `agent/src/docs.spec.ts`: a componen
 | `external-secrets` | External Secrets | Holt Secrets aus externen Tresoren. | yes |
 | `sealed-secrets` | Sealed Secrets | Verschlüsselte Secrets im Git. |  |
 | `vault` | Vault | Secret-Tresor. |  |
-| `kyverno` | Kyverno | Richtlinien für Ressourcen. |  |
+| `kyverno` | Kyverno | Richtlinien für Ressourcen. | yes |
+| `trivy` | Trivy Operator | Prüft jedes Image im Cluster auf bekannte Schwachstellen. | yes |
+| `gatekeeper` | OPA Gatekeeper | Richtlinien für Ressourcen mit Open Policy Agent. | yes |
 | `authentik` | authentik | Single Sign-On. |  |
 | `keycloak` | Keycloak | Single Sign-On. |  |
 | `crowdsec` | CrowdSec | Erkennt und blockt Angriffe. |  |

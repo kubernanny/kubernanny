@@ -107,9 +107,61 @@ Title (RFC 2047 encoded, so umlauts survive), priority and tags are set; with `P
 
 The JSON form is meant for n8n, Home Assistant, Node-RED or your own scripts. Webhook URLs often are credentials: put them into `notifications.existingSecret` as `WEBHOOK_URL` instead of the values file.
 
-## Native push (planned)
+## Native push
 
-Push straight to the Kubernanny app, without ntfy, is planned on top of the end-to-end encrypted protocol described in the [roadmap](ROADMAP.md): the payload is encrypted for the device before it leaves the agent, so no push service can read it.
+Push straight to the Kubernanny app, without ntfy or Discord. Each message is sealed on the agent for the one device it goes to; the relay and Google carry it and cannot read it. Why it is built this way: [decisions/0007](decisions/0007-native-push.md).
+
+```mermaid
+sequenceDiagram
+  participant A as Agent
+  participant R as Relay
+  participant G as Firebase Cloud Messaging
+  participant P as Phone
+  P->>A: POST /api/push/register {FCM token, platform, push public key} (sealed call)
+  Note over A: issue lasts 5 min
+  A->>A: seal title and body for that device's push key (HPKE)
+  A->>R: Push frame on its relay WebSocket: token, key id, sealed bytes
+  R->>G: messages:send (service account of the relay)
+  G->>P: data message (Android) / via APNs (iOS)
+  P->>P: open with the push key, show the text
+```
+
+**In the app**: a cluster's settings, "Push to this device". Only then does the app ask for permission to show notifications (never at start), make a key pair for push on this cluster and register it. The same place turns it off again and sends a test push. A removed device or cluster takes its registration with it. The option is hidden in the web app and in app builds without Firebase config, and shown locked when the deployment switched push off.
+
+**What it needs**: the relay (`relay.enabled`, [RELAY.md](RELAY.md)), and a relay that delivers push. The public relay does, for the app from the stores. Messages are the same as on every other channel: the five-minute rule, escalations, resolutions, silences, the maintenance window, security alerts and the weekly report, and with `detail: minimal` only counts (still sealed). The app is a channel like ntfy: it counts for the test button and for "a channel took it".
+
+### Who sees what
+
+| Party | Sees | Never sees |
+|---|---|---|
+| Agent | everything (it writes the message) | |
+| Relay | the device's FCM token and platform, a key id, the size and time of each push, the agent id | title, body, cluster name, anything in the cluster |
+| Google (FCM), Apple (APNs, iOS) | the token, the app, size and time | the content: it is sealed for the phone's push key |
+| Phone | the message, opened with its push key for that cluster | |
+
+A message opens only if the agent sealed it: the phone checks it against the agent key it pinned at pairing. On iOS a message that does not open shows a generic "Kubernanny: new status from a cluster"; on Android it is dropped.
+
+### Switching it off
+
+`notifications.appPush.enabled: false` (env `APP_PUSH=off`) switches native push off for good, not just from view:
+
+- `POST` and `DELETE /api/push/register` and `POST /api/push/test` answer `404 PUSH_OFF` before reading or writing anything;
+- push tokens stored earlier are deleted from `kubernanny-devices` when the agent starts;
+- the agent never hands a push to the relay (the relay connection is not offered for push at all);
+- the app shows push as locked, without a button; it cannot switch it back on.
+
+The default is on: nothing leaves the cluster until a device opts in, and that needs the relay, which is off by default. The relay has its own switch (`RELAY_PUSH=off`), and is off anyway without a Firebase service account.
+
+### Setting it up yourself
+
+Only for a self-built app or your own relay; the store apps and the public relay need nothing.
+
+1. **A Firebase project** (console.firebase.google.com). Add an Android app `app.kubernanny` and an iOS app `app.kubernanny`. For iOS, upload an APNs authentication key (Apple Developer, Keys, "Apple Push Notifications service") under Project settings, Cloud Messaging; FCM uses it to reach iPhones.
+2. **The app's config files**, not committed (`.gitignore` lists them): `google-services.json` into `app/android/app/`, `GoogleService-Info.plist` into `app/ios/App/App/`. Fastlane copies them from `~/.config/kubernanny-store/` ([RELEASING.md](RELEASING.md)). Without them the app builds and runs as before, without push.
+3. **iOS project, once**: `cd app && bundle exec ruby scripts/add-push-extension.rb` adds the Notification Service Extension and the App Group `group.app.kubernanny.push`; register that App Group for both identifiers in the Apple Developer account.
+4. **A service account for the relay**: Google Cloud console of the same project, IAM, Service accounts, one allowed to send FCM messages (the role "Firebase Cloud Messaging API Admin" is enough), with a JSON key. Give it to the relay as `FCM_SERVICE_ACCOUNT` (Node: the variable or `FCM_SERVICE_ACCOUNT_FILE`; Worker: `wrangler secret put FCM_SERVICE_ACCOUNT`). Keep it in a Secret: it can push to every install of that app. The relay logs `native push on (FCM project …)` at start.
+
+The relay's service account and the app's config files must belong to the same Firebase project: FCM tokens are only valid within their project.
 
 ## Alerting on Kubernanny itself
 
