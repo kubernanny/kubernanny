@@ -190,6 +190,61 @@ test.describe('web demo (no agent, nothing leaves the browser)', () => {
   });
 });
 
+test.describe('scanning the pairing QR code in the browser', () => {
+  /** A browser with BarcodeDetector and a camera, whose camera "sees" window.__qr. */
+  async function fakeCamera(page: import('@playwright/test').Page, qr: string | null): Promise<void> {
+    await page.addInitScript((value) => {
+      const w = window as unknown as Record<string, unknown>;
+      w['__qr'] = value;
+      if (value === null) {
+        delete w['BarcodeDetector'];
+        return;
+      }
+      w['BarcodeDetector'] = class {
+        static async getSupportedFormats() {
+          return ['qr_code'];
+        }
+        async detect() {
+          return [{ rawValue: w['__qr'] as string }];
+        }
+      };
+      navigator.mediaDevices.getUserMedia = async () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = 64;
+        const ctx = canvas.getContext('2d')!;
+        setInterval(() => ctx.fillRect(0, 0, 64, 64), 50);
+        return canvas.captureStream(10);
+      };
+    }, qr);
+  }
+
+  test('offers no scanner where the browser cannot read QR codes', async ({ page }) => {
+    await fakeCamera(page, null);
+    await page.goto(`${DEMO}/#/clusters`);
+    await expect(page.getByText('Dein Cluster, auf einen Blick.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'QR-Code scannen' })).toHaveCount(0);
+    await expect(page.getByText('Mit der Handykamera, oder den Link öffnen.', { exact: false })).toBeVisible();
+  });
+
+  test('opens the pairing page for the web UI link from the log, with the same checks as a link', async ({ page }) => {
+    const key = 'pb1Jnr1HGw7SBrdj3BybbMxBD8U3KIkMOog6iubpzgk';
+    await fakeCamera(page, `https://nanny.example/#/pair?code=ABCDE23456&name=homelab&key=${key}`);
+    await page.goto(`${DEMO}/#/clusters`);
+    await page.getByRole('button', { name: 'QR-Code scannen' }).click();
+    await expect(page.getByText('Mit diesem Agent koppeln?')).toBeVisible();
+    await expect(visiblePage(page)).toContainText('https://nanny.example');
+    await expect(visiblePage(page)).toContainText('homelab');
+  });
+
+  test('refuses a QR code that is no pairing link, from "Cluster hinzufügen"', async ({ page }) => {
+    await fakeCamera(page, 'https://example.com/hello');
+    await page.goto(`${DEMO}/#/cluster/new`);
+    await page.getByRole('button', { name: 'QR-Code scannen' }).click();
+    await expectToast(page, 'Das ist kein Pairing-Code von Kubernanny.');
+    await expect(page.getByText('Mit diesem Agent koppeln?')).toHaveCount(0);
+  });
+});
+
 test.describe('demo host build (demo.kubernanny.app)', () => {
   const DEMO_HOST = 'http://127.0.0.1:4330';
 
