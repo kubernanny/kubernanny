@@ -491,6 +491,7 @@ export const de = {
   'push.security.title': (p: { cluster: string }) => `${p.cluster}: sicherheitsrelevante Änderung`,
   'push.security.notificationsOff': (p: { by: string }) => `${p.by} hat die Benachrichtigungen ausgeschaltet.`,
   'push.security.moduleOff': (p: { by: string; id: string }) => `${p.by} hat das Modul ${p.id} ausgeschaltet.`,
+  'push.security.moduleOn': (p: { by: string; id: string }) => `${p.by} hat das Modul ${p.id} eingeschaltet. Es sendet Daten aus dem Cluster.`,
   'push.security.actionOff': (p: { by: string; id: string }) => `${p.by} hat die Aktion ${p.id} ausgeschaltet.`,
   'push.security.maintenance': (p: { by: string; hours: number }) => `${p.by} hat ein Wartungsfenster für ${p.hours} Stunde${p.hours === 1 ? '' : 'n'} gestartet.`,
   'push.security.deviceRevoked': (p: { by: string; device: string }) => `${p.by} hat das Gerät ${p.device} entfernt.`,

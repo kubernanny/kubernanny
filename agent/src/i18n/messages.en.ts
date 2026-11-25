@@ -461,6 +461,7 @@ export const en = {
   'push.security.title': (p) => `${p.cluster}: security-relevant change`,
   'push.security.notificationsOff': (p) => `${p.by} switched notifications off.`,
   'push.security.moduleOff': (p) => `${p.by} switched the module ${p.id} off.`,
+  'push.security.moduleOn': (p) => `${p.by} switched the module ${p.id} on. It sends data out of the cluster.`,
   'push.security.actionOff': (p) => `${p.by} switched the action ${p.id} off.`,
   'push.security.maintenance': (p) => `${p.by} started a maintenance window of ${n1(p.hours, 'hour', 'hours')}.`,
   'push.security.deviceRevoked': (p) => `${p.by} removed the device ${p.device}.`,

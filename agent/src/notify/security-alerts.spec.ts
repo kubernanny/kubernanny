@@ -51,6 +51,33 @@ describe('security notifications (review: a stolen device could blind the owner)
     expect(alerts.length).toBe(count);
   });
 
+  it('announces switching on a module that sends data out of the cluster, in both languages; other modules switch on silently', async () => {
+    const kube = new DemoKubeClient();
+    const { alerts, notifier } = recorder(kube);
+    const settings = new SettingsService(loadConfig(), new SlowKube(), notifier);
+    await settings.onModuleInit();
+    await settings.update({ modules: { vulnerabilities: true } }, who);
+    expect(alerts.at(-1)).toMatchObject({ events: [{ kind: 'moduleOn', id: 'vulnerabilities' }] });
+    // Off again and on again: announced again; already on: nothing.
+    await settings.update({ modules: { vulnerabilities: false } }, who);
+    await settings.update({ modules: { vulnerabilities: true, 'image-updates': true } }, who);
+    expect(alerts.at(-1)!.events).toEqual([
+      { kind: 'moduleOn', id: 'vulnerabilities' },
+      { kind: 'moduleOn', id: 'image-updates' },
+    ]);
+    const count = alerts.length;
+    await settings.update({ modules: { vulnerabilities: true } }, who);
+    await settings.update({ modules: { argocd: false } }, who);
+    await settings.update({ modules: { argocd: true } }, who);
+    expect(alerts.slice(count).flatMap((a) => a.events)).toEqual([{ kind: 'moduleOff', id: 'argocd' }]);
+
+    const en = formatSecurityAlert('home', 'Nicos iPhone', [{ kind: 'moduleOn', id: 'vulnerabilities' }], 'full', 'en');
+    expect(en.body).toContain('Nicos iPhone switched the module vulnerabilities on. It sends data out of the cluster.');
+    const de = formatSecurityAlert('home', 'Nicos iPhone', [{ kind: 'moduleOn', id: 'vulnerabilities' }], 'full', 'de');
+    expect(de.body).toContain('Nicos iPhone hat das Modul vulnerabilities eingeschaltet. Es sendet Daten aus dem Cluster.');
+    expect(`${en.body}${de.body}`).not.toMatch(/[\u2013\u2014]/);
+  });
+
   it('announces a maintenance window before it holds everything back', async () => {
     const kube = new DemoKubeClient();
     const { alerts, notifier } = recorder(kube);
