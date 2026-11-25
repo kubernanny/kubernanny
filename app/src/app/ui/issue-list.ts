@@ -45,12 +45,20 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
                 </ul>
               }
               <div class="meta">
-                {{ item.area }}, {{ item.sinceText }}
-                @if (item.silencedText) {
-                  <span class="silenced"><ion-icon name="notifications-off-outline" aria-hidden="true" />{{ item.silencedText }}</span>
+                <span>
+                  {{ item.area }}, {{ item.sinceText }}
+                  @if (item.silencedText) {
+                    <span class="silenced"><ion-icon name="notifications-off-outline" aria-hidden="true" />{{ item.silencedText }}</span>
+                  }
+                </span>
+                @if (item.buttons.length === 0 && item.canSilence) {
+                  <!-- Nothing to fix from here: the mute icon sits on this row instead of a row of its own. -->
+                  <button type="button" class="quiet icon-only inline" [disabled]="busy() !== null" (click)="silence(item)" [attr.aria-label]="t('issues.silence')" [title]="t('issues.silence')">
+                    <ion-icon name="notifications-off-outline" aria-hidden="true" />
+                  </button>
                 }
               </div>
-              @if (item.buttons.length > 0 || item.canSilence || item.silencedText) {
+              @if (item.buttons.length > 0 || item.silencedText) {
                 <div class="actions">
                   @for (button of item.buttons; track button.type + button.index) {
                     <button type="button" [disabled]="busy() !== null" (click)="run(item, button)">
@@ -126,6 +134,15 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
       margin-top: 0.4rem;
       color: var(--mute);
       font-size: 0.8125rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .meta .inline {
+      flex: none;
+      padding: 0.35rem 0.5rem;
+      margin: -0.35rem 0;
     }
     /* One row: what fixes it first, the quiet silence as an icon at the end; scrolls sideways rather than stacking. */
     .actions {
