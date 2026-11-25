@@ -18,6 +18,7 @@ export {
   sealRequest,
   validPath,
 } from './envelope.js';
+export { sourceKey } from './address.js';
 export { constantTimeEqual, randomBytes } from './bytes.js';
 export { fingerprint, fromBase64Url, parsePublicKey, toBase64Url } from './keys.js';
 export {

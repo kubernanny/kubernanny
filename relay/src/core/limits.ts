@@ -1,4 +1,4 @@
-import { MAX_SEALED_REQUEST } from '@kubernanny/protocol';
+import { MAX_SEALED_REQUEST, sourceKey } from '@kubernanny/protocol';
 
 /**
  * Limits of one relay, read from the environment. Shared by the Node relay
@@ -346,9 +346,13 @@ export function clientAddress(headers: Record<string, string | string[] | undefi
  * anyone who knows an agent's public key can send it junk, and without this
  * one address could empty the agent's call and byte buckets for everyone.
  * Each address gets `callerShare` of them, so emptying the agent's buckets
- * takes several addresses. Bounded: past `maxCallers` the least recently
- * seen address is forgotten (it starts full again, which only helps an
- * attacker who has that many addresses anyway).
+ * takes several addresses. IPv6 callers count per /64 (`sourceKey`, the same
+ * grouping as the agent's own per-address buckets): one host usually owns a
+ * whole /64 and would otherwise get a fresh share, and push everyone else out
+ * of the `maxCallers` entries, with every address it rotates through.
+ * Bounded: past `maxCallers` the least recently seen key is forgotten (it
+ * starts full again, which only helps an attacker who has that many
+ * IPv4 addresses or /64s anyway).
  */
 export class CallerLimiter {
   private readonly callers = new Map<string, { calls: TokenBucket; bytes: TokenBucket }>();
@@ -375,9 +379,10 @@ export class CallerLimiter {
   }
 
   private entry(address: string, now: number): { calls: TokenBucket; bytes: TokenBucket } {
-    let entry = this.callers.get(address);
+    const key = sourceKey(address);
+    let entry = this.callers.get(key);
     if (entry) {
-      this.callers.delete(address); // re-inserted: the Map's order is least recently used first
+      this.callers.delete(key); // re-inserted: the Map's order is least recently used first
     } else {
       const share = this.limits.callerShare;
       entry = {
@@ -385,7 +390,7 @@ export class CallerLimiter {
         bytes: new TokenBucket(Math.max(1, Math.floor(this.limits.bytesPerHour * share)), (this.limits.bytesPerHour * share) / 3_600_000, now),
       };
     }
-    this.callers.set(address, entry);
+    this.callers.set(key, entry);
     while (this.callers.size > this.maxCallers) {
       this.callers.delete(this.callers.keys().next().value!);
     }
