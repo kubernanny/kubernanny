@@ -469,6 +469,7 @@ export const de = {
     moreRows: '{{n}} weitere nicht gezeigt. Die ganze Liste steht im Werkzeug selbst.',
   },
   chart: {
+    loading: 'Lädt',
     now: 'jetzt',
     hoursAgo: 'vor {{count}} h',
     max: 'max {{value}}',

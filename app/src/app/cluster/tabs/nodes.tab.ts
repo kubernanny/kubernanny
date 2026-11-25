@@ -86,10 +86,10 @@ export function nodeCards(nodes: NodeView[], history: HistoryView | null, now: D
             @if (c.cpuSeries || c.memorySeries) {
               <div class="charts">
                 @if (c.cpuSeries; as s) {
-                  <app-area-chart [title]="t('nodes.cpu')" [points]="s.points" unit="ratio" />
+                  <app-area-chart [title]="t('nodes.cpu')" [points]="s.points" unit="ratio" [loading]="history().loading && !history().value" />
                 }
                 @if (c.memorySeries; as s) {
-                  <app-area-chart [title]="t('nodes.ram')" [points]="s.points" unit="ratio" />
+                  <app-area-chart [title]="t('nodes.ram')" [points]="s.points" unit="ratio" [loading]="history().loading && !history().value" />
                 }
               </div>
             }

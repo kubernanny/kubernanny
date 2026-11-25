@@ -465,6 +465,7 @@ export const en: Dictionary = {
     moreRows: '{{n}} more not shown. The full list is in the tool itself.',
   },
   chart: {
+    loading: 'Loading',
     now: 'now',
     hoursAgo: '{{count}} h ago',
     max: 'max {{value}}',
