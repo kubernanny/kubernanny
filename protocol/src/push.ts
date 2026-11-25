@@ -118,6 +118,37 @@ export interface PushContent {
   p: number;
   /** The agent's clock when it sealed this, ms since the epoch. */
   s: number;
+  /**
+   * The cluster's state at sealing, for the phone's home-screen widget
+   * (docs/PROTOCOL.md, "Push status"). Optional: agents before it send
+   * none, and phones before it ignore it. Left out when it would not fit.
+   */
+  w?: PushStatus;
+}
+
+/** Lights as the agent and the app name them. */
+export type PushLight = 'green' | 'yellow' | 'red' | 'unknown';
+const PUSH_LIGHTS: readonly PushLight[] = ['green', 'yellow', 'red', 'unknown'];
+
+/** At most this many problems travel in `w.i`, each title at most PUSH_STATUS_TITLE characters. */
+export const PUSH_STATUS_PROBLEMS = 3;
+export const PUSH_STATUS_TITLE = 120;
+
+/**
+ * The cluster's state in a push, counted like the app's headline (silenced
+ * issues and hints left out). Keys in this order: `l, c, n, a, i`.
+ */
+export interface PushStatus {
+  /** The light. */
+  l: PushLight;
+  /** Open outages. */
+  c: number;
+  /** Open warnings. */
+  n: number;
+  /** The agent's last check (ms since the epoch), null before the first run. */
+  a: number | null;
+  /** The worst problems first (`s`: `c` outage, `w` warning), in the agent's language; absent with `detail: minimal`. */
+  i?: { s: 'c' | 'w'; t: string }[];
 }
 
 /** The content as bytes, the body shortened (on a character boundary) until it fits. */
@@ -130,6 +161,10 @@ export function encodePushContent(content: PushContent): Uint8Array {
     }
     const chars = Array.from(body);
     if (chars.length <= 1) {
+      if (content.w) {
+        // The status is a bonus: without it the message still says what happened.
+        return encodePushContent(withoutStatus(content));
+      }
       throw new Error('push title too long');
     }
     // Cut well past the overflow at once; JSON escaping makes bytes and characters differ.
@@ -142,7 +177,35 @@ export function decodePushContent(bytes: Uint8Array): PushContent {
   if (!value || typeof value.t !== 'string' || typeof value.b !== 'string' || typeof value.p !== 'number' || typeof value.s !== 'number') {
     throw new Error('not push content');
   }
-  return { t: value.t, b: value.b, p: value.p, s: value.s };
+  const status = decodePushStatus(value.w);
+  return status ? { t: value.t, b: value.b, p: value.p, s: value.s, w: status } : { t: value.t, b: value.b, p: value.p, s: value.s };
+}
+
+function withoutStatus(content: PushContent): PushContent {
+  const { w: _dropped, ...rest } = content;
+  return rest;
+}
+
+const count = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n < 1_000_000;
+
+/** A status that is malformed in any way is dropped as a whole: the widget never shows half of one. */
+export function decodePushStatus(value: unknown): PushStatus | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const w = value as Record<string, unknown>;
+  if (!PUSH_LIGHTS.includes(w['l'] as PushLight) || !count(w['c']) || !count(w['n']) || !(w['a'] === null || (typeof w['a'] === 'number' && Number.isFinite(w['a'])))) {
+    return null;
+  }
+  const status: PushStatus = { l: w['l'] as PushLight, c: w['c'], n: w['n'], a: w['a'] as number | null };
+  if (w['i'] !== undefined) {
+    const items = w['i'];
+    if (!Array.isArray(items) || items.length > PUSH_STATUS_PROBLEMS || !items.every((p) => p && (p.s === 'c' || p.s === 'w') && typeof p.t === 'string' && Array.from(p.t as string).length <= PUSH_STATUS_TITLE)) {
+      return null;
+    }
+    status.i = items.map((p: { s: 'c' | 'w'; t: string }) => ({ s: p.s, t: p.t }));
+  }
+  return status;
 }
 
 /**

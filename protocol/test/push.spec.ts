@@ -4,7 +4,7 @@ import { CipherSuite, HkdfSha256 } from '@hpke/core';
 import { DhkemX25519HkdfSha256 } from '@hpke/dhkem-x25519';
 import { describe, expect, it } from 'vitest';
 import { generateKeyPair, keyPairFromSecret } from '../src/noise.js';
-import { MAX_PUSH_PLAINTEXT, PUSH_INFO, decodePushContent, encodePushContent, openPush, pushKeyId, sealPush } from '../src/push.js';
+import { MAX_PUSH_PLAINTEXT, PUSH_INFO, decodePushContent, decodePushStatus, encodePushContent, openPush, pushKeyId, sealPush } from '../src/push.js';
 import { decodePushRequest, decodePushResult, decodeFrame, encodePushRequest, encodePushResult, FrameType } from '../src/relay.js';
 import { toBase64Url } from '../src/keys.js';
 
@@ -52,6 +52,11 @@ function build(name: string, plaintext: string, seed: number): PushVector {
 const expected: PushVector[] = [
   build('status', '{"t":"homelab: 2 problems","b":"🔴 default/api: CrashLoopBackOff","p":5,"s":1795000000000}', 0x01),
   build('minimal', '{"t":"homelab: new problems","b":"1 critical. Details in Kubernanny.","p":5,"s":1795000060000}', 0x31),
+  build(
+    'widget-status',
+    '{"t":"homelab: 2 problems","b":"🔴 default/api: CrashLoopBackOff","p":5,"s":1795000120000,"w":{"l":"red","c":1,"n":1,"a":1795000110000,"i":[{"s":"c","t":"default/api: CrashLoopBackOff"},{"s":"w","t":"Certificate shop.example expires in 9 days"}]}}',
+    0x51,
+  ),
 ];
 
 if (process.env['UPDATE_VECTORS']) {
@@ -130,6 +135,29 @@ describe('push content', () => {
 
   it('refuses a title that cannot fit', () => {
     expect(() => encodePushContent({ t: 'x'.repeat(3000), b: 'y', p: 3, s: 1 })).toThrow();
+  });
+
+  it('carries the widget status and keeps it in key order', () => {
+    const w = { l: 'red' as const, c: 1, n: 2, a: 1795000000000, i: [{ s: 'c' as const, t: 'default/api: CrashLoopBackOff' }] };
+    const encoded = encodePushContent({ t: 'homelab: 1 problem', b: 'x', p: 5, s: 1795000000001, w });
+    expect(new TextDecoder().decode(encoded)).toBe('{"t":"homelab: 1 problem","b":"x","p":5,"s":1795000000001,"w":{"l":"red","c":1,"n":2,"a":1795000000000,"i":[{"s":"c","t":"default/api: CrashLoopBackOff"}]}}');
+    expect(decodePushContent(encoded).w).toEqual(w);
+  });
+
+  it('reads content without a status (older agents) and drops a malformed one', () => {
+    expect(decodePushContent(text.encode('{"t":"a","b":"b","p":3,"s":1}')).w).toBeUndefined();
+    for (const w of ['{"l":"pink","c":0,"n":0,"a":null}', '{"l":"red","c":-1,"n":0,"a":null}', '{"l":"red","c":0,"n":0,"a":null,"i":[{"s":"x","t":"a"}]}', '{"l":"red","c":0,"n":0,"a":null,"i":[1,2,3,4]}', '"red"']) {
+      const decoded = decodePushContent(text.encode(`{"t":"a","b":"b","p":3,"s":1,"w":${w}}`));
+      expect(decoded.w).toBeUndefined();
+      expect(decoded.t).toBe('a');
+    }
+    expect(decodePushStatus({ l: 'green', c: 0, n: 0, a: null })).toEqual({ l: 'green', c: 0, n: 0, a: null });
+  });
+
+  it('leaves the status out rather than fail when the title takes the room', () => {
+    const encoded = encodePushContent({ t: 'x'.repeat(1990), b: 'y', p: 3, s: 1, w: { l: 'red', c: 1, n: 0, a: 1, i: [{ s: 'c', t: 'z'.repeat(100) }] } });
+    expect(encoded.length).toBeLessThanOrEqual(MAX_PUSH_PLAINTEXT);
+    expect(decodePushContent(encoded).w).toBeUndefined();
   });
 
   it('refuses content that is not push content', () => {

@@ -20,5 +20,16 @@
     "keyId": "fG8DBY1Locv5Pm0p",
     "plaintext": "{\"t\":\"homelab: new problems\",\"b\":\"1 critical. Details in Kubernanny.\",\"p\":5,\"s\":1795000060000}",
     "message": "019cced751b301bbd16c4fb8deddd82f18925d71ed90c844fa0158f845b0fa7f4b642f404542353d951d63d2c1a65554f9b614336d234143627eb5492943064fd4d68fdac095a16f5fcb279fc49f56535fd24564202998653e057dd5c4abe1f14c8b3bb3324f2bbcb0e9b0956f247f390369ca69df8c0ed6a7e77afb11891946d3751c9799ff2b68ccd947ee37adb4"
+  },
+  {
+    "name": "widget-status",
+    "agentStaticSecret": "d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0",
+    "agentStaticPublic": "21c3332b61be6a7b6ab8461e155651b17501b6e07532ecf9ab6661bd5a2ca575",
+    "pushSecret": "7172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f90",
+    "pushPublic": "d214723afdfe2cddbdc929b18a5e43017e44445fc5d6c8fcf88b1868c53f395c",
+    "ephemeralSecret": "b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0",
+    "keyId": "VqgMM02Dnwo01bdV",
+    "plaintext": "{\"t\":\"homelab: 2 problems\",\"b\":\"🔴 default/api: CrashLoopBackOff\",\"p\":5,\"s\":1795000120000,\"w\":{\"l\":\"red\",\"c\":1,\"n\":1,\"a\":1795000110000,\"i\":[{\"s\":\"c\",\"t\":\"default/api: CrashLoopBackOff\"},{\"s\":\"w\",\"t\":\"Certificate shop.example expires in 9 days\"}]}}",
+    "message": "01cd700e88f9e99b19c1a8a8dcd58182fd101e5e032a69ce317fde23e8ee265c51bc5b349ec2e4c9e789fcda74fe12e9c9fda3492bebf602d84238c8e1d0cd63031added136f28e28215c2ffc0f0ce9644cbba3ba235776c1a76d465dc056c42a34aa5e90c1af671bb8132c9237ce959359eb0f819af3e3efb62f258409c22d3c6da9c2bc4b80604dfc00c9f50cd40d71fec5d85183fd39039394a4145d5865f7759118b01cee2f44790ff2eae73b8383e1b365fe9f70310108a24db9e13e600334b5179bea7ee5b271f2f3b7dc80a4623f14833ed43688bd3390d6fe4fe5a86922f250330c29e2b853102adaca9761c4b827d45841c691d4c779bc7bcdb7b26b16a87f783ad9907098d1d5f42a906d2204c28ffb379434bca6649fcce74af51e2f69c3e6195caab7418"
   }
 ]
