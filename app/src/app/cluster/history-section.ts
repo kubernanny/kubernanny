@@ -112,8 +112,10 @@ import { HISTORY_PREVIEW, HistoryVM } from './history-view';
       color: var(--tone);
       background: var(--tone-soft);
     }
+    /* A quiet day is still a visible cell, in both themes: a faint mint fill with a hairline. */
     .tone-ok .cell {
-      background: color-mix(in srgb, var(--ok) 7%, var(--surface));
+      background: color-mix(in srgb, var(--ok) 10%, var(--surface));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ok) 22%, transparent);
     }
     .tone-muted .cell {
       background: repeating-linear-gradient(135deg, var(--mute-soft) 0 4px, transparent 4px 8px);
@@ -169,7 +171,7 @@ import { HISTORY_PREVIEW, HistoryVM } from './history-view';
     }
     .title {
       font-weight: 600;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .meta {
       display: flex;

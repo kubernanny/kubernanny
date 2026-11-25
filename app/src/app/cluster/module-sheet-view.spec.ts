@@ -72,18 +72,31 @@ describe('workload restarts', () => {
     } as WorkloadView;
     const [row] = workloadGroups([w], '', 'restarts', now, de)[0]!.rows;
     expect(row!.restart).toEqual({ text: 'Letzter Neustart: OOMKilled am Speicherlimit von 512 MiB, Exit-Code 137, vor 1 h', oom: true });
-    expect(row!.resources.map((r) => [r.label, r.text, r.note])).toEqual([
-      ['CPU', '120m', 'Requests 250m, keine Limits'],
-      ['RAM', '300 MiB', 'Requests 256 MiB, Limits 512 MiB'],
+    expect(row!.resources.map((r) => [r.label, r.bar.capacity, r.bar.capacityIsLimit ?? false])).toEqual([
+      ['CPU', 250, false],
+      ['RAM', 512 * 2 ** 20, true],
     ]);
     expect(row!.pods[0]!.containers).toEqual([{ name: 'app', text: '2 Neustarts, OOMKilled am Speicherlimit von 512 MiB', oom: true }]);
   });
 });
 
-describe('node resources', () => {
-  it('names requests, overbooked limits and pods without a limit per node', async () => {
-    const { nodeResourceNote } = await import('../core/resources-text');
-    expect(nodeResourceNote('cpu', 2500, 6400, 4000, 3, de)).toBe('Requests 2,50, Limits 6,40 (überbucht), 3 Pods ohne Limit');
-    expect(nodeResourceNote('memory', 2 ** 30, 2 * 2 ** 30, 8 * 2 ** 30, 0, translatorFor('en'))).toBe('requests 1.0 GiB, limits 2.0 GiB');
+describe('resource bar', () => {
+  it('shows use, reservation and limits in cores with a comma, and overbooking with the pods without a limit', async () => {
+    const { resourceBarView } = await import('../ui/resource-bar');
+    const v = resourceBarView({ kind: 'cpu', used: 1730, capacity: 4000, requested: 1150, limit: 6400, withoutLimit: 8 }, 'CPU', de);
+    expect([v.value, v.pct, v.tone, Math.round(v.usedPct), Math.round(v.reservedPct), v.limitPct, v.overbooked]).toEqual(['1,73 / 4 Kerne', '43 %', 'ok', 43, 29, 100, true]);
+    expect(v.legend).toEqual([
+      { kind: 'used', text: '1,73 genutzt' },
+      { kind: 'reserved', text: '1,15 reserviert' },
+      { kind: 'limit', text: '6,40 Limit', extra: '+ 8 Pods ohne Limit', over: '+60 % überbucht' },
+    ]);
+    expect(v.aria).toBe('CPU, 1,73 / 4 Kerne, 1,73 genutzt, 1,15 reserviert, 6,40 Limit + 8 Pods ohne Limit +60 % überbucht');
+  });
+
+  it('turns amber when requests take 90 % even at low use, coral from 90 % use', async () => {
+    const { resourceBarView } = await import('../ui/resource-bar');
+    expect(resourceBarView({ kind: 'memory', used: 2 ** 30, capacity: 8 * 2 ** 30, requested: 7.5 * 2 ** 30 }, 'RAM', de).tone).toBe('warning');
+    expect(resourceBarView({ kind: 'memory', used: 7.5 * 2 ** 30, capacity: 8 * 2 ** 30 }, 'RAM', translatorFor('en')).tone).toBe('critical');
+    expect(resourceBarView({ kind: 'cpu', used: 400, capacity: 4000, limit: 0, withoutLimit: 3 }, 'CPU', de).legend.at(-1)).toEqual({ kind: 'limit', text: 'kein Limit', extra: '+ 3 Pods ohne Limit' });
   });
 });

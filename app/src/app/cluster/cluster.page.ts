@@ -23,7 +23,7 @@ import { ClusterStore } from '../core/cluster-store.service';
 import { StatusStore } from '../core/status-store.service';
 import { LanguageService } from '../i18n/language.service';
 import { NannyEye } from '../ui/nanny-eye';
-import { UsageBar } from '../ui/usage-bar';
+import { ResourceBar } from '../ui/resource-bar';
 import { buildClusterView, issueCards } from './cluster-view';
 import { historyView } from './history-view';
 import { statusReport } from './status-report';
@@ -68,7 +68,7 @@ const NEEDS: Record<Tab, Parameters<ClusterDataStore['need']>> = {
     IonSegment,
     IonSegmentButton,
     NannyEye,
-    UsageBar,
+    ResourceBar,
     OverviewTab,
     ServicesTab,
     NodesTab,

@@ -8,15 +8,15 @@ import { LanguageService } from '../../i18n/language.service';
 import { Translator } from '../../i18n/translator';
 import { AreaChart } from '../../ui/area-chart';
 import { Meter } from '../../ui/meter';
-import { nodeResourceNote } from '../../core/resources-text';
+import { ResourceBar, ResourceInput } from '../../ui/resource-bar';
 
 export interface NodeCard {
   node: NodeView;
   tone: Tone;
   state: string;
   facts: { label: string; value: string }[];
-  cpu: { used: number | null; reserved: number | null; limit: number | null; text: string; note: string };
-  memory: { used: number | null; reserved: number | null; limit: number | null; text: string; note: string };
+  cpu: ResourceInput;
+  memory: ResourceInput;
   disk: { used: number | null; text: string } | null;
   pods: { used: number | null; text: string };
   cpuSeries: Series | null;
@@ -26,11 +26,11 @@ export interface NodeCard {
 
 export function nodeCards(nodes: NodeView[], history: HistoryView | null, now: Date, tr: Translator): NodeCard[] {
   const lang = tr.lang;
-  return nodes.map((n) => {
+  const rank: Record<Tone, number> = { critical: 0, warning: 1, muted: 2, ok: 3 };
+  // Nodes with a problem first, then by name (the agent sends them by name).
+  const cards = nodes.map((n): NodeCard => {
     const state = tr.t(!n.ready ? 'nodes.notReady' : n.rebooting ? 'nodes.rebooting' : n.cordoned ? 'nodes.cordoned' : 'nodes.ready');
     const tone: Tone = !n.ready ? (n.cordoned || n.rebooting ? 'warning' : 'critical') : n.rebooting || n.cordoned ? 'muted' : 'ok';
-    const usedCpu = ratio(n.cpu.usedMilli, n.cpu.allocatableMilli);
-    const usedMem = ratio(n.memory.used, n.memory.allocatable);
     return {
       node: n,
       tone,
@@ -45,20 +45,8 @@ export function nodeCards(nodes: NodeView[], history: HistoryView | null, now: D
         { label: tr.t('nodes.arch'), value: n.arch ?? NO_VALUE },
         { label: tr.t('nodes.inCluster'), value: age(n.createdAt, now, lang) },
       ],
-      cpu: {
-        used: usedCpu,
-        reserved: ratio(n.cpu.requestedMilli, n.cpu.allocatableMilli),
-        limit: n.cpu.limitMilli === undefined ? null : ratio(n.cpu.limitMilli, n.cpu.allocatableMilli),
-        text: tr.t('resources.cores', { used: cores(n.cpu.usedMilli, lang), total: cores(n.cpu.allocatableMilli, lang) }),
-        note: nodeResourceNote('cpu', n.cpu.requestedMilli, n.cpu.limitMilli, n.cpu.allocatableMilli, n.podsWithoutLimit?.cpu, tr),
-      },
-      memory: {
-        used: usedMem,
-        reserved: ratio(n.memory.requested, n.memory.allocatable),
-        limit: n.memory.limit === undefined ? null : ratio(n.memory.limit, n.memory.allocatable),
-        text: tr.t('resources.of', { used: bytes(n.memory.used, lang), total: bytes(n.memory.allocatable, lang) }),
-        note: nodeResourceNote('memory', n.memory.requested, n.memory.limit, n.memory.allocatable, n.podsWithoutLimit?.memory, tr),
-      },
+      cpu: { kind: 'cpu', used: n.cpu.usedMilli, capacity: n.cpu.allocatableMilli, requested: n.cpu.requestedMilli, limit: n.cpu.limitMilli, withoutLimit: n.podsWithoutLimit?.cpu },
+      memory: { kind: 'memory', used: n.memory.used, capacity: n.memory.allocatable, requested: n.memory.requested, limit: n.memory.limit, withoutLimit: n.podsWithoutLimit?.memory },
       disk: n.disk === null ? null : { used: n.disk, text: tr.t('nodes.diskText', { used: percent(n.disk, lang) }) },
       pods: { used: ratio(n.pods.count, n.pods.capacity), text: tr.t('nodes.podsText', { count: n.pods.count, capacity: n.pods.capacity }) },
       cpuSeries: history?.series.find((s) => s.id === `node-cpu:${n.name}`) ?? null,
@@ -66,12 +54,13 @@ export function nodeCards(nodes: NodeView[], history: HistoryView | null, now: D
       warnings: [...n.conditions.filter((c) => c.type !== 'Ready').map((c) => `${c.type}${c.since ? ` (${sinceText(c.since, now, lang)})` : ''}${c.message ? `: ${c.message}` : ''}`), ...n.taints.filter((t) => !t.includes('control-plane') && !t.includes('master') && !t.includes('etcd'))],
     };
   });
+  return cards.map((c, i) => ({ c, i })).sort((x, y) => rank[x.c.tone] - rank[y.c.tone] || (y.c.warnings.length ? 1 : 0) - (x.c.warnings.length ? 1 : 0) || x.i - y.i).map((x) => x.c);
 }
 
 @Component({
   selector: 'app-nodes-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, Meter, AreaChart, IonSpinner],
+  imports: [TranslocoDirective, Meter, ResourceBar, AreaChart, IonSpinner],
   template: `
     <ng-container *transloco="let t">
       @if (cards().length === 0 && nodes().loading) {
@@ -87,8 +76,8 @@ export function nodeCards(nodes: NodeView[], history: HistoryView | null, now: D
               <span class="pill">{{ c.state }}</span>
             </header>
             <div class="meters">
-              <app-meter [label]="t('nodes.cpu')" [used]="c.cpu.used" [reserved]="c.cpu.reserved" [limit]="c.cpu.limit" [text]="c.cpu.text" [note]="c.cpu.note" />
-              <app-meter [label]="t('nodes.ram')" [used]="c.memory.used" [reserved]="c.memory.reserved" [limit]="c.memory.limit" [text]="c.memory.text" [note]="c.memory.note" />
+              <app-resource-bar [resource]="c.cpu" [label]="t('nodes.cpu')" />
+              <app-resource-bar [resource]="c.memory" [label]="t('nodes.ram')" />
               @if (c.disk; as d) {
                 <app-meter [label]="t('nodes.disk')" [used]="d.used" [text]="d.text" />
               }
@@ -122,7 +111,6 @@ export function nodeCards(nodes: NodeView[], history: HistoryView | null, now: D
           </article>
         }
       </div>
-      <p class="muted legend">{{ t('nodes.legend') }}</p>
     </ng-container>
   `,
   styles: `
@@ -147,7 +135,7 @@ export function nodeCards(nodes: NodeView[], history: HistoryView | null, now: D
     h2 {
       font-size: 1.25rem;
       font-weight: 650;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .meters {
       display: grid;
@@ -183,11 +171,7 @@ export function nodeCards(nodes: NodeView[], history: HistoryView | null, now: D
     dd {
       margin: 0.1rem 0 0;
       font-size: 0.875rem;
-      overflow-wrap: anywhere;
-    }
-    .legend {
-      font-size: 0.8125rem;
-      margin-top: 1rem;
+      overflow-wrap: break-word;
     }
     .error {
       color: var(--crit);

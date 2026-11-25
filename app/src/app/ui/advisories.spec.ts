@@ -79,7 +79,7 @@ describe('issue list in English', () => {
     await fixture.whenStable();
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('.advisories')?.getAttribute('aria-label')).toBe('Vulnerabilities on osv.dev');
-    expect(el.querySelector('.actions button')?.textContent?.trim()).toBe('Silence');
+    expect(el.querySelector('.actions button')?.getAttribute('aria-label')).toBe('Silence');
     expect(el.querySelector('.meta')?.textContent).toContain('for 1 h');
   });
 });

@@ -86,9 +86,11 @@ test.describe('web demo (no agent, nothing leaves the browser)', () => {
     const cluster = visiblePage(page);
     const first = cluster.locator('app-issue-list li').first();
     const title = await first.locator('.title').innerText();
-    await first.locator('button', { hasText: 'Stumm' }).click();
+    await first.getByRole('button', { name: 'Stumm' }).click();
     await page.locator('ion-action-sheet button', { hasText: '8 Stunden' }).click();
     await expectToast(page, 'Stummgeschaltet.');
+    // Silenced issues are folded on the overview; one tap shows them.
+    await cluster.getByRole('button', { name: /stummgeschaltete zeigen/ }).click();
     const silenced = cluster.locator('section.hints', { hasText: 'Stummgeschaltet' });
     await expect(silenced.locator('.title', { hasText: title })).toBeVisible();
     await expect(silenced).toContainText(/stumm bis/);
@@ -139,7 +141,7 @@ test.describe('web demo (no agent, nothing leaves the browser)', () => {
     await expect(tab.locator('li', { hasText: 'shop-api-pg' }).first()).toContainText('S3, s3://shop-backups/cnpg/shop-api-pg');
     await expect(tab.getByRole('heading', { name: /Ohne Backup/ })).toBeVisible();
     await expect(tab).toContainText('monitoring/data-loki-0');
-    await expect(tab).toContainText('erreichbar');
+    await expect(tab).toContainText('Erreichbar');
   });
 
   test('groups repeated Kubernetes warnings', async ({ page }) => {

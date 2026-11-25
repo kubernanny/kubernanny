@@ -1,15 +1,14 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { IonIcon } from '@ionic/angular/standalone';
 import { ClusterConfig, HistoryView, Series } from '../../core/agent.model';
 import { Loadable } from '../../core/cluster-data.store';
 import { AreaChart } from '../../ui/area-chart';
-import { UsageBar } from '../../ui/usage-bar';
-import { Meter } from '../../ui/meter';
+import { ResourceBar } from '../../ui/resource-bar';
 import { IssueList } from '../../ui/issue-list';
 import { LanguageService } from '../../i18n/language.service';
 import { Translator } from '../../i18n/translator';
-import { ClusterView } from '../cluster-view';
+import { ClusterView, IssueCard } from '../cluster-view';
 import { HistorySection } from '../history-section';
 import { HistoryVM } from '../history-view';
 
@@ -19,10 +18,20 @@ export function hourChoices(tr: Translator): { hours: number; label: string }[] 
   return [1, 6, 24, 168].map((hours) => ({ hours, label: hours < 48 ? tr.t('overview.hours', { count: hours }) : tr.t('overview.days', { count: hours / 24 }) }));
 }
 
+/** Warnings shown before "Alle N Warnungen zeigen". */
+export const WARNINGS_SHOWN = 3;
+
+export function foldIssues(cards: IssueCard[], all: boolean, tr: Translator): { shown: IssueCard[]; folded: number; moreLabel: string } {
+  const critical = cards.filter((c) => c.issue.severity === 'critical');
+  const rest = cards.filter((c) => c.issue.severity !== 'critical');
+  const shown = all ? rest : rest.slice(0, WARNINGS_SHOWN);
+  return { shown: [...critical, ...shown], folded: rest.length - shown.length, moreLabel: tr.t('overview.showWarnings', { n: rest.length }) };
+}
+
 @Component({
   selector: 'app-overview-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, IssueList, AreaChart, IonIcon, HistorySection, UsageBar, Meter],
+  imports: [TranslocoDirective, IssueList, AreaChart, IonIcon, HistorySection, ResourceBar],
   template: `
     <ng-container *transloco="let t">
       @if (view().update; as update) {
@@ -46,7 +55,10 @@ export function hourChoices(tr: Translator): { hours: number; label: string }[] 
       <section>
         @if (view().issues.length > 0) {
           <h2>{{ t('overview.needsYou') }}</h2>
-          <app-issue-list [cards]="view().issues" [cluster]="cluster()" (changed)="changed.emit()" />
+          <app-issue-list [cards]="fold().shown" [cluster]="cluster()" (changed)="changed.emit()" />
+          @if (fold().folded > 0) {
+            <button type="button" class="more" (click)="allWarnings.set(true)">{{ fold().moreLabel }}</button>
+          }
         } @else if (view().light === 'green') {
           <div class="calm">
             <ion-icon name="checkmark-circle" aria-hidden="true" />
@@ -61,16 +73,24 @@ export function hourChoices(tr: Translator): { hours: number; label: string }[] 
       @if (view().hints.length > 0) {
         <section class="hints">
           <h2>{{ t('overview.hints') }} <span class="count">{{ view().hints.length }}</span></h2>
-          <p class="muted hint-intro">{{ t('overview.hintsIntro') }}</p>
-          <app-issue-list [cards]="view().hints" [cluster]="cluster()" (changed)="changed.emit()" />
+          @if (openHints()) {
+            <p class="muted hint-intro">{{ t('overview.hintsIntro') }}</p>
+            <app-issue-list [cards]="view().hints" [cluster]="cluster()" (changed)="changed.emit()" />
+          } @else {
+            <button type="button" class="more" (click)="openHints.set(true)">{{ t('overview.showHints', { n: view().hints.length }) }}</button>
+          }
         </section>
       }
 
       @if (view().silenced.length > 0) {
         <section class="hints">
           <h2>{{ t('overview.silenced') }} <span class="count">{{ view().silenced.length }}</span></h2>
-          <p class="muted hint-intro">{{ t('overview.silencedIntro') }}</p>
-          <app-issue-list [cards]="view().silenced" [cluster]="cluster()" (changed)="changed.emit()" />
+          @if (openSilenced()) {
+            <p class="muted hint-intro">{{ t('overview.silencedIntro') }}</p>
+            <app-issue-list [cards]="view().silenced" [cluster]="cluster()" (changed)="changed.emit()" />
+          } @else {
+            <button type="button" class="more" (click)="openSilenced.set(true)">{{ t('overview.showSilenced', { n: view().silenced.length }) }}</button>
+          }
         </section>
       }
 
@@ -118,8 +138,7 @@ export function hourChoices(tr: Translator): { hours: number; label: string }[] 
               <dd class="display">{{ k.value }}</dd>
               <dd class="note">{{ k.note }}</dd>
                 @if (k.bar; as b) {
-                  <dd class="bar"><app-usage-bar [used]="b.used" [reserved]="b.reserved" [limit]="b.limit" /></dd>
-                  <dd class="note">{{ b.note }}</dd>
+                  <dd class="bar"><app-resource-bar [resource]="b" [label]="k.label" [head]="false" [compact]="true" /></dd>
                 }
             </div>
           }
@@ -133,12 +152,11 @@ export function hourChoices(tr: Translator): { hours: number; label: string }[] 
             @for (n of view().perNode; track n.name) {
               <div class="node">
                 <strong>{{ n.name }}</strong>
-                <app-meter [label]="t('nodes.cpu')" [used]="n.cpu.used" [reserved]="n.cpu.reserved" [limit]="n.cpu.limit" [text]="n.cpu.text" [note]="n.cpu.note" />
-                <app-meter [label]="t('nodes.ram')" [used]="n.memory.used" [reserved]="n.memory.reserved" [limit]="n.memory.limit" [text]="n.memory.text" [note]="n.memory.note" />
+                <app-resource-bar [resource]="n.cpu" [label]="t('nodes.cpu')" />
+                <app-resource-bar [resource]="n.memory" [label]="t('nodes.ram')" />
               </div>
             }
           </div>
-          <p class="muted hint">{{ t('resources.perNodeHint') }}</p>
         </section>
       }
 
@@ -164,6 +182,17 @@ export function hourChoices(tr: Translator): { hours: number; label: string }[] 
     </ng-container>
   `,
   styles: `
+    .more {
+      margin-top: 0.5rem;
+      padding: 0.5rem 0.2rem;
+      border: none;
+      background: none;
+      color: var(--accent);
+      font: inherit;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
     section {
       margin-bottom: 2rem;
     }
@@ -240,7 +269,7 @@ export function hourChoices(tr: Translator): { hours: number; label: string }[] 
     }
     .update code {
       font-size: 0.75rem;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
       user-select: all;
     }
     .hints h2 {
@@ -323,11 +352,7 @@ export function hourChoices(tr: Translator): { hours: number; label: string }[] 
     }
     .node strong {
       font-weight: 650;
-      overflow-wrap: anywhere;
-    }
-    .per-node .hint {
-      font-size: 0.8125rem;
-      margin: 0.6rem 0 0;
+      overflow-wrap: break-word;
     }
     .kpi .bar {
       margin: 0.45rem 0 0.2rem;
@@ -397,6 +422,11 @@ export class OverviewTab {
   readonly setHours = output<number>();
   private readonly language = inject(LanguageService);
   readonly hourChoices = computed(() => hourChoices(this.language.translator()));
+  /** Outages always; warnings after the first three behind a button, so the figures are not pages away on a phone. */
+  readonly allWarnings = signal(false);
+  readonly openHints = signal(false);
+  readonly openSilenced = signal(false);
+  readonly fold = computed(() => foldIssues(this.view().issues, this.allWarnings(), this.language.translator()));
 
   readonly charts = computed<Series[]>(() => {
     const series = this.history().value?.series ?? [];

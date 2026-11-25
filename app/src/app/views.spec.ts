@@ -169,7 +169,7 @@ describe('tabs', () => {
     };
     const [card] = nodeCards([node], { source: 'prometheus', hours: 6, series: [{ id: 'node-cpu:n1', label: 'CPU', unit: 'ratio', points: [] }] }, NOW, de);
     expect(card).toMatchObject({ state: 'Startet neu', tone: 'muted' });
-    expect(card.cpu).toMatchObject({ used: 0.5, reserved: 0.25 });
+    expect(card.cpu).toMatchObject({ kind: 'cpu', used: 2000, capacity: 4000, requested: 1000 });
     expect(card.cpuSeries?.id).toBe('node-cpu:n1');
     expect(card.warnings).toEqual(['DiskPressure: low', 'example.com/gpu=true:NoSchedule']);
   });
@@ -221,9 +221,9 @@ describe('tabs', () => {
       ],
     };
     expect(hostRows(view, de).map((r) => [r.host, r.cert])).toEqual([
-      ['c.example', 'Zertifikat 1 Tag'],
-      ['a.example', 'Zertifikat 9 Tage'],
-      ['b.example', 'Zertifikat 60 Tage'],
+      ['c.example', 'Zertifikat noch 1 Tag'],
+      ['a.example', 'Zertifikat noch 9 Tage'],
+      ['b.example', 'Zertifikat noch 60 Tage'],
     ]);
     expect(hostRows(view, en).map((r) => r.cert)).toEqual(['Certificate: 1 day', 'Certificate: 9 days', 'Certificate: 60 days']);
   });

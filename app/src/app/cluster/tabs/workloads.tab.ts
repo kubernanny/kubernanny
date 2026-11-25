@@ -2,11 +2,9 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, signal } f
 import { TranslocoDirective } from '@jsverse/transloco';
 import { IonIcon, IonSpinner } from '@ionic/angular/standalone';
 import { Termination, Tone, WorkloadView } from '../../core/agent.model';
-import { resourceNote } from '../../core/resources-text';
-import { UsageBar } from '../../ui/usage-bar';
-import { usageTone } from '../../ui/meter';
+import { ResourceBar, ResourceInput } from '../../ui/resource-bar';
 import { Loadable } from '../../core/cluster-data.store';
-import { age, bytes, cores, ratio, relativeTime } from '../../core/format';
+import { age, bytes, cores, relativeTime } from '../../core/format';
 import { LanguageService } from '../../i18n/language.service';
 import { Translator } from '../../i18n/translator';
 
@@ -22,7 +20,7 @@ export interface WorkloadRow {
   /** "last 2 h ago: OOMKilled at the limit of 512 MiB", when it restarted; `oom` tints it. */
   restart: { text: string; oom: boolean } | null;
   /** CPU and RAM: use against requests and limits (agents from 0.4 on). */
-  resources: { label: string; text: string; note: string; used: number | null; reserved: number | null; tone: Tone }[];
+  resources: { label: string; bar: ResourceInput }[];
   pods: { name: string; tone: Tone; text: string; containers: { name: string; text: string; oom: boolean }[] }[];
 }
 
@@ -48,28 +46,26 @@ export function terminationText(term: Termination, now: Date, tr: Translator): s
 }
 
 /**
- * Use against what a workload asks for: the bar runs to the limit (amber from
- * 80 %, coral from 90 %); without a limit to the request or the use, whichever
- * is larger, in a neutral tone, since nothing caps it.
+ * Use against what a workload asks for: the track runs to its limit (amber
+ * from 80 %, coral from 90 %), without a limit to the request or the use,
+ * whichever is larger, and says how many containers set no limit.
  */
 function resourceRows(w: WorkloadView, tr: Translator): WorkloadRow['resources'] {
   const r = w.resources;
   if (!r) {
     return [];
   }
-  const lang = tr.lang;
-  const row = (kind: 'cpu' | 'memory', used: number | null, request: number, limit: number | null, unlimited: number) => {
-    const scale = limit ?? Math.max(request, used ?? 0);
-    const share = ratio(used, scale > 0 ? scale : null);
-    return {
-      label: tr.t(kind === 'cpu' ? 'nodes.cpu' : 'nodes.ram'),
-      text: used === null ? '' : kind === 'cpu' ? cores(used, lang) : bytes(used, lang),
-      note: resourceNote(kind, request, limit, limit ? unlimited : 0, tr),
-      used: share,
-      reserved: ratio(request, scale > 0 ? scale : null),
-      tone: (limit ? usageTone(share) : 'muted') as Tone,
-    };
-  };
+  const row = (kind: 'cpu' | 'memory', used: number | null, request: number, limit: number | null, unlimited: number) => ({
+    label: tr.t(kind === 'cpu' ? 'nodes.cpu' : 'nodes.ram'),
+    bar: {
+      kind,
+      used,
+      capacity: limit ?? Math.max(request, used ?? 0),
+      requested: request,
+      ...(limit ? { capacityIsLimit: true } : { limit: 0, uncapped: true }),
+      withoutLimit: limit ? unlimited : 0,
+    } as ResourceInput,
+  });
   return [row('cpu', w.cpuMilli, r.cpuRequestMilli, r.cpuLimitMilli, r.cpuUnlimited), row('memory', w.memBytes, r.memRequest, r.memLimit, r.memUnlimited)];
 }
 
@@ -122,7 +118,7 @@ export function workloadGroups(list: WorkloadView[], query: string, filter: Work
 @Component({
   selector: 'app-workloads-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, IonIcon, IonSpinner, UsageBar],
+  imports: [TranslocoDirective, IonIcon, IonSpinner, ResourceBar],
   template: `
     <ng-container *transloco="let t">
       <div class="tools">
@@ -168,13 +164,7 @@ export function workloadGroups(list: WorkloadView[], query: string, filter: Work
                     @if (r.resources.length > 0) {
                       <div class="res">
                         @for (x of r.resources; track x.label) {
-                          <div [class]="'tone-' + x.tone">
-                            <span class="rlabel">{{ x.label }} <strong>{{ x.text }}</strong></span>
-                            @if (x.used !== null) {
-                              <app-usage-bar [used]="x.used" [reserved]="x.reserved" />
-                            }
-                            <span class="muted">{{ x.note }}</span>
-                          </div>
+                          <app-resource-bar [resource]="x.bar" [label]="x.label" [compact]="true" />
                         }
                       </div>
                     }
@@ -304,7 +294,7 @@ export function workloadGroups(list: WorkloadView[], query: string, filter: Work
       display: grid;
     }
     .main strong {
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .main .muted {
       font-size: 0.8125rem;
@@ -326,7 +316,7 @@ export function workloadGroups(list: WorkloadView[], query: string, filter: Work
     code {
       font-size: 0.75rem;
       color: var(--ink-2);
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .pods li {
       display: flex;
@@ -339,7 +329,7 @@ export function workloadGroups(list: WorkloadView[], query: string, filter: Work
     .restart {
       font-size: 0.8125rem;
       color: var(--ink-2);
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .oom {
       color: var(--warn);
@@ -352,23 +342,11 @@ export function workloadGroups(list: WorkloadView[], query: string, filter: Work
       margin: 0.3rem 0;
       font-size: 0.8125rem;
     }
-    .res > div {
-      display: grid;
-      gap: 0.25rem;
-    }
-    .rlabel {
-      color: var(--mute);
-      font-weight: 600;
-    }
-    .rlabel strong {
-      color: var(--ink);
-      font-weight: 600;
-    }
     .container {
       flex-basis: 100%;
       padding-left: 1rem;
       color: var(--ink-2);
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .container.oom {
       color: var(--warn);

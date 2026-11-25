@@ -182,7 +182,8 @@ export function formatValue(v: number, unit: Unit, lang: Lang): string {
     case 'seconds':
       return v < 1 ? `${decimal(v * 1000, lang, v < 0.01 ? 1 : 0)} ms` : `${decimal(v, lang, 2)} s`;
     case 'count':
-      return v < 10 ? decimal(v, lang, 1) : String(Math.round(v));
+      // Restarts and the like are whole numbers; a rate below one keeps one decimal, "0" stays "0".
+      return Number.isInteger(v) || v >= 10 || v === 0 ? String(Math.round(v)) : decimal(v, lang, 1);
   }
 }
 

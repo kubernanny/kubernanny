@@ -43,7 +43,7 @@ describe('backupsView', () => {
       ['CloudNativePG', 'Datenbanken'],
       ['Longhorn', 'Volumes'],
       ['etcd', 'Cluster-Zustand'],
-      ['Velero', 'Schedules'],
+      ['Velero', 'Zeitpläne'],
     ]);
     expect(v.groups[0].lines.map((l) => l.name)).toEqual(['shop-pg', 'api-pg']);
     expect(v.summary).toBe('3 von 5 brauchen Aufmerksamkeit.');
@@ -61,7 +61,7 @@ describe('backupsView', () => {
 
   it('lists targets with availability and what has no backup at all', () => {
     const v = backupsView(view, NOW, en);
-    expect(v.targets).toEqual([{ name: 'default', tone: 'critical', text: 'NFS, nfs://nas:/backups', availability: 'unreachable' }]);
+    expect(v.targets).toEqual([{ name: 'default', tone: 'critical', text: 'NFS, nfs://nas:/backups', availability: 'Unreachable' }]);
     expect(v.unprotected.map((u) => [u.kind, u.name])).toEqual([
       ['Volume', 'monitoring/data-loki-0'],
       ['Database', 'dev/scratch-pg'],

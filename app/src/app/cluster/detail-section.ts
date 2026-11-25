@@ -33,6 +33,31 @@ import { SheetSection } from './module-sheet-view';
                   @if (r.value) {
                     <span class="rvalue">{{ r.value }}</span>
                   }
+                  @if (r.children.length > 0) {
+                    <ul class="children">
+                      @for (c of r.children; track c.key) {
+                        <li [class]="'tone-' + c.tone">
+                          <span class="dot" aria-hidden="true"></span>
+                          <div class="main">
+                            <span class="cname">{{ c.name }}</span>
+                            @if (c.sub) {
+                              <span class="rsub">{{ c.sub }}</span>
+                            }
+                            @if (c.meta.length > 0) {
+                              <span class="rmeta">
+                                @for (m of c.meta; track $index) {
+                                  <span [class]="'chip tone-' + (m.tone ?? 'muted')" [class.flag]="m.tone === 'warning' || m.tone === 'critical'">{{ m.text }}</span>
+                                }
+                              </span>
+                            }
+                          </div>
+                          @if (c.value) {
+                            <span class="rvalue">{{ c.value }}</span>
+                          }
+                        </li>
+                      }
+                    </ul>
+                  }
                 </li>
               }
             </ul>
@@ -69,6 +94,31 @@ import { SheetSection } from './module-sheet-view';
     </ng-container>
   `,
   styles: `
+    .children {
+      grid-column: 2 / -1;
+      list-style: none;
+      margin: 0.45rem 0 0;
+      padding: 0 0 0 0.6rem;
+      border-left: 2px solid var(--line);
+      display: grid;
+      gap: 0.4rem;
+    }
+    .children li {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 0 0.5rem;
+      align-items: start;
+      font-size: 0.875rem;
+    }
+    .children .dot {
+      width: 0.4rem;
+      height: 0.4rem;
+      margin-top: 0.4rem;
+    }
+    .cname {
+      font-weight: 550;
+      overflow-wrap: break-word;
+    }
     h2 {
       font-size: 1.1rem;
       font-weight: 650;
@@ -99,7 +149,7 @@ import { SheetSection } from './module-sheet-view';
       background: var(--surface);
       overflow: hidden;
     }
-    .rows li {
+    .rows > li {
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) auto;
       gap: 0 0.65rem;
@@ -107,11 +157,12 @@ import { SheetSection } from './module-sheet-view';
       padding: 0.55rem 0.9rem;
       border-top: 1px solid var(--line);
     }
-    .rows li:first-child {
+    .rows > li:first-child {
       border-top: none;
     }
-    .rows li.problem {
-      background: var(--tone-soft);
+    /* A problem row stands out by its rail and a lifted surface, not a tint that turns muddy on dark navy. */
+    .rows > li.problem {
+      background: var(--raise);
       box-shadow: inset 3px 0 0 var(--tone);
       padding-top: 0.7rem;
       padding-bottom: 0.7rem;
@@ -135,12 +186,12 @@ import { SheetSection } from './module-sheet-view';
     .rname {
       font-weight: 600;
       font-size: 0.9375rem;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .rsub {
       color: var(--ink-2);
       font-size: 0.8125rem;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .rmeta {
       display: flex;
@@ -159,10 +210,10 @@ import { SheetSection } from './module-sheet-view';
       color: var(--ink-2);
       text-align: right;
       max-width: 9.5rem;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
       padding-top: 0.05rem;
     }
-    .problem .rvalue {
+    .problem > .rvalue {
       color: var(--tone);
     }
     .more {
@@ -179,7 +230,6 @@ import { SheetSection } from './module-sheet-view';
     .grid {
       width: 100%;
       border-collapse: collapse;
-      table-layout: fixed;
       background: var(--surface);
       border-radius: var(--radius-l);
       overflow: hidden;
@@ -195,19 +245,19 @@ import { SheetSection } from './module-sheet-view';
     .grid td {
       padding: 0.5rem 0.9rem;
       border-top: 1px solid var(--line);
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
       vertical-align: top;
     }
-    .grid th:first-child,
-    .grid td:first-child {
-      width: 42%;
+    .grid td:not(:first-child),
+    .grid th:not(:first-child) {
+      white-space: nowrap;
     }
     .grid td:first-child {
       font-weight: 600;
     }
     .grid tr.tone-warning td,
     .grid tr.tone-critical td {
-      background: var(--tone-soft);
+      background: var(--raise);
       color: var(--tone);
     }
   `,

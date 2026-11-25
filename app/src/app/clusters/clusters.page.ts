@@ -159,7 +159,7 @@ export const PAIR_COMMAND = 'kubectl -n kubernanny logs deploy/kubernanny';
       font-size: 1.6rem;
       font-weight: 700;
       letter-spacing: -0.02em;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .top .muted {
       font-size: 0.875rem;
@@ -258,7 +258,7 @@ export const PAIR_COMMAND = 'kubectl -n kubernanny logs deploy/kubernanny';
     .cmd code {
       flex: 1;
       font-size: 0.8125rem;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .cmd ion-icon {
       color: var(--accent);

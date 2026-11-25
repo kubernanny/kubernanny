@@ -13,6 +13,7 @@ export interface SheetRow {
   /** A problem row: tinted, never folded away. */
   problem: boolean;
   meta: DetailMeta[];
+  children: SheetRow[];
 }
 
 export interface SheetList {
@@ -47,19 +48,25 @@ export interface SheetView {
   /** Two to four key figures, one row; `columns` sets the grid so it is never half empty. */
   figures: Stat[];
   columns: number;
+  /** A label or value too long for a third of a phone's width. */
+  longLabels: boolean;
   sections: SheetSection[];
+  /** The agent lists the workloads with their pods itself: the plain workload list is not shown again. */
+  hasRuntime: boolean;
 }
 
 function listSection(key: string, title: string, rows: DetailRow[], more: number, expanded: boolean, tr: Translator): SheetList {
-  const all: SheetRow[] = rows.map((r, i) => ({
-    key: `${key}/${i}`,
+  const toRow = (r: DetailRow, k: string): SheetRow => ({
+    key: k,
     name: r.name,
     sub: r.sub,
     value: r.value,
     tone: r.tone,
     problem: r.tone === 'critical' || r.tone === 'warning',
     meta: r.meta ?? [],
-  }));
+    children: (r.children ?? []).map((c, j) => toRow(c, `${k}/${j}`)),
+  });
+  const all: SheetRow[] = rows.map((r, i) => toRow(r, `${key}/${i}`));
   const problems = all.filter((r) => r.problem);
   const healthy = all.filter((r) => !r.problem);
   const shown = expanded ? healthy : healthy.slice(0, HEALTHY_SHOWN);
@@ -113,6 +120,8 @@ export function buildSheetView(m: ModuleView, expanded: ReadonlySet<string>, tr:
     meta: (m.instances?.length ?? 0) > 1 ? '' : [m.version, m.namespace].filter(Boolean).join(', '),
     figures,
     columns: figures.length,
+    hasRuntime: (m.details ?? []).some((d) => d.kind === 'list' && d.role === 'runtime'),
+    longLabels: figures.some((f) => f.label.length > 13 || f.value.length > 9),
     sections,
   };
 }

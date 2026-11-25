@@ -28,7 +28,7 @@
     </ion-refresher>
 
     <div class="layout">
-      <header [class]="'hero tone-' + view().tone" [class.stale]="view().stale">
+      <header [class]="'hero tone-' + view().tone" [class.stale]="view().stale" [class.compact]="tab() !== 'lage'">
         <h1 class="name">
           {{ cluster()?.name }}
           @if (cluster()?.demo) {
@@ -54,8 +54,7 @@
                 <dd class="display">{{ k.value }}</dd>
                 <dd class="note">{{ k.note }}</dd>
                 @if (k.bar; as b) {
-                  <dd class="bar"><app-usage-bar [used]="b.used" [reserved]="b.reserved" [limit]="b.limit" /></dd>
-                  <dd class="note">{{ b.note }}</dd>
+                  <dd class="bar"><app-resource-bar [resource]="b" [label]="k.label" [head]="false" [compact]="true" /></dd>
                 }
               </div>
             }

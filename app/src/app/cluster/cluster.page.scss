@@ -34,7 +34,7 @@ ion-toolbar {
   font-variation-settings: 'wdth' 85;
   letter-spacing: -0.03em;
   line-height: 1;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .subline {
@@ -120,6 +120,43 @@ ion-segment-button {
 
 .vitals {
   display: none;
+}
+
+/* Phone, any tab but the overview: name, eye and headline in two short lines, so the tab gets the screen. */
+@media (max-width: 979px) {
+  .hero.compact {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .hero.compact .name {
+    font-size: 1.6rem;
+  }
+
+  .hero.compact .subline,
+  .hero.compact .via-relay,
+  .hero.compact .checked {
+    display: none;
+  }
+
+  .hero.compact .state {
+    display: contents;
+  }
+
+  .hero.compact app-nanny-eye {
+    --eye-width: 48px;
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .hero.compact .headline {
+    grid-column: 1;
+    font-size: 1rem;
+    margin-top: 0.2rem;
+  }
 }
 
 /* Wide screens: the vital signs stay put on the left, the details scroll on the right. */
