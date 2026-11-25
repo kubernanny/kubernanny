@@ -54,6 +54,12 @@ export interface PromRule {
   alerts: readonly string[];
   /** Metric names that must exist in Prometheus for the rule to be checkable. */
   needs: readonly string[];
+  /**
+   * What a missing metric usually means for this rule, when that is the cluster's setup and not a
+   * gap in monitoring (no software RAID, no ResourceQuotas): the sheet lists the rule as not
+   * applying, with this text, instead of "metric missing".
+   */
+  absent?: Text;
   query: string;
   /** More values per series, joined on `by`. */
   extra?: Record<string, string>;
@@ -341,6 +347,7 @@ export const PROM_RULES: readonly PromRule[] = [
     area: 'nodes',
     alerts: ['NodeRAIDDegraded'],
     needs: ['node_md_disks_required', 'node_md_disks'],
+    absent: t('std.absent.raid'),
     query: 'max by (instance, device) (min_over_time((node_md_disks_required - ignoring (state) node_md_disks{state="active"})[15m:1m]))',
     by: ['instance', 'device'],
     judge: above({ critical: 0 }),
@@ -356,6 +363,7 @@ export const PROM_RULES: readonly PromRule[] = [
     area: 'nodes',
     alerts: ['NodeRAIDDiskFailure'],
     needs: ['node_md_disks'],
+    absent: t('std.absent.raid'),
     query: 'max by (instance, device) (node_md_disks{state="failed"})',
     by: ['instance', 'device'],
     judge: above({ warning: 0 }),
@@ -432,6 +440,7 @@ export const PROM_RULES: readonly PromRule[] = [
     area: 'kubernetes',
     alerts: ['KubeQuotaExceeded'],
     needs: ['kube_resourcequota'],
+    absent: t('std.absent.quota'),
     query:
       'max by (namespace, resourcequota, resource) (min_over_time((max by (namespace, resourcequota, resource) (kube_resourcequota{type="used"})' +
       ' / on (namespace, resourcequota, resource) (max by (namespace, resourcequota, resource) (kube_resourcequota{type="hard"}) > 0))[15m:1m]))',
@@ -466,6 +475,7 @@ export const PROM_RULES: readonly PromRule[] = [
     area: 'kubernetes',
     alerts: ['KubeletClientCertificateExpiration'],
     needs: ['kubelet_certificate_manager_client_ttl_seconds'],
+    absent: t('std.absent.kubeletCert'),
     query: 'min by (instance) (kubelet_certificate_manager_client_ttl_seconds)',
     by: ['instance'],
     judge: below({ warning: 7 * DAY, critical: DAY }),
@@ -480,6 +490,7 @@ export const PROM_RULES: readonly PromRule[] = [
     area: 'kubernetes',
     alerts: ['KubeletServerCertificateExpiration'],
     needs: ['kubelet_certificate_manager_server_ttl_seconds'],
+    absent: t('std.absent.kubeletCert'),
     query: 'min by (instance) (kubelet_certificate_manager_server_ttl_seconds)',
     by: ['instance'],
     judge: below({ warning: 7 * DAY, critical: DAY }),
