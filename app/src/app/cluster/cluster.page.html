@@ -56,6 +56,9 @@
           <p class="checked">{{ view().checked }}</p>
         }
         @if (view().kpis.length > 0) {
+          @if (view().pendingLabel) {
+            <app-pending-sync-card class="rail-pending" [label]="view().pendingLabel" [hint]="t('pendingSync.cardHint')" (open)="openPending()" />
+          }
           <app-resource-rail class="vitals" [rail]="view().rail" />
         }
       </header>
@@ -88,6 +91,7 @@
                   [incidents]="incidents()"
                   (changed)="refresh()"
                   (openModule)="openModule($event)"
+                  (openPending)="openPending()"
                   (setHours)="data.setHours($event)"
                 />
               }
