@@ -21,8 +21,8 @@ function shot(file: string, alt: string, size: { width: number; height: number }
 }
 
 export const SCREENSHOTS = {
-  heroPhone: shot('05-overview-red.png', 'Kubernanny on a phone: a red heartbeat, "3 outages and 19 warnings", and the first problem with its logs, restart and silence buttons', PHONE, '41-light-overview.png'),
-  clusters: shot('04-clusters.png', 'Three clusters side by side, each with its own heartbeat: red, amber and green', PHONE),
+  heroPhone: shot('05-overview-red.png', 'Kubernanny on a phone: the eye glowing red, "3 outages and 19 warnings", and the first problem with its logs, restart and silence buttons', PHONE, '41-light-overview.png'),
+  clusters: shot('04-clusters.png', 'Three clusters side by side, each with its light in the nanny eye: red, amber and green', PHONE),
   issues: shot('06-overview-issues.png', 'A list of problems, each with its cause, its age and the action that fixes it', PHONE),
   longhorn: shot('18-sheet-longhorn.png', 'The Longhorn detail sheet: version, healthy volumes, free disk, backups and the backup target', PHONE),
   confirm: shot('11-confirm-restart.png', 'A confirmation dialog before restarting a crashing deployment', PHONE),
@@ -31,12 +31,12 @@ export const SCREENSHOTS = {
   history: shot('61-history.png', 'The last seven days: one cell per day coloured by its worst incident, and each incident with start and duration', PHONE),
   backups: shot('66-backups.png', 'The backups tab: each database and volume with its last backup and where it goes', PHONE),
   yellow: shot('37-overview-yellow.png', 'A cluster with two warnings: an old database backup and an expiring certificate', PHONE),
-  desktop: shot('46-desktop-overview.png', 'The desktop layout: cluster vitals and heartbeat on the left, the problems on the right', DESKTOP, '55-desktop-light-overview.png'),
+  desktop: shot('46-desktop-overview.png', 'The desktop layout: cluster vitals and the nanny eye on the left, the problems on the right', DESKTOP, '55-desktop-light-overview.png'),
 } as const;
 
 /** The strip of phone screens under "See it". */
 export const GALLERY: { shot: Screenshot; caption: string }[] = [
-  { shot: SCREENSHOTS.clusters, caption: 'Every cluster, one heartbeat each' },
+  { shot: SCREENSHOTS.clusters, caption: 'Every cluster, one light each' },
   { shot: SCREENSHOTS.issues, caption: 'Only what is broken, with cause and action' },
   { shot: SCREENSHOTS.logs, caption: 'Logs of the run that crashed' },
   { shot: SCREENSHOTS.nodes, caption: 'Nodes: used against requested' },
