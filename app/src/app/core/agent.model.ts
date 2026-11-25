@@ -57,11 +57,13 @@ export interface DetailRow {
   tone: Tone;
   value?: string;
   meta?: DetailMeta[];
+  /** A workload's pods, shown indented under it. */
+  children?: DetailRow[];
 }
 
 /** A structured part of a module sheet: its objects as a list or a short table (agents from 0.4 on). */
 export type DetailSection =
-  | { title: string; kind: 'list'; rows: DetailRow[]; more?: number }
+  | { title: string; kind: 'list'; rows: DetailRow[]; more?: number; role?: 'runtime' }
   | { title: string; kind: 'table'; columns: string[]; rows: { cells: string[]; tone: Tone }[]; more?: number };
 
 /** One copy of a component installed several times (Redis/Valkey per app). */

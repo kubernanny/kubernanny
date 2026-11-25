@@ -10,10 +10,9 @@ export function usageTone(ratio: number | null): Tone {
 }
 
 /**
- * A capacity bar: what is used (solid), what is reserved by requests (hatched),
- * and where the limits end (a tick; at the right edge, dashed, when they add
- * up to more than there is), against what there is. The label and numbers are
- * always written out (`text`, `note`), the colour and marks only repeat them.
+ * A capacity bar for disk, pods and volumes: what is used (solid), what is
+ * reserved (hatched), against what there is. CPU and RAM use ResourceBar.
+ * The label and number are always written out, the colour only repeats them.
  */
 @Component({
   selector: 'app-meter',
@@ -28,13 +27,7 @@ export function usageTone(ratio: number | null): Tone {
         <span class="reserved" [style.width.%]="reservedPct()"></span>
       }
       <span class="used" [style.width.%]="usedPct()"></span>
-      @if (limitPct() !== null) {
-        <span class="limit" [class.over]="limitOver()" [style.left.%]="limitPct()"></span>
-      }
     </div>
-    @if (note()) {
-      <p class="note">{{ note() }}</p>
-    }
   `,
   styles: `
     :host {
@@ -75,25 +68,6 @@ export function usageTone(ratio: number | null): Tone {
       background: repeating-linear-gradient(135deg, var(--tone-soft) 0 3px, transparent 3px 6px);
       box-shadow: inset 0 0 0 1px var(--tone-soft);
     }
-    .limit {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      width: 2px;
-      margin-left: -1px;
-      background: var(--ink-2);
-      opacity: 0.7;
-    }
-    .limit.over {
-      margin-left: -2px;
-      background: repeating-linear-gradient(180deg, var(--ink-2) 0 2px, transparent 2px 4px);
-    }
-    .note {
-      margin: 0.3rem 0 0;
-      font-size: 0.75rem;
-      color: var(--mute);
-      overflow-wrap: anywhere;
-    }
   `,
 })
 export class Meter {
@@ -103,17 +77,8 @@ export class Meter {
   readonly reserved = input<number | null>(null);
   readonly text = input('');
   readonly toneOverride = input<Tone | null>(null);
-  /** Limits as a share of what there is (may exceed 1), or null for no mark. */
-  readonly limit = input<number | null>(null);
-  /** A line under the bar: requests and limits in numbers. */
-  readonly note = input('');
 
   readonly usedPct = computed(() => Math.min(100, Math.round((this.used() ?? 0) * 100)));
   readonly reservedPct = computed(() => Math.min(100, Math.round((this.reserved() ?? 0) * 100)));
-  readonly limitPct = computed(() => {
-    const l = this.limit();
-    return l === null || l <= 0 ? null : Math.min(100, l * 100);
-  });
-  readonly limitOver = computed(() => (this.limit() ?? 0) > 1);
   readonly tone = computed(() => this.toneOverride() ?? usageTone(this.used()));
 }

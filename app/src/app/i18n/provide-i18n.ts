@@ -67,7 +67,13 @@ function followLanguage(choice: Lang | null): void {
     void language.init();
   }
   transloco.setActiveLang(language.lang());
-  effect(() => transloco.setActiveLang(language.lang()));
+  effect(() => {
+    transloco.setActiveLang(language.lang());
+    // Hyphenation (long German labels in narrow figures) follows the document's language.
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = language.lang();
+    }
+  });
 }
 
 /** For component tests: Transloco with the bundled texts, fixed to one language and not stored. */

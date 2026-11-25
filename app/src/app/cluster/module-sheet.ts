@@ -54,7 +54,7 @@ import { DetailSectionView } from './detail-section';
         }
 
         @if (sheet().figures.length > 0) {
-          <dl class="figures" [attr.aria-label]="t('module.keyFigures')" [style.--n]="sheet().columns" [class.four]="sheet().columns === 4">
+          <dl class="figures" [attr.aria-label]="t('module.keyFigures')" [style.--n]="sheet().columns" [class.four]="sheet().columns === 4" [class.three]="sheet().columns === 3" [class.long]="sheet().longLabels">
             @for (s of sheet().figures; track s.label) {
               <div [class]="'tone-' + (s.tone ?? 'muted')">
                 <dt>{{ s.label }}</dt>
@@ -115,7 +115,7 @@ import { DetailSectionView } from './detail-section';
           </ul>
         }
 
-        @if (module.workloads.items.length > 0) {
+        @if (module.workloads.items.length > 0 && !sheet().hasRuntime) {
           <h2>{{ t('module.workloads') }} <span class="count">{{ t('module.podsReady', { ready: module.workloads.ready, total: module.workloads.total }) }}</span></h2>
           <ul class="workloads">
             @for (w of module.workloads.items; track w.kind + w.namespace + w.name) {
@@ -185,7 +185,7 @@ import { DetailSectionView } from './detail-section';
       margin: 0.25rem 0 0;
       font-size: 0.8125rem;
       color: var(--mute);
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .figures {
       display: grid;
@@ -196,6 +196,13 @@ import { DetailSectionView } from './detail-section';
     @media (max-width: 459px) {
       .figures.four {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      /* Three figures with long words: the first spans the row, the other two share the next. */
+      .figures.three.long {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .figures.three.long div:first-child {
+        grid-column: 1 / -1;
       }
     }
     .figures div {
@@ -208,6 +215,7 @@ import { DetailSectionView } from './detail-section';
       color: var(--mute);
       font-size: 0.75rem;
       line-height: 1.3;
+      hyphens: auto;
     }
     .figures dd {
       margin: 0.2rem 0 0;
@@ -216,7 +224,7 @@ import { DetailSectionView } from './detail-section';
       font-size: 1.2rem;
       line-height: 1.2;
       color: var(--ink);
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .figures .tone-warning dd,
     .figures .tone-critical dd {
@@ -251,7 +259,7 @@ import { DetailSectionView } from './detail-section';
     }
     .wname {
       font-weight: 600;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .workloads .muted {
       grid-row: 2;
@@ -278,12 +286,12 @@ import { DetailSectionView } from './detail-section';
     .accepted .advisory {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 0.875rem;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .accepted .muted,
     .accepted .reason {
       font-size: 0.8125rem;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .accepted .reason {
       color: var(--ink-2);
@@ -336,7 +344,7 @@ export class ModuleSheet implements OnInit {
   readonly expanded = signal<ReadonlySet<string>>(new Set());
   readonly sheet = computed<SheetView>(() => {
     const m = this.view();
-    return m ? buildSheetView(m, this.expanded(), this.language.translator()) : { meta: '', figures: [], columns: 0, sections: [] };
+    return m ? buildSheetView(m, this.expanded(), this.language.translator()) : { meta: '', figures: [], columns: 0, longLabels: false, hasRuntime: false, sections: [] };
   });
   readonly issues = signal<IssueCard[]>([]);
   readonly accepted = signal<AcceptedRow[]>([]);

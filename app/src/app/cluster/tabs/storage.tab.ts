@@ -6,6 +6,7 @@ import { Loadable } from '../../core/cluster-data.store';
 import { bytes, percent } from '../../core/format';
 import { LanguageService } from '../../i18n/language.service';
 import { Translator } from '../../i18n/translator';
+import { TranslationKey } from '../../i18n/dictionary';
 import { Meter, usageTone } from '../../ui/meter';
 
 export interface VolumeRow {
@@ -14,11 +15,16 @@ export interface VolumeRow {
   namespace: string;
   tone: Tone;
   state: string;
+  /** The pill's colour follows its own word (bound, healthy, degraded); fill warnings sit on the meter. */
+  stateTone: Tone;
   used: number | null;
   usageText: string;
   facts: string;
   usedBy: string;
 }
+
+const PHASE: Record<string, TranslationKey> = { Bound: 'storage.bound', Pending: 'storage.pending', Lost: 'storage.lost' };
+const ROBUSTNESS: Record<string, TranslationKey> = { healthy: 'storage.healthy', degraded: 'storage.degraded', faulted: 'storage.faulted', unknown: 'storage.robustnessUnknown' };
 
 export function volumeRows(view: StorageView | null, tr: Translator): VolumeRow[] {
   const lang = tr.lang;
@@ -28,20 +34,26 @@ export function volumeRows(view: StorageView | null, tr: Translator): VolumeRow[
       const lh = v.longhorn?.robustness;
       const tone: Tone =
         v.phase === 'Lost' || lh === 'faulted' ? 'critical' : v.phase !== 'Bound' || lh === 'degraded' ? 'warning' : share !== null ? usageTone(share) : 'ok';
-      const state = v.phase !== 'Bound' ? (v.phase ?? tr.t('storage.unknown')) : lh ? tr.t('storage.longhorn', { state: lh }) : tr.t('storage.bound');
+      const phase = PHASE[v.phase ?? ''];
+      const robust = ROBUSTNESS[lh ?? ''];
+      const state = v.phase !== 'Bound' ? (phase ? tr.t(phase) : (v.phase ?? tr.t('storage.unknown'))) : robust ? tr.t('storage.longhorn', { state: tr.t(robust) }) : tr.t('storage.bound');
+      const stateTone: Tone = v.phase === 'Lost' || lh === 'faulted' ? 'critical' : v.phase !== 'Bound' || lh === 'degraded' ? 'warning' : 'ok';
+      // "genutzt von data-x-0" under the volume data-x-0 says nothing: only pods whose name is not in the volume's.
+      const users = v.usedBy.filter((pod) => !v.name.includes(pod));
       return {
         key: `${v.namespace}/${v.name}`,
         name: v.name,
         namespace: v.namespace,
         tone,
         state,
+        stateTone,
         used: share,
         usageText:
           v.used !== null
             ? tr.t('storage.usage', { used: bytes(v.used, lang), capacity: bytes(v.capacity, lang), percent: percent(share, lang) })
             : tr.t('storage.usageUnknown', { capacity: bytes(v.capacity, lang) }),
         facts: [v.storageClass, v.accessModes.join(', '), v.longhorn?.replicas ? tr.n('storage.replicas', v.longhorn.replicas) : null].filter(Boolean).join(', '),
-        usedBy: v.usedBy.length ? tr.t('storage.usedBy', { pods: v.usedBy.join(', ') }) : tr.t('storage.unused'),
+        usedBy: users.length ? tr.t('storage.usedBy', { pods: users.join(', ') }) : v.usedBy.length ? '' : tr.t('storage.unused'),
       };
     })
     .sort((a, b) => ['critical', 'warning', 'ok', 'muted'].indexOf(a.tone) - ['critical', 'warning', 'ok', 'muted'].indexOf(b.tone) || (b.used ?? -1) - (a.used ?? -1));
@@ -88,10 +100,16 @@ export function classRows(view: StorageView | null, tr: Translator): { name: str
                 <strong>{{ v.name }}</strong>
                 <span class="muted">{{ v.namespace }}, {{ v.facts }}</span>
               </div>
-              <span class="pill">{{ v.state }}</span>
+              <span [class]="'pill tone-' + v.stateTone">{{ v.state }}</span>
             </div>
-            <app-meter [label]="t('storage.usageLabel')" [used]="v.used" [text]="v.usageText" />
-            <span class="muted by">{{ v.usedBy }}</span>
+            @if (v.used !== null) {
+              <app-meter [label]="t('storage.usageLabel')" [used]="v.used" [text]="v.usageText" />
+            } @else {
+              <span class="muted by">{{ v.usageText }}</span>
+            }
+            @if (v.usedBy) {
+              <span class="muted by">{{ v.usedBy }}</span>
+            }
           </li>
         }
       </ul>
@@ -148,12 +166,12 @@ export function classRows(view: StorageView | null, tr: Translator): { name: str
       min-width: 0;
     }
     .names strong {
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .names .muted,
     .by {
       font-size: 0.8125rem;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .note {
       font-size: 0.8125rem;

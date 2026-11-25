@@ -63,9 +63,8 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
                     </button>
                   }
                   @if (item.canSilence) {
-                    <button type="button" class="quiet" [disabled]="busy() !== null" (click)="silence(item)">
+                    <button type="button" class="quiet icon-only" [disabled]="busy() !== null" (click)="silence(item)" [attr.aria-label]="t('issues.silence')" [title]="t('issues.silence')">
                       <ion-icon name="notifications-off-outline" aria-hidden="true" />
-                      {{ t('issues.silence') }}
                     </button>
                   } @else if (item.silencedText) {
                     <button type="button" class="quiet" [disabled]="busy() !== null" (click)="unsilence(item)">
@@ -88,12 +87,14 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
       padding: 0;
       display: grid;
       gap: 2px;
+      grid-template-columns: minmax(0, 1fr);
       border-radius: var(--radius-l);
       overflow: hidden;
     }
     li {
       display: flex;
       gap: 0.85rem;
+      min-width: 0;
       padding: 1rem 1rem 1rem 0.9rem;
       background: var(--surface);
       box-shadow: inset 3px 0 0 var(--tone);
@@ -112,25 +113,39 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
       font-weight: 650;
       font-size: 1rem;
       line-height: 1.3;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .cause {
       margin: 0.3rem 0 0;
       color: var(--ink-2);
       font-size: 0.9375rem;
       line-height: 1.45;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .meta {
       margin-top: 0.4rem;
       color: var(--mute);
       font-size: 0.8125rem;
     }
+    /* One row: what fixes it first, the quiet silence as an icon at the end; scrolls sideways rather than stacking. */
     .actions {
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       gap: 0.5rem;
       margin-top: 0.75rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+      /* Fades out at the right edge when the buttons go on past it, so the row reads as one that scrolls. */
+      mask-image: linear-gradient(to right, #000 calc(100% - 1.25rem), transparent);
+      padding-right: 1.25rem;
+    }
+    .actions button {
+      flex: none;
+      white-space: nowrap;
+    }
+    .actions .icon-only {
+      padding: 0.5rem 0.6rem;
+      margin-left: auto;
     }
     button {
       display: inline-flex;
@@ -185,7 +200,7 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
       font-size: 0.8125rem;
       color: var(--accent);
       text-decoration: none;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .advisories a:hover {
       text-decoration: underline;

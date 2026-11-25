@@ -1,7 +1,7 @@
 import { Category, CheckStatus, Issue, IssueAction, IssueActionType, Light, ModuleView, Snapshot, Tone } from '../core/agent.model';
 import { KNOWN_AGENT_VERSION, UPGRADE_COMMAND, olderThan } from '../core/version';
 import { LIGHT_TONE, STATUS_TONE, bytes, cores, duration, percent, ratio, relativeTime, sinceText, untilText } from '../core/format';
-import { nodeResourceNote, resourceNote } from '../core/resources-text';
+import { ResourceInput } from '../ui/resource-bar';
 import { TranslationKey } from '../i18n/dictionary';
 import { Translator } from '../i18n/translator';
 import { MaintenanceVM, maintenanceView } from './maintenance-view';
@@ -39,22 +39,14 @@ export interface Kpi {
   value: string;
   note: string;
   tone: Tone;
-  /** CPU and RAM: use, requests and limits as shares of what there is, with requests and limits in numbers. */
-  bar?: { used: number | null; reserved: number | null; limit: number | null; note: string };
-}
-
-export interface NodeResourceBar {
-  used: number | null;
-  reserved: number | null;
-  limit: number | null;
-  text: string;
-  note: string;
+  /** CPU and RAM: use, requests and limits against what there is, as a loading bar. */
+  bar?: ResourceInput;
 }
 
 export interface NodeResourceRow {
   name: string;
-  cpu: NodeResourceBar;
-  memory: NodeResourceBar;
+  cpu: ResourceInput;
+  memory: ResourceInput;
 }
 
 export interface ModuleRow {
@@ -233,6 +225,7 @@ export function buildClusterView(snapshot: Snapshot | null, error: string | null
 
   const cpu = o?.cpu ? ratio(o.cpu.usedMilli, o.cpu.allocatableMilli) : null;
   const mem = o?.memory ? ratio(o.memory.used, o.memory.allocatable) : null;
+  const withoutLimit = (o?.perNode ?? []).reduce((a, n) => ({ cpu: a.cpu + n.podsWithoutLimit.cpu, memory: a.memory + n.podsWithoutLimit.memory }), { cpu: 0, memory: 0 });
   const toneFor = (r: number | null): Tone => (r === null ? 'muted' : r >= 0.9 ? 'critical' : r >= 0.8 ? 'warning' : 'ok');
   const kpis: Kpi[] = o
     ? [
@@ -248,7 +241,7 @@ export function buildClusterView(snapshot: Snapshot | null, error: string | null
           note: o.cpu ? tr.t('resources.cores', { used: cores(o.cpu.usedMilli, lang), total: cores(o.cpu.allocatableMilli, lang) }) : tr.t('cluster.kpi.noMetrics'),
           tone: toneFor(cpu),
           ...(o.cpu?.requestedMilli !== undefined
-            ? { bar: { used: cpu, reserved: ratio(o.cpu.requestedMilli, o.cpu.allocatableMilli), limit: ratio(o.cpu.limitMilli, o.cpu.allocatableMilli), note: resourceNote('cpu', o.cpu.requestedMilli, o.cpu.limitMilli, 0, tr) } }
+            ? { bar: { kind: 'cpu', used: o.cpu.usedMilli, capacity: o.cpu.allocatableMilli, requested: o.cpu.requestedMilli, limit: o.cpu.limitMilli, withoutLimit: withoutLimit.cpu } }
             : {}),
         },
         {
@@ -257,7 +250,7 @@ export function buildClusterView(snapshot: Snapshot | null, error: string | null
           note: o.memory ? tr.t('resources.of', { used: bytes(o.memory.used, lang), total: bytes(o.memory.allocatable, lang) }) : tr.t('cluster.kpi.noMetrics'),
           tone: toneFor(mem),
           ...(o.memory?.requested !== undefined
-            ? { bar: { used: mem, reserved: ratio(o.memory.requested, o.memory.allocatable), limit: ratio(o.memory.limit, o.memory.allocatable), note: resourceNote('memory', o.memory.requested, o.memory.limit, 0, tr) } }
+            ? { bar: { kind: 'memory', used: o.memory.used, capacity: o.memory.allocatable, requested: o.memory.requested, limit: o.memory.limit, withoutLimit: withoutLimit.memory } }
             : {}),
         },
         {
@@ -311,20 +304,8 @@ export function buildClusterView(snapshot: Snapshot | null, error: string | null
     kpis,
     perNode: (o?.perNode ?? []).map((n) => ({
       name: n.name,
-      cpu: {
-        used: ratio(n.cpu.usedMilli, n.cpu.allocatableMilli),
-        reserved: ratio(n.cpu.requestedMilli, n.cpu.allocatableMilli),
-        limit: ratio(n.cpu.limitMilli, n.cpu.allocatableMilli),
-        text: tr.t('resources.cores', { used: cores(n.cpu.usedMilli, lang), total: cores(n.cpu.allocatableMilli, lang) }),
-        note: nodeResourceNote('cpu', n.cpu.requestedMilli, n.cpu.limitMilli, n.cpu.allocatableMilli, n.podsWithoutLimit.cpu, tr),
-      },
-      memory: {
-        used: ratio(n.memory.used, n.memory.allocatable),
-        reserved: ratio(n.memory.requested, n.memory.allocatable),
-        limit: ratio(n.memory.limit, n.memory.allocatable),
-        text: tr.t('resources.of', { used: bytes(n.memory.used, lang), total: bytes(n.memory.allocatable, lang) }),
-        note: nodeResourceNote('memory', n.memory.requested, n.memory.limit, n.memory.allocatable, n.podsWithoutLimit.memory, tr),
-      },
+      cpu: { kind: 'cpu', used: n.cpu.usedMilli, capacity: n.cpu.allocatableMilli, requested: n.cpu.requestedMilli, limit: n.cpu.limitMilli, withoutLimit: n.podsWithoutLimit.cpu },
+      memory: { kind: 'memory', used: n.memory.used, capacity: n.memory.allocatable, requested: n.memory.requested, limit: n.memory.limit, withoutLimit: n.podsWithoutLimit.memory },
     })),
     groups,
     attention: rows.filter((r) => r.tone === 'critical' || r.tone === 'warning' || r.module.status === 'error'),

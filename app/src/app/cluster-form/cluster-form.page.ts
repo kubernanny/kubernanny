@@ -75,7 +75,7 @@ import { WidgetSectionComponent } from './widget-section.component';
             @if (result(); as r) {
               <p [class]="r.ok ? 'ok' : 'error'">{{ r.text }}</p>
             }
-            <ion-button expand="block" type="submit" [disabled]="testing()">{{ testing() ? t('form.connecting') : t('form.save') }}</ion-button>
+            <ion-button expand="block" type="submit" [fill]="unchanged() ? 'outline' : 'solid'" [disabled]="testing()">{{ testing() ? t('form.connecting') : t('form.save') }}</ion-button>
           </form>
 
           @if (info(); as i) {
@@ -148,6 +148,11 @@ export class ClusterFormPage implements OnInit {
   readonly saved = computed(() => {
     const id = this.id();
     return id ? this.store.clusters().find((c) => c.id === id) : undefined;
+  });
+  /** An existing cluster with name and address as saved: saving is offered, not pressed on (outline, not filled). */
+  readonly unchanged = computed(() => {
+    const s = this.saved();
+    return !this.isNew() && s !== undefined && s.name === this.name().trim() && s.url === this.url().trim();
   });
 
   async ngOnInit(): Promise<void> {

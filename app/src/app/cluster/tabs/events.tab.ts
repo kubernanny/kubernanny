@@ -120,14 +120,14 @@ export function eventRows(events: EventView[], now: Date, tr: Translator): Event
     }
     .head .muted {
       font-size: 0.875rem;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     p {
       margin: 0.25rem 0 0;
       color: var(--ink-2);
       font-size: 0.9375rem;
       line-height: 1.45;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
   `,
 })

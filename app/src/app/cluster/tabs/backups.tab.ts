@@ -162,7 +162,7 @@ import { backupsView } from '../backups-view';
     .name {
       display: grid;
       min-width: 0;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .name .muted {
       font-size: 0.8125rem;
@@ -185,7 +185,7 @@ import { backupsView } from '../backups-view';
       font-size: 0.8125rem;
     }
     .target {
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
       font-size: 0.8125rem;
     }
     .unprotected ul {
@@ -203,7 +203,7 @@ import { backupsView } from '../backups-view';
       font-size: 0.9375rem;
     }
     .uname {
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
     }
     .kind {
       color: var(--mute);
