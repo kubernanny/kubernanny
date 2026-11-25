@@ -137,6 +137,7 @@ async function phoneDark(browser, L) {
     ['Security', '65-sheet-security'],
     ['Alertmanager', '80-sheet-alertmanager'],
     ['Redis / Valkey', '81-sheet-redis'],
+    ['Kubernanny', '92-sheet-kubernanny'],
   ]) {
     await scroll(page, 0);
     const target = page.locator('app-services-tab button', { hasText: name }).first();
@@ -154,6 +155,7 @@ async function phoneDark(browser, L) {
       '20-sheet-prometheus': '78-sheet-prometheus-targets',
       '80-sheet-alertmanager': '82-sheet-alertmanager-alerts',
       '81-sheet-redis': '83-sheet-redis-pods',
+      '92-sheet-kubernanny': '93-sheet-kubernanny-timing',
     }[file];
     if (details) {
       await detailShot(page, details);
@@ -298,6 +300,16 @@ async function desktop(browser, L, scheme) {
     await page.setViewportSize({ width: 1440, height: 960 });
     await scroll(page, 2200);
     await shot(page, '47-desktop-charts');
+    // A range change on a slow connection: the charts keep their frame and shimmer until the data is there.
+    await page.route('**/api/e2e', async (route) => {
+      await new Promise((r) => setTimeout(r, 3000));
+      await route.continue().catch(() => undefined);
+    });
+    await page.locator('app-overview-tab .range button').last().click();
+    await page.waitForTimeout(600);
+    await shot(page, '91-desktop-charts-loading');
+    await page.unroute('**/api/e2e');
+    await page.waitForTimeout(3500);
     for (const [label, file] of [
       [L.services, '48-desktop-services'],
       [L.nodes, '49-desktop-nodes'],
