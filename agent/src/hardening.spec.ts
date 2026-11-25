@@ -3,7 +3,7 @@ import { int, loadConfig, parseChoice, parseDigest, parseSwitch } from './config
 import { DemoKubeClient } from './demo/demo-cluster';
 import { errorText, localize, raw, render, reviveText, t } from './i18n/text';
 import { upsertConfigMapData } from './kube/configmap';
-import { KubeClient, KubeError } from './kube/kube-client';
+import { KubeClient, KubeError, MAX_KUBE_ERROR_BODY } from './kube/kube-client';
 import { parseAlerts } from './modules/integrations/alertmanager';
 import { Prometheus, ServiceHttp } from './modules/service-proxy';
 import { MAX_ISSUES_PER_MODULE, boundStats, capIssues, str, strings } from './modules/untrusted';
@@ -236,6 +236,22 @@ describe('LOW: Kubernetes responses are bounded', () => {
     delete process.env.K8S_API_URL;
     delete process.env.KUBERNETES_SERVICE_HOST;
     await expect(new KubeClient().get('/version')).rejects.toThrow(/K8S_API_URL/);
+  });
+
+  it('reads an error body only up to MAX_KUBE_ERROR_BODY (review: res.json() had no cap)', async () => {
+    vi.stubEnv('K8S_API_URL', 'http://kube.test');
+    const huge = `{"message":"${'x'.repeat(MAX_KUBE_ERROR_BODY * 4)}"}`;
+    const bodies = [JSON.stringify({ kind: 'Status', message: 'configmaps "x" is forbidden' }), huge];
+    vi.stubGlobal('fetch', async () => new Response(bodies.shift()!, { status: 403, statusText: 'Forbidden' }));
+    try {
+      const kube = new KubeClient();
+      await expect(kube.get('/a')).rejects.toMatchObject({ status: 403, message: '403 on /a: configmaps "x" is forbidden' });
+      // Too large to be a Status: refused unread, the status text stands in.
+      await expect(kube.get('/b')).rejects.toMatchObject({ status: 403, message: '403 on /b: Forbidden' });
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
   });
 });
 
