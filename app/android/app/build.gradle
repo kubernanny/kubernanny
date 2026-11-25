@@ -22,6 +22,16 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // The QR scanner uses only the plugin's scan(): Google's code scanner, which
+    // runs inside Play services. The plugin also bundles ML Kit's own decoder
+    // for startScan() and readBarcodesFromImage(), about 6 MB of native code per
+    // ABI that the app never calls; it stays out. Using either of those calls
+    // needs this line removed (and the CAMERA permission for startScan()).
+    packaging {
+        jniLibs {
+            excludes += ['**/libbarhopper_v3.so']
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false

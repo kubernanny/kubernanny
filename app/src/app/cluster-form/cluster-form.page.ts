@@ -1,12 +1,13 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { AlertController, IonBackButton, IonButton, IonButtons, IonContent, IonHeader, IonTitle, IonToolbar } from '@ionic/angular/standalone';
+import { AlertController, IonBackButton, IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonTitle, IonToolbar } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { AgentClient, describeError, deviceName } from '../core/agent-client.service';
 import { AgentInfo } from '../core/agent.model';
 import { ClusterStore } from '../core/cluster-store.service';
 import { adoptedRelay } from '../core/relay-route';
+import { ScanPairing } from '../core/scan/scan-pairing.service';
 import { StatusStore } from '../core/status-store.service';
 import { LanguageService } from '../i18n/language.service';
 import { AgentSectionComponent } from './agent-section.component';
@@ -32,6 +33,7 @@ import { WidgetSectionComponent } from './widget-section.component';
     IonBackButton,
     IonButton,
     IonContent,
+    IonIcon,
     AgentSectionComponent,
     RelaySectionComponent,
     MaintenanceSectionComponent,
@@ -53,6 +55,10 @@ import { WidgetSectionComponent } from './widget-section.component';
 
       <ion-content class="ion-padding">
         <div class="wrap">
+          @if (scanFirst()) {
+            <ion-button class="scan" expand="block" (click)="scan()"><ion-icon slot="start" name="qr-code-outline" />{{ t('pair.scan.button') }}</ion-button>
+            <p class="or"><span>{{ t('pair.scan.or') }}</span></p>
+          }
           <form (ngSubmit)="save()">
             <label>
               <span>{{ t('form.name') }}</span>
@@ -75,7 +81,7 @@ import { WidgetSectionComponent } from './widget-section.component';
             @if (result(); as r) {
               <p [class]="r.ok ? 'ok' : 'error'">{{ r.text }}</p>
             }
-            <ion-button expand="block" type="submit" [fill]="unchanged() ? 'outline' : 'solid'" [disabled]="testing()">{{ testing() ? t('form.connecting') : t('form.save') }}</ion-button>
+            <ion-button expand="block" type="submit" [fill]="unchanged() || scanFirst() ? 'outline' : 'solid'" [disabled]="testing()">{{ testing() ? t('form.connecting') : t('form.save') }}</ion-button>
           </form>
 
           @if (info(); as i) {
@@ -115,6 +121,26 @@ import { WidgetSectionComponent } from './widget-section.component';
       display: grid;
       gap: 1rem;
     }
+    .scan {
+      --border-radius: var(--radius-m);
+      min-height: 3rem;
+      font-weight: 650;
+      margin: 0.25rem 0 0;
+    }
+    .or {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 1.25rem 0;
+      color: var(--mute);
+      font-size: 0.875rem;
+    }
+    .or::before,
+    .or::after {
+      content: '';
+      flex: 1;
+      border-top: 1px solid var(--line);
+    }
     .ok {
       color: var(--ok);
       margin: 0;
@@ -136,6 +162,10 @@ export class ClusterFormPage implements OnInit {
   private readonly alerts = inject(AlertController);
   private readonly language = inject(LanguageService);
   private readonly push = inject(PushRegistration);
+  /** "QR-Code scannen" above the form for a new cluster, where this device can scan. */
+  private readonly scanner = inject(ScanPairing);
+  /** The scan button leads; the form's own button steps back to outline. */
+  readonly scanFirst = computed(() => !this.id() && this.scanner.available());
 
   readonly isNew = signal(true);
   readonly modulesLink = computed(() => `/cluster/${this.id()}/modules`);
@@ -174,6 +204,10 @@ export class ClusterFormPage implements OnInit {
         () => undefined,
       );
     }
+  }
+
+  scan(): void {
+    void this.scanner.start();
   }
 
   /**

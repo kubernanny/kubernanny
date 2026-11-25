@@ -4,6 +4,7 @@ import { App as CapApp } from '@capacitor/app';
 import { IonApp, IonRouterOutlet } from '@ionic/angular/standalone';
 import { registerIcons } from './core/icons';
 import { pairingRoute } from './core/pairing-link';
+import { ScanPairing } from './core/scan/scan-pairing.service';
 import { clusterLinkId } from './core/widget/widget-link';
 import { WidgetSync } from './core/widget/widget-sync.service';
 import { ClusterStore } from './core/cluster-store.service';
@@ -22,6 +23,7 @@ export { pairingRoute } from './core/pairing-link';
 export class App {
   private readonly router = inject(Router);
   private readonly store = inject(ClusterStore);
+  private readonly scanPairing = inject(ScanPairing);
 
   constructor() {
     registerIcons();
@@ -33,6 +35,15 @@ export class App {
       }
       // A tap on a home-screen widget or an Android push opens that cluster.
       this.openCluster(() => knownClusterId(clusterLinkId(url), this.store.clusters()));
+    }).catch(() => undefined);
+    // Android may stop the app while Google's scanner is open; the scan then arrives as a restored result.
+    void CapApp.addListener('appRestoredResult', (restored) => {
+      if (restored.pluginId === 'BarcodeScanner' && restored.methodName === 'scan' && restored.success) {
+        const text = (restored.data as { barcodes?: { rawValue?: string }[] } | undefined)?.barcodes?.[0]?.rawValue;
+        if (text) {
+          void this.scanPairing.follow({ kind: 'text', text });
+        }
+      }
     }).catch(() => undefined);
     // A tap that cold-starts the app may only show up as the launch URL; a second navigation to the same cluster is harmless.
     void CapApp.getLaunchUrl()

@@ -4,6 +4,7 @@ import { IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonTitle, IonToo
 import { TranslocoDirective } from '@jsverse/transloco';
 import { buildClusterView } from '../cluster/cluster-view';
 import { ClusterStore } from '../core/cluster-store.service';
+import { ScanPairing } from '../core/scan/scan-pairing.service';
 import { copyText } from '../core/share';
 import { StatusStore } from '../core/status-store.service';
 import { DEMO_HOST } from '../../environments/build-flags';
@@ -98,10 +99,13 @@ export const PAIR_COMMAND = 'kubectl -n kubernanny logs deploy/kubernanny';
                 </li>
                 <li>
                   <strong>{{ t('clusters.empty.scanTitle') }}</strong>
-                  <span class="muted">{{ t('clusters.empty.scanNote') }}</span>
+                  <span class="muted">{{ canScan() ? t('clusters.empty.scanNoteInApp') : t('clusters.empty.scanNote') }}</span>
                 </li>
               </ol>
               <div class="empty-actions">
+                @if (canScan()) {
+                  <ion-button class="scan" (click)="scan()"><ion-icon slot="start" name="qr-code-outline" />{{ t('pair.scan.button') }}</ion-button>
+                }
                 @if (!demoHost) {
                   <ion-button fill="outline" routerLink="/cluster/new">{{ t('clusters.empty.manual') }}</ion-button>
                 }
@@ -283,6 +287,12 @@ export const PAIR_COMMAND = 'kubectl -n kubernanny logs deploy/kubernanny';
       gap: 0.2rem;
       max-width: 34rem;
     }
+    .empty-actions .scan {
+      flex: 1 1 100%;
+      --border-radius: var(--radius-m);
+      min-height: 3rem;
+      font-weight: 650;
+    }
     .demo-actions,
     .empty-actions {
       display: flex;
@@ -345,6 +355,9 @@ export class ClustersPage implements OnInit {
   readonly demoHost = DEMO_HOST;
   /** True when this page itself is served by a Kubernanny agent. */
   readonly thisAgent = signal(false);
+  private readonly scanner = inject(ScanPairing);
+  /** The in-app scanner: native always, the web only with BarcodeDetector; never in the demo host build. */
+  readonly canScan = computed(() => !this.demoHost && this.scanner.available());
 
   readonly cards = computed(() =>
     this.clusters.clusters().map((c) => {
@@ -392,6 +405,10 @@ export class ClustersPage implements OnInit {
 
   ionViewDidLeave(): void {
     this.status.stop();
+  }
+
+  scan(): void {
+    void this.scanner.start();
   }
 
   async startDemo(): Promise<void> {

@@ -35,3 +35,33 @@ export function pairingRoute(link: string): PairingLinkParams | null {
     return null;
   }
 }
+
+/**
+ * A scanned QR code -> the /pair page's params, or null for anything else.
+ * Takes the two links the agent prints: the app link (the QR code in its log)
+ * and the web UI's `<agent>/#/pair?code&name&key[&relay]`, whose address is
+ * everything before the `#`. Both go through pairingRoute(), so a scanned
+ * code is held to exactly the rules of a link the system opens.
+ */
+export function scannedPairingRoute(text: string): PairingLinkParams | null {
+  const value = text.trim();
+  if (value.startsWith('kubernanny:')) {
+    return pairingRoute(value);
+  }
+  const web = /^(https?:\/\/[^#]+)#\/pair\?(.*)$/i.exec(value);
+  if (!web) {
+    return null;
+  }
+  try {
+    const base = new URL(web[1]);
+    if (base.search || base.username || base.password) {
+      return null;
+    }
+    const query = new URLSearchParams(web[2]);
+    // The agent's address is where the web UI lives, never a `url` the fragment names.
+    query.set('url', `${base.origin}${base.pathname}`.replace(/\/+$/, ''));
+    return pairingRoute(`kubernanny://pair?${query}`);
+  } catch {
+    return null;
+  }
+}

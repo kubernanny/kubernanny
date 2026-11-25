@@ -53,6 +53,8 @@
 		<true/>
 	</dict>
 	<!-- Asked by iOS before the first call to an agent in the local network. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Kubernanny nutzt die Kamera nur, um den QR-Code aus den Logs deines Agents zu scannen. Die Bilder bleiben auf dem Gerät.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Kubernanny fragt den Kubernanny-Agent in deinem Cluster nach dem Zustand, auch im lokalen Netzwerk. Alles ist Ende-zu-Ende verschlüsselt.</string>
 	<key>CFBundleVersion</key>

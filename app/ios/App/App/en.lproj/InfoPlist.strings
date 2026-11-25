@@ -1,2 +1,4 @@
 /* Shown when iOS asks for local network access. */
 "NSLocalNetworkUsageDescription" = "Kubernanny asks the Kubernanny agent in your cluster for its state, also on your local network. Everything is end-to-end encrypted.";
+/* Shown when iOS asks for camera access (scanning the pairing QR code). */
+"NSCameraUsageDescription" = "Kubernanny uses the camera only to scan the QR code from your agent’s logs. The images stay on the device.";
