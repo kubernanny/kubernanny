@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
 # Store screenshots for the App Store and Google Play: the demo agents of
 # scripts/screenshots (red, yellow, green), the web UI paired with all three,
-# then eight screens per device size and language, written to
-# fastlane/screenshots/ for `npm run store:screenshots`. Needs Playwright with
-# Chromium and Python 3 with Pillow (docs/RELEASING.md, Screenshots).
+# then eight screens per device size and language, each framed in a drawn
+# device under a headline (frame/), written to fastlane/screenshots/ for
+# `npm run store:screenshots`. Needs Playwright with Chromium (the one of e2e/
+# is used when none is installed elsewhere) and Python 3 with Pillow
+# (docs/RELEASING.md, Screenshots).
 #   SKIP_BUILD=1   use the existing dist/ of protocol, agent and app
-#   CAPTIONS=0     the app full-screen, without the caption band
 #   ONLY=iphone69,phone   only these sizes (iphone69, ipad13, phone, tablet)
+# To change only the headlines or the frame: node frame/frame.cjs (from raw/).
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT=$(cd ../.. && pwd)
 OUT=$(pwd)/raw
 mkdir -p "$OUT"
 export OUT
+export NODE_PATH="$ROOT/e2e/node_modules${NODE_PATH:+:$NODE_PATH}"
 # A relay address makes the agents offer push (the push screen); nothing listens there, nothing leaves the machine.
 export DEMO_RELAY_URL=ws://localhost:9
 source ../screenshots/demo-agents.sh
