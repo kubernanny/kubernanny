@@ -88,9 +88,16 @@ spec:
             - name: SECURITY_SYSTEM_NAMESPACES
               value: {{ join "," . | quote }}
             {{- end }}
-            {{- if .Values.vulnerabilities.enabled }}
+            {{- $enabledModules := list }}
+            {{- if .Values.vulnerabilities.enabled }}{{- $enabledModules = append $enabledModules "vulnerabilities" }}{{- end }}
+            {{- if (.Values.imageUpdates).enabled }}{{- $enabledModules = append $enabledModules "image-updates" }}{{- end }}
+            {{- with $enabledModules }}
             - name: ENABLED_MODULES
-              value: vulnerabilities
+              value: {{ join "," . | quote }}
+            {{- end }}
+            {{- if not .Values.vulnerabilities.allowAccept }}
+            - name: VULN_ACCEPT
+              value: "off"
             {{- end }}
             {{- with .Values.vulnerabilities.dbUrl }}
             - name: VULN_DB_URL
@@ -112,6 +119,10 @@ spec:
               value: {{ .Values.notifications.webhookFormat | quote }}
             - name: NOTIFY_DETAIL
               value: {{ .Values.notifications.detail | quote }}
+            {{- if not .Values.notifications.appPush.enabled }}
+            - name: APP_PUSH
+              value: "off"
+            {{- end }}
             {{- if .Values.relay.enabled }}
             - name: RELAY_URL
               value: {{ required "relay.url is required when relay.enabled is true" .Values.relay.url | quote }}

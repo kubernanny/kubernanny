@@ -71,6 +71,11 @@ spec:
             # Memory ≈ 100 MB + agents × 25 KB + 2 × this; fits the 256Mi limit below for 1000 agents.
             - name: RELAY_MAX_INFLIGHT_BYTES
               value: "67108864"
+            # Native push (docs/RELAY.md, "Native push"): off unless a Firebase service account is given.
+            # kubectl -n kubernanny-relay create secret generic relay-fcm --from-file=service-account.json=<key file>
+            # - name: FCM_SERVICE_ACCOUNT
+            #   valueFrom:
+            #     secretKeyRef: { name: relay-fcm, key: service-account.json }
           livenessProbe:
             httpGet:
               path: /healthz
@@ -137,7 +142,9 @@ spec:
       secretName: kubernanny-relay-tls
 ---
 # Only the ingress controller reaches the API, only Prometheus the metrics;
-# the relay itself opens no connection to anything.
+# the relay itself opens no connection to anything. With native push on it
+# needs DNS and HTTPS to Google (oauth2.googleapis.com, fcm.googleapis.com):
+# replace `egress: []` with rules for UDP/TCP 53 and TCP 443.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

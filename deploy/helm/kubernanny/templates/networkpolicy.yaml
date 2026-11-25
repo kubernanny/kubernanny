@@ -70,6 +70,12 @@ spec:
           protocol: TCP
     {{- end }}
     {{- end }}
+    {{- if and (.Values.imageUpdates).enabled (not (has "image-updates" .Values.checks.disabled)) (not .Values.networkPolicy.egress.internetHttps) }}
+    # Container registries for the image-updates module (registry-1.docker.io, auth.docker.io, ghcr.io, quay.io, registry.k8s.io, *.pkg.dev). A NetworkPolicy cannot name a host.
+    - ports:
+        - port: 443
+          protocol: TCP
+    {{- end }}
     {{- if and .Values.relay.enabled (or (not .Values.networkPolicy.egress.internetHttps) (ne (int .Values.relay.egressPort) 443)) }}
     # The relay's WebSocket (relay.url). A NetworkPolicy cannot name a host, only a port.
     - ports:

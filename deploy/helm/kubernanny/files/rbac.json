@@ -94,6 +94,28 @@
         ]
       }
     ],
+    "gatekeeper": [
+      {
+        "group": "templates.gatekeeper.sh",
+        "resources": [
+          "constrainttemplates"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      },
+      {
+        "group": "constraints.gatekeeper.sh",
+        "resources": [
+          "*"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      }
+    ],
     "hpa": [
       {
         "group": "autoscaling",
@@ -112,6 +134,30 @@
         "resources": [
           "infisicalsecrets",
           "infisicalstaticsecrets"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      }
+    ],
+    "kyverno": [
+      {
+        "group": "wgpolicyk8s.io",
+        "resources": [
+          "policyreports",
+          "clusterpolicyreports"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      },
+      {
+        "group": "kyverno.io",
+        "resources": [
+          "clusterpolicies",
+          "policies"
         ],
         "verbs": [
           "get",
@@ -146,11 +192,36 @@
         ]
       }
     ],
+    "rook-ceph": [
+      {
+        "group": "ceph.rook.io",
+        "resources": [
+          "cephclusters"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      }
+    ],
     "system-upgrade-controller": [
       {
         "group": "upgrade.cattle.io",
         "resources": [
           "plans"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      }
+    ],
+    "trivy": [
+      {
+        "group": "aquasecurity.github.io",
+        "resources": [
+          "vulnerabilityreports",
+          "clustervulnerabilityreports"
         ],
         "verbs": [
           "get",

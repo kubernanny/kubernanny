@@ -44,6 +44,14 @@ notifications:
     enabled: false
     weekday: 1
     hour: 9
+  # Push straight to the Kubernanny app, sealed for each device: neither the
+  # relay nor Google can read it. Needs relay.enabled and a relay with push
+  # (docs/NOTIFICATIONS.md, "Native push"); each phone opts in itself under
+  # "Push to this device". false (APP_PUSH=off): the push routes answer 404
+  # before touching anything, stored push tokens are deleted on start, the
+  # agent never sends a push to the relay, and the app shows it as locked.
+  appPush:
+    enabled: true
 
 # Time zone for the weekly report and log times, e.g. Europe/Berlin. Empty: UTC.
 timezone: ""
@@ -81,6 +89,22 @@ vulnerabilities:
   # to anywhere is allowed while the module is enabled (a NetworkPolicy
   # cannot name a host).
   dbNamespace: ""
+  # Lets a person mark one advisory on one component as "does not apply
+  # here" for 30, 90 or 365 days (announced through the notification
+  # channels, in the audit log). false: the API refuses it before touching
+  # anything, stored acceptances are ignored and the app hides the button.
+  allowAccept: true
+
+# Newer versions of recognised components (module `image-updates`): asks the
+# public registries the images come from (Docker Hub, ghcr.io, quay.io,
+# registry.k8s.io) for their tag lists and shows newer patch, minor and major
+# releases as hints. Off by default because it contacts those registries; it
+# sends repository names only (no tags, no cluster data). enabled: true
+# switches it on for this install (and, with networkPolicy.egress on, allows
+# HTTPS out); `checks.disabled: [image-updates]` locks it off, and then no
+# registry is ever contacted. Details: docs/SECURITY-CHECKS.md.
+imageUpdates:
+  enabled: false
 
 # Your own applications, shown as components with name, icon and category
 # instead of anonymous workloads. Image prefixes match at a boundary
