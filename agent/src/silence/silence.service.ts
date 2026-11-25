@@ -15,9 +15,13 @@ export const SILENCE_HOURS = [1, 8, 24, 168] as const;
 /** A maintenance window: no notifications at all, for planned work on the cluster. */
 export const MAINTENANCE_HOURS = [1, 2, 4, 8, 24] as const;
 const MAX_SILENCED = 500;
-/** Silencing this many issues within BULK_WINDOW_MS is announced, whatever their severity: a quiet way to blind the owner otherwise. */
-export const BULK_SILENCES = 4;
-export const BULK_WINDOW_MS = 10 * 60_000;
+const RANK: Record<IssueSeverity, number> = { info: 0, warning: 1, critical: 2 };
+
+/** One silence: until when, and the severity the issue had when it was silenced. */
+interface Silence {
+  until: number;
+  severity: IssueSeverity;
+}
 /** Stored next to the silenced issues; no issue id is a lone asterisk. */
 const MAINTENANCE = '*';
 
@@ -27,14 +31,17 @@ const MAINTENANCE = '*';
  * sends no notification until it expires. Kept under the key `silenced` of
  * the ConfigMap `kubernanny-settings`, next to the switches, so it survives
  * restarts.
+ *
+ * Two rules keep a silence from blinding the owner (a stolen phone's easiest
+ * move): every silence of a warning or an outage is announced through the
+ * channels before it takes effect, and a silence only covers the severity
+ * the issue had when it was silenced. A warning silenced today that turns
+ * critical tomorrow is no longer silenced and notifies like any outage.
  */
 @Injectable()
 export class SilenceService implements OnModuleInit {
   private readonly audit = new Logger('audit');
-  private until = new Map<string, number>();
-  /** When the last silences were set, for the bulk announcement. */
-  private recent: number[] = [];
-  private bulkAnnouncedAt = -Infinity;
+  private until = new Map<string, Silence>();
   /** Every change reads, changes and writes the whole map: one at a time, or two at once lose one. */
   private readonly writes = new Serial();
 
@@ -53,7 +60,10 @@ export class SilenceService implements OnModuleInit {
     try {
       const cm = await this.kube.get<{ data?: { silenced?: string } }>(`${this.path}/${SETTINGS_CONFIGMAP}`);
       const raw = JSON.parse(cm.data?.silenced ?? '{}') as Record<string, unknown>;
-      this.until = new Map(Object.entries(raw).filter((e): e is [string, number] => typeof e[1] === 'number'));
+      this.until = new Map(Object.entries(raw).flatMap(([id, v]) => {
+        const silence = parseSilence(v);
+        return silence ? [[id, silence] as const] : [];
+      }));
     } catch (err) {
       if (!(err instanceof KubeError && err.status === 404)) {
         new Logger(SilenceService.name).warn(`cannot read silenced issues (${err instanceof Error ? err.message : err}); silences last until restart`);
@@ -61,10 +71,19 @@ export class SilenceService implements OnModuleInit {
     }
   }
 
-  /** When the issue's silence ends, or null when it is not silenced (expired ones count as not silenced). */
-  silencedUntil(issueId: string, now = Date.now()): string | null {
-    const until = this.until.get(issueId);
-    return until !== undefined && until > now ? new Date(until).toISOString() : null;
+  /**
+   * When the issue's silence ends, or null when it is not silenced: expired,
+   * or the issue is worse now (`severity`) than when it was silenced.
+   */
+  silencedUntil(issueId: string, now = Date.now(), severity?: IssueSeverity): string | null {
+    const silence = this.until.get(issueId);
+    if (silence === undefined || silence.until <= now) {
+      return null;
+    }
+    if (severity !== undefined && RANK[severity] > RANK[silence.severity]) {
+      return null;
+    }
+    return new Date(silence.until).toISOString();
   }
 
   /** When the maintenance window ends, or null outside one. */
@@ -88,10 +107,10 @@ export class SilenceService implements OnModuleInit {
     }
     await this.notifier?.securityAlert(who.name, [{ kind: 'maintenance', hours }]);
     const next = this.pruned(now);
-    next.set(MAINTENANCE, now + hours * 3_600_000);
+    next.set(MAINTENANCE, { until: now + hours * 3_600_000, severity: 'critical' });
     await this.save(next);
     this.audit.log(`maintenance window for ${hours} h started by "${who.name}" (${who.id})`);
-    return new Date(next.get(MAINTENANCE)!).toISOString();
+    return new Date(next.get(MAINTENANCE)!.until).toISOString();
   }
 
   endMaintenance(who: Principal, now = Date.now()): Promise<void> {
@@ -119,18 +138,19 @@ export class SilenceService implements OnModuleInit {
       throw new BadRequestException({ code: 'SILENCE_HOURS', message: t('error.silenceHours', { hours: SILENCE_HOURS.join(', ') }) });
     }
     const next = this.pruned(now);
-    next.set(issueId, now + hours * 3_600_000);
+    // Unknown severity (an issue the caller did not look up) counts as a warning: an outage then still breaks through.
+    next.set(issueId, { until: now + hours * 3_600_000, severity: severity ?? 'warning' });
     if (next.size > MAX_SILENCED) {
       throw new BadRequestException({ code: 'SILENCE_LIMIT', message: t('error.silenceLimit') });
     }
     // Before it takes effect, like a maintenance window: a silenced critical issue sends nothing more.
-    const events = this.silenceEvents(issueId, hours, now, severity);
+    const events = this.silenceEvents(issueId, hours, severity);
     if (events.length > 0) {
       await this.notifier?.securityAlert(who.name, events);
     }
     await this.save(next);
     this.audit.log(`issue ${logSafe(issueId)} silenced for ${hours} h by "${who.name}" (${who.id})`);
-    return new Date(next.get(issueId)!).toISOString();
+    return new Date(next.get(issueId)!.until).toISOString();
   }
 
   unsilence(issueId: string, who: Principal, now = Date.now()): Promise<void> {
@@ -145,30 +165,31 @@ export class SilenceService implements OnModuleInit {
     }
   }
 
-  /**
-   * What silencing this issue announces: every critical issue, and once per
-   * window a summary when BULK_SILENCES or more were silenced within
-   * BULK_WINDOW_MS (warnings silenced one by one would otherwise go unnoticed).
-   */
-  private silenceEvents(issueId: string, hours: number, now: number, severity: IssueSeverity | undefined): SecurityEvent[] {
-    this.recent = [...this.recent.filter((at) => now - at < BULK_WINDOW_MS), now];
-    const events: SecurityEvent[] = [];
-    if (severity === 'critical') {
-      events.push({ kind: 'silenced', issue: issueId, hours });
-    }
-    if (this.recent.length >= BULK_SILENCES && now - this.bulkAnnouncedAt >= BULK_WINDOW_MS) {
-      this.bulkAnnouncedAt = now;
-      events.push({ kind: 'silencedMany', n: this.recent.length, minutes: BULK_WINDOW_MS / 60_000 });
-    }
-    return events;
+  /** What silencing this issue announces: every warning and outage. Hints never notify, so silencing one hides nothing. */
+  private silenceEvents(issueId: string, hours: number, severity: IssueSeverity | undefined): SecurityEvent[] {
+    return severity === 'info' ? [] : [{ kind: 'silenced', issue: issueId, hours }];
   }
 
-  private pruned(now: number): Map<string, number> {
-    return new Map([...this.until].filter(([, until]) => until > now));
+  private pruned(now: number): Map<string, Silence> {
+    return new Map([...this.until].filter(([, s]) => s.until > now));
   }
 
-  private async save(next: Map<string, number>): Promise<void> {
+  private async save(next: Map<string, Silence>): Promise<void> {
     await upsertConfigMapData(this.kube, this.config.namespace, SETTINGS_CONFIGMAP, { silenced: JSON.stringify(Object.fromEntries(next)) });
     this.until = next;
   }
+}
+
+/** A stored silence; plain numbers come from versions that stored no severity and count as covering warnings only. */
+function parseSilence(v: unknown): Silence | null {
+  if (typeof v === 'number') {
+    return { until: v, severity: 'warning' };
+  }
+  if (v && typeof v === 'object') {
+    const { until, severity } = v as { until?: unknown; severity?: unknown };
+    if (typeof until === 'number' && (severity === 'info' || severity === 'warning' || severity === 'critical')) {
+      return { until, severity };
+    }
+  }
+  return null;
 }

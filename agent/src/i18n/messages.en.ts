@@ -440,7 +440,6 @@ export const en = {
   'push.security.devicePaired': (p) => `A new device was paired: ${p.by}.`,
   'push.security.advisoryAccepted': (p) => `${p.by} marked ${p.advisory} on ${p.component} as not applicable for ${p.days} days.`,
   'push.security.silenced': (p) => `${p.by} silenced the critical issue ${p.issue} for ${n1(p.hours, 'hour', 'hours')}.`,
-  'push.security.silencedMany': (p) => `${p.by} silenced ${p.n} issues within ${p.minutes} minutes.`,
   'push.security.minimal': "A paired device changed a security-relevant setting. Details in the agent's audit log.",
   'push.security.advice': 'Not you? Remove that device from another paired device (Paired devices) and check the settings.',
   'digest.title': (p) => `${p.cluster}: weekly report`,

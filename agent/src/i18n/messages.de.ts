@@ -471,7 +471,6 @@ export const de = {
   'push.security.advisoryAccepted': (p: { by: string; advisory: string; component: string; days: number }) =>
     `${p.by} hat ${p.advisory} bei ${p.component} für ${p.days} Tage als nicht zutreffend markiert.`,
   'push.security.silenced': (p: { by: string; issue: string; hours: number }) => `${p.by} hat das kritische Problem ${p.issue} für ${p.hours} Stunde${p.hours === 1 ? '' : 'n'} stummgeschaltet.`,
-  'push.security.silencedMany': (p: { by: string; n: number; minutes: number }) => `${p.by} hat ${p.n} Probleme in ${p.minutes} Minuten stummgeschaltet.`,
   'push.security.minimal': 'Ein gekoppeltes Gerät hat eine sicherheitsrelevante Einstellung geändert. Details im Audit-Log des Agents.',
   'push.security.advice': 'Warst du das nicht? Entferne das Gerät von einem anderen gekoppelten Gerät aus (Gekoppelte Geräte) und prüfe die Einstellungen.',
   'digest.title': (p: { cluster: string }) => `${p.cluster}: Wochenbericht`,

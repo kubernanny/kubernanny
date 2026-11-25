@@ -38,7 +38,7 @@ If every channel fails, nothing is marked as sent and the next run tries again. 
 
 *Silencing an issue from the app.*
 
-**Silenced issues** (in the app: "Silence" on an issue, for 1 hour, 8 hours, a day or a week) send nothing new while silenced: no "opened", no "escalated". Silencing never sends a "resolved" either; that only comes when the issue is really gone. Silences live in the ConfigMap `kubernanny-settings` and survive restarts; every silence is in the audit log with the device.
+**Silenced issues** (in the app: "Silence" on an issue, for 1 hour, 8 hours, a day or a week) send nothing new while silenced: no "opened", no "escalated". Two limits keep a silence from hiding too much: it covers only the severity the issue had when it was silenced (a warning silenced for a week that becomes an outage notifies like any outage), and every silence of a warning or an outage is announced through your channels first, naming the device. Silencing never sends a "resolved" either; that only comes when the issue is really gone. Silences live in the ConfigMap `kubernanny-settings` and survive restarts; every silence is in the audit log with the device.
 
 <p><img src="screenshots/59-settings-maintenance.png" alt="The maintenance window in the cluster settings" width="260"></p>
 

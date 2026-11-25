@@ -241,7 +241,7 @@ export class StatusService implements OnApplicationBootstrap, OnApplicationShutd
     return (
       found
         .map((i) => {
-          const silencedUntil = this.silences.silencedUntil(i.id, now.getTime());
+          const silencedUntil = this.silences.silencedUntil(i.id, now.getTime(), i.severity);
           return { ...i, since: this.firstSeen.get(i.id)!.toISOString(), ...(silencedUntil ? { silencedUntil } : {}) };
         })
         // Ties keep the order the modules reported them in (the sort is stable), never the title:

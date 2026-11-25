@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { int, loadConfig, parseChoice, parseDigest, parseSwitch } from './config';
 import { DemoKubeClient } from './demo/demo-cluster';
-import { localize, raw, render, reviveText, t } from './i18n/text';
+import { errorText, localize, raw, render, reviveText, t } from './i18n/text';
 import { upsertConfigMapData } from './kube/configmap';
 import { KubeClient, KubeError } from './kube/kube-client';
 import { parseAlerts } from './modules/integrations/alertmanager';
@@ -11,7 +11,7 @@ import { OSV_MAX_IDS_PER_QUERY, OsvClient, sanitize } from './modules/vulnerabil
 import { RegistryClient } from './modules/image-updates/registry-client';
 import { parseNotified } from './notify/notified-store';
 import { Notifier, escapeDiscord, escapeSlack, webhookBody } from './notify/notifier';
-import { BULK_SILENCES, SilenceService } from './silence/silence.service';
+import { SilenceService } from './silence/silence.service';
 import { logSafe } from './util/log-safe';
 import { ActionsService, LOG_LIMIT_BYTES } from './actions/actions.service';
 import type { Issue } from './checks/types';
@@ -152,22 +152,50 @@ describe('M3: OSV and registry answers are bounded', () => {
   });
 });
 
-describe('M5: silencing is announced', () => {
+describe('error texts from outside', () => {
+  it('lose control characters and are bounded (pentest finding)', () => {
+    const text = render(errorText(new Error('bad\u0007answer\u202e' + 'x'.repeat(500))), 'en');
+    expect(text).not.toMatch(/[\u0000-\u001f\u202e]/);
+    expect(text.length).toBeLessThanOrEqual(300);
+  });
+});
+
+describe('M5: silencing cannot blind the owner', () => {
   const who = { kind: 'device' as const, id: 'd1', name: 'Phone' };
 
-  it('announces every silenced critical issue, and once a burst of silences', async () => {
+  it('announces every silenced warning and outage, never a hint', async () => {
     const alerts: unknown[][] = [];
     const notifier = { securityAlert: async (...a: unknown[]) => void alerts.push(a) } as unknown as Notifier;
     const silences = new SilenceService(loadConfig(), new DemoKubeClient(), notifier);
     await silences.silence('nodes/n1/not-ready', 1, who, 0, 'critical');
-    expect(alerts).toEqual([['Phone', [{ kind: 'silenced', issue: 'nodes/n1/not-ready', hours: 1 }]]]);
-    await silences.silence('a', 1, who, 1000, 'warning');
-    await silences.silence('b', 1, who, 2000, 'warning');
-    expect(alerts).toHaveLength(1);
-    await silences.silence('c', 1, who, 3000, 'warning');
-    expect(alerts.at(-1)).toEqual(['Phone', [{ kind: 'silencedMany', n: BULK_SILENCES, minutes: 10 }]]);
-    await silences.silence('d', 1, who, 4000, 'warning');
-    expect(alerts).toHaveLength(2);
+    await silences.silence('certificates/a/b', 8, who, 1000, 'warning');
+    await silences.silence('security/x/root', 8, who, 2000, 'info');
+    expect(alerts).toEqual([
+      ['Phone', [{ kind: 'silenced', issue: 'nodes/n1/not-ready', hours: 1 }]],
+      ['Phone', [{ kind: 'silenced', issue: 'certificates/a/b', hours: 8 }]],
+    ]);
+  });
+
+  it('a warning silenced early is no longer silenced once it turns critical (pentest finding)', async () => {
+    const silences = new SilenceService(loadConfig(), new DemoKubeClient());
+    await silences.silence('certificates/a/b', 168, who, 0, 'warning');
+    expect(silences.silencedUntil('certificates/a/b', 1000, 'warning')).not.toBeNull();
+    expect(silences.silencedUntil('certificates/a/b', 1000, 'critical')).toBeNull();
+    // A silence set on an outage keeps covering it, and an issue that got better.
+    await silences.silence('nodes/n1/not-ready', 1, who, 0, 'critical');
+    expect(silences.silencedUntil('nodes/n1/not-ready', 1000, 'critical')).not.toBeNull();
+    expect(silences.silencedUntil('nodes/n1/not-ready', 1000, 'warning')).not.toBeNull();
+  });
+
+  it('keeps the severity across a restart, and reads silences stored without one as warnings', async () => {
+    const kube = new DemoKubeClient();
+    const first = new SilenceService(loadConfig(), kube);
+    await first.onModuleInit();
+    await first.silence('certificates/a/b', 8, who, 0, 'warning');
+    const second = new SilenceService(loadConfig(), kube);
+    await second.onModuleInit();
+    expect(second.silencedUntil('certificates/a/b', 1000, 'critical')).toBeNull();
+    expect(second.silencedUntil('certificates/a/b', 1000, 'warning')).not.toBeNull();
   });
 });
 

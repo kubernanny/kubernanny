@@ -25,6 +25,7 @@
 
 ### Security fixes after review
 
+- Pentest: a silence covers only the severity the issue had when it was silenced (a silenced warning that becomes an outage notifies again), and every silence of a warning or outage is announced; error texts from outside lose control characters; a malformed IPv6 source can no longer throw in the rate limiter.
 - Data from in-cluster services (Grafana, Loki, Prometheus, Alertmanager, kured) is type-checked and capped and can never pose as a text of the agent; a failed run can no longer crash the agent.
 - Argo CD restarts are offered only for workloads the agent itself sees not ready in the Application's destination namespace; ids include the namespace.
 - `checks.disabled: [notifications]` and `[prometheus]` are now hard: nothing is sent, no Prometheus request is made. Unknown ids and switch values stop the start (and the chart render).

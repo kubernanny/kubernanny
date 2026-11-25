@@ -43,7 +43,7 @@ Switching it off, from soft to hard:
 - `checks.disabled: [<module>]`: the module is not run, so nothing offers its actions; the permissions only it needs leave the ClusterRole;
 - `rbac.allowActions: false`: every write verb leaves the ClusterRole, the agent is strictly read-only apart from its own Secrets and ConfigMap.
 
-Audit: every action and every log read is written to the agent's log with the device that asked, the action and the target object (`kubectl -n kubernanny logs deploy/kubernanny | grep audit`). Switching a module, an action or notifications off, maintenance windows, silencing a critical issue (or four or more issues within 10 minutes), device changes and accepted vulnerability advisories are also announced through every notification channel at once.
+Audit: every action and every log read is written to the agent's log with the device that asked, the action and the target object (`kubectl -n kubernanny logs deploy/kubernanny | grep audit`). Switching a module, an action or notifications off, maintenance windows, silencing any warning or outage, device changes and accepted vulnerability advisories are also announced through every notification channel at once.
 
 ## Per module
 

@@ -356,7 +356,7 @@ export const en: Dictionary = {
     silence: 'Silence',
     unsilence: 'Unsilence',
     silenceHeader: 'Silence',
-    silenceText: 'It stays visible, but does not change the traffic light or send notifications.',
+    silenceText: 'It stays visible, but does not change the traffic light or send notifications. If it gets worse and becomes an outage, you hear about it again. Your notification channels are told that you silenced it.',
     hour: '1 hour',
     hours8: '8 hours',
     day: '1 day',

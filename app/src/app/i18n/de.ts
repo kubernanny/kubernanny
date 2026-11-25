@@ -360,7 +360,7 @@ export const de = {
     silence: 'Stumm',
     unsilence: 'Wieder melden',
     silenceHeader: 'Stummschalten',
-    silenceText: 'Bleibt sichtbar, färbt aber die Ampel nicht und sendet keine Benachrichtigung.',
+    silenceText: 'Es bleibt sichtbar, ändert aber die Ampel nicht und schickt keine Benachrichtigungen. Wird daraus ein Ausfall, meldet es sich wieder. Deine Benachrichtigungskanäle erfahren, dass du es stummgeschaltet hast.',
     hour: '1 Stunde',
     hours8: '8 Stunden',
     day: '1 Tag',

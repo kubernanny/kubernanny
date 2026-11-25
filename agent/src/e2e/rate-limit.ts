@@ -121,6 +121,10 @@ export function sourceKey(address: string | undefined): string {
   const [head, tail = ''] = address.toLowerCase().split('::');
   const left = head ? head.split(':') : [];
   const right = tail ? tail.split(':') : [];
+  if (left.length + right.length > 8) {
+    // Not a valid address (more than eight groups): one shared bucket, never an exception.
+    return 'invalid';
+  }
   const groups = address.includes('::') ? [...left, ...Array(8 - left.length - right.length).fill('0'), ...right] : left;
   return `${groups.slice(0, 4).join(':')}::/64`;
 }

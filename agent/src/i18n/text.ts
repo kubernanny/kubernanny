@@ -10,6 +10,7 @@
 import type { Language } from '@kubernanny/protocol';
 import { de, type Messages } from './messages.de';
 import { en } from './messages.en';
+import { CONTROL_CHARS } from '../util/log-safe';
 
 export type Lang = Language;
 export const LANGS: readonly Lang[] = ['en', 'de'];
@@ -208,5 +209,6 @@ export function errorText(err: unknown): Text {
   if (err instanceof TextError) {
     return err.text;
   }
-  return raw(err instanceof Error ? err.message : String(err));
+  // Error messages can come from outside (a service's answer, a network error): no control characters, a bounded length.
+  return raw((err instanceof Error ? err.message : String(err)).replace(CONTROL_CHARS, ' ').slice(0, 300));
 }
