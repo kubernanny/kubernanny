@@ -67,7 +67,7 @@ const clamp = (v: number) => Math.max(0, Math.min(100, v));
  * to more than there is. Tone: coral from 90 % use, amber from 80 % use or
  * when requests take 90 % (nothing more can be scheduled).
  */
-export function resourceBarView(r: ResourceInput, label: string, tr: Translator): ResourceBarView {
+export function resourceBarView(r: ResourceInput, label: string, tr: Translator, short = false): ResourceBarView {
   const cap = r.capacity > 0 ? r.capacity : 0;
   const share = (v: number | null | undefined) => (v === null || v === undefined || cap === 0 ? null : v / cap);
   const used = share(r.used);
@@ -92,13 +92,13 @@ export function resourceBarView(r: ResourceInput, label: string, tr: Translator)
     legend.push({ kind: 'reserved', text: tr.t('bar.reserved', { value: fmt(r.requested) }) });
   }
   if (r.capacityIsLimit) {
-    legend.push({ kind: 'limit', text: tr.t('bar.limit', { value: fmt(cap) }), ...(r.withoutLimit ? { extra: tr.n('bar.withoutLimit', r.withoutLimit) } : {}) });
+    legend.push({ kind: 'limit', text: tr.t('bar.limit', { value: fmt(cap) }), ...(r.withoutLimit ? { extra: tr.n(short ? 'bar.withoutLimitShort' : 'bar.withoutLimit', r.withoutLimit) } : {}) });
   } else if (r.limit !== undefined) {
     const over = limit !== null && limit > 1 ? Math.round((limit - 1) * 100) : 0;
     legend.push({
       kind: 'limit',
       text: r.limit > 0 ? tr.t('bar.limit', { value: fmt(r.limit) }) : tr.t('bar.noLimit'),
-      ...(r.withoutLimit ? { extra: tr.n('bar.withoutLimit', r.withoutLimit) } : {}),
+      ...(r.withoutLimit ? { extra: tr.n(short ? 'bar.withoutLimitShort' : 'bar.withoutLimit', r.withoutLimit) } : {}),
       ...(over > 0 ? { over: tr.t('bar.over', { pct: over }) } : {}),
     });
   }
@@ -149,7 +149,8 @@ export function resourceBarView(r: ResourceInput, label: string, tr: Translator)
             <span class="seg-over"></span>
           }
         </div>
-        <ul class="legend" aria-hidden="true">
+        @if (legend()) {
+        <ul class="legend" [class.one-line]="oneLine()" aria-hidden="true">
           @for (l of v.legend; track l.kind) {
             <li [class]="l.kind">
               <span class="swatch"></span>
@@ -163,6 +164,7 @@ export function resourceBarView(r: ResourceInput, label: string, tr: Translator)
             </li>
           }
         </ul>
+        }
       </div>
     }
   `,
@@ -283,6 +285,16 @@ export function resourceBarView(r: ResourceInput, label: string, tr: Translator)
       font-size: 0.75rem;
       color: var(--ink-2);
     }
+    .legend.one-line {
+      flex-wrap: nowrap;
+      gap: 0.75rem;
+      white-space: nowrap;
+      overflow: hidden;
+      font-size: 0.6875rem;
+    }
+    .legend.one-line li {
+      flex-wrap: nowrap;
+    }
     .legend li {
       display: inline-flex;
       align-items: center;
@@ -328,6 +340,10 @@ export class ResourceBar {
   /** Header line with label, percentage and "1,73 / 4 Kerne"; off where the figure above says it already. */
   readonly head = input(true);
   readonly compact = input(false);
+  /** The legend under the bar; off in per-node rows where the cluster bar above explains the marks. */
+  readonly legend = input(true);
+  /** Legend on one line with the short "+ 57 ohne Limit" (the overview rail). */
+  readonly oneLine = input(false);
   private readonly language = inject(LanguageService);
-  readonly view = computed(() => resourceBarView(this.resource(), this.label(), this.language.translator()));
+  readonly view = computed(() => resourceBarView(this.resource(), this.label(), this.language.translator(), this.oneLine()));
 }

@@ -1,7 +1,7 @@
-import { Category, CheckStatus, Issue, IssueAction, IssueActionType, Light, ModuleView, Snapshot, Tone } from '../core/agent.model';
+import { Category, CheckStatus, Issue, IssueAction, IssueActionType, Light, ModuleView, Overview, Snapshot, Tone } from '../core/agent.model';
 import { KNOWN_AGENT_VERSION, UPGRADE_COMMAND, olderThan } from '../core/version';
 import { LIGHT_TONE, STATUS_TONE, bytes, cores, duration, percent, ratio, relativeTime, sinceText, untilText } from '../core/format';
-import { ResourceInput } from '../ui/resource-bar';
+import { ResourceInput, resourceBarView } from '../ui/resource-bar';
 import { TranslationKey } from '../i18n/dictionary';
 import { Translator } from '../i18n/translator';
 import { MaintenanceVM, maintenanceView } from './maintenance-view';
@@ -49,6 +49,32 @@ export interface NodeResourceRow {
   memory: ResourceInput;
 }
 
+/** One node in the rail's per-node comparison: a thin bar, its percentage, problem nodes first. */
+export interface RailNode {
+  name: string;
+  bar: ResourceInput;
+  pct: string;
+  tone: Tone;
+  problem: boolean;
+}
+
+export interface RailResource {
+  key: 'cpu' | 'memory';
+  label: string;
+  /** Null from agents without requests: the figure is shown as text only. */
+  bar: ResourceInput | null;
+  value: string;
+  note: string;
+  tone: Tone;
+  nodes: RailNode[];
+}
+
+/** The cluster's figures as a rail: the small counts in one row, CPU and RAM across the width with a bar per node. */
+export interface RailView {
+  small: Kpi[];
+  resources: RailResource[];
+}
+
 export interface ModuleRow {
   module: ModuleView;
   tone: Tone;
@@ -81,6 +107,7 @@ export interface ClusterView {
   critical: number;
   warning: number;
   kpis: Kpi[];
+  rail: RailView;
   /** Use, requests and limits per node, under the cluster's figures. */
   perNode: NodeResourceRow[];
   groups: CategoryGroup[];
@@ -302,6 +329,7 @@ export function buildClusterView(snapshot: Snapshot | null, error: string | null
     critical,
     warning,
     kpis,
+    rail: buildRail(kpis, o?.perNode ?? [], tr),
     perNode: (o?.perNode ?? []).map((n) => ({
       name: n.name,
       cpu: { kind: 'cpu', used: n.cpu.usedMilli, capacity: n.cpu.allocatableMilli, requested: n.cpu.requestedMilli, limit: n.cpu.limitMilli, withoutLimit: n.podsWithoutLimit.cpu },
@@ -311,5 +339,31 @@ export function buildClusterView(snapshot: Snapshot | null, error: string | null
     attention: rows.filter((r) => r.tone === 'critical' || r.tone === 'warning' || r.module.status === 'error'),
     hasPrometheus: o?.prometheus ?? false,
     maintenance: maintenanceView(s?.maintenanceUntil, now, tr),
+  };
+}
+
+/** The rail from the figures: nodes, pods, volumes and addresses small; CPU and RAM with their per-node bars. */
+export function buildRail(kpis: Kpi[], perNode: NonNullable<Overview['perNode']>, tr: Translator): RailView {
+  const rank: Record<Tone, number> = { critical: 0, warning: 1, muted: 2, ok: 3 };
+  const resource = (key: 'cpu' | 'memory', kpi: Kpi | undefined): RailResource | null => {
+    if (!kpi) {
+      return null;
+    }
+    const nodes = perNode
+      .map((n): RailNode => {
+        const bar: ResourceInput =
+          key === 'cpu'
+            ? { kind: 'cpu', used: n.cpu.usedMilli, capacity: n.cpu.allocatableMilli, requested: n.cpu.requestedMilli, limit: n.cpu.limitMilli, withoutLimit: n.podsWithoutLimit.cpu }
+            : { kind: 'memory', used: n.memory.used, capacity: n.memory.allocatable, requested: n.memory.requested, limit: n.memory.limit, withoutLimit: n.podsWithoutLimit.memory };
+        const v = resourceBarView(bar, n.name, tr);
+        return { name: n.name, bar, pct: v.pct, tone: v.tone, problem: v.tone === 'warning' || v.tone === 'critical' };
+      })
+      .sort((a, b) => rank[a.tone] - rank[b.tone] || a.name.localeCompare(b.name));
+    return { key, label: kpi.label, bar: kpi.bar ?? null, value: kpi.value, note: kpi.note, tone: kpi.tone, nodes };
+  };
+  const [nodes, cpu, ram, pods, volumes, addresses] = kpis;
+  return {
+    small: [nodes, pods, volumes, addresses].filter((k): k is Kpi => k !== undefined),
+    resources: [resource('cpu', cpu), resource('memory', ram)].filter((r): r is RailResource => r !== null),
   };
 }

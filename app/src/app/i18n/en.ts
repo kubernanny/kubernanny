@@ -187,6 +187,7 @@ export const en: Dictionary = {
     reserved: '{{value}} reserved',
     limit: '{{value}} limit',
     noLimit: 'no limit',
+    withoutLimitShort: { one: '+ {{count}} without limit', other: '+ {{count}} without limit' },
     withoutLimit: { one: '+ {{count}} pod without a limit', other: '+ {{count}} pods without a limit' },
     over: '+{{pct}}% overbooked',
   },

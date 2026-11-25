@@ -56,18 +56,7 @@
           <p class="checked">{{ view().checked }}</p>
         }
         @if (view().kpis.length > 0) {
-          <dl class="vitals">
-            @for (k of view().kpis; track k.label) {
-              <div [class]="'tone-' + k.tone">
-                <dt>{{ k.label }}</dt>
-                <dd class="display">{{ k.value }}</dd>
-                <dd class="note">{{ k.note }}</dd>
-                @if (k.bar; as b) {
-                  <dd class="bar"><app-resource-bar [resource]="b" [label]="k.label" [head]="false" [compact]="true" /></dd>
-                }
-              </div>
-            }
-          </dl>
+          <app-resource-rail class="vitals" [rail]="view().rail" />
         }
       </header>
 

@@ -233,44 +233,17 @@ ion-segment-button {
   }
 
   /* The key numbers move from the overview tab into the left column. */
+  /* The rail: small counts in a row, CPU and RAM across the width with a bar per node. */
   .vitals {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.25rem 1rem;
+    display: block;
     margin: 2rem 0 0;
     padding-top: 1.5rem;
     border-top: 1px solid var(--line);
   }
 
-  .vitals div {
-    border-left: 2px solid var(--tone);
-    padding-left: 0.75rem;
-  }
-
-  .vitals dt {
-    color: var(--mute);
-    font-size: 0.8125rem;
-  }
-
-  .vitals dd {
-    margin: 0;
-  }
-
-  .vitals .display {
-    font-size: 1.5rem;
-    font-weight: 650;
-  }
-
-  .vitals .note {
-    color: var(--mute);
-    font-size: 0.8125rem;
-  }
-
-  .vitals .bar {
-    margin: 0.4rem 0 0.25rem;
-  }
-
-  :host ::ng-deep app-overview-tab .kpi-section {
+  /* The rail on the left already compares the nodes: the overview's own figures and per-node section are for phones. */
+  :host ::ng-deep app-overview-tab .kpi-section,
+  :host ::ng-deep app-overview-tab .per-node {
     display: none;
   }
 }
