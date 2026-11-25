@@ -127,11 +127,11 @@ export function loadBalancerRows(view: NetworkView | null, tr: Translator): { ke
     .host {
       font-size: 1.1rem;
       font-weight: 650;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .detail {
       font-size: 0.8125rem;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .lbs li {
       background: var(--surface);

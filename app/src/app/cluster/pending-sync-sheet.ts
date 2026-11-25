@@ -137,7 +137,7 @@ import { PendingSyncRow, pendingSyncRows } from './pending-syncs';
     }
     .names strong {
       font-size: 1.05rem;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .names .muted {
       font-size: 0.8125rem;
@@ -174,7 +174,7 @@ import { PendingSyncRow, pendingSyncRows } from './pending-syncs';
     dd {
       margin: 0.15rem 0 0;
       font-size: 0.875rem;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     code {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -188,7 +188,7 @@ import { PendingSyncRow, pendingSyncRows } from './pending-syncs';
     }
     .res span:first-child {
       min-width: 0;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .change {
       flex: none;

@@ -294,7 +294,7 @@ export function workloadGroups(list: WorkloadView[], query: string, filter: Work
       display: grid;
     }
     .main strong {
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .main .muted {
       font-size: 0.8125rem;
@@ -316,7 +316,7 @@ export function workloadGroups(list: WorkloadView[], query: string, filter: Work
     code {
       font-size: 0.75rem;
       color: var(--ink-2);
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .pods li {
       display: flex;
@@ -329,7 +329,7 @@ export function workloadGroups(list: WorkloadView[], query: string, filter: Work
     .restart {
       font-size: 0.8125rem;
       color: var(--ink-2);
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .oom {
       color: var(--warn);
@@ -346,7 +346,7 @@ export function workloadGroups(list: WorkloadView[], query: string, filter: Work
       flex-basis: 100%;
       padding-left: 1rem;
       color: var(--ink-2);
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .container.oom {
       color: var(--warn);

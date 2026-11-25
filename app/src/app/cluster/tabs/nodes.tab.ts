@@ -135,7 +135,7 @@ export function nodeCards(nodes: NodeView[], history: HistoryView | null, now: D
     h2 {
       font-size: 1.25rem;
       font-weight: 650;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .meters {
       display: grid;
@@ -171,7 +171,7 @@ export function nodeCards(nodes: NodeView[], history: HistoryView | null, now: D
     dd {
       margin: 0.1rem 0 0;
       font-size: 0.875rem;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .error {
       color: var(--crit);

@@ -274,7 +274,7 @@ export function foldIssues(cards: IssueCard[], all: boolean, tr: Translator): { 
     }
     .update code {
       font-size: 0.75rem;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
       user-select: all;
     }
     .hints h2 {
@@ -357,7 +357,7 @@ export function foldIssues(cards: IssueCard[], all: boolean, tr: Translator): { 
     }
     .node strong {
       font-weight: 650;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .kpi .bar {
       margin: 0.45rem 0 0.2rem;
@@ -377,6 +377,8 @@ export function foldIssues(cards: IssueCard[], all: boolean, tr: Translator): { 
       padding: 0;
       margin: 0;
       display: grid;
+      /* Not wider than the screen: the rows' longest word would set the column otherwise (large text). */
+      grid-template-columns: minmax(0, 1fr);
       gap: 0.5rem;
     }
     .attention button {
@@ -408,10 +410,36 @@ export function foldIssues(cards: IssueCard[], all: boolean, tr: Translator): { 
       flex: 1;
       min-width: 0;
       display: grid;
+      overflow-wrap: anywhere;
     }
     .text span {
       color: var(--mute);
       font-size: 0.875rem;
+    }
+    /* Narrow rows (small phones, large text): the status pill goes under the text, so names keep their width. */
+    .attention li {
+      container-type: inline-size;
+    }
+    @container (max-width: 20rem) {
+      .attention button {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-areas:
+          'icon text'
+          'icon pill';
+        row-gap: 0.4rem;
+      }
+      .attention .icon {
+        grid-area: icon;
+        align-self: start;
+      }
+      .attention .text {
+        grid-area: text;
+      }
+      .attention .pill {
+        grid-area: pill;
+        justify-self: start;
+      }
     }
   `,
 })

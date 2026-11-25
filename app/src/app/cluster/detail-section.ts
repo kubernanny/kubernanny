@@ -117,7 +117,7 @@ import { SheetSection } from './module-sheet-view';
     }
     .cname {
       font-weight: 550;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     h2 {
       font-size: 1.1rem;
@@ -186,12 +186,12 @@ import { SheetSection } from './module-sheet-view';
     .rname {
       font-weight: 600;
       font-size: 0.9375rem;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .rsub {
       color: var(--ink-2);
       font-size: 0.8125rem;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .rmeta {
       display: flex;
@@ -210,7 +210,7 @@ import { SheetSection } from './module-sheet-view';
       color: var(--ink-2);
       text-align: right;
       max-width: 9.5rem;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
       padding-top: 0.05rem;
     }
     .problem > .rvalue {
@@ -245,7 +245,7 @@ import { SheetSection } from './module-sheet-view';
     .grid td {
       padding: 0.5rem 0.9rem;
       border-top: 1px solid var(--line);
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
       vertical-align: top;
     }
     .grid td:not(:first-child),

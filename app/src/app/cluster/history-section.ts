@@ -171,7 +171,7 @@ import { HISTORY_PREVIEW, HistoryVM } from './history-view';
     }
     .title {
       font-weight: 600;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .meta {
       display: flex;

@@ -157,21 +157,24 @@ export function classRows(view: StorageView | null, tr: Translator): { name: str
     }
     .top {
       display: flex;
+      flex-wrap: wrap;
       justify-content: space-between;
-      gap: 0.75rem;
+      gap: 0.4rem 0.75rem;
       align-items: start;
     }
+    /* The name keeps a readable width; a long status word (large text) goes to the next line instead. */
     .names {
       display: grid;
+      flex: 1 1 7rem;
       min-width: 0;
     }
     .names strong {
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .names .muted,
     .by {
       font-size: 0.8125rem;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .note {
       font-size: 0.8125rem;

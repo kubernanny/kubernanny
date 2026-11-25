@@ -82,7 +82,7 @@ import { RailView } from './cluster-view';
       font-size: 0.75rem;
       line-height: 1.25;
       hyphens: auto;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .small dd {
       margin: 0;
@@ -95,7 +95,7 @@ import { RailView } from './cluster-view';
     .note {
       color: var(--mute);
       font-size: 0.75rem;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .res {
       padding: 0.9rem 0 0.4rem;

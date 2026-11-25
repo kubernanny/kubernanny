@@ -121,14 +121,14 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
       font-weight: 650;
       font-size: 1rem;
       line-height: 1.3;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .cause {
       margin: 0.3rem 0 0;
       color: var(--ink-2);
       font-size: 0.9375rem;
       line-height: 1.45;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .meta {
       margin-top: 0.4rem;
@@ -158,7 +158,9 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
     }
     .actions button {
       flex: none;
-      white-space: nowrap;
+      /* Each button keeps its one-line width; only a label wider than the whole row (large text) wraps instead of running under the fade. */
+      max-width: 100%;
+      text-align: left;
     }
     .actions .icon-only {
       padding: 0.5rem 0.6rem;
@@ -217,7 +219,7 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
       font-size: 0.8125rem;
       color: var(--accent);
       text-decoration: none;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .advisories a:hover {
       text-decoration: underline;

@@ -185,7 +185,7 @@ import { DetailSectionView } from './detail-section';
       margin: 0.25rem 0 0;
       font-size: 0.8125rem;
       color: var(--mute);
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .figures {
       display: grid;
@@ -224,7 +224,7 @@ import { DetailSectionView } from './detail-section';
       font-size: 1.2rem;
       line-height: 1.2;
       color: var(--ink);
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .figures .tone-warning dd,
     .figures .tone-critical dd {
@@ -259,7 +259,7 @@ import { DetailSectionView } from './detail-section';
     }
     .wname {
       font-weight: 600;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .workloads .muted {
       grid-row: 2;
@@ -286,12 +286,12 @@ import { DetailSectionView } from './detail-section';
     .accepted .advisory {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 0.875rem;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .accepted .muted,
     .accepted .reason {
       font-size: 0.8125rem;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
     }
     .accepted .reason {
       color: var(--ink-2);

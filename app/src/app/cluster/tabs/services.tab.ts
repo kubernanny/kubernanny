@@ -106,6 +106,8 @@ import { CategoryGroup } from '../cluster-view';
       min-width: 0;
       display: grid;
       gap: 0.1rem;
+      /* Long URLs in a summary break instead of widening the column under the status. */
+      overflow-wrap: anywhere;
     }
     .name {
       display: flex;
@@ -147,6 +149,33 @@ import { CategoryGroup } from '../cluster-view';
     .chev {
       color: var(--mute);
       flex: none;
+    }
+    /* Narrow rows (small phones, large text): the status word goes under the text, so names keep their width. */
+    li {
+      container-type: inline-size;
+    }
+    @container (max-width: 20rem) {
+      button:not(.tone-ok) {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        grid-template-areas:
+          'icon text chev'
+          'icon status chev';
+        row-gap: 0.35rem;
+      }
+      button:not(.tone-ok) .icon {
+        grid-area: icon;
+        align-self: start;
+      }
+      button:not(.tone-ok) .text {
+        grid-area: text;
+      }
+      button:not(.tone-ok) .status {
+        grid-area: status;
+      }
+      button:not(.tone-ok) .chev {
+        grid-area: chev;
+      }
     }
   `,
 })
