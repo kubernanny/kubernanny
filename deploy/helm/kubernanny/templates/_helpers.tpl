@@ -31,11 +31,26 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- $list | uniq | toJson -}}
 {{- end }}
 
+{{/*
+Action types that get no permission and no admission branch: the disabled
+ones, plus every opt-in type (rbac.json optInActions) not named in
+actions.enabled. The agent locks those itself (ENABLED_ACTIONS). JSON array.
+*/}}
+{{- define "kubernanny.offActions" -}}
+{{- $rbac := .Files.Get "files/rbac.json" | fromJson -}}
+{{- $list := include "kubernanny.disabledActions" . | fromJsonArray -}}
+{{- $enabled := (.Values.actions).enabled | default list -}}
+{{- range ($rbac.optInActions | default list) -}}
+{{- if not (has . $enabled) -}}{{- $list = append $list . -}}{{- end -}}
+{{- end -}}
+{{- $list | uniq | toJson -}}
+{{- end }}
+
 {{/* Write action types that are enabled and offered by at least one enabled module: what the ClusterRole grants. JSON array. */}}
 {{- define "kubernanny.enabledWriteActions" -}}
 {{- $rbac := .Files.Get "files/rbac.json" | fromJson -}}
 {{- $disabledModules := .Values.checks.disabled | default list -}}
-{{- $disabledActions := include "kubernanny.disabledActions" . | fromJsonArray -}}
+{{- $disabledActions := include "kubernanny.offActions" . | fromJsonArray -}}
 {{- $out := list -}}
 {{- range $type := $rbac.writeActions -}}
 {{- if not (has $type $disabledActions) -}}
@@ -69,6 +84,11 @@ Custom components are named `custom:<id>`.
 {{- range (.Values.actions.disabled | default list) -}}
 {{- if not (has . $rbac.actionTypes) -}}
 {{- fail (printf "actions.disabled: unknown action type %q. Known: %s" . (join ", " $rbac.actionTypes)) -}}
+{{- end -}}
+{{- end -}}
+{{- range ((.Values.actions).enabled | default list) -}}
+{{- if not (has . ($rbac.optInActions | default list)) -}}
+{{- fail (printf "actions.enabled: %q cannot be enabled. Only these action types are off by default: %s" . (join ", " $rbac.optInActions)) -}}
 {{- end -}}
 {{- end -}}
 {{- end }}

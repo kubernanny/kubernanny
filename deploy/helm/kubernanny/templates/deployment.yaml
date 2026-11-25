@@ -79,6 +79,10 @@ spec:
             - name: DISABLED_ACTIONS
               value: {{ join "," . | quote }}
             {{- end }}
+            {{- with (.Values.actions).enabled }}
+            - name: ENABLED_ACTIONS
+              value: {{ join "," . | quote }}
+            {{- end }}
             {{- with .Values.checks.prometheusUrl }}
             - name: PROMETHEUS_URL
               value: {{ . | quote }}

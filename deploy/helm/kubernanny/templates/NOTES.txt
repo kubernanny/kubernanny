@@ -32,6 +32,13 @@ does not stop HTTPS to the internet until you set it{{ end }}. Find the addresse
 
 Note: this cluster has no ValidatingAdmissionPolicy (Kubernetes 1.30+), so the
 policy that limits the agent's write actions was not installed. The agent's
-ServiceAccount can patch any Deployment, StatefulSet, DaemonSet{{ if or (has "argocd-sync" $writes) (has "argocd-refresh" $writes) }} and Argo CD Application{{ end }}.
+ServiceAccount can patch any Deployment, StatefulSet, DaemonSet{{ if or (has "argocd-sync" $writes) (has "argocd-refresh" $writes) (has "argocd-rollback" $writes) }} and Argo CD Application{{ end }}.
 Upgrade Kubernetes, or set rbac.allowActions: false for a read-only agent.
+{{- end }}
+{{- if has "argocd-rollback" (include "kubernanny.enabledWriteActions" . | fromJsonArray) }}
+
+Rollbacks are on (actions.enabled: [argocd-rollback]): any paired device can roll
+a manual-sync Argo CD app back to an earlier deployment from its history. Every
+rollback is announced through the notification channels. Leave it off unless
+you need it (docs/SECURITY.md).
 {{- end }}

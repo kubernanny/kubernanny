@@ -12,10 +12,12 @@ metadata:
 # - an action's permission is granted only while the action is enabled and at
 #   least one module offering it is enabled. argocd-sync and argocd-refresh
 #   both need `patch` on Applications, so that stays while either is enabled;
-#   checks.disabled: [argocd] removes it together with every Argo CD read.
+#   checks.disabled: [argocd] removes it together with every Argo CD read;
+# - an opt-in action (argocd-rollback) counts as disabled until named in
+#   actions.enabled.
 {{- $rbac := .Files.Get "files/rbac.json" | fromJson }}
 {{- $disabledModules := .Values.checks.disabled | default list }}
-{{- $disabledActions := include "kubernanny.disabledActions" . | fromJsonArray }}
+{{- $disabledActions := include "kubernanny.offActions" . | fromJsonArray }}
 {{- $granted := dict }}
 {{- range $type, $grant := $rbac.actions }}
 {{- if not (has $type $disabledActions) }}

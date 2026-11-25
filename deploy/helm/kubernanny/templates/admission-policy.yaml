@@ -7,6 +7,8 @@ ServiceAccount may only
     kubectl.kubernetes.io/restartedAt (a restart), nothing else;
   - on Argo CD Applications: set `operation` to a plain sync (no other
     revision, source or manifests) and the refresh annotation, nothing else;
+    only with actions.enabled: [argocd-rollback], also a sync of a manual-sync,
+    single-source app to a revision from its own status.history;
   - on CNPG Backups: create one that names only a cluster.
 Everything else from the agent on these resources (other fields, create,
 delete) is denied. Other users and controllers are not matched at all.
@@ -83,7 +85,8 @@ spec:
   validationActions: [Deny]
 {{- end }}
 {{- end }}
-{{- if or (has "argocd-sync" $writes) (has "argocd-refresh" $writes) }}
+{{- $rollback := has "argocd-rollback" $writes }}
+{{- if or (has "argocd-sync" $writes) (has "argocd-refresh" $writes) $rollback }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -151,11 +154,43 @@ spec:
           object.operation.?sync.?manifests == optional.none() &&
           object.operation.?sync.?resources == optional.none()
         )
+        {{- if $rollback }} || (
+          has(object.operation) &&
+          object.operation.?initiatedBy.?username == optional.of('kubernanny') &&
+          object.operation.?initiatedBy.?automated.orValue(false) == false &&
+          object.operation.?retry == optional.none() &&
+          size(object.operation.?info.orValue([])) <= 1 &&
+          object.operation.?info.orValue([]).all(i, i.name == 'Reason') &&
+          object.operation.?sync.?syncStrategy.?hook.hasValue() &&
+          object.operation.?sync.?syncStrategy.?hook.?force.orValue(false) == false &&
+          object.operation.?sync.?syncStrategy.?apply == optional.none() &&
+          object.operation.?sync.?prune == optional.none() &&
+          object.operation.?sync.?dryRun == optional.none() &&
+          object.operation.?sync.?syncOptions == optional.none() &&
+          object.operation.?sync.?autoHealAttemptsCount == optional.none() &&
+          object.operation.?sync.?revisions == optional.none() &&
+          object.operation.?sync.?source == optional.none() &&
+          object.operation.?sync.?sources == optional.none() &&
+          object.operation.?sync.?manifests == optional.none() &&
+          object.operation.?sync.?resources == optional.none() &&
+          oldObject.?spec.?syncPolicy.?automated == optional.none() &&
+          oldObject.?spec.?sources == optional.none() &&
+          oldObject.?spec.?source.?repoURL.hasValue() &&
+          object.operation.?sync.?revision.hasValue() &&
+          oldObject.?status.?history.orValue([]).exists(h,
+            h.?revision == object.operation.?sync.?revision &&
+            h.?source.?repoURL == oldObject.?spec.?source.?repoURL)
+        )
+        {{- end }}
       # An allowlist of the one operation the agent sends (actions.service.ts): a hook sync of
       # the Application as it is, by kubernanny, without prune, force, dry run, options, retry,
       # another revision, source, manifests or a resource subset. Every field of Argo CD's
       # Operation schema is named here; a field a later Argo CD adds is not covered until listed.
-      message: the Kubernanny agent may only start a plain sync of the Application as it is
+      # With actions.enabled: [argocd-rollback] (and only then) the second branch also lets
+      # the agent roll a manual-sync, single-source app back: the same hook sync, with
+      # `revision` set to the revision of an entry the stored status.history holds for
+      # the same repository; still no source, prune, options or anything else.
+      message: the Kubernanny agent may only start a plain sync of the Application as it is{{ if $rollback }}, or roll a manual-sync app back to a revision from its history{{ end }}
       reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1

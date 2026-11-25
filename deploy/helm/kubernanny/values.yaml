@@ -126,11 +126,21 @@ actions:
   # once no enabled action of an enabled module needs it (argocd-sync and
   # argocd-refresh share `patch` on Applications: disable both to drop it).
   disabled: []
+  # Action types that are off until named here. Only argocd-rollback: roll a
+  # manual-sync, single-source Argo CD app back to an earlier deployment from
+  # its own history, from the Argo CD sheet, also when nothing looks wrong.
+  # Adds no RBAC verb (the same `patch` on Applications as argocd-sync), but
+  # renders an extra branch of the admission policy that allows exactly that
+  # sync. Every rollback is announced through the notification channels.
+  # actions.disabled and rbac.allowActions: false win over this list.
+  # Leave it empty unless you need it (docs/SECURITY.md).
+  enabled: []
 
 rbac:
   # Sync and refresh Argo CD apps, restart Deployments/StatefulSets/DaemonSets,
   # start CNPG backups. The agent only runs an action an open issue offers.
-  # false: strictly read-only (adds the four write actions to actions.disabled).
+  # false: strictly read-only (adds every write action to actions.disabled,
+  # argocd-rollback included).
   allowActions: true
   # A ValidatingAdmissionPolicy that limits the agent's write permissions to
   # what its actions change: on Deployments, StatefulSets and DaemonSets only
