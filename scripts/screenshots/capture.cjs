@@ -140,7 +140,8 @@ async function phoneDark(browser, L) {
     ['Kubernanny', '92-sheet-kubernanny'],
   ]) {
     await scroll(page, 0);
-    const target = page.locator('app-services-tab button', { hasText: name }).first();
+    // By the row's own name: another row's summary may mention it (Known vulnerabilities names CloudNativePG).
+    const target = page.locator('app-services-tab button', { has: page.locator('.name strong').getByText(name, { exact: true }) }).first();
     if ((await target.count()) === 0) {
       errors.push(`no service "${name}" for ${file}`);
       continue;
