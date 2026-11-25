@@ -17,10 +17,20 @@ import UserNotifications
 /// of @aparajita/capacitor-secure-storage stay in the app's own group; the
 /// extension never sees them (decisions/0007-native-push.md).
 ///
+/// The person's authenticity marker (app/src/app/core/push/push-marker.ts)
+/// is an item of the same group, account `marker`: the extension prefixes
+/// every title it opened with it. It never leaves the phone.
+///
+/// A tap on a push reaches the app as `pushTapped` with the key id the
+/// extension left in `userInfo`; the app resolves it to its own cluster id
+/// (push-tap.ts). The plugin takes the bridge's notification router for
+/// that, as @capacitor/push-notifications does, so a tap that cold-starts
+/// the app is kept until the app listens.
+///
 /// Without GoogleService-Info.plist in the app bundle Firebase is never
 /// configured and `isAvailable` says no: the app then hides push entirely.
 @objc(KubernannyPushPlugin)
-public class KubernannyPushPlugin: CAPPlugin, CAPBridgedPlugin {
+public class KubernannyPushPlugin: CAPPlugin, CAPBridgedPlugin, NotificationHandlerProtocol {
     public let identifier = "KubernannyPushPlugin"
     public let jsName = "KubernannyPush"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -28,17 +38,34 @@ public class KubernannyPushPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "requestPermission", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getToken", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "storeKey", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "removeKey", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "removeKey", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getMarker", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setMarker", returnType: CAPPluginReturnPromise)
     ]
 
     /// Keep in step with `PushKeys.swift` in the extension.
     static let accessGroup = "group.app.kubernanny.push"
     static let service = "app.kubernanny.push"
+    static let markerAccount = "marker"
 
     public override func load() {
         if FirebaseApp.app() == nil, Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
             FirebaseApp.configure()
         }
+        bridge?.notificationRouter.pushNotificationHandler = self
+    }
+
+    /// While the app is in front it shows the state itself, as before.
+    public func willPresent(notification: UNNotification) -> UNNotificationPresentationOptions {
+        []
+    }
+
+    public func didReceive(response: UNNotificationResponse) {
+        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+              let kid = response.notification.request.content.userInfo["k"] as? String else {
+            return
+        }
+        notifyListeners("pushTapped", data: ["kid": kid], retainUntilConsumed: true)
     }
 
     private var available: Bool { FirebaseApp.app() != nil }
@@ -103,6 +130,36 @@ public class KubernannyPushPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
+    @objc func getMarker(_ call: CAPPluginCall) {
+        var read = query(Self.markerAccount)
+        read[kSecReturnData as String] = true
+        read[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: AnyObject?
+        if SecItemCopyMatching(read as CFDictionary, &result) == errSecSuccess, let data = result as? Data, let marker = String(data: data, encoding: .utf8) {
+            call.resolve(["marker": marker])
+        } else {
+            call.resolve([:])
+        }
+    }
+
+    /// The app normalises the marker (at most 12 characters as a person counts them); this only keeps the item bounded.
+    @objc func setMarker(_ call: CAPPluginCall) {
+        guard let marker = call.getString("marker")?.trimmingCharacters(in: .whitespacesAndNewlines), !marker.isEmpty, marker.count <= 12 else {
+            call.reject("marker must be 1 to 12 characters")
+            return
+        }
+        SecItemDelete(query(Self.markerAccount) as CFDictionary)
+        var add = query(Self.markerAccount)
+        add[kSecValueData as String] = Data(marker.utf8)
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let status = SecItemAdd(add as CFDictionary, nil)
+        if status == errSecSuccess {
+            call.resolve()
+        } else {
+            call.reject("cannot store the marker (\(status))")
+        }
+    }
+
     @objc func removeKey(_ call: CAPPluginCall) {
         if let kid = call.getString("kid") {
             SecItemDelete(query(kid) as CFDictionary)
@@ -110,11 +167,11 @@ public class KubernannyPushPlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve()
     }
 
-    private func query(_ kid: String) -> [String: Any] {
+    private func query(_ account: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: Self.service,
-            kSecAttrAccount as String: kid,
+            kSecAttrAccount as String: account,
             kSecAttrAccessGroup as String: Self.accessGroup,
             kSecAttrSynchronizable as String: false
         ]

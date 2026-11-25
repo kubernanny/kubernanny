@@ -99,11 +99,17 @@ const FALLBACK = {
 } as const;
 
 /**
- * The FCM v1 message. Android gets a data-only message at high priority,
- * which the app's own messaging service opens and shows. iOS gets a generic
- * alert with `mutable-content`, which the Notification Service Extension
- * replaces with the opened text; if it cannot open it, the generic text is
- * what shows.
+ * The FCM v1 message. Android gets a data-only message at high priority
+ * (never a `notification` block, which the system would show without the
+ * app's code), so the app's own messaging service runs, opens it and shows
+ * it. iOS gets a generic placeholder alert, always with `mutable-content`,
+ * which the Notification Service Extension replaces with the opened text;
+ * if it cannot open it, the placeholder is what shows.
+ *
+ * Only the opened text carries the person's authenticity marker
+ * (docs/NOTIFICATIONS.md, "Is this push real?"). Whoever holds the service
+ * account can still send a message of a different shape that the phone
+ * shows on its own; the marker is what tells the two apart.
  */
 export function fcmMessage(push: PushRequest): unknown {
   const data = { k: push.kid, m: push.message };

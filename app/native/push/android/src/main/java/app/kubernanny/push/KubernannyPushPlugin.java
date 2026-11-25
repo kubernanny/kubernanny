@@ -16,9 +16,10 @@ import com.google.firebase.messaging.FirebaseMessaging;
 
 /**
  * Native push for the app (app/src/app/core/push/): whether this build can
- * do it, the notification permission, the FCM token and the per-cluster
- * push keys. Without google-services.json there is no FirebaseApp, and the
- * app hides the push option entirely.
+ * do it, the notification permission, the FCM token, the per-cluster
+ * push keys and the authenticity marker shown on every opened push.
+ * Without google-services.json there is no FirebaseApp, and the app hides
+ * the push option entirely.
  */
 @CapacitorPlugin(name = "KubernannyPush", permissions = { @Permission(alias = "notifications", strings = { Manifest.permission.POST_NOTIFICATIONS }) })
 public class KubernannyPushPlugin extends Plugin {
@@ -74,6 +75,32 @@ public class KubernannyPushPlugin extends Plugin {
             call.resolve();
         } catch (Exception e) {
             call.reject("cannot store the push key");
+        }
+    }
+
+    @PluginMethod
+    public void getMarker(PluginCall call) {
+        String marker = PushKeyStore.getMarker(getContext());
+        JSObject result = new JSObject();
+        if (marker != null) {
+            result.put("marker", marker);
+        }
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void setMarker(PluginCall call) {
+        String marker = call.getString("marker");
+        // The app normalises it (at most 12 characters as a person counts them); this only keeps the store bounded.
+        if (marker == null || marker.trim().isEmpty() || marker.length() > 64) {
+            call.reject("marker must be 1 to 12 characters");
+            return;
+        }
+        try {
+            PushKeyStore.putMarker(getContext(), marker.trim());
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("cannot store the marker");
         }
     }
 

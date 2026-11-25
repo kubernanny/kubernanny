@@ -8,6 +8,8 @@ import { clusterLinkId } from './core/widget/widget-link';
 import { WidgetSync } from './core/widget/widget-sync.service';
 import { ClusterStore } from './core/cluster-store.service';
 import { PushRegistration } from './core/push/push-registration.service';
+import { PushNative } from './core/push/push-native';
+import { clusterIdForPushKey, knownClusterId } from './core/push/push-tap';
 
 /** "kubernanny://pair?url=…&code=…&key=…[&relay=…]" -> the /pair page's params, or null for anything else. */
 export function pairingRoute(link: string): { url: string; code: string; name?: string; key?: string; relay?: string } | null {
@@ -38,6 +40,7 @@ export function pairingRoute(link: string): { url: string; code: string; name?: 
 })
 export class App {
   private readonly router = inject(Router);
+  private readonly store = inject(ClusterStore);
 
   constructor() {
     registerIcons();
@@ -47,26 +50,36 @@ export class App {
       if (params) {
         void this.router.navigate(['/pair'], { queryParams: params });
       }
-      // A tap on a home-screen widget opens that cluster.
-      const clusterId = clusterLinkId(url);
-      if (clusterId) {
-        void this.router.navigate(['/c', clusterId]);
-      }
+      // A tap on a home-screen widget or an Android push opens that cluster.
+      this.openCluster(() => knownClusterId(clusterLinkId(url), this.store.clusters()));
     }).catch(() => undefined);
-    // A widget tap that cold-starts the app may only show up as the launch URL; a second navigation to the same cluster is harmless.
+    // A tap that cold-starts the app may only show up as the launch URL; a second navigation to the same cluster is harmless.
     void CapApp.getLaunchUrl()
       .then((launch) => {
-        const clusterId = launch ? clusterLinkId(launch.url) : null;
-        if (clusterId) {
-          void this.router.navigate(['/c', clusterId]);
+        if (launch) {
+          this.openCluster(() => knownClusterId(clusterLinkId(launch.url), this.store.clusters()));
         }
       })
       .catch(() => undefined);
+    // A tap on an iOS push names its key id; this device knows which cluster it registered that key for.
+    inject(PushNative).onTap((kid) => this.openCluster(() => clusterIdForPushKey(kid, this.store.clusters())));
     // Starts keeping the home-screen widgets in step with every new snapshot.
     inject(WidgetSync);
     // A new FCM token (restored phone, rotated token) reaches every agent this device gets push from.
     const push = inject(PushRegistration);
-    void inject(ClusterStore).loaded.then(() => push.refreshTokens()).catch(() => undefined);
+    void this.store.loaded.then(() => push.refreshTokens()).catch(() => undefined);
+  }
+
+  /** Only once the list is loaded, and only to a cluster in it: the id comes from outside the app. */
+  private openCluster(resolve: () => string | null): void {
+    void this.store.loaded
+      .then(() => {
+        const id = resolve();
+        if (id) {
+          void this.router.navigate(['/c', id]);
+        }
+      })
+      .catch(() => undefined);
   }
 }
 

@@ -54,6 +54,7 @@
 ### Living with it
 
 - Push straight to the Kubernanny app (iOS, Android), sealed per device with HPKE: the relay and Google see a token and a size, never the text. Through the relay and Firebase Cloud Messaging; `notifications.appPush.enabled: false` makes it impossible. Decision record 0007.
+- Push: choose your own sign, shown on every real push (a forged one cannot know it); tapping a push opens its cluster.
 - Notification state survives agent restarts: no repeated "opened", "resolved" still sent.
 
 - Silence a known problem for 1, 8, 24 or 168 hours: still shown, but no light, score or notification. Stored in the `kubernanny-settings` ConfigMap, so it survives restarts.

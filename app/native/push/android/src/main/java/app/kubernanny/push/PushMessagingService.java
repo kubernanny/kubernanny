@@ -5,6 +5,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
@@ -18,11 +19,17 @@ import org.json.JSONObject;
  * Receives Kubernanny pushes (FCM data messages: `k` key id, `m` sealed
  * message), opens them with the push key of that cluster and shows them.
  * Runs without the app's WebView. A message that does not open is dropped:
- * on Android nothing is shown that the agent did not write.
+ * this service shows nothing the agent did not write, and what it shows
+ * carries the person's authenticity marker (PushMarker). Someone holding the
+ * relay's Firebase credentials can still have the system show an FCM
+ * *notification* message without this code; that one has no marker.
+ *
+ * A tap opens kubernanny://cluster?id=… with the app's own cluster id, kept
+ * in the key entry: the agent never knows that id, and the app only follows
+ * the link to a cluster in its list (app/src/app/core/push/push-tap.ts).
  */
 public class PushMessagingService extends FirebaseMessagingService {
     static final String CHANNEL = "kubernanny-status";
-    static final String EXTRA_CLUSTER = "kubernannyCluster";
 
     @Override
     public void onMessageReceived(RemoteMessage remote) {
@@ -39,7 +46,8 @@ public class PushMessagingService extends FirebaseMessagingService {
         try {
             byte[] plain = PushCrypto.open(new AndroidPrimitives(), entry.secretKey, entry.publicKey, entry.agentKey, PushKeyStore.unb64(sealed));
             JSONObject content = new JSONObject(new String(plain, StandardCharsets.UTF_8));
-            show(this, entry.clusterId, content.getString("t"), content.getString("b"), content.optInt("p", 3), content.optLong("s", System.currentTimeMillis()));
+            String title = PushMarker.title(PushKeyStore.getMarker(this), content.getString("t"));
+            show(this, entry.clusterId, title, content.getString("b"), content.optInt("p", 3), content.optLong("s", System.currentTimeMillis()));
         } catch (Exception ignored) {
             // Not from the pinned agent, or damaged: nothing to show.
         }
@@ -55,10 +63,13 @@ public class PushMessagingService extends FirebaseMessagingService {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && manager.getNotificationChannel(CHANNEL) == null) {
             manager.createNotificationChannel(new NotificationChannel(CHANNEL, context.getString(R.string.kn_push_channel), NotificationManager.IMPORTANCE_HIGH));
         }
+        // Explicit (the app's own launcher activity), like the widget's: Capacitor's App plugin passes the VIEW data on as appUrlOpen.
         Intent open = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
         PendingIntent tap = null;
         if (open != null) {
-            open.putExtra(EXTRA_CLUSTER, clusterId);
+            open.setAction(Intent.ACTION_VIEW);
+            open.setData(new Uri.Builder().scheme("kubernanny").authority("cluster").appendQueryParameter("id", clusterId).build());
+            open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             tap = PendingIntent.getActivity(context, clusterId.hashCode(), open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         }
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL)

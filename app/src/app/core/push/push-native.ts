@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import { Capacitor, PluginListenerHandle, registerPlugin } from '@capacitor/core';
 
 export type PushPlatform = 'ios' | 'android';
 
@@ -22,6 +22,11 @@ interface KubernannyPushPlugin {
   getToken(): Promise<{ token: string }>;
   storeKey(options: { kid: string; secretKey: string; publicKey: string; agentKey: string; clusterId: string }): Promise<void>;
   removeKey(options: { kid: string }): Promise<void>;
+  /** The authenticity marker (push-marker.ts), kept next to the push keys and nowhere else. */
+  getMarker(): Promise<{ marker: string | null }>;
+  setMarker(options: { marker: string }): Promise<void>;
+  /** iOS: a tap on a push, with the key id it carried (Android opens kubernanny://cluster?id=… instead). */
+  addListener(event: 'pushTapped', listener: (tap: { kid?: unknown }) => void): Promise<PluginListenerHandle>;
 }
 
 const native = registerPlugin<KubernannyPushPlugin>('KubernannyPush');
@@ -59,5 +64,26 @@ export class PushNative {
 
   async removeKey(kid: string): Promise<void> {
     await native.removeKey({ kid }).catch(() => undefined);
+  }
+
+  /** Null when none was chosen yet, and in builds without the plugin. */
+  async marker(): Promise<string | null> {
+    try {
+      return (await native.getMarker()).marker || null;
+    } catch {
+      return null;
+    }
+  }
+
+  setMarker(marker: string): Promise<void> {
+    return native.setMarker({ marker });
+  }
+
+  /** Quiet where there is nothing to listen to (web, a build without the plugin). */
+  onTap(listener: (kid: unknown) => void): void {
+    if (!Capacitor.isNativePlatform()) {
+      return;
+    }
+    void native.addListener('pushTapped', (tap) => listener(tap?.kid)).catch(() => undefined);
   }
 }

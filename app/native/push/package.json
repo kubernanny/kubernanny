@@ -5,7 +5,7 @@
   "description": "Kubernanny's native push plugin: FCM token, notification permission, per-cluster push keys, and the code that opens pushes without the app (Android messaging service; the iOS Notification Service Extension lives in ios/App/KubernannyPushExtension). The TypeScript side lives in app/src/app/core/push/.",
   "license": "Apache-2.0",
   "scripts": {
-    "test": "rm -rf build/jvm && javac -d build/jvm android/src/main/java/app/kubernanny/push/PushCrypto.java android/src/test/java/app/kubernanny/push/PushCryptoTest.java && java -cp build/jvm app.kubernanny.push.PushCryptoTest ../../../protocol/test/push-vectors.json"
+    "test": "rm -rf build/jvm && javac -encoding UTF-8 -d build/jvm android/src/main/java/app/kubernanny/push/PushCrypto.java android/src/main/java/app/kubernanny/push/PushMarker.java android/src/test/java/app/kubernanny/push/PushCryptoTest.java android/src/test/java/app/kubernanny/push/PushMarkerTest.java && java -cp build/jvm app.kubernanny.push.PushCryptoTest ../../../protocol/test/push-vectors.json && java -Dstdout.encoding=UTF-8 -cp build/jvm app.kubernanny.push.PushMarkerTest"
   },
   "capacitor": {
     "ios": {

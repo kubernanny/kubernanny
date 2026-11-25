@@ -1,11 +1,16 @@
 import UserNotifications
 
 /// Replaces the generic alert FCM delivers ("Kubernanny: new status from a
-/// cluster") with the text the agent sealed for this phone. If the message
-/// does not open (no key for its id, not from the pinned agent, damaged),
-/// the generic text of this file is shown, whatever alert text arrived:
-/// whoever holds the relay's Firebase credentials can send any alert, and
-/// must not be able to put words of their own on the screen.
+/// cluster") with the text the agent sealed for this phone, its title
+/// prefixed with the person's authenticity marker. If the message does not
+/// open (no key for its id, not from the pinned agent, damaged), the generic
+/// text of this file is shown, whatever alert text arrived, and no marker.
+///
+/// This extension only runs for alerts with `mutable-content`. Whoever holds
+/// the relay's Firebase credentials can send an alert without it, and iOS
+/// shows that one as sent, without this code: such a notification can say
+/// anything, but it cannot carry the marker, which only the phone knows
+/// (docs/NOTIFICATIONS.md, "Is this push real?").
 final class NotificationService: UNNotificationServiceExtension {
     private var handler: ((UNNotificationContent) -> Void)?
     private var fallback: UNMutableNotificationContent?
@@ -17,11 +22,14 @@ final class NotificationService: UNNotificationServiceExtension {
         content.title = "Kubernanny"
         content.subtitle = ""
         content.body = german ? "Neuer Status eines Clusters. Öffne Kubernanny, um ihn zu sehen." : "New status from a cluster. Open Kubernanny to see it."
+        // A message that did not open leads nowhere when tapped.
+        content.userInfo = [:]
         fallback = content
         defer { contentHandler(content) }
+        let info = request.content.userInfo
         guard
-            let kid = request.content.userInfo["k"] as? String,
-            let sealed = (request.content.userInfo["m"] as? String).flatMap(PushKeys.base64url),
+            let kid = info["k"] as? String,
+            let sealed = (info["m"] as? String).flatMap(PushKeys.base64url),
             let entry = PushKeys.entry(for: kid),
             let plain = try? PushCrypto.open(pushSecret: entry.secretKey, pushPublic: entry.publicKey, agentPublic: entry.agentKey, message: sealed),
             let json = try? JSONSerialization.jsonObject(with: plain) as? [String: Any],
@@ -30,10 +38,11 @@ final class NotificationService: UNNotificationServiceExtension {
         else {
             return
         }
-        content.title = title
+        content.title = PushKeys.markedTitle(PushKeys.marker(), title)
         content.body = body
         content.threadIdentifier = entry.clusterId
-        content.userInfo = ["kubernannyCluster": entry.clusterId]
+        // The key id only: the app resolves it to its cluster on a tap (push-tap.ts), and to nothing it does not know.
+        content.userInfo = ["k": kid]
         if let priority = json["p"] as? Int, priority >= 5, #available(iOS 15.0, *) {
             content.interruptionLevel = .timeSensitive
         }

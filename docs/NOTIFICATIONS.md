@@ -126,7 +126,7 @@ sequenceDiagram
   P->>P: open with the push key, show the text
 ```
 
-**In the app**: a cluster's settings, "Push to this device". Only then does the app ask for permission to show notifications (never at start), make a key pair for push on this cluster and register it. The same place turns it off again and sends a test push. A removed device or cluster takes its registration with it. The option is hidden in the web app and in app builds without Firebase config, and shown locked when the deployment switched push off.
+**In the app**: a cluster's settings, "Push to this device". The app first asks you to pick your sign for pushes (below), then for permission to show notifications (never at start), makes a key pair for push on this cluster and registers it. The same place turns it off again, changes the sign and sends a test push. Tapping a push opens that cluster in the app. A removed device or cluster takes its registration with it. The option is hidden in the web app and in app builds without Firebase config, and shown locked when the deployment switched push off.
 
 **What it needs**: the relay (`relay.enabled`, [RELAY.md](RELAY.md)), and a relay that delivers push. The public relay does, for the app from the stores. Messages are the same as on every other channel: the five-minute rule, escalations, resolutions, silences, the maintenance window, security alerts and the weekly report, and with `detail: minimal` only counts (still sealed). The app is a channel like ntfy: it counts for the test button and for "a channel took it".
 
@@ -139,7 +139,15 @@ sequenceDiagram
 | Google (FCM), Apple (APNs, iOS) | the token, the app, size and time | the content: it is sealed for the phone's push key |
 | Phone | the message, opened with its push key for that cluster | |
 
-A message opens only if the agent sealed it: the phone checks it against the agent key it pinned at pairing. On iOS a message that does not open shows a generic "Kubernanny: new status from a cluster"; on Android it is dropped.
+A message opens only if the agent sealed it: the phone checks it against the agent key it pinned at pairing. On iOS a message that does not open shows a generic "Kubernanny: new status from a cluster", without your sign; on Android it is dropped.
+
+### Is this push real?
+
+**A push without your sign did not come from your cluster.** When you turn push on, the app asks you to pick a short sign: one of a few emoji (one is suggested at random) or a word of your own, up to 12 characters. It is kept only on the phone, next to the push keys (the shared keychain group on iOS, the Keystore-encrypted store on Android), the same for every cluster on that phone, and never sent to the agent, the relay or Google. Every push the phone opens is shown with it in front of the title, for example `🦉 homelab: 2 problems`. Change it in a cluster's push section.
+
+Why it is needed: whoever holds the relay's Firebase service account (the relay's operator, for the public relay the Kubernanny project, or anyone who steals that key) can make a registered phone show a notification with any text. Android shows an FCM *notification* message without the app's code, and iOS shows an APNs alert without `mutable-content` without the Notification Service Extension. FCM and APNs offer no way to forbid that. Kubernanny's own pushes never take that path: Android gets data-only messages that the app opens and shows itself, iOS always gets `mutable-content` with a placeholder that the extension replaces. A forged notification can say anything, but it can never carry a real cluster's text (that is sealed for your phone and signed by your agent), it cannot trigger any action (a tap at most opens a cluster already in the app), and it cannot know your sign. To remove the third party, run your own relay with your own Firebase project and a build of the app with its config ([Setting it up yourself](#setting-it-up-yourself)).
+
+Tapping a push opens its cluster: the push names its key id, and the app knows which of its clusters it registered that key for (the agent never learns the app's cluster ids). Anything that does not lead to a cluster in the app's list opens the app as it is.
 
 ### Switching it off
 

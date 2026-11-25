@@ -23,6 +23,8 @@ import org.json.JSONObject;
  *
  * An entry holds the push secret key (only ever used to open pushes), its
  * public half, the agent key pinned at pairing and the app's cluster id.
+ * Next to them, sealed the same way: the person's authenticity marker
+ * (PushMarker), which never leaves the phone.
  */
 final class PushKeyStore {
     static final class Entry {
@@ -50,10 +52,7 @@ final class PushKeyStore {
             .put("p", b64(entry.publicKey))
             .put("a", b64(entry.agentKey))
             .put("c", entry.clusterId);
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.ENCRYPT_MODE, wrappingKey());
-        byte[] sealed = PushCrypto.concat(cipher.getIV(), cipher.doFinal(json.toString().getBytes(StandardCharsets.UTF_8)));
-        prefs(context).edit().putString("key." + kid, b64(sealed)).apply();
+        prefs(context).edit().putString("key." + kid, seal(json.toString())).apply();
     }
 
     static Entry get(Context context, String kid) {
@@ -62,14 +61,41 @@ final class PushKeyStore {
             return null;
         }
         try {
-            byte[] sealed = unb64(stored);
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.DECRYPT_MODE, wrappingKey(), new GCMParameterSpec(128, Arrays.copyOf(sealed, 12)));
-            JSONObject json = new JSONObject(new String(cipher.doFinal(Arrays.copyOfRange(sealed, 12, sealed.length)), StandardCharsets.UTF_8));
+            JSONObject json = new JSONObject(unseal(stored));
             return new Entry(unb64(json.getString("s")), unb64(json.getString("p")), unb64(json.getString("a")), json.getString("c"));
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /** One marker per phone, for every cluster. The app checks its shape (push-marker.ts) before it gets here. */
+    static void putMarker(Context context, String marker) throws Exception {
+        prefs(context).edit().putString("marker", seal(marker)).apply();
+    }
+
+    static String getMarker(Context context) {
+        String stored = prefs(context).getString("marker", null);
+        if (stored == null) {
+            return null;
+        }
+        try {
+            return unseal(stored);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String seal(String plain) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE, wrappingKey());
+        return b64(PushCrypto.concat(cipher.getIV(), cipher.doFinal(plain.getBytes(StandardCharsets.UTF_8))));
+    }
+
+    private static String unseal(String stored) throws Exception {
+        byte[] sealed = unb64(stored);
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.DECRYPT_MODE, wrappingKey(), new GCMParameterSpec(128, Arrays.copyOf(sealed, 12)));
+        return new String(cipher.doFinal(Arrays.copyOfRange(sealed, 12, sealed.length)), StandardCharsets.UTF_8);
     }
 
     static void remove(Context context, String kid) {

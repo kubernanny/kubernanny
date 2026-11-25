@@ -50,6 +50,30 @@ describe('the FCM message', () => {
     expect(message.message.apns.payload.aps['alert']).toEqual({ title: 'Kubernanny', body: expect.stringContaining('Öffne Kubernanny') });
   });
 
+  // A `notification` block would be shown by Android without the app's code, and an APNs alert
+  // without mutable-content by iOS without the extension: legitimate pushes never take that path,
+  // so the authenticity marker the app adds can only appear on a push that really opened.
+  it('never carries a notification block, and the iOS alert always goes through the extension', () => {
+    for (const platform of ['android', 'ios'] as const) {
+      for (const lang of [undefined, 'en', 'de'] as const) {
+        const message = fcmMessage(request({ platform, ...(lang ? { lang } : {}) })) as { message: Record<string, unknown> & { android?: Record<string, unknown>; apns?: { payload: { aps: Record<string, unknown> } } } };
+        expect(message.message).not.toHaveProperty('notification');
+        expect(Object.keys(message.message.data as object).sort()).toEqual(['k', 'm']);
+        if (platform === 'android') {
+          expect(message.message.android).toEqual({ priority: 'HIGH', ttl: '86400s' });
+          expect(message.message).not.toHaveProperty('apns');
+        } else {
+          expect(message.message).not.toHaveProperty('android');
+          const aps = message.message.apns!.payload.aps;
+          expect(aps['mutable-content']).toBe(1);
+          expect(Object.keys(aps).sort()).toEqual(['alert', 'mutable-content', 'sound']);
+          // The placeholder names nothing the relay could know about the cluster.
+          expect(JSON.stringify(aps['alert'])).not.toMatch(/homelab|problem|default\//i);
+        }
+      }
+    }
+  });
+
   it('maps FCM answers to outcomes', () => {
     expect(outcomeOf(200, null)).toBe('sent');
     expect(outcomeOf(404, null)).toBe('unregistered');
