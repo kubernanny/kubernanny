@@ -1,4 +1,5 @@
-import { FrameType, KeyPair, answerChallenge, decodeFrame, encodeReply, generateKeyPair, relayAgentId } from '@kubernanny/protocol';
+import { FrameType, KeyPair, answerChallenge, decodeFrame, decodePushResult, encodePushRequest, encodeReply, generateKeyPair, relayAgentId, toBase64Url } from '@kubernanny/protocol';
+import type { PushSender } from '../src/core/push';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentObjectCore, AgentObjectState, HibernatableSocket, MAX_PENDING_PER_OBJECT } from '../cloudflare/src/agent-object';
 
@@ -60,7 +61,7 @@ describe('Cloudflare agent object', () => {
   afterEach(() => vi.useRealTimers());
 
   /** A new core on the same state and sockets: what the runtime does when the object wakes from hibernation. */
-  const wake = (env: Record<string, string> = {}) =>
+  const wake = (env: Record<string, string> = {}, send?: PushSender) =>
     new AgentObjectCore(state, { RELAY_REGISTER_TIMEOUT_MS: '3000', ...env }, {
       newSocketPair: () => {
         last = new FakeSocket(state);
@@ -68,7 +69,7 @@ describe('Cloudflare agent object', () => {
       },
       autoResponse: () => null,
       upgradeResponse: () => new Response(null, { status: 200 }),
-    });
+    }, send);
 
   const connect = async () => {
     await object.fetch(new Request(`https://relay/v1/agents/${agentId}/ws`), 'connect', agentId);
@@ -160,5 +161,47 @@ describe('Cloudflare agent object', () => {
     vi.setSystemTime(60_000);
     object = wake(env);
     expect(await answered()).toBe(200);
+  });
+
+  describe('native push', () => {
+    const fcm = JSON.stringify({ client_email: 'r@p.iam.gserviceaccount.com', private_key: '-----BEGIN PRIVATE KEY-----\nAA\n-----END PRIVATE KEY-----', project_id: 'kubernanny-test' });
+    const push = (id: number) => encodePushRequest(id, { token: 'device-token-0123456789:APA91b', platform: 'ios', kid: 'AbCdEfGhIjKlMnOp', message: toBase64Url(new Uint8Array(80)) });
+    const ready = (socket: FakeSocket) => JSON.parse(new TextDecoder().decode(decodeFrame(socket.sent[1] as Uint8Array).payload)) as { push: boolean };
+    const results = (socket: FakeSocket) => socket.sent.filter((m) => typeof m !== 'string').map((m) => decodeFrame(m as Uint8Array)).filter((f) => f.type === FrameType.PushResult).map((f) => decodePushResult(f.payload));
+
+    it('is off without a service account: Ready says so and pushes are refused', async () => {
+      const socket = await connect();
+      await prove(socket);
+      expect(ready(socket).push).toBe(false);
+      await object.webSocketMessage(socket, push(1).slice().buffer);
+      expect(results(socket)).toEqual(['disabled']);
+    });
+
+    it('is off with RELAY_PUSH=off even with a service account, and never calls FCM', async () => {
+      const send = vi.fn(async () => 'sent' as const);
+      object = wake({ FCM_SERVICE_ACCOUNT: fcm, RELAY_PUSH: 'off' }, send);
+      const socket = await connect();
+      await prove(socket);
+      expect(ready(socket).push).toBe(false);
+      await object.webSocketMessage(socket, push(1).slice().buffer);
+      expect(results(socket)).toEqual(['disabled']);
+      expect(send).not.toHaveBeenCalled();
+    });
+
+    it('delivers with a service account, and keeps the agent push budget across a hibernation', async () => {
+      const env = { FCM_SERVICE_ACCOUNT: fcm, RELAY_PUSH_BURST: '1', RELAY_PUSHES_PER_HOUR: '1' };
+      const send = vi.fn(async () => 'sent' as const);
+      object = wake(env, send);
+      const socket = await connect();
+      await prove(socket);
+      expect(ready(socket).push).toBe(true);
+      await object.webSocketMessage(socket, push(1).slice().buffer);
+      await vi.advanceTimersByTimeAsync(0);
+      object = wake(env, send);
+      await object.webSocketMessage(socket, push(2).slice().buffer);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(results(socket)).toEqual(['sent', 'rate_limited']);
+      expect(send).toHaveBeenCalledTimes(1);
+    });
   });
 });

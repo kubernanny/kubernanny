@@ -17,6 +17,9 @@ new_sqlite_classes = ["AgentObject"]
 RELAY_MAX_CONCURRENT = "8"
 RELAY_CALL_TIMEOUT_MS = "25000"
 # CORS_ORIGINS = "*"
+# Native push is off unless the secret FCM_SERVICE_ACCOUNT is set (docs/RELAY.md, "Native push"):
+#   npx wrangler secret put FCM_SERVICE_ACCOUNT < service-account.json
+# RELAY_PUSH = "off"   # turns it off even with the secret
 
 # Your own domain instead of *.workers.dev:
 # routes = [{ pattern = "relay.example.com", custom_domain = true }]

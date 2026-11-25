@@ -1,6 +1,7 @@
-import { Frame, FrameType, RelayClose, RelayFrameError, RelayLimitsInfo, decodeReplyEnd, encodeFrame } from '@kubernanny/protocol';
+import { Frame, FrameType, RelayClose, RelayFrameError, RelayLimitsInfo, decodePushRequest, decodeReplyEnd, encodeFrame, encodePushResult } from '@kubernanny/protocol';
 import { RelayErrorCode, checkAgentReply } from './http';
 import { BucketState, BudgetHolder, ByteBudget, RelayLimits, TokenBucket, shareBytes } from './limits';
+import { DEFAULT_PUSH, PushSender } from './push';
 
 /** What a link needs from a WebSocket; the Node `ws` socket and a Workers WebSocket both fit with a one-line adapter. */
 export interface LinkSocket {
@@ -12,6 +13,17 @@ export interface LinkSocket {
 export interface LinkRates {
   calls: BucketState;
   bytes: BucketState;
+  pushes?: BucketState;
+}
+
+/** Native push for this agent: where Push frames go, and this agent's share of them. */
+export interface LinkPush {
+  send: PushSender;
+  burst: number;
+  perHour: number;
+  maxInFlight: number;
+  /** Called when a push has ended, after its bucket was charged (a Durable Object saves the rates then). */
+  done?: () => void;
 }
 
 export interface LinkOptions {
@@ -20,6 +32,8 @@ export interface LinkOptions {
   parent?: ByteBudget;
   /** Rate limit state saved by an earlier link on the same socket (see `rates()`). */
   rates?: LinkRates;
+  /** Native push; without it Push frames are answered `disabled` and Ready says `push: false`. */
+  push?: LinkPush | null;
 }
 
 export type CallResult = { kind: 'reply'; status: number; body: Uint8Array } | { kind: 'error'; code: RelayErrorCode };
@@ -52,13 +66,19 @@ export class AgentLink {
   private readonly now: () => number;
   private nextId = 1;
   private closed = false;
+  private readonly push: LinkPush | null;
+  private readonly pushes: TokenBucket;
+  /** Push ids waiting for FCM: each answered once, and their number is capped. */
+  private readonly pushesInFlight = new Set<number>();
 
   constructor(
     private readonly socket: LinkSocket,
     private readonly limits: RelayLimits,
-    { now = Date.now, parent = new ByteBudget(limits.maxInflightBytes), rates }: LinkOptions = {},
+    { now = Date.now, parent = new ByteBudget(limits.maxInflightBytes), rates, push = null }: LinkOptions = {},
   ) {
     this.now = now;
+    this.push = push;
+    this.pushes = new TokenBucket(push?.burst ?? DEFAULT_PUSH.agentBurst, (push?.perHour ?? DEFAULT_PUSH.agentPerHour) / 3_600_000, now(), rates?.pushes);
     this.budget = new ByteBudget(Math.min(limits.maxConcurrent * limits.maxResponseBytes, shareBytes(limits)), parent);
     this.calls = new TokenBucket(limits.callBurst, limits.callsPerMinute / 60_000, now(), rates?.calls);
     this.bytes = new TokenBucket(limits.bytesPerHour, limits.bytesPerHour / 3_600_000, now(), rates?.bytes);
@@ -66,7 +86,7 @@ export class AgentLink {
 
   /** The rate limit state, for a link that has to be rebuilt later (a Durable Object loses its fields when it hibernates). */
   rates(): LinkRates {
-    return { calls: this.calls.state(), bytes: this.bytes.state() };
+    return { calls: this.calls.state(), bytes: this.bytes.state(), pushes: this.pushes.state() };
   }
 
   get inFlight(): number {
@@ -80,6 +100,7 @@ export class AgentLink {
       maxResponseBytes: this.limits.maxResponseBytes,
       maxConcurrent: this.limits.maxConcurrent,
       callTimeoutMs: this.limits.callTimeoutMs,
+      push: this.push !== null,
     };
   }
 
@@ -114,6 +135,10 @@ export class AgentLink {
 
   /** A binary message from the registered agent. */
   onFrame(frame: Frame): void {
+    if (frame.type === FrameType.Push) {
+      this.onPush(frame.callId, frame.payload);
+      return;
+    }
     if (frame.type !== FrameType.ReplyChunk && frame.type !== FrameType.ReplyEnd) {
       return; // unknown types are ignored, so agents can add some later
     }
@@ -152,6 +177,43 @@ export class AgentLink {
       const reply = checkAgentReply(status, join(call.parts, call.size));
       this.finish(frame.callId, reply ? { kind: 'reply', ...reply } : { kind: 'error', code: 'RELAY_BAD_AGENT_RESPONSE' });
     }
+  }
+
+  /**
+   * One push from the agent: answered exactly once per id, with `disabled`
+   * on a relay without push, `rate_limited` past this agent's bucket or its
+   * pushes in flight, `invalid` for a malformed request, else what FCM said.
+   * Nothing of it is logged: the token is the phone's address.
+   */
+  private onPush(id: number, payload: Uint8Array): void {
+    if (this.pushesInFlight.has(id)) {
+      return; // an id still waiting: one answer per id is all the agent gets
+    }
+    if (!this.push) {
+      this.trySend(encodePushResult(id, 'disabled'));
+      return;
+    }
+    const request = decodePushRequest(payload);
+    if (!request) {
+      this.trySend(encodePushResult(id, 'invalid'));
+      return;
+    }
+    if (this.pushesInFlight.size >= this.push.maxInFlight || !this.pushes.take(1, this.now())) {
+      this.trySend(encodePushResult(id, 'rate_limited'));
+      this.push.done?.();
+      return;
+    }
+    this.pushesInFlight.add(id);
+    const { send, done } = this.push;
+    void send(request)
+      .catch(() => 'failed' as const)
+      .then((outcome) => {
+        this.pushesInFlight.delete(id);
+        if (!this.closed) {
+          this.trySend(encodePushResult(id, outcome));
+        }
+        done?.();
+      });
   }
 
   /** Every part is checked before it is kept: the answer's size, this agent's byte budget, the relay's memory. */

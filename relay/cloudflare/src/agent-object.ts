@@ -17,6 +17,7 @@ import { FrameType, RegistrationChallenge, RelayClose, RelayFrameError, decodeFr
 import { AgentLink, LinkRates } from '../../src/core/agent-link';
 import { RelayErrorCode, relayError } from '../../src/core/http';
 import { RelayLimits, parseLimits } from '../../src/core/limits';
+import { PushConfig, PushSender, parsePushConfig, pushSender } from '../../src/core/push';
 import { checkRegistration } from '../../src/core/registration';
 
 /** The parts of a Workers WebSocket this object uses. */
@@ -72,13 +73,24 @@ export class AgentObjectCore {
   private readonly limits: RelayLimits;
   /** Links live only while the object is awake; a call in flight keeps it awake. */
   private readonly links = new Map<HibernatableSocket, AgentLink>();
+  /**
+   * Native push (secret FCM_SERVICE_ACCOUNT, RELAY_PUSH): null when off. The
+   * per-token limit lives in this object, so it is per agent here, not
+   * relay-wide as on the Node relay (docs/RELAY.md).
+   */
+  private readonly push: { config: PushConfig; send: PushSender } | null;
 
   constructor(
     private readonly state: AgentObjectState,
     env: Record<string, unknown>,
     private readonly runtime: Runtime,
+    /** Tests pass a fake FCM; the Worker sends to the real one. */
+    send?: PushSender,
   ) {
     this.limits = parseLimits(stringVars(env));
+    const config = parsePushConfig(stringVars(env));
+    const sender = config.enabled ? (send ?? pushSender(config)) : null;
+    this.push = sender ? { config, send: sender } : null;
     state.setWebSocketAutoResponse(runtime.autoResponse('ping', 'pong'));
   }
 
@@ -247,7 +259,10 @@ export class AgentObjectCore {
     let link = this.links.get(socket);
     if (!link) {
       const { rates } = socket.deserializeAttachment() as Attachment;
-      link = new AgentLink({ send: (bytes) => socket.send(bytes), close: (code, reason) => socket.close(code, reason) }, this.limits, { rates });
+      const push = this.push
+        ? { send: this.push.send, burst: this.push.config.agentBurst, perHour: this.push.config.agentPerHour, maxInFlight: this.push.config.maxInFlight, done: () => this.saveRates(socket) }
+        : null;
+      link = new AgentLink({ send: (bytes) => socket.send(bytes), close: (code, reason) => socket.close(code, reason) }, this.limits, { rates, push });
       this.links.set(socket, link);
     }
     return link;

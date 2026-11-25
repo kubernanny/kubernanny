@@ -4,9 +4,10 @@ import { Inject, Injectable, Logger, BeforeApplicationShutdown, OnApplicationBoo
 import { HttpAdapterHost } from '@nestjs/core';
 import { FrameType, HEARTBEAT_PING, HEARTBEAT_PONG, REPLY_CHUNK, RegistrationChallenge, RelayClose, RelayFrameError, decodeFrame, encodeFrame } from '@kubernanny/protocol';
 import { RawData, WebSocket, WebSocketServer } from 'ws';
-import { AgentLink, CallResult } from './core/agent-link';
+import { AgentLink, CallResult, LinkPush } from './core/agent-link';
 import { idPrefix, parseRoute, pathOf } from './core/http';
 import { ByteBudget, clientAddress, shareBytes } from './core/limits';
+import { pushSender } from './core/push';
 import { checkRegistration } from './core/registration';
 import { RELAY_CONFIG, RelayConfig } from './config';
 import { RelayMetrics } from './metrics';
@@ -45,6 +46,8 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
   private readonly byAddress = new Map<string, { agents: Set<Connection>; budget: ByteBudget }>();
   private readonly wss = new WebSocketServer({ noServer: true, maxPayload: MAX_AGENT_MESSAGE, perMessageDeflate: false, clientTracking: false });
   private sweeper: ReturnType<typeof setInterval> | null = null;
+  /** One sender for every agent, so the per-token limit spans them all; null without push. */
+  private readonly push: LinkPush | null;
 
   constructor(
     @Inject(HttpAdapterHost) private readonly adapterHost: HttpAdapterHost,
@@ -52,11 +55,26 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
     @Inject(RelayMetrics) private readonly metrics: RelayMetrics,
   ) {
     this.budget = new ByteBudget(config.limits.maxInflightBytes);
+    const send = pushSender(config.push);
+    const { agentBurst, agentPerHour, maxInFlight } = config.push;
+    this.push = send
+      ? {
+          send: async (request) => {
+            const outcome = await send(request);
+            this.metrics.push(outcome);
+            return outcome;
+          },
+          burst: agentBurst,
+          perHour: agentPerHour,
+          maxInFlight,
+        }
+      : null;
   }
 
   onApplicationBootstrap(): void {
     const server = this.adapterHost.httpAdapter.getHttpServer() as Server;
     server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => this.upgrade(req, socket, head));
+    this.logger.log(this.push ? `native push on (FCM project ${this.config.push.account!.projectId})` : 'native push off');
     const every = Math.max(1000, Math.min(30_000, this.config.limits.idleTimeoutMs / 3));
     this.sweeper = setInterval(() => this.sweep(Date.now()), every);
     this.sweeper.unref();
@@ -236,7 +254,7 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
       }
     }
     const entry = this.addressEntry(address);
-    connection.link = new AgentLink({ send: (bytes) => socket.send(bytes), close: (code, reason) => socket.close(code, reason) }, limits, { parent: entry.budget });
+    connection.link = new AgentLink({ send: (bytes) => socket.send(bytes), close: (code, reason) => socket.close(code, reason) }, limits, { parent: entry.budget, push: this.push });
     entry.agents.add(connection);
     this.agents.set(agentId, connection);
     if (previous) {

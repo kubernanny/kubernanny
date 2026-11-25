@@ -14,6 +14,7 @@ export class RelayMetrics {
   pending = 0;
   private readonly calls = new Map<CallOutcome, number>();
   private readonly registrations = new Map<RegistrationOutcome, number>();
+  private readonly pushes = new Map<string, number>();
   private bytesIn = 0;
   private bytesOut = 0;
   private durationSum = 0;
@@ -31,6 +32,11 @@ export class RelayMetrics {
     this.registrations.set(outcome, (this.registrations.get(outcome) ?? 0) + 1);
   }
 
+  /** A native push by outcome (sent, unregistered, rate_limited, …); never with a token or agent id. */
+  push(outcome: string): void {
+    this.pushes.set(outcome, (this.pushes.get(outcome) ?? 0) + 1);
+  }
+
   render(): string {
     const lines = [
       '# HELP kubernanny_relay_agents Agents connected and registered.',
@@ -45,6 +51,9 @@ export class RelayMetrics {
       '# HELP kubernanny_relay_registrations_total Agent registrations by outcome.',
       '# TYPE kubernanny_relay_registrations_total counter',
       ...[...this.registrations].map(([outcome, n]) => `kubernanny_relay_registrations_total{outcome="${outcome}"} ${n}`),
+      '# HELP kubernanny_relay_pushes_total Native pushes by outcome.',
+      '# TYPE kubernanny_relay_pushes_total counter',
+      ...[...this.pushes].map(([outcome, n]) => `kubernanny_relay_pushes_total{outcome="${outcome}"} ${n}`),
       '# HELP kubernanny_relay_bytes_total Bytes carried, request (in) and response (out).',
       '# TYPE kubernanny_relay_bytes_total counter',
       `kubernanny_relay_bytes_total{direction="in"} ${this.bytesIn}`,

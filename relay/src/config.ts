@@ -1,10 +1,14 @@
+import { readFileSync } from 'node:fs';
 import { RelayLimits, parseLimits } from './core/limits';
+import { PushConfig, parsePushConfig } from './core/push';
 
 export interface RelayConfig {
   port: number;
   /** Prometheus /metrics on its own port, kept off the public one. 0 disables it. */
   metricsPort: number;
   limits: RelayLimits;
+  /** Native push to FCM: off unless a service account is configured (docs/RELAY.md, "Native push"). */
+  push: PushConfig;
 }
 
 function port(name: string, fallback: number): number {
@@ -17,7 +21,10 @@ function port(name: string, fallback: number): number {
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): RelayConfig {
-  return { port: port('PORT', 8080), metricsPort: port('METRICS_PORT', 9100), limits: parseLimits(env) };
+  // The key file mounted from a Secret is the usual way; the variable itself works too (and is what a Worker uses).
+  const file = env['FCM_SERVICE_ACCOUNT_FILE'];
+  const pushEnv = file && !env['FCM_SERVICE_ACCOUNT'] ? { ...env, FCM_SERVICE_ACCOUNT: readFileSync(file, 'utf8') } : env;
+  return { port: port('PORT', 8080), metricsPort: port('METRICS_PORT', 9100), limits: parseLimits(env), push: parsePushConfig(pushEnv) };
 }
 
 export const RELAY_CONFIG = Symbol('RELAY_CONFIG');
