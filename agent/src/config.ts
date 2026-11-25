@@ -12,6 +12,54 @@ function num(name: string, fallback: number): number {
   return value;
 }
 
+/** A whole number in `min..max` (0 allowed where the range starts there, e.g. DIGEST_WEEKDAY=0 for Sunday). */
+export function int(name: string, raw: string | undefined, fallback: number, min: number, max: number): number {
+  const value = raw === undefined || raw.trim() === '' ? fallback : Number(raw);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`${name} must be a whole number from ${min} to ${max}, got "${raw}"`);
+  }
+  return value;
+}
+
+/**
+ * A switch: on, true, 1 or off, false, 0 (any case); unset or empty is the
+ * default. Anything else stops the start: a typo in a switch that takes
+ * something away must never leave it in place.
+ */
+export function parseSwitch(name: string, raw: string | undefined, fallback: boolean): boolean {
+  const value = (raw ?? '').trim().toLowerCase();
+  if (value === '') {
+    return fallback;
+  }
+  if (['on', 'true', '1'].includes(value)) {
+    return true;
+  }
+  if (['off', 'false', '0'].includes(value)) {
+    return false;
+  }
+  throw new Error(`${name} must be on or off (also true/false, 1/0), got "${raw}"`);
+}
+
+/** One of `allowed`; unset or empty is `fallback`; anything else stops the start. */
+export function parseChoice<T extends string>(name: string, raw: string | undefined, allowed: readonly T[], fallback: T): T {
+  const value = (raw ?? '').trim().toLowerCase();
+  if (value === '') {
+    return fallback;
+  }
+  if (!(allowed as readonly string[]).includes(value)) {
+    throw new Error(`${name} must be one of ${allowed.join(', ')}, got "${raw}"`);
+  }
+  return value as T;
+}
+
+/** DIGEST: unset, empty or off for none, weekly for the weekly report. */
+export function parseDigest(env: NodeJS.ProcessEnv): { weekday: number; hour: number } | null {
+  if (parseChoice('DIGEST', env.DIGEST, ['off', 'weekly'], 'off') === 'off') {
+    return null;
+  }
+  return { weekday: int('DIGEST_WEEKDAY', env.DIGEST_WEEKDAY, 1, 0, 6), hour: int('DIGEST_HOUR', env.DIGEST_HOUR, 9, 0, 23) };
+}
+
 function list(name: string, fallback: string[]): string[] {
   const raw = process.env[name];
   return raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : fallback;
@@ -75,14 +123,7 @@ export function parseDemo(raw: string | undefined): DemoScenario | null {
  * switch it back on. Anything else stops the start, as for DEMO.
  */
 export function parseAppPush(raw: string | undefined): boolean {
-  const value = (raw ?? '').trim().toLowerCase();
-  if (['', 'on', 'true', '1'].includes(value)) {
-    return true;
-  }
-  if (['off', 'false', '0'].includes(value)) {
-    return false;
-  }
-  throw new Error(`APP_PUSH must be on or off, got "${raw}"`);
+  return parseSwitch('APP_PUSH', raw, true);
 }
 
 /** A component of your own, recognised by image prefix: `{ "name": "Shop API", "images": ["ghcr.io/acme/shop-api"] }`. */
@@ -182,6 +223,8 @@ export interface Config {
   appPush: boolean;
   /** UPTIME_KUMA_STATUS_PAGE: slug of a published Uptime Kuma status page whose monitors the `uptime-kuma` module reads. */
   uptimeKumaStatusPage?: string;
+  /** PAIRING_LOG: print a pairing code and QR code to the log on start (default on). */
+  pairingLog?: boolean;
 }
 
 /** A status page slug goes into a URL path: letters, digits and dashes only, as Uptime Kuma itself allows. */
@@ -215,10 +258,10 @@ export function loadConfig(): Config {
     prometheusUrl: process.env.PROMETHEUS_URL || undefined,
     publicUrl: process.env.PUBLIC_URL?.replace(/\/+$/, '') || undefined,
     webhookUrl: checkNotifyUrl('WEBHOOK_URL', process.env.WEBHOOK_URL || undefined),
-    notifyDetail: process.env.NOTIFY_DETAIL === 'minimal' ? 'minimal' : 'full',
-    digest: process.env.DIGEST === 'weekly' ? { weekday: Math.min(6, Math.max(0, num('DIGEST_WEEKDAY', 1))), hour: Math.min(23, Math.max(0, num('DIGEST_HOUR', 9))) } : null,
-    webhookFormat: (process.env.WEBHOOK_FORMAT as Config['webhookFormat']) || 'auto',
-    metricsPort: process.env.METRICS_PORT === '0' ? 0 : num('METRICS_PORT', 9100),
+    notifyDetail: parseChoice('NOTIFY_DETAIL', process.env.NOTIFY_DETAIL, ['full', 'minimal'], 'full'),
+    digest: parseDigest(process.env),
+    webhookFormat: parseChoice<NonNullable<Config['webhookFormat']>>('WEBHOOK_FORMAT', process.env.WEBHOOK_FORMAT, ['auto', 'discord', 'slack', 'gotify', 'json'], 'auto'),
+    metricsPort: int('METRICS_PORT', process.env.METRICS_PORT, 9100, 0, 65535),
     webRoot: process.env.WEB_ROOT || undefined,
     namespace: process.env.POD_NAMESPACE || 'kubernanny',
     certWarnDays: num('CERT_WARN_DAYS', 14),
@@ -229,7 +272,7 @@ export function loadConfig(): Config {
     disabledActions: list('DISABLED_ACTIONS', []),
     enabledModules: list('ENABLED_MODULES', []),
     vulnDbUrl: (checkNotifyUrl('VULN_DB_URL', process.env.VULN_DB_URL || undefined) ?? 'https://api.osv.dev').replace(/\/+$/, ''),
-    vulnAcceptLocked: process.env.VULN_ACCEPT === 'off',
+    vulnAcceptLocked: !parseSwitch('VULN_ACCEPT', process.env.VULN_ACCEPT, true),
     securitySystemNamespaces: list('SECURITY_SYSTEM_NAMESPACES', []),
     customComponents: parseCustomComponents(process.env.CUSTOM_COMPONENTS),
     // Capacitor's WebView origins plus `ionic serve`.
@@ -245,6 +288,7 @@ export function loadConfig(): Config {
     appPush: parseAppPush(process.env.APP_PUSH),
     // The demo cluster publishes a status page under this slug, so the module has something to show.
     uptimeKumaStatusPage: checkStatusPageSlug(process.env.UPTIME_KUMA_STATUS_PAGE || (demo ? 'homelab' : undefined)),
+    pairingLog: parseSwitch('PAIRING_LOG', process.env.PAIRING_LOG, true),
   };
 }
 

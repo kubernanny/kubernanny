@@ -9,6 +9,18 @@ import { CONFIG, Config } from '../config';
 /** Largest response the internal routes may produce; the views stay far below. */
 export const MAX_INTERNAL_RESPONSE = 8 * 1024 * 1024;
 const TIMEOUT_MS = 30_000;
+/**
+ * Calls dispatched at once. Each paired device is rate-limited, but a dozen
+ * devices each asking for logs or history could still stack up dozens of
+ * slow calls; past this one the caller gets a busy answer at once.
+ */
+export const MAX_DISPATCH_IN_FLIGHT = 16;
+
+export class DispatchBusyError extends Error {
+  constructor() {
+    super('too many calls in flight');
+  }
+}
 
 export interface InternalResponse {
   status: number;
@@ -30,6 +42,7 @@ export interface InternalResponse {
 export class InternalServer implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(InternalServer.name);
   private server: Server | null = null;
+  private inFlight = 0;
 
   constructor(
     @Inject(HttpAdapterHost) private readonly adapterHost: HttpAdapterHost,
@@ -62,8 +75,16 @@ export class InternalServer implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   /** One API call as `principal` ("admin", "demo" or a device id), answered in `language`. `path` is below /api and already validated. */
-  dispatch(principal: string, method: string, path: string, body?: unknown, language?: Language): Promise<InternalResponse> {
-    return call(this.config.internalSocket, principal, method, path, body, language);
+  async dispatch(principal: string, method: string, path: string, body?: unknown, language?: Language): Promise<InternalResponse> {
+    if (this.inFlight >= MAX_DISPATCH_IN_FLIGHT) {
+      throw new DispatchBusyError();
+    }
+    this.inFlight++;
+    try {
+      return await call(this.config.internalSocket, principal, method, path, body, language);
+    } finally {
+      this.inFlight--;
+    }
   }
 }
 

@@ -16,7 +16,7 @@ import {
   toBase64Url,
 } from '@kubernanny/protocol';
 import { NotFoundException } from '@nestjs/common';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
 import { DevicesService, Principal } from '../auth/devices.service';
 import { IdentityService } from '../auth/identity.service';
@@ -109,9 +109,19 @@ describe('push registration', () => {
     const lastWrite = secretWrites(b.kube).at(-1)!.body as { stringData: { devices: string } };
     expect(lastWrite.stringData.devices).not.toContain(TOKEN);
 
+    // FCM's verdict comes through the relay, which is not trusted: only three strikes an hour apart remove the token.
     const c = await setup({}, 'unregistered');
     await c.push.register(c.device, registration);
-    expect(await c.push.deliver(message)).toBe(false);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      for (let strike = 0; strike < 3; strike++) {
+        expect(c.devices.pushTargets()).toHaveLength(1);
+        expect(await c.push.deliver(message)).toBe(false);
+        vi.setSystemTime(Date.now() + 3_600_000);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
     expect(c.devices.pushTargets()).toEqual([]);
   });
 

@@ -178,8 +178,9 @@ describe('agent against the demo cluster', () => {
     expect(res.headers['referrer-policy']).toBe('no-referrer');
     expect(res.headers['cache-control']).toBe('no-store');
     expect(res.headers['x-powered-by']).toBeUndefined();
+    // A forwarded header is any caller's word; HSTS is the TLS terminator's job.
     const https = await request(app.getHttpServer()).get('/healthz').set('x-forwarded-proto', 'https');
-    expect(https.headers['strict-transport-security']).toBe('max-age=31536000');
+    expect(https.headers['strict-transport-security']).toBeUndefined();
   });
 
   it('refuses oversized bodies', async () => {
@@ -260,7 +261,7 @@ describe('agent against the demo cluster', () => {
         'prometheus/down/blackbox',
       ]),
     );
-    expect(ids).toEqual(expect.arrayContaining(['argocd/weblate-chart/sync', 'cnpg/default/shop-api-pg/backup', 'certificates/weblate/weblate-tls', 'alertmanager/BlackboxProbeFailed', 'kured/lock']));
+    expect(ids).toEqual(expect.arrayContaining(['argocd/argocd/weblate-chart/sync', 'cnpg/default/shop-api-pg/backup', 'certificates/weblate/weblate-tls', 'alertmanager/BlackboxProbeFailed', 'kured/lock']));
     // Kubernetes 1.33 ended in June 2026, Gatus sees the forum down, Velero's nightly run partly failed.
     expect(ids).toEqual(expect.arrayContaining(['kubernetes-support/1.33', 'gatus/group/shop', 'velero/daily-apps']));
     expect(body.light).toBe('red');
@@ -435,7 +436,7 @@ describe('agent against the demo cluster', () => {
       expect(byId.longhorn.stats.find((s: { label: string }) => s.label === 'Disk free').value).toBe('271 GiB of 640 GiB');
       const titles = Object.fromEntries(body.issues.map((i: { id: string; title: string }) => [i.id, i.title]));
       expect(titles['volumes/discourse/uploads']).toMatch(/^PVC discourse\/uploads pending for \d+ (min|h|days?)$/);
-      expect(titles['argocd/weblate-chart/sync']).toBe('Argo CD app weblate-chart: change waiting for sync');
+      expect(titles['argocd/argocd/weblate-chart/sync']).toBe('Argo CD app weblate-chart: change waiting for sync');
       // Ids and machine fields do not change with the language.
       const german = (await phone.get('/status', 200)).body;
       expect(body.issues.map((i: { id: string; severity: string }) => [i.id, i.severity])).toEqual(german.issues.map((i: { id: string; severity: string }) => [i.id, i.severity]));

@@ -35,14 +35,30 @@ type Accepts<P> = {
 };
 type ArgsOf<K extends MessageKey> = Messages[K] extends string ? [] : [params: Accepts<ParamsOf<K>>];
 
+/**
+ * Every Text the agent made itself, and nothing else. A response from an
+ * in-cluster service (Grafana, Prometheus, Alertmanager) is plain JSON, and
+ * `{"$t": "valueOf"}` in it must stay data: `localize` would otherwise call
+ * whatever the key names on the catalog. A WeakSet rather than a property,
+ * so a Text still compares equal to `{ $t, p }` in tests and serializes as
+ * before; objects parsed from JSON are never in it.
+ */
+const MADE = new WeakSet<object>();
+
+function make(key: string, p?: Readonly<Record<string, Param>>): Text {
+  const text = (p ? { $t: key, p } : { $t: key }) as Text;
+  MADE.add(text);
+  return text;
+}
+
 /** `t('nodes.notReady.title', { node })`: the parameters are checked against the German catalog. */
 export function t<K extends MessageKey>(key: K, ...args: ArgsOf<K>): Text {
-  return args.length ? { $t: key, p: args[0] as Record<string, Param> } : { $t: key };
+  return make(key, args.length ? (args[0] as Record<string, Param>) : undefined);
 }
 
 /** Text that is the same in every language: a message from the cluster, a name, an error from a library. */
 export function raw(text: string): Text {
-  return { $t: 'raw', p: { text } };
+  return make('raw', { text: String(text) });
 }
 
 /** The cluster's own message when it gave one, else ours. */
@@ -50,24 +66,92 @@ export function rawOr(text: string | undefined | null, fallback: Text): Text {
   return text ? raw(text) : fallback;
 }
 
+/** True only for a Text made by `t`, `raw` or `reviveText`: a look-alike from outside input is data. */
 export function isText(value: unknown): value is Text {
-  return typeof value === 'object' && value !== null && typeof (value as { $t?: unknown }).$t === 'string';
+  return typeof value === 'object' && value !== null && MADE.has(value);
+}
+
+const KNOWN_KEYS = new Set(Object.keys(CATALOGS.de));
+
+/**
+ * A Text read back from the agent's own storage (the notified issues in the
+ * ConfigMap): only a known key, with parameters that are strings, numbers or
+ * revivable Texts themselves. Anything else is null.
+ */
+export function reviveText(value: unknown, depth = 0): Text | null {
+  if (typeof value !== 'object' || value === null || depth > 4) {
+    return null;
+  }
+  const { $t, p } = value as { $t?: unknown; p?: unknown };
+  if (typeof $t !== 'string' || !KNOWN_KEYS.has($t)) {
+    return null;
+  }
+  if (p === undefined) {
+    return make($t);
+  }
+  if (typeof p !== 'object' || p === null || Array.isArray(p)) {
+    return null;
+  }
+  const params: Record<string, Param> = {};
+  for (const [name, v] of Object.entries(p)) {
+    const one = (x: unknown): string | number | Text | null =>
+      typeof x === 'string' || (typeof x === 'number' && Number.isFinite(x)) ? x : reviveText(x, depth + 1);
+    if (Array.isArray(v)) {
+      const items = v.slice(0, 50).map(one);
+      if (items.some((x) => x === null || typeof x === 'number')) {
+        return null;
+      }
+      params[name] = items as (string | Text)[];
+    } else if (v !== undefined && v !== null) {
+      const x = one(v);
+      if (x === null) {
+        return null;
+      }
+      params[name] = x;
+    }
+  }
+  return make($t, params);
+}
+
+type Entry = string | ((p: Record<string, unknown>) => string);
+
+/** A parameter as the catalog may see it: a primitive, or a short JSON rendering of anything else (outside input that slipped through). */
+function plainParam(value: unknown): unknown {
+  if (value === undefined || typeof value === 'string' || typeof value === 'number') {
+    return value;
+  }
+  try {
+    return (JSON.stringify(value) ?? '').slice(0, 200);
+  } catch {
+    return '';
+  }
 }
 
 export function render(text: Text, lang: Lang): string {
-  const entry = (CATALOGS[lang] as unknown as Record<string, string | ((p: Record<string, unknown>) => string)>)[text.$t];
+  const catalog = CATALOGS[lang] as unknown as Record<string, Entry>;
+  // Own keys only: `valueOf`, `constructor` and friends are not messages.
+  const entry = typeof text.$t === 'string' && Object.hasOwn(catalog, text.$t) ? catalog[text.$t] : undefined;
   if (entry === undefined) {
     // Unreachable for typed keys; a stale key from somewhere must not take the response down.
-    return text.$t;
+    return String(text.$t);
   }
   if (typeof entry === 'string') {
     return entry;
   }
   const params: Record<string, unknown> = {};
   for (const [name, value] of Object.entries(text.p ?? {})) {
-    params[name] = Array.isArray(value) ? value.map((v: string | Text) => (isText(v) ? render(v, lang) : v)) : isText(value) ? render(value, lang) : value;
+    params[name] = Array.isArray(value)
+      ? value.map((v: unknown) => (isText(v) ? render(v, lang) : plainParam(v)))
+      : isText(value)
+        ? render(value, lang)
+        : plainParam(value);
   }
-  return entry(params);
+  try {
+    return entry(params);
+  } catch {
+    // A parameter of the wrong shape: the key is better than a failed response or a crashed run.
+    return text.$t;
+  }
 }
 
 /** Replaces every Text inside a value (snapshot, view, error body) with its rendering. */

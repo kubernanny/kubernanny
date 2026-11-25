@@ -1,4 +1,5 @@
 import { IssueActionType } from '../checks/types';
+import { CATALOG } from '../discovery/catalog';
 import { CORE_CHECKS } from '../modules/core';
 import { INTEGRATIONS } from '../modules/integrations';
 
@@ -20,6 +21,14 @@ export const ACTION_PERMISSIONS: Record<IssueActionType, Rule[]> = {
   logs: [{ group: '', resources: ['pods/log'], verbs: ['get'] }],
 };
 
+/** "notifications" is not a module but switches every channel off (checks.disabled). */
+export const NOTIFICATIONS_ID = 'notifications';
+
+/** Every id `checks.disabled` (DISABLED_MODULES) and ENABLED_MODULES may name; custom components add `custom:<id>`. */
+export function knownModuleIds(): string[] {
+  return [...new Set([...CORE_CHECKS.map((c) => c.id), ...CATALOG.map((e) => e.id), NOTIFICATIONS_ID])].sort();
+}
+
 /** Action types that change the cluster: `rbac.allowActions: false` switches all of them off. */
 export const WRITE_ACTIONS: IssueActionType[] = ['restart', 'argocd-sync', 'argocd-refresh', 'cnpg-backup'];
 
@@ -40,7 +49,18 @@ export interface ActionGrant {
   rules: Rule[];
 }
 
-export function rbacExport(): { modules: Record<string, Rule[]>; actions: Record<string, ActionGrant>; writeActions: string[] } {
+/**
+ * `knownModules` and `actionTypes` let the chart refuse a typo in
+ * `checks.disabled` / `actions.disabled` with `fail` instead of rendering a
+ * switch that switches nothing off.
+ */
+export function rbacExport(): {
+  modules: Record<string, Rule[]>;
+  actions: Record<string, ActionGrant>;
+  writeActions: string[];
+  knownModules: string[];
+  actionTypes: string[];
+} {
   const modules: Record<string, Rule[]> = {};
   for (const m of [...CORE_CHECKS, ...INTEGRATIONS]) {
     if (m.reads.length === 0) {
@@ -59,7 +79,7 @@ export function rbacExport(): { modules: Record<string, Rule[]>; actions: Record
       { modules: all.filter((m) => m.actions.includes(type)).map((m) => m.id).sort(), rules: ACTION_PERMISSIONS[type] },
     ]),
   );
-  return { modules: sortKeys(modules), actions: sortKeys(actions), writeActions: WRITE_ACTIONS };
+  return { modules: sortKeys(modules), actions: sortKeys(actions), writeActions: WRITE_ACTIONS, knownModules: knownModuleIds(), actionTypes: Object.keys(ACTION_PERMISSIONS).sort() };
 }
 
 function sortKeys<T>(o: Record<string, T>): Record<string, T> {

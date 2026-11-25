@@ -21,6 +21,8 @@ export const de = {
   'common.ago': (p: { age: string }) => `vor ${p.age}`,
   'common.ofTotal': (p: { part: string; total: string }) => `${p.part} von ${p.total}`,
   'common.number': (p: { n: number }) => p.n.toLocaleString('de-DE'),
+  'module.moreIssues.title': (p: { n: number }) => `${p.n} weitere Meldungen`,
+  'module.moreIssues.cause': 'Dieses Modul meldet mehr, als die App zeigt. Die vollständige Liste steht im Werkzeug selbst.',
   'common.yes': 'ja',
   'common.none': 'keiner',
 
@@ -413,6 +415,8 @@ export const de = {
   'error.deviceNotFound': 'Gerät nicht gefunden.',
   'error.adminOnly': 'Nur über die Admin-CLI im Pod.',
   'error.bodyMissing': 'Body fehlt.',
+  'error.notificationsLocked': 'Benachrichtigungen sind im Helm-Chart abgeschaltet (checks.disabled: [notifications]); es wird nichts gesendet.',
+  'error.notifyTestFailed': (p: { error: string }) => `Die Testnachricht kam nicht an: ${p.error}`,
   'error.noChannel': 'Kein Kanal eingerichtet. Setze NTFY_URL oder WEBHOOK_URL am Agent, oder schalte Push für ein Gerät ein.',
   'error.pushOff': 'Push an die App ist in der Installation abgeschaltet (APP_PUSH=off) und lässt sich nur dort einschalten.',
   'error.pushDeviceOnly': 'Push lässt sich nur für ein gekoppeltes Gerät einrichten.',
@@ -466,6 +470,8 @@ export const de = {
   'push.security.devicePaired': (p: { by: string }) => `Ein neues Gerät wurde gekoppelt: ${p.by}.`,
   'push.security.advisoryAccepted': (p: { by: string; advisory: string; component: string; days: number }) =>
     `${p.by} hat ${p.advisory} bei ${p.component} für ${p.days} Tage als nicht zutreffend markiert.`,
+  'push.security.silenced': (p: { by: string; issue: string; hours: number }) => `${p.by} hat das kritische Problem ${p.issue} für ${p.hours} Stunde${p.hours === 1 ? '' : 'n'} stummgeschaltet.`,
+  'push.security.silencedMany': (p: { by: string; n: number; minutes: number }) => `${p.by} hat ${p.n} Probleme in ${p.minutes} Minuten stummgeschaltet.`,
   'push.security.minimal': 'Ein gekoppeltes Gerät hat eine sicherheitsrelevante Einstellung geändert. Details im Audit-Log des Agents.',
   'push.security.advice': 'Warst du das nicht? Entferne das Gerät von einem anderen gekoppelten Gerät aus (Gekoppelte Geräte) und prüfe die Einstellungen.',
   'digest.title': (p: { cluster: string }) => `${p.cluster}: Wochenbericht`,

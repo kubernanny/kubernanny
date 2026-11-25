@@ -58,7 +58,17 @@ export const INTEGRATIONS: readonly Integration[] = [
   new TrivyIntegration(),
 ];
 
+/**
+ * The Prometheus every module and view queries, or null. `checks.disabled:
+ * [prometheus]` (DISABLED_MODULES) means no request to Prometheus at all, from
+ * any module or view (nodes, volumes, etcd, clocks, /history, …). Switching the
+ * module off in the app only hides the Prometheus module itself; the other
+ * modules keep using it (docs/CONFIGURATION.md).
+ */
 export function findPrometheus(ctx: Omit<ModuleContext, 'prom'>, detected: Detected[]): Prometheus | null {
+  if (ctx.config.disabledModules?.includes('prometheus')) {
+    return null;
+  }
   if (ctx.config.prometheusUrl) {
     return new Prometheus(ServiceHttp.direct(ctx.kube, ctx.config.prometheusUrl));
   }

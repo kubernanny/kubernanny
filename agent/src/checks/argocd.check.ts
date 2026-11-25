@@ -1,4 +1,6 @@
+import { allWorkloads, readiness } from '../discovery/discovery';
 import { raw, rawOr, t } from '../i18n/text';
+import type { Inventory } from '../inventory/inventory';
 import { Issue, IssueAction, ObjectMeta, WorkloadKind } from './types';
 
 interface AppResource {
@@ -11,7 +13,7 @@ interface AppResource {
 
 export interface ArgoApplication {
   metadata: ObjectMeta;
-  spec?: { syncPolicy?: { automated?: unknown } };
+  spec?: { syncPolicy?: { automated?: unknown }; destination?: { namespace?: string } };
   status?: {
     sync?: { status?: string; revision?: string };
     health?: { status?: string; message?: string };
@@ -23,11 +25,49 @@ export interface ArgoApplication {
 
 const RESTARTABLE = new Set<string>(['Deployment', 'StatefulSet', 'DaemonSet']);
 
-export function evaluateArgoApps(apps: ArgoApplication[]): Issue[] {
+/**
+ * Restarts for the resources an Application reports as degraded, but only
+ * for a workload the agent's own inventory shows not ready, in the
+ * Application's destination namespace. `status.resources` is written by
+ * whoever can create or edit an Application, so on its own it could point a
+ * restart at any workload in the cluster (kube-system/cilium); the inventory
+ * and the destination are what the agent believes.
+ */
+export function restartTargets(app: ArgoApplication, broken: AppResource[], inv: Inventory | undefined): IssueAction[] {
+  const destination = app.spec?.destination?.namespace;
+  if (!inv || !destination) {
+    return [];
+  }
+  const notReady = new Set(
+    allWorkloads(inv)
+      .filter(({ kind, w }) => {
+        const r = readiness(kind, w);
+        return r.ready < r.desired;
+      })
+      .map(({ kind, w }) => `${kind}/${w.metadata.namespace ?? 'default'}/${w.metadata.name}`),
+  );
+  const seen = new Set<string>();
+  const out: IssueAction[] = [];
+  for (const r of broken) {
+    const target: string = r.namespace ?? destination;
+    const key = `${r.kind}/${target}/${r.name}`;
+    if (!RESTARTABLE.has(r.kind) || r.health?.status !== 'Degraded' || target !== destination || !notReady.has(key) || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    out.push({ type: 'restart', kind: r.kind as WorkloadKind, namespace: target, name: r.name });
+  }
+  return out.slice(0, 3);
+}
+
+/** `inv`: the agent's inventory, the only source of restart targets; without it no restart is offered. */
+export function evaluateArgoApps(apps: ArgoApplication[], inv?: Inventory): Issue[] {
   const issues: Issue[] = [];
   for (const app of apps) {
     const ns = app.metadata.namespace ?? 'argocd';
     const name = app.metadata.name;
+    // The namespace too: Applications in any namespace (Argo CD 2.5+) can share a name.
+    const id = `argocd/${ns}/${name}`;
     const health = app.status?.health?.status;
     const sync = app.status?.sync?.status;
     const op = app.status?.operationState;
@@ -44,16 +84,13 @@ export function evaluateArgoApps(apps: ArgoApplication[]): Issue[] {
       const broken = (app.status?.resources ?? []).filter(
         (r) => r.health?.status === 'Degraded' || r.health?.status === 'Missing',
       );
-      const restarts: IssueAction[] = broken
-        .filter((r) => RESTARTABLE.has(r.kind) && r.health?.status === 'Degraded')
-        .slice(0, 3)
-        .map((r) => ({ type: 'restart', kind: r.kind as WorkloadKind, namespace: r.namespace ?? 'default', name: r.name }));
+      const restarts = restartTargets(app, broken, inv);
       const detail = broken
         .slice(0, 3)
         .map((r) => `${r.kind} ${r.name}${r.health?.message ? `: ${r.health.message}` : ''}`)
         .join('; ');
       issues.push({
-        id: `argocd/${name}/health`,
+        id: `${id}/health`,
         check: 'argocd',
         severity: 'critical',
         title: t('argocd.health.title', { app: name, health }),
@@ -64,7 +101,7 @@ export function evaluateArgoApps(apps: ArgoApplication[]): Issue[] {
 
     if (op && (op.phase === 'Failed' || op.phase === 'Error')) {
       issues.push({
-        id: `argocd/${name}/operation`,
+        id: `${id}/operation`,
         check: 'argocd',
         severity: 'critical',
         title: t('argocd.syncFailed.title', { app: name }),
@@ -78,7 +115,7 @@ export function evaluateArgoApps(apps: ArgoApplication[]): Issue[] {
       // behind Git's back.
       const automated = app.spec?.syncPolicy?.automated !== undefined;
       issues.push({
-        id: `argocd/${name}/sync`,
+        id: `${id}/sync`,
         check: 'argocd',
         severity: automated ? 'warning' : 'info',
         title: automated ? t('argocd.drift.title', { app: name }) : t('argocd.pending.title', { app: name }),
@@ -90,7 +127,7 @@ export function evaluateArgoApps(apps: ArgoApplication[]): Issue[] {
     const comparisonError = app.status?.conditions?.find((c) => c.type === 'ComparisonError');
     if (comparisonError) {
       issues.push({
-        id: `argocd/${name}/comparison`,
+        id: `${id}/comparison`,
         check: 'argocd',
         severity: 'warning',
         title: t('argocd.comparison.title', { app: name }),

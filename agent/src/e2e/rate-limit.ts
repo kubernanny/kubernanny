@@ -36,18 +36,23 @@ export class TokenBucket {
 }
 
 /**
- * One bucket per key (a paired device). Keys come only from authenticated
- * callers, so the map is bounded by the paired devices; buckets that refilled
- * completely are dropped when it grows, which forgets nothing.
+ * One bucket per key (a paired device, a source address). Buckets that
+ * refilled completely are dropped when the map is full, which forgets
+ * nothing. Never more than `maxKeys`: keys past that, while every bucket is
+ * still in use, share one overflow bucket of the same size, so a flood from
+ * many addresses costs memory for `maxKeys` buckets at most.
  */
 export class KeyedBuckets {
   private readonly buckets = new Map<string, TokenBucket>();
+  private readonly overflow: TokenBucket;
 
   constructor(
     private readonly capacity: number,
     private readonly perSecond: number,
     private readonly maxKeys: number,
-  ) {}
+  ) {
+    this.overflow = new TokenBucket(capacity, perSecond);
+  }
 
   take(key: string, now: number): boolean {
     let bucket = this.buckets.get(key);
@@ -59,6 +64,9 @@ export class KeyedBuckets {
           }
         }
       }
+      if (this.buckets.size >= this.maxKeys) {
+        return this.overflow.take(now);
+      }
       bucket = new TokenBucket(this.capacity, this.perSecond, now);
       this.buckets.set(key, bucket);
     }
@@ -68,4 +76,51 @@ export class KeyedBuckets {
   get size(): number {
     return this.buckets.size;
   }
+}
+
+/**
+ * Keys seen recently, each until its own expiry, at most `max` (the oldest go
+ * first). The e2e channel remembers here the source addresses that recently
+ * made an authenticated call.
+ */
+export class RecentKeys {
+  private readonly until = new Map<string, number>();
+
+  constructor(
+    private readonly ttlMs: number,
+    private readonly max: number,
+  ) {}
+
+  add(key: string, now: number): void {
+    this.until.delete(key);
+    this.until.set(key, now + this.ttlMs);
+    while (this.until.size > this.max) {
+      this.until.delete(this.until.keys().next().value!);
+    }
+  }
+
+  has(key: string, now: number): boolean {
+    const until = this.until.get(key);
+    return until !== undefined && until > now;
+  }
+}
+
+/** The bucket key of a source address: IPv4 as is, IPv6 by its /64 (one host usually owns a whole /64). */
+export function sourceKey(address: string | undefined): string {
+  if (!address) {
+    return 'unknown';
+  }
+  const v4 = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address);
+  if (v4) {
+    return v4[1]!;
+  }
+  if (!address.includes(':')) {
+    return address;
+  }
+  // Expand "::" so the first four groups are the /64.
+  const [head, tail = ''] = address.toLowerCase().split('::');
+  const left = head ? head.split(':') : [];
+  const right = tail ? tail.split(':') : [];
+  const groups = address.includes('::') ? [...left, ...Array(8 - left.length - right.length).fill('0'), ...right] : left;
+  return `${groups.slice(0, 4).join(':')}::/64`;
 }

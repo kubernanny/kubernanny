@@ -1,8 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { connect } from 'node:tls';
 import { Injectable } from '@nestjs/common';
+import { readCapped } from '../util/read-capped';
 
 const SA_DIR = '/var/run/secrets/kubernetes.io/serviceaccount';
+/**
+ * Largest API response read. Lists that can be huge (vulnerability reports)
+ * are paged with `listEach`; anything past this is refused, not buffered
+ * into a pod with a 256 MiB limit.
+ */
+export const MAX_KUBE_RESPONSE = 64 * 1024 * 1024;
 
 export class KubeError extends Error {
   constructor(
@@ -23,9 +30,9 @@ export class KubeError extends Error {
  */
 @Injectable()
 export class KubeClient {
-  private readonly baseUrl =
+  private readonly baseUrl: string | null =
     process.env.K8S_API_URL ??
-    `https://${process.env.KUBERNETES_SERVICE_HOST}:${process.env.KUBERNETES_SERVICE_PORT ?? '443'}`;
+    (process.env.KUBERNETES_SERVICE_HOST ? `https://${process.env.KUBERNETES_SERVICE_HOST}:${process.env.KUBERNETES_SERVICE_PORT ?? '443'}` : null);
 
   /**
    * True inside a pod: services are then reached directly over cluster DNS,
@@ -68,8 +75,8 @@ export class KubeClient {
       return null;
     }
     await this.assertOk(res, path);
-    const body = (await res.json()) as { items?: T[] };
-    return body.items ?? [];
+    const body = (await this.json(res)) as { items?: T[] } | null;
+    return body?.items ?? [];
   }
 
   /**
@@ -82,8 +89,8 @@ export class KubeClient {
       return null;
     }
     await this.assertOk(res, path);
-    const body = (await res.json()) as { items?: T[]; metadata?: { continue?: string } };
-    return { items: body.items ?? [], continue: body.metadata?.continue || undefined };
+    const body = (await this.json(res)) as { items?: T[]; metadata?: { continue?: string } } | null;
+    return { items: body?.items ?? [], continue: body?.metadata?.continue || undefined };
   }
 
   /**
@@ -111,13 +118,18 @@ export class KubeClient {
   async get<T>(path: string): Promise<T> {
     const res = await this.request(path);
     await this.assertOk(res, path);
-    return (await res.json()) as T;
+    return (await this.json(res)) as T;
   }
 
-  async text(path: string): Promise<string> {
+  /** `max`: a smaller cap for callers that know their answer is small (pod logs). */
+  async text(path: string, max = MAX_KUBE_RESPONSE): Promise<string> {
     const res = await this.request(path);
     await this.assertOk(res, path);
-    return res.text();
+    return readCapped(res, max);
+  }
+
+  private async json(res: Response): Promise<unknown> {
+    return JSON.parse(await readCapped(res, MAX_KUBE_RESPONSE)) as unknown;
   }
 
   async mergePatch(path: string, body: unknown): Promise<void> {
@@ -139,6 +151,9 @@ export class KubeClient {
   }
 
   private request(path: string, init: RequestInit = {}): Promise<Response> {
+    if (this.baseUrl === null) {
+      return Promise.reject(new Error('not running in a cluster: KUBERNETES_SERVICE_HOST is unset. Outside a cluster set K8S_API_URL (e.g. http://127.0.0.1:8001 with `kubectl proxy`), or DEMO=1.'));
+    }
     const headers = new Headers(init.headers);
     const token = this.token();
     if (token) {

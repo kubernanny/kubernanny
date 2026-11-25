@@ -3,15 +3,21 @@ import type { Principal } from '../auth/devices.service';
 import { CONFIG, Config } from '../config';
 import { t } from '../i18n/text';
 import { KubeClient, KubeError } from '../kube/kube-client';
-import { Notifier } from '../notify/notifier';
+import { IssueSeverity } from '../checks/types';
+import { Notifier, SecurityEvent } from '../notify/notifier';
+import { logSafe } from '../util/log-safe';
 import { SETTINGS_CONFIGMAP } from '../settings/settings.service';
 import { Serial } from '../util/serial';
+import { upsertConfigMapData } from '../kube/configmap';
 
 /** The durations the app offers; anything else is refused, so nobody silences an issue for a year by accident. */
 export const SILENCE_HOURS = [1, 8, 24, 168] as const;
 /** A maintenance window: no notifications at all, for planned work on the cluster. */
 export const MAINTENANCE_HOURS = [1, 2, 4, 8, 24] as const;
 const MAX_SILENCED = 500;
+/** Silencing this many issues within BULK_WINDOW_MS is announced, whatever their severity: a quiet way to blind the owner otherwise. */
+export const BULK_SILENCES = 4;
+export const BULK_WINDOW_MS = 10 * 60_000;
 /** Stored next to the silenced issues; no issue id is a lone asterisk. */
 const MAINTENANCE = '*';
 
@@ -26,6 +32,9 @@ const MAINTENANCE = '*';
 export class SilenceService implements OnModuleInit {
   private readonly audit = new Logger('audit');
   private until = new Map<string, number>();
+  /** When the last silences were set, for the bulk announcement. */
+  private recent: number[] = [];
+  private bulkAnnouncedAt = -Infinity;
   /** Every change reads, changes and writes the whole map: one at a time, or two at once lose one. */
   private readonly writes = new Serial();
 
@@ -97,11 +106,12 @@ export class SilenceService implements OnModuleInit {
     }
   }
 
-  silence(issueId: string, hours: number, who: Principal, now = Date.now()): Promise<string> {
-    return this.writes.run(() => this.doSilence(issueId, hours, who, now));
+  /** `severity`: of the issue as the agent sees it; silencing a critical one is announced through the channels first. */
+  silence(issueId: string, hours: number, who: Principal, now = Date.now(), severity?: IssueSeverity): Promise<string> {
+    return this.writes.run(() => this.doSilence(issueId, hours, who, now, severity));
   }
 
-  private async doSilence(issueId: string, hours: number, who: Principal, now: number): Promise<string> {
+  private async doSilence(issueId: string, hours: number, who: Principal, now: number, severity?: IssueSeverity): Promise<string> {
     if (!issueId || issueId.length > 300 || issueId === MAINTENANCE) {
       throw new BadRequestException({ code: 'ISSUE_MISSING', message: t('error.issueMissing') });
     }
@@ -113,8 +123,13 @@ export class SilenceService implements OnModuleInit {
     if (next.size > MAX_SILENCED) {
       throw new BadRequestException({ code: 'SILENCE_LIMIT', message: t('error.silenceLimit') });
     }
+    // Before it takes effect, like a maintenance window: a silenced critical issue sends nothing more.
+    const events = this.silenceEvents(issueId, hours, now, severity);
+    if (events.length > 0) {
+      await this.notifier?.securityAlert(who.name, events);
+    }
     await this.save(next);
-    this.audit.log(`issue ${issueId} silenced for ${hours} h by "${who.name}" (${who.id})`);
+    this.audit.log(`issue ${logSafe(issueId)} silenced for ${hours} h by "${who.name}" (${who.id})`);
     return new Date(next.get(issueId)!).toISOString();
   }
 
@@ -126,8 +141,26 @@ export class SilenceService implements OnModuleInit {
     const next = this.pruned(now);
     if (issueId !== MAINTENANCE && next.delete(issueId)) {
       await this.save(next);
-      this.audit.log(`issue ${issueId} unsilenced by "${who.name}" (${who.id})`);
+      this.audit.log(`issue ${logSafe(issueId)} unsilenced by "${who.name}" (${who.id})`);
     }
+  }
+
+  /**
+   * What silencing this issue announces: every critical issue, and once per
+   * window a summary when BULK_SILENCES or more were silenced within
+   * BULK_WINDOW_MS (warnings silenced one by one would otherwise go unnoticed).
+   */
+  private silenceEvents(issueId: string, hours: number, now: number, severity: IssueSeverity | undefined): SecurityEvent[] {
+    this.recent = [...this.recent.filter((at) => now - at < BULK_WINDOW_MS), now];
+    const events: SecurityEvent[] = [];
+    if (severity === 'critical') {
+      events.push({ kind: 'silenced', issue: issueId, hours });
+    }
+    if (this.recent.length >= BULK_SILENCES && now - this.bulkAnnouncedAt >= BULK_WINDOW_MS) {
+      this.bulkAnnouncedAt = now;
+      events.push({ kind: 'silencedMany', n: this.recent.length, minutes: BULK_WINDOW_MS / 60_000 });
+    }
+    return events;
   }
 
   private pruned(now: number): Map<string, number> {
@@ -135,28 +168,7 @@ export class SilenceService implements OnModuleInit {
   }
 
   private async save(next: Map<string, number>): Promise<void> {
-    const data = { silenced: JSON.stringify(Object.fromEntries(next)) };
-    try {
-      await this.kube.mergePatch(`${this.path}/${SETTINGS_CONFIGMAP}`, { data });
-    } catch (err) {
-      if (!(err instanceof KubeError && err.status === 404)) {
-        throw err;
-      }
-      try {
-        await this.kube.create(this.path, {
-          apiVersion: 'v1',
-          kind: 'ConfigMap',
-          metadata: { name: SETTINGS_CONFIGMAP, labels: { 'app.kubernetes.io/name': 'kubernanny' } },
-          data,
-        });
-      } catch (createErr) {
-        // The settings switches created it in the meantime.
-        if (!(createErr instanceof KubeError && createErr.status === 409)) {
-          throw createErr;
-        }
-        await this.kube.mergePatch(`${this.path}/${SETTINGS_CONFIGMAP}`, { data });
-      }
-    }
+    await upsertConfigMapData(this.kube, this.config.namespace, SETTINGS_CONFIGMAP, { silenced: JSON.stringify(Object.fromEntries(next)) });
     this.until = next;
   }
 }

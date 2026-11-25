@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { AddressInfo } from 'node:net';
-import { FrameType, KeyPair, RegistrationChallenge, decodeFrame, encodeFrame, generateKeyPair } from '@kubernanny/protocol';
+import { FrameType, KeyPair, RegistrationChallenge, decodeFrame, encodeFrame, generateKeyPair, randomBytes, relayAgentId } from '@kubernanny/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
 import { IdentityService } from '../auth/identity.service';
@@ -39,9 +39,11 @@ describe('agent behind a hostile relay', () => {
     const keys: KeyPair = generateKeyPair();
     wss = new WebSocketServer({ port: 0 });
     const port = (wss.address() as AddressInfo).port;
-    const relaySide = new Promise<{ ws: WebSocket; messages: Uint8Array[]; closed: Promise<number> }>((resolve) => {
+    const relaySide = new Promise<{ ws: WebSocket; messages: Uint8Array[]; closed: Promise<number>; proven: (origin: string) => boolean }>((resolve) => {
       wss!.on('connection', (ws) => {
-        const challenge = new RegistrationChallenge();
+        const nonce = randomBytes(32);
+        const secret = randomBytes(32);
+        const challenge = new RegistrationChallenge(nonce, secret);
         const messages: Uint8Array[] = [];
         const closed = new Promise<number>((r) => ws.on('close', (code) => r(code)));
         ws.on('message', (data: Buffer, binary: boolean) => {
@@ -49,9 +51,12 @@ describe('agent behind a hostile relay', () => {
             return;
           }
           const bytes = new Uint8Array(data);
-          if (decodeFrame(bytes).type === FrameType.Proof) {
+          const frame = decodeFrame(bytes);
+          if (frame.type === FrameType.Proof) {
+            const proof = frame.payload.slice();
             ws.send(encodeFrame(FrameType.Ready, 0, new TextEncoder().encode('{}')));
-            resolve({ ws, messages, closed });
+            // A fresh check per origin; the challenge itself verifies only once.
+            resolve({ ws, messages, closed, proven: (origin) => new RegistrationChallenge(nonce, secret).verify(proof, relayAgentId(keys.publicKey), origin) });
           } else {
             messages.push(bytes);
           }
@@ -65,6 +70,13 @@ describe('agent behind a hostile relay', () => {
     await until(() => client!.status()?.connected === true);
     return side;
   }
+
+  it('binds its registration proof to the relay it dialled (review L3)', async () => {
+    const { proven } = await setup();
+    const port = (wss!.address() as AddressInfo).port;
+    expect(proven(`http://127.0.0.1:${port}`)).toBe(true);
+    expect(proven('https://another-relay.example')).toBe(false);
+  });
 
   it('ignores cancels for calls it is not working on, so they cannot pile up', async () => {
     const { ws } = await setup();

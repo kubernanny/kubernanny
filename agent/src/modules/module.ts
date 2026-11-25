@@ -3,6 +3,7 @@ import type { Config } from '../config';
 import type { Text } from '../i18n/text';
 import { Detected } from '../discovery/discovery';
 import { ServiceHttp } from './service-proxy';
+import { boundStats, capIssues } from './untrusted';
 import { ApiRead, ModuleContext, ModuleResult } from './types';
 
 /**
@@ -83,7 +84,9 @@ export abstract class Integration extends CheckModule {
   async run(ctx: ModuleContext, det: Detected, allowed: (type: IssueActionType) => boolean): Promise<ModuleResult> {
     const scoped: ModuleContext = this.untrusted ? ctx : { ...ctx, prom: null };
     const result = await this.inspect(scoped, det);
-    return { ...result, issues: this.keepActions(result.issues, (t) => !this.untrusted && allowed(t)) };
+    const issues = this.keepActions(result.issues, (t) => !this.untrusted && allowed(t));
+    // An answer from an in-cluster service can be forged and as long as its sender likes.
+    return this.untrusted ? { ...result, issues: capIssues(issues, this.id), stats: boundStats(result.stats) } : { ...result, issues };
   }
 
   /** The first service of the component with one of the ports, over cluster DNS. Untrusted integrations only. */

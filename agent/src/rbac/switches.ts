@@ -33,8 +33,16 @@ export const SWITCHES: readonly HardSwitch[] = [
     value: 'checks.disabled',
     set: 'checks.disabled: [notifications]',
     hard: true,
-    outbound: 'no message to ntfy or the webhook: issue notifications and security alerts are not sent',
-    other: 'the app shows notifications as locked',
+    outbound: 'no message through any channel (ntfy, the webhook, app push): issue notifications, security alerts, the weekly report and the test message are not sent; the chart does not even pass NTFY_URL, WEBHOOK_URL or the existing Secret to the agent',
+    routes: '`POST /api/notify/test` answers 403 `NOTIFICATIONS_LOCKED`',
+    other: 'the app shows notifications as locked. `checks.disabled: [prometheus]` likewise means no request to Prometheus from any module or view, not only the Prometheus module',
+  },
+  {
+    value: 'rbac.admissionPolicy.enabled',
+    set: 'rbac.admissionPolicy.enabled: true (default)',
+    hard: true,
+    other:
+      'adds ValidatingAdmissionPolicies (Kubernetes 1.30+) that deny every request of the agent\'s ServiceAccount on workloads, Argo CD Applications and CNPG Backups beyond what its actions change (see the write table). false: the RBAC rules alone apply. Rendered only while a write action is enabled',
   },
   {
     value: 'actions.disabled',
@@ -111,6 +119,7 @@ export const SWITCHES: readonly HardSwitch[] = [
     value: 'networkPolicy.egress.internetHttps',
     set: 'networkPolicy.egress.internetHttps: false',
     hard: true,
-    outbound: 'with egress on: HTTPS to the internet (notifications to public services, api.osv.dev)',
+    outbound:
+      'with egress on: HTTPS to the internet (notifications to public services, api.osv.dev). Only together with `networkPolicy.egress.apiServerCIDRs`: without it the API-server rule allows its ports, 443 included, to any address',
   },
 ];

@@ -30,7 +30,7 @@ async function bootstrap(): Promise<void> {
   await app.listen(config.port, '0.0.0.0');
   logger.log(`agent for ${config.clusterName} on :${config.port}, checks every ${config.intervalSeconds}s, key ${identity.fingerprint}`);
 
-  if (process.env.PAIRING_LOG !== 'false') {
+  if (config.pairingLog !== false) {
     // A one-time code: logs often end up in Loki & co., and a code is worth little there.
     const pairing = app.get(PairingService);
     process.stdout.write(await pairing.banner(pairing.issue()));
@@ -48,4 +48,15 @@ async function bootstrap(): Promise<void> {
   }
 }
 
-void bootstrap();
+// A promise rejected where nobody awaits it (a fire-and-forget refresh, a
+// background write) is a bug to log, not a reason to end the process: every
+// restart would hand whoever triggers it a crash loop. Start-up failures still
+// end it, through bootstrap's own catch.
+process.on('unhandledRejection', (reason) => {
+  new Logger('kubernanny').error(`unhandled rejection: ${reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)}`);
+});
+
+bootstrap().catch((err: unknown) => {
+  new Logger('kubernanny').error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+});

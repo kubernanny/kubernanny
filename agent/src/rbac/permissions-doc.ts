@@ -82,9 +82,13 @@ function impossible(type: IssueActionType): string {
 function writeTable(): string {
   const rows = (Object.keys(WRITE_EFFECTS) as WriteActionType[]).map((type) => {
     const grant = rbacExport().actions[type]!;
-    return `| ${code(type)} | ${grant.rules.map(ruleText).join('; ')} | ${WRITE_EFFECTS[type].changes} | ${grant.modules.map(code).join(', ')} | ${impossible(type)} |`;
+    return `| ${code(type)} | ${grant.rules.map(ruleText).join('; ')} | ${WRITE_EFFECTS[type].changes} | ${WRITE_EFFECTS[type].admission} | ${grant.modules.map(code).join(', ')} | ${impossible(type)} |`;
   });
-  return ['| Action | Verb and resource | What exactly it changes | Offered by | How to make it impossible |', '|---|---|---|---|---|', ...rows].join('\n');
+  return [
+    '| Action | Verb and resource | What exactly it changes | What the admission policy still allows the ServiceAccount (Kubernetes 1.30+) | Offered by | How to make it impossible |',
+    '|---|---|---|---|---|---|',
+    ...rows,
+  ].join('\n');
 }
 
 function moduleTable(): string {
@@ -128,7 +132,15 @@ function switchMatrix(valuesPaths: ReadonlySet<string>): string {
         .filter(([, g]) => g.modules.length === 1 && g.modules[0] === m.id)
         .map(([type]) => code(type));
       const rbac = [...own, ...(onlyHere.length ? [`the permissions of ${onlyHere.join(', ')}`] : [])].join('; ');
-      const outbound = outboundOf(m) ? (m instanceof CoreCheck ? `its requests out of the cluster (${moduleName(m)})` : `HTTP to ${moduleName(m)}`) : '';
+      // findPrometheus: the hard switch takes the client away from every module and view, not only this one.
+      const outbound =
+        m.id === 'prometheus'
+          ? 'every request to Prometheus, from every module and view (nodes, volumes, etcd, clocks, ingress error rates, history)'
+          : outboundOf(m)
+            ? m instanceof CoreCheck
+              ? `its requests out of the cluster (${moduleName(m)})`
+              : `HTTP to ${moduleName(m)}`
+            : '';
       const routes = m.id === 'vulnerabilities' ? '`POST /api/vulnerabilities/accept` and `/unaccept` answer 403' : '';
       return `| ${code(`checks.disabled: [${m.id}]`)} | yes | ${rbac} | ${routes} | ${outbound} | not run, no issues |`;
     });

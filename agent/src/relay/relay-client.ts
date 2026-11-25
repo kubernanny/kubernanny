@@ -13,6 +13,7 @@ import {
   encodePushRequest,
   encodeReply,
   relayAgentId,
+  relayOrigin,
 } from '@kubernanny/protocol';
 import { RawData, WebSocket } from 'ws';
 import { IdentityService } from '../auth/identity.service';
@@ -32,7 +33,7 @@ const DEAD_AFTER_MS = 60_000;
 export const MAX_RELAY_MESSAGE = MAX_SEALED_REQUEST + 64;
 /**
  * Calls handled at once. The relay forwards at most its own per-agent
- * concurrency (8 by default); more come only from a relay that misbehaves,
+ * concurrency (4 by default, RELAY_MAX_CONCURRENT); more come only from a relay that misbehaves,
  * and are refused like a rate-limited direct call, without any work.
  */
 export const MAX_IN_FLIGHT = 16;
@@ -208,7 +209,7 @@ export class RelayClient implements OnApplicationBootstrap, OnModuleDestroy, Pus
       }
     });
     socket.on('close', (code: number, reason: Buffer) => {
-      this.lost(session, code, reason.toString().slice(0, 100));
+      this.lost(session, code, cleanReason(reason.toString()));
     });
     socket.on('error', () => undefined); // followed by close; ws closes with 1009 on an oversized message
     this.heartbeat = setInterval(() => this.beat(session), PING_EVERY_MS);
@@ -236,7 +237,8 @@ export class RelayClient implements OnApplicationBootstrap, OnModuleDestroy, Pus
         }
         session.answered = true;
         try {
-          socket.send(answerChallenge(this.identity.keyPair, frame.payload));
+          // Bound to the relay we dialled: a relay cannot forward our proof to register us elsewhere.
+          socket.send(answerChallenge(this.identity.keyPair, frame.payload, relayOrigin(this.config.relayUrl!)));
         } catch {
           socket.close(RelayClose.Protocol, 'bad challenge');
         }
@@ -391,6 +393,20 @@ function readyOffersPush(payload: Uint8Array): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * A close reason as the relay sent it, made safe for the log: the relay is
+ * not trusted, and a reason with line breaks or control characters could
+ * forge log lines. Control and format characters become spaces, the rest is
+ * capped at 100 characters.
+ */
+export function cleanReason(reason: string): string {
+  return reason
+    .replace(/[\p{C}]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 100);
 }
 
 const json = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));

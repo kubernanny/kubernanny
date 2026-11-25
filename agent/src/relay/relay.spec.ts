@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { IdentityService } from '../auth/identity.service';
 import { loadConfig } from '../config';
 import { PairingService } from '../pairing/pairing';
-import { RECONNECT_MAX_MS, reconnectDelay } from './relay-client';
+import { RECONNECT_MAX_MS, cleanReason, reconnectDelay } from './relay-client';
 import { checkRelayUrl, relayHttpUrl, relaySocketUrl } from './relay-url';
 
 describe('RELAY_URL', () => {
@@ -56,5 +56,13 @@ describe('reconnectDelay', () => {
   it('backs off for good when the relay refuses the proof, and long when replaced', () => {
     expect(reconnectDelay(0, RelayClose.ProofFailed, 0)).toBe(RECONNECT_MAX_MS);
     expect(reconnectDelay(0, RelayClose.Replaced, 0)).toBeGreaterThanOrEqual(30_000);
+  });
+});
+
+describe('close reasons from the relay (review: log forging)', () => {
+  it('strips control characters and caps the length', () => {
+    expect(cleanReason('replaced\n[Nest] 1  - LOG [auth] admin signed in')).toBe('replaced [Nest] 1 - LOG [auth] admin signed in');
+    expect(cleanReason('a\u0000b\u001b[31mc\u202ed')).toBe('a b [31mc d');
+    expect(cleanReason('x'.repeat(500))).toHaveLength(100);
   });
 });

@@ -71,11 +71,19 @@ export class StatusService implements OnApplicationBootstrap, OnApplicationShutd
     clearInterval(this.timer);
   }
 
-  /** Runs everything; concurrent callers share one run. */
+  /**
+   * Runs everything; concurrent callers share one run. Never rejects: it is
+   * started with `void` from timers and listeners, where a rejection would be
+   * unhandled and end the process (a crash loop for whoever can make a run fail).
+   */
   refresh(): Promise<void> {
-    this.running ??= this.run().finally(() => {
-      this.running = null;
-    });
+    this.running ??= this.run()
+      .catch((err: unknown) => {
+        this.logger.error(`run failed: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
+      })
+      .finally(() => {
+        this.running = null;
+      });
     return this.running;
   }
 
@@ -248,7 +256,12 @@ export class StatusService implements OnApplicationBootstrap, OnApplicationShutd
     this.incidents.record(snapshot.issues, now.getTime());
     // During maintenance nothing is sent; what is still broken afterwards goes out on the first run after it.
     if (this.settings.notificationsOn() && !snapshot.maintenanceUntil) {
-      await this.notifier.update(snapshot, now);
+      try {
+        await this.notifier.update(snapshot, now);
+      } catch (err) {
+        // The snapshot is published; a notification that cannot be built or sent must not undo that.
+        this.logger.error(`notifications failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
   }
 

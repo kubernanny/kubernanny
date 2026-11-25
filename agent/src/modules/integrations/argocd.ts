@@ -9,7 +9,7 @@ export class ArgoCdIntegration extends Integration {
   readonly reads = [{ group: 'argoproj.io', resource: 'applications', why: 'sync and health status of every app' }];
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
     const apps = (await ctx.kube.list<ArgoApplication>('/apis/argoproj.io/v1alpha1/applications')) ?? [];
-    const issues = evaluateArgoApps(apps);
+    const issues = evaluateArgoApps(apps, ctx.inv);
     const synced = apps.filter((a) => a.status?.sync?.status === 'Synced').length;
     const healthy = apps.filter((a) => a.status?.health?.status === 'Healthy').length;
     const progressing = apps.filter((a) => a.status?.health?.status === 'Progressing').length;

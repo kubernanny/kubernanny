@@ -1,9 +1,10 @@
 import { BadRequestException, ConflictException, Inject, Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
 import { PUSH_PLATFORMS, PushOutcome, PushPlatform, encodePushContent, isPushToken, parsePublicKey, sealPush, toBase64Url } from '@kubernanny/protocol';
-import { DevicesService, Principal, PushTarget } from '../auth/devices.service';
+import { DevicesService, Principal, PushTarget, validKey } from '../auth/devices.service';
 import { IdentityService } from '../auth/identity.service';
 import { CONFIG, Config } from '../config';
 import { t } from '../i18n/text';
+import { UnregisteredStrikes } from '../relay/unregistered-strikes';
 import { PushTransport } from './push-transport';
 
 /**
@@ -42,6 +43,8 @@ export interface AppPushMessage {
 export class AppPushService implements OnApplicationBootstrap {
   private readonly logger = new Logger('push');
   private readonly audit = new Logger('audit');
+  /** The relay's `unregistered` is believed only after repeated strikes (a hostile relay must not wipe registrations). */
+  private readonly unregistered = new UnregisteredStrikes();
 
   constructor(
     @Inject(CONFIG) private readonly config: Config,
@@ -150,7 +153,8 @@ export class AppPushService implements OnApplicationBootstrap {
         }
       }),
     );
-    const gone = targets.filter((_, i) => outcomes[i] === 'unregistered').map((target) => target.deviceId);
+    const now = Date.now();
+    const gone = targets.filter((target, i) => this.unregistered.record(target.push.token, outcomes[i]!, now)).map((target) => target.deviceId);
     if (gone.length > 0) {
       await this.devices.clearPush(gone).catch(() => undefined);
       this.logger.log(`forgot the push token of ${gone.length} device(s): FCM no longer knows it`);
@@ -164,10 +168,3 @@ export class AppPushService implements OnApplicationBootstrap {
   }
 }
 
-function validKey(key: unknown): key is string {
-  try {
-    return typeof key === 'string' && parsePublicKey(key).length === 32;
-  } catch {
-    return false;
-  }
-}

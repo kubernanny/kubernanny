@@ -438,7 +438,7 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
     '/apis/argoproj.io/v1alpha1/applications',
     ARGO_APPS.map(([name, s0, h0, auto]) => [name, broken ? s0 : name === 'weblate-chart' && warn ? 'OutOfSync' : 'Synced', broken ? h0 : 'Healthy', auto] as const).map(([name, sync, health, auto]) => ({
       metadata: { name, namespace: 'argocd' },
-      spec: { syncPolicy: auto ? { automated: { prune: true, selfHeal: true } } : {} },
+      spec: { destination: { namespace: 'default' }, syncPolicy: auto ? { automated: { prune: true, selfHeal: true } } : {} },
       status: {
         sync: { status: sync },
         health: { status: health },
@@ -897,7 +897,7 @@ export class DemoKubeClient extends KubeClient {
     return hit as T;
   }
 
-  override async text(path: string): Promise<string> {
+  override async text(path: string, _max?: number): Promise<string> {
     if (path.endsWith('/proxy/ready')) {
       return 'ready\n';
     }

@@ -38,10 +38,9 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), usb=(), payment=()');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   res.removeHeader('X-Powered-By');
-  const https = req.secure || req.headers['x-forwarded-proto'] === 'https';
-  if (https) {
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000');
-  }
+  // No HSTS: the agent never speaks TLS itself, and X-Forwarded-Proto is
+  // whatever any caller writes. HSTS belongs on whatever terminates TLS (the
+  // ingress controller), docs/SECURITY.md.
   if (req.path.startsWith('/api/')) {
     // Cluster state and logs must never land in a browser or proxy cache.
     res.setHeader('Cache-Control', 'no-store');

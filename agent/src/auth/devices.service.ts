@@ -217,7 +217,8 @@ function validPush(push: DevicePush): boolean {
   return typeof push.token === 'string' && (push.platform === 'ios' || push.platform === 'android') && validKey(push.key) && typeof push.kid === 'string';
 }
 
-function validKey(key: unknown): boolean {
+/** A base64url X25519 public key: device keys and push keys alike. */
+export function validKey(key: unknown): key is string {
   try {
     return typeof key === 'string' && parsePublicKey(key).length === 32;
   } catch {

@@ -24,7 +24,7 @@ export class PrometheusIntegration extends Integration {
     }
     const issues: Issue[] = [...byJob.entries()].map(([job, instances]) => ({
       id: `prometheus/down/${job}`,
-      check: 'alertmanager',
+      check: 'prometheus',
       severity: 'warning',
       title: t('prometheus.down.title', { job, n: instances.length }),
       cause: t('prometheus.down.cause', { targets: `${instances.slice(0, 3).join(', ')}${instances.length > 3 ? ' …' : ''}` }),

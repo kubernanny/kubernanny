@@ -11,6 +11,7 @@ import { CORE_CHECKS } from '../modules/core';
 import { INTEGRATIONS } from '../modules/integrations';
 import { Notifier, SecurityEvent } from '../notify/notifier';
 import { Serial } from '../util/serial';
+import { upsertConfigMapData } from '../kube/configmap';
 
 export const SETTINGS_CONFIGMAP = 'kubernanny-settings';
 
@@ -78,7 +79,7 @@ interface Stored {
 /**
  * What runs, in two layers:
  *
- * 1. **The deployment** (Helm values `modules.disabled`, `actions.disabled`,
+ * 1. **The deployment** (Helm values `checks.disabled`, `actions.disabled`,
  *    `rbac.allowActions`; env `DISABLED_MODULES`, `DISABLED_ACTIONS`). This is
  *    the security boundary: the chart also drops the RBAC rules of a
  *    disabled module, so the agent could not read it even if asked.
@@ -251,7 +252,7 @@ export class SettingsService implements OnModuleInit {
     }
   }
 
-  /** What `next` switches off that runs now: the changes a stolen device would make to go unnoticed. */
+  /** What `next` switches off that runs now: the changes a stolen device key would make to go unnoticed. */
   private switchedOff(next: Stored): SecurityEvent[] {
     const events: SecurityEvent[] = [];
     if (next.notificationsPaused && this.notificationsOn()) {
@@ -271,21 +272,8 @@ export class SettingsService implements OnModuleInit {
   }
 
   private async save(next: Stored): Promise<void> {
-    const data = { settings: JSON.stringify(next) };
     if (this.persistent) {
-      try {
-        await this.kube.mergePatch(`${this.path}/${SETTINGS_CONFIGMAP}`, { data });
-      } catch (err) {
-        if (!(err instanceof KubeError && err.status === 404)) {
-          throw err;
-        }
-        await this.kube.create(this.path, {
-          apiVersion: 'v1',
-          kind: 'ConfigMap',
-          metadata: { name: SETTINGS_CONFIGMAP, labels: { 'app.kubernetes.io/name': 'kubernanny' } },
-          data,
-        });
-      }
+      await upsertConfigMapData(this.kube, this.config.namespace, SETTINGS_CONFIGMAP, { settings: JSON.stringify(next) });
     }
     this.stored = next;
   }

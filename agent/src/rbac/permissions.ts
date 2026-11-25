@@ -28,23 +28,33 @@ export const INVENTORY_READS: readonly ExplainedRule[] = [
 export type WriteActionType = Exclude<IssueActionType, 'logs'>;
 
 /** What each write action changes, exactly as `actions/actions.service.ts` sends it (the spec checks the strings are there). */
-export const WRITE_EFFECTS: Record<WriteActionType, { changes: string; marker: string }> = {
+/**
+ * `admission`: what the chart's ValidatingAdmissionPolicy
+ * (`templates/admission-policy.yaml`, `rbac.admissionPolicy.enabled`) still
+ * lets the agent's ServiceAccount do with that permission, so a compromised
+ * pod cannot use it for more than the action.
+ */
+export const WRITE_EFFECTS: Record<WriteActionType, { changes: string; marker: string; admission: string }> = {
   restart: {
     changes:
       'merge patch of `spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"]` on the Deployment, StatefulSet or DaemonSet the issue names: the same as `kubectl rollout restart`',
     marker: 'kubectl.kubernetes.io/restartedAt',
+    admission: 'only an UPDATE that changes nothing but that annotation (spec, template spec and labels, the other annotations, metadata compared); no create, no delete',
   },
   'argocd-sync': {
     changes: 'merge patch of `operation` (a sync with `initiatedBy.username: kubernanny`) on the Application the issue names: the same as pressing Sync in Argo CD',
     marker: "initiatedBy: { username: 'kubernanny' }",
+    admission: 'only `operation` (a sync initiated by `kubernanny`, without `revision(s)`, `source(s)`, `manifests` or `resources`) and the refresh annotation; spec, status, labels, other annotations unchanged; no create, no delete',
   },
   'argocd-refresh': {
     changes: 'merge patch of the annotation `argocd.argoproj.io/refresh: hard` on the Application the issue names: the same as a hard refresh in Argo CD',
     marker: "'argocd.argoproj.io/refresh': 'hard'",
+    admission: 'the same policy as `argocd-sync`: the refresh annotation set to `hard` or `normal`, nothing else',
   },
   'cnpg-backup': {
     changes: 'creates one `Backup` object (`generateName: <cluster>-kubernanny-`, label `app.kubernetes.io/created-by: kubernanny`) for the database cluster the issue names: the same as `kubectl cnpg backup`',
     marker: "kind: 'Backup'",
+    admission: 'only CREATE of a Backup naming a cluster, without `method`, `target`, `online`, `onlineConfiguration` or `pluginConfiguration`; whether the cluster exists is not checked (CNPG fails such a Backup)',
   },
 };
 

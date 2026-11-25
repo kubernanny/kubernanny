@@ -9,7 +9,8 @@
  * Answers are kept 12 h; when a registry cannot be reached, answers up to
  * 7 days old are used, and that registry is left alone for 15 minutes.
  */
-import { ImageRef, refKey, Registry } from './image-ref';
+import { readCapped } from '../../util/read-capped';
+import { ImageRef, refKey, Registry, TAG } from './image-ref';
 
 export interface TagSource {
   /** Every tag the registry lists for the repository. Throws when the registry cannot be asked and no usable answer is cached. */
@@ -22,8 +23,11 @@ export const REGISTRY_BACKOFF_MS = 15 * 60_000;
 const MAX_PAGES = 10;
 const MAX_TAGS = 20_000;
 const MAX_REDIRECTS = 3;
-const TAG = /^[\w][\w.-]{0,127}$/;
 const USER_AGENT = 'kubernanny-agent';
+/** One page of 1000 tags is ~30 KB; a token answer a few KB. */
+export const REGISTRY_MAX_RESPONSE = 2 * 1024 * 1024;
+/** Repositories remembered; a cluster has far fewer distinct images. */
+const MAX_CACHED = 2000;
 
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -39,6 +43,7 @@ export class RegistryClient implements TagSource {
   async tags(ref: ImageRef, now: Date): Promise<string[]> {
     const t = now.getTime();
     const key = refKey(ref);
+    this.prune(t);
     const hit = this.cache.get(key);
     if (hit && t - hit.at < TAGS_TTL_MS) {
       return hit.tags;
@@ -66,6 +71,26 @@ export class RegistryClient implements TagSource {
     }
   }
 
+  /** Drops answers past the stale window and old failures, then the oldest answers beyond MAX_CACHED. */
+  private prune(t: number): void {
+    for (const [key, entry] of this.cache) {
+      if (t - entry.at >= STALE_MAX_MS) {
+        this.cache.delete(key);
+      }
+    }
+    for (const [key, entry] of this.failures) {
+      if (t - entry.at >= REGISTRY_BACKOFF_MS) {
+        this.failures.delete(key);
+      }
+    }
+    for (const key of this.cache.keys()) {
+      if (this.cache.size <= MAX_CACHED) {
+        break;
+      }
+      this.cache.delete(key);
+    }
+  }
+
   private async list(ref: ImageRef): Promise<string[]> {
     const tags: string[] = [];
     let token: string | undefined;
@@ -79,7 +104,7 @@ export class RegistryClient implements TagSource {
       if (!res.ok) {
         throw new Error(`${ref.registry.name}: HTTP ${res.status}`);
       }
-      const body = (await res.json()) as { tags?: unknown };
+      const body = (JSON.parse(await readCapped(res, REGISTRY_MAX_RESPONSE)) ?? {}) as { tags?: unknown };
       tags.push(...(Array.isArray(body.tags) ? body.tags.filter((x): x is string => typeof x === 'string' && TAG.test(x)) : []));
       const next = nextPage(res.headers.get('link'));
       if (!next) {
@@ -129,7 +154,7 @@ export class RegistryClient implements TagSource {
     if (!res.ok) {
       throw new Error(`${ref.registry.name}: token HTTP ${res.status}`);
     }
-    const body = (await res.json()) as { token?: unknown; access_token?: unknown };
+    const body = (JSON.parse(await readCapped(res, REGISTRY_MAX_RESPONSE)) ?? {}) as { token?: unknown; access_token?: unknown };
     const token = typeof body.token === 'string' ? body.token : typeof body.access_token === 'string' ? body.access_token : '';
     if (!token || token.length > 16_384) {
       throw new Error(`${ref.registry.name}: no token`);

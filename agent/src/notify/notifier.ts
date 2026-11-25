@@ -1,193 +1,19 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { CONFIG, Config } from '../config';
-import { Lang, Text, render, t } from '../i18n/text';
-import type { IssueView, Snapshot } from '../status/status.service';
+import { render, t } from '../i18n/text';
+import type { Snapshot } from '../status/status.service';
 import { IncidentsService } from '../incidents/incidents.service';
 import { AppPushService } from '../push/app-push.service';
 import { digestDue, formatDigest, weekKey } from './digest';
+import { NotifyPlan, Push, Pushed, SecurityEvent, formatPush, formatSecurityAlert, planNotifications } from './format';
 import { NotifiedStore } from './notified-store';
+import { detectFormat, webhookBody } from './webhook';
 
-export interface NotifyPlan {
-  opened: IssueView[];
-  /** Issues pushed earlier that are gone now, with the title they had. */
-  resolved: { id: string; title: Text }[];
-  /** A pushed warning that turned critical. */
-  escalated: IssueView[];
-}
+// Formatting and the webhook dialects live in format.ts and webhook.ts; existing imports keep working through here.
+export * from './format';
+export * from './webhook';
 
-export interface Pushed {
-  title: Text;
-  severity: 'warning' | 'critical';
-}
-
-/**
- * What to push this run. An issue is pushed once it has lasted `afterMs`
- * (rollouts and kured reboots heal before that), again only if it turns
- * critical, and its end is pushed only if its start was.
- */
-export function planNotifications(
-  pushed: Map<string, Pushed>,
-  issues: IssueView[],
-  now: Date,
-  afterMs: number,
-): NotifyPlan {
-  const plan: NotifyPlan = { opened: [], resolved: [], escalated: [] };
-  // Hints are shown in the app, never pushed. A silenced issue sends nothing
-  // new, but still counts as present: silencing is no reason to say "resolved".
-  const pushable = issues.filter((i) => i.severity !== 'info');
-  const current = new Set(pushable.map((i) => i.id));
-  const relevant = pushable.filter((i) => !i.silencedUntil);
-  for (const issue of relevant) {
-    const before = pushed.get(issue.id);
-    if (!before) {
-      if (now.getTime() - Date.parse(issue.since) >= afterMs) {
-        plan.opened.push(issue);
-      }
-    } else if (before.severity === 'warning' && issue.severity === 'critical') {
-      plan.escalated.push(issue);
-    }
-  }
-  for (const [id, p] of pushed) {
-    if (!current.has(id)) {
-      plan.resolved.push({ id, title: p.title });
-    }
-  }
-  return plan;
-}
-
-export function formatPush(
-  cluster: string,
-  plan: NotifyPlan,
-  detail: 'full' | 'minimal',
-  lang: Lang,
-): { title: string; body: string; priority: number; tags: string } | null {
-  const bad = [...plan.escalated, ...plan.opened];
-  if (bad.length === 0 && plan.resolved.length === 0) {
-    return null;
-  }
-  const s = (text: Text) => render(text, lang);
-  const critical = bad.some((i) => i.severity === 'critical');
-  if (detail === 'minimal') {
-    // Nothing about the cluster's contents: no namespaces, names, hosts or messages.
-    const crit = bad.filter((i) => i.severity === 'critical').length;
-    const parts = [
-      crit ? t('push.minimal.critical', { n: crit }) : null,
-      bad.length - crit ? t('push.minimal.warnings', { n: bad.length - crit }) : null,
-      plan.resolved.length ? t('push.minimal.resolved', { n: plan.resolved.length }) : null,
-    ].filter((p) => p !== null);
-    return {
-      title: s(bad.length === 0 ? t('push.minimal.titleResolved', { cluster }) : t('push.minimal.titleNew', { cluster })),
-      body: s(t('push.minimal.body', { parts })),
-      priority: critical ? 5 : bad.length > 0 ? 3 : 2,
-      tags: critical ? 'rotating_light' : bad.length > 0 ? 'warning' : 'white_check_mark',
-    };
-  }
-  const lines = [
-    ...bad.map((i) => `${i.severity === 'critical' ? '🔴' : '🟡'} ${s(i.title)}: ${s(i.cause)}`),
-    ...plan.resolved.map((r) => s(t('push.resolvedLine', { title: r.title }))),
-  ];
-  const title =
-    bad.length === 0
-      ? s(t('push.title.resolved', { cluster, n: plan.resolved.length }))
-      : bad.length === 1
-        ? `${cluster}: ${s(bad[0].title)}`
-        : s(t('push.title.many', { cluster, n: bad.length }));
-  return {
-    title,
-    body: lines.join('\n'),
-    priority: critical ? 5 : bad.length > 0 ? 3 : 2,
-    tags: critical ? 'rotating_light' : bad.length > 0 ? 'warning' : 'white_check_mark',
-  };
-}
-
-/**
- * A change that could blind or lock out the owner if a stolen device made it
- * (docs/SECURITY.md, "A stolen device key"). Each one is announced through
- * every channel, even with notifications switched off in the app or during a
- * maintenance window; only `checks.disabled: [notifications]` in Helm silences them.
- */
-export type SecurityEvent =
-  | { kind: 'notificationsOff' }
-  | { kind: 'moduleOff'; id: string }
-  | { kind: 'actionOff'; id: string }
-  | { kind: 'maintenance'; hours: number }
-  | { kind: 'deviceRevoked'; device: string }
-  | { kind: 'devicePaired' }
-  | { kind: 'advisoryAccepted'; component: string; advisory: string; days: number };
-
-const SECURITY_LINE: { [K in SecurityEvent['kind']]: (by: string, e: Extract<SecurityEvent, { kind: K }>) => Text } = {
-  notificationsOff: (by) => t('push.security.notificationsOff', { by }),
-  moduleOff: (by, e) => t('push.security.moduleOff', { by, id: e.id }),
-  actionOff: (by, e) => t('push.security.actionOff', { by, id: e.id }),
-  maintenance: (by, e) => t('push.security.maintenance', { by, hours: e.hours }),
-  deviceRevoked: (by, e) => t('push.security.deviceRevoked', { by, device: e.device }),
-  devicePaired: (by) => t('push.security.devicePaired', { by }),
-  advisoryAccepted: (by, e) => t('push.security.advisoryAccepted', { by, advisory: e.advisory, component: e.component, days: e.days }),
-};
-
-/** One short message naming the device (`by`) and what it changed; `minimal` names neither. */
-export function formatSecurityAlert(cluster: string, by: string, events: SecurityEvent[], detail: 'full' | 'minimal', lang: Lang): Push {
-  const s = (text: Text) => render(text, lang);
-  const lines =
-    detail === 'minimal'
-      ? [s(t('push.security.minimal'))]
-      : events.map((e) => s((SECURITY_LINE[e.kind] as (by: string, e: SecurityEvent) => Text)(by, e)));
-  return { title: s(t('push.security.title', { cluster })), body: [...lines, s(t('push.security.advice'))].join('\n'), priority: 4, tags: 'lock' };
-}
-
-export type WebhookFormat = 'discord' | 'slack' | 'gotify' | 'json';
-
-export function detectFormat(url: string, configured: string | undefined): WebhookFormat {
-  if (configured && configured !== 'auto') {
-    return configured as WebhookFormat;
-  }
-  if (/discord(app)?\.com\/api\/webhooks/.test(url)) {
-    return 'discord';
-  }
-  if (/hooks\.slack\.com/.test(url)) {
-    return 'slack';
-  }
-  if (/\/message(\?|$)/.test(url)) {
-    return 'gotify';
-  }
-  return 'json';
-}
-
-type Push = NonNullable<ReturnType<typeof formatPush>>;
-
-/** The body each chat service expects. */
-export function webhookBody(format: WebhookFormat | 'json-minimal', cluster: string, push: Push, plan: NotifyPlan, lang: Lang): unknown {
-  const s = (text: Text) => render(text, lang);
-  switch (format) {
-    case 'discord':
-      return {
-        username: 'Kubernanny',
-        embeds: [{ title: push.title, description: push.body, color: push.priority >= 5 ? 0xff5c6c : push.priority >= 3 ? 0xf2b33d : 0x3dd9b4 }],
-      };
-    case 'slack':
-      return { text: `*${push.title}*\n${push.body}` };
-    case 'gotify':
-      return { title: push.title, message: push.body, priority: push.priority * 2 };
-    case 'json':
-      return {
-        cluster,
-        title: push.title,
-        body: push.body,
-        priority: push.priority,
-        opened: plan.opened.map(({ id, title, severity, cause }) => ({ id, title: s(title), severity, cause: s(cause) })),
-        escalated: plan.escalated.map(({ id, title, severity, cause }) => ({ id, title: s(title), severity, cause: s(cause) })),
-        resolved: plan.resolved.map(({ id, title }) => ({ id, title: s(title) })),
-      };
-    case 'json-minimal':
-      return {
-        cluster,
-        title: push.title,
-        body: push.body,
-        priority: push.priority,
-        counts: { opened: plan.opened.length, escalated: plan.escalated.length, resolved: plan.resolved.length },
-      };
-  }
-}
+const EMPTY_PLAN: NotifyPlan = { opened: [], resolved: [], escalated: [] };
 
 /** Pushes status changes to ntfy, a webhook (Discord, Slack, Gotify, JSON) and the app's native push. No-op without any. */
 @Injectable()
@@ -208,7 +34,15 @@ export class Notifier {
     @Optional() @Inject(NotifiedStore) private readonly store?: NotifiedStore,
   ) {}
 
+  /** `checks.disabled: [notifications]`: no channel at all, so nothing is ever sent (issues, security alerts, digest, test). */
+  get locked(): boolean {
+    return this.config.disabledModules?.includes('notifications') ?? false;
+  }
+
   get channels(): string[] {
+    if (this.locked) {
+      return [];
+    }
     return [
       this.config.ntfyUrl ? 'ntfy' : null,
       this.config.webhookUrl ? detectFormat(this.config.webhookUrl, this.config.webhookFormat) : null,
@@ -267,32 +101,56 @@ export class Notifier {
       return;
     }
     const push = formatDigest(cluster, this.incidents.lastWeek(now.getTime()), now.getTime(), this.incidents.since, this.config.notifyDetail, this.config.language);
-    const delivered = await this.deliver(cluster, push, { opened: [], resolved: [], escalated: [] });
+    const delivered = await this.deliver(cluster, push, EMPTY_PLAN);
     if (delivered) {
       this.digestSentFor = week;
     }
   }
 
+  /** One send per configured channel, named; none when locked. */
+  private sends(cluster: string, push: Push, plan: NotifyPlan): { channel: string; send: () => Promise<void> }[] {
+    if (this.locked) {
+      return [];
+    }
+    const out: { channel: string; send: () => Promise<void> }[] = [];
+    const { ntfyUrl, webhookUrl } = this.config;
+    if (ntfyUrl) {
+      out.push({ channel: 'ntfy', send: () => this.sendNtfy(ntfyUrl, push) });
+    }
+    if (webhookUrl) {
+      const format = detectFormat(webhookUrl, this.config.webhookFormat);
+      const body = format === 'json' && this.config.notifyDetail === 'minimal' ? 'json-minimal' : format;
+      out.push({ channel: format, send: () => this.post(webhookUrl, webhookBody(body, cluster, push, plan, this.config.language)) });
+    }
+    const appPush = this.appPush;
+    if (appPush?.hasTargets()) {
+      out.push({ channel: 'app', send: () => this.sendApp(appPush, push) });
+    }
+    return out;
+  }
+
+  /** Sends to every channel at once; the channels that took it. */
+  private async sendAll(cluster: string, push: Push, plan: NotifyPlan): Promise<{ done: string[]; failed: string[] }> {
+    const sends = this.sends(cluster, push, plan);
+    const results = await Promise.allSettled(sends.map((s) => s.send()));
+    const done: string[] = [];
+    const failed: string[] = [];
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') {
+        done.push(sends[i]!.channel);
+      } else {
+        failed.push(`${sends[i]!.channel}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`);
+      }
+    });
+    if (failed.length > 0) {
+      this.logger.warn(`push failed: ${failed.join('; ')}`);
+    }
+    return { done, failed };
+  }
+
   /** Sends to every channel; true when at least one took it. */
   private async deliver(cluster: string, push: Push, plan: NotifyPlan): Promise<boolean> {
-    const sends: Promise<void>[] = [];
-    if (this.config.ntfyUrl) {
-      sends.push(this.sendNtfy(this.config.ntfyUrl, push));
-    }
-    if (this.config.webhookUrl) {
-      const format = detectFormat(this.config.webhookUrl, this.config.webhookFormat);
-      const body = format === 'json' && this.config.notifyDetail === 'minimal' ? 'json-minimal' : format;
-      sends.push(this.post(this.config.webhookUrl, webhookBody(body, cluster, push, plan, this.config.language)));
-    }
-    if (this.appPush?.hasTargets()) {
-      sends.push(this.sendApp(this.appPush, push));
-    }
-    const results = await Promise.allSettled(sends);
-    const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
-    if (failed.length > 0) {
-      this.logger.warn(`push failed: ${failed.map((f) => (f.reason instanceof Error ? f.reason.message : f.reason)).join('; ')}`);
-    }
-    return failed.length < results.length;
+    return (await this.sendAll(cluster, push, plan)).done.length > 0;
   }
 
   /**
@@ -302,35 +160,28 @@ export class Notifier {
    * Never throws: a channel that is down must not block the change itself.
    */
   async securityAlert(by: string, events: SecurityEvent[]): Promise<void> {
-    if (events.length === 0 || this.config.disabledModules.includes('notifications') || this.channels.length === 0) {
+    if (events.length === 0 || this.channels.length === 0) {
       return;
     }
     const push = formatSecurityAlert(this.config.clusterName, by, events, this.config.notifyDetail, this.config.language);
     try {
-      await this.deliver(this.config.clusterName, push, { opened: [], resolved: [], escalated: [] });
+      await this.deliver(this.config.clusterName, push, EMPTY_PLAN);
     } catch (err) {
       this.logger.warn(`security notification failed: ${err instanceof Error ? err.message : err}`);
     }
   }
 
-  /** Sends one test message through every channel, for the app's "test notification" button. */
+  /**
+   * Sends one test message through every channel, for the app's "test
+   * notification" button. Throws when any channel failed, naming it, so a
+   * broken webhook shows up there. Nothing when locked (the route refuses first).
+   */
   async test(cluster: string): Promise<string[]> {
     const lang = this.config.language;
     const push = { title: render(t('push.test.title', { cluster }), lang), body: render(t('push.test.body'), lang), priority: 3, tags: 'white_check_mark' };
-    const plan = { opened: [], resolved: [], escalated: [] };
-    const done: string[] = [];
-    if (this.config.ntfyUrl) {
-      await this.sendNtfy(this.config.ntfyUrl, push);
-      done.push('ntfy');
-    }
-    if (this.config.webhookUrl) {
-      const format = detectFormat(this.config.webhookUrl, this.config.webhookFormat);
-      await this.post(this.config.webhookUrl, webhookBody(format, cluster, push, plan, lang));
-      done.push(format);
-    }
-    if (this.appPush?.hasTargets()) {
-      await this.sendApp(this.appPush, push);
-      done.push('app');
+    const { done, failed } = await this.sendAll(cluster, push, EMPTY_PLAN);
+    if (failed.length > 0) {
+      throw new Error(failed.join('; '));
     }
     return done;
   }

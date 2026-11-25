@@ -5,8 +5,9 @@ import { IdentityService } from '../auth/identity.service';
 import { Config } from '../config';
 import { Notifier } from '../notify/notifier';
 import { PairingService } from '../pairing/pairing';
-import { CLOCK_WINDOW_MS, DEVICE_LIMIT, E2eResult, E2eService, OPEN_LIMIT, STRANGER_LIMIT, WRITE_CLOCK_WINDOW_MS, tunnelsIntoItself } from './e2e.service';
-import { InternalServer } from './internal-server';
+import { CLOCK_WINDOW_MS, DEVICE_LIMIT, E2eResult, E2eService, OPEN_LIMIT, OPEN_RESERVE, SOURCE_LIMIT, STRANGER_LIMIT, WRITE_CLOCK_WINDOW_MS, tunnelsIntoItself } from './e2e.service';
+import { DispatchBusyError, InternalServer } from './internal-server';
+import { sourceKey } from './rate-limit';
 
 const NOW = 1_800_000_000_000;
 
@@ -96,11 +97,90 @@ describe('E2eService rate limits (review: one global bucket before auth)', () =>
       crypto.getRandomValues(body.subarray(1));
       return body;
     };
+    // From many addresses, so no per-address bucket stops it first.
     for (let i = 0; i < OPEN_LIMIT.capacity; i++) {
-      expect(((await service.handle(junk(), NOW)) as { code: string }).code).toBe('E2E_HANDSHAKE');
+      expect(((await service.handle(junk(), NOW, 'direct', `10.0.${i >> 8}.${i & 255}`)) as { code: string }).code).toBe('E2E_HANDSHAKE');
     }
-    expect(((await service.handle(junk(), NOW)) as { code: string }).code).toBe('E2E_RATE_LIMITED');
+    expect(((await service.handle(junk(), NOW, 'direct', '10.9.9.9')) as { code: string }).code).toBe('E2E_RATE_LIMITED');
     expect((await call(phone, 'GET', '/status', NOW + 100, NOW + 100)).status).toBe(200);
+  });
+});
+
+describe('E2eService open ceilings (security review M6: unauthenticated callers locking out devices)', () => {
+  const junk = () => {
+    const body = new Uint8Array(120);
+    body[0] = 1;
+    crypto.getRandomValues(body.subarray(1));
+    return body;
+  };
+  const code = (r: E2eResult) => (r.kind === 'plain' ? r.code : 'sealed');
+
+  it('gives every source address a bucket of its own, so one flooding caller cannot spend the ceiling', async () => {
+    const { service, agent, pair } = setup();
+    const phone = pair('phone');
+    for (let i = 0; i < SOURCE_LIMIT.capacity; i++) {
+      await service.handle(junk(), NOW, 'direct', '10.1.1.1');
+    }
+    expect(code(await service.handle(junk(), NOW, 'direct', '10.1.1.1'))).toBe('E2E_RATE_LIMITED');
+    const sealed = sealRequest(phone, agent.publicKey, { method: 'GET', path: '/status', time: NOW });
+    expect(code(await service.handle(sealed.body, NOW, 'direct', '10.2.2.2'))).toBe('sealed');
+  });
+
+  it('keeps a reserve of the direct ceiling for addresses that recently authenticated', async () => {
+    const { service, agent, pair } = setup();
+    const phone = pair('phone');
+    const seal = () => sealRequest(phone, agent.publicKey, { method: 'GET', path: '/status', time: NOW }).body;
+    expect(code(await service.handle(seal(), NOW, 'direct', '192.168.1.20'))).toBe('sealed');
+    // A distributed flood spends the general ceiling ...
+    for (let i = 0; i < OPEN_LIMIT.capacity; i++) {
+      await service.handle(junk(), NOW, 'direct', `10.0.${i >> 8}.${i & 255}`);
+    }
+    expect(code(await service.handle(junk(), NOW, 'direct', '10.8.8.8'))).toBe('E2E_RATE_LIMITED');
+    // ... but the phone's address still gets through, from the reserve.
+    for (let i = 0; i < 20; i++) {
+      expect(code(await service.handle(seal(), NOW, 'direct', '192.168.1.20'))).toBe('sealed');
+    }
+    expect(OPEN_RESERVE.capacity).toBeGreaterThanOrEqual(20);
+  });
+
+  it('keeps relayed calls on a ceiling of their own', async () => {
+    const { service, agent, pair } = setup();
+    const phone = pair('phone');
+    for (let i = 0; i < OPEN_LIMIT.capacity; i++) {
+      await service.handle(junk(), NOW, 'direct', `10.0.${i >> 8}.${i & 255}`);
+    }
+    const sealed = sealRequest(phone, agent.publicKey, { method: 'GET', path: '/status', time: NOW });
+    expect(code(await service.handle(sealed.body, NOW, 'relay'))).toBe('sealed');
+  });
+
+  it('buckets IPv6 by /64 and unwraps IPv4-mapped addresses', () => {
+    expect(sourceKey('2001:db8:1:2:aaaa::1')).toBe('2001:db8:1:2::/64');
+    expect(sourceKey('2001:db8:1:2:bbbb:cccc:dddd:eeee')).toBe('2001:db8:1:2::/64');
+    expect(sourceKey('2001:db8::1')).toBe('2001:db8:0:0::/64');
+    expect(sourceKey('::ffff:10.0.0.1')).toBe('10.0.0.1');
+    expect(sourceKey(undefined)).toBe('unknown');
+  });
+});
+
+describe('E2eService replay after a restart (security review)', () => {
+  it('refuses a request dated before the process started, since the replay cache did not exist then', async () => {
+    const { service, agent, pair } = setup();
+    const phone = pair('phone');
+    const now = Date.now() + 1_000;
+    const old = sealRequest(phone, agent.publicKey, { method: 'GET', path: '/status', time: now - 120_000 });
+    const result = await service.handle(old.body, now, 'direct', '10.0.0.1');
+    expect(answer(result, old.open).code).toBe('E2E_CLOCK_SKEW');
+    const fresh = sealRequest(phone, agent.publicKey, { method: 'GET', path: '/status', time: now });
+    expect(answer(await service.handle(fresh.body, now, 'direct', '10.0.0.1'), fresh.open).status).toBe(200);
+  });
+});
+
+describe('E2eService dispatch (security review)', () => {
+  it('answers busy, sealed, when too many calls are in flight', async () => {
+    const { service, agent, pair } = setup({ dispatch: async () => Promise.reject(new DispatchBusyError()) });
+    const phone = pair('phone');
+    const sealed = sealRequest(phone, agent.publicKey, { method: 'GET', path: '/status', time: NOW });
+    expect(answer(await service.handle(sealed.body, NOW), sealed.open)).toEqual({ status: 503, code: 'E2E_BUSY' });
   });
 });
 

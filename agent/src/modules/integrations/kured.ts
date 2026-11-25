@@ -3,6 +3,7 @@ import { Integration } from '../module';
 import { Issue, ageText } from '../../checks/types';
 import { t } from '../../i18n/text';
 import { ModuleContext, ModuleResult, Stat } from '../types';
+import { record, str } from '../untrusted';
 
 export class KuredIntegration extends Integration {
   readonly id = 'kured';
@@ -13,7 +14,9 @@ export class KuredIntegration extends Integration {
     const lockRaw = ds?.metadata.annotations?.['weave.works/kured-node-lock'];
     let lock: { nodeID?: string; created?: string } | null = null;
     try {
-      lock = lockRaw ? (JSON.parse(lockRaw) as { nodeID?: string; created?: string }) : null;
+      // Anyone who can annotate the DaemonSet writes this: read it like an untrusted answer.
+      const parsed = record(lockRaw ? JSON.parse(lockRaw) : null);
+      lock = { nodeID: str(parsed.nodeID, 253), created: str(parsed.created, 64) };
     } catch {
       lock = null;
     }

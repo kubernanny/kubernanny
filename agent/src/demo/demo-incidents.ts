@@ -28,7 +28,7 @@ export function demoIncidents(now: number, scenario: DemoScenario): { since: num
     ended('certificates/default/shop-app-tls', 'cert-manager', 'warning', t('certificates.expiring.title', { host: 'shop.example', age: ageText(13 * D) }), 6 * D + 5 * H, 2 * H + 20 * M),
   ];
   const busy = [
-    ended('argocd/weblate-chart/operation', 'argocd', 'warning', t('argocd.syncFailed.title', { app: 'weblate-chart' }), 1 * D + 4 * H, 41 * M),
+    ended('argocd/argocd/weblate-chart/operation', 'argocd', 'warning', t('argocd.syncFailed.title', { app: 'weblate-chart' }), 1 * D + 4 * H, 41 * M),
     ended('cnpg/default/shop-api-pg/backup', 'cnpg', 'warning', t('cnpg.oldBackup.title', { cluster: 'default/shop-api-pg', age: ageText(27 * H) }), 3 * D + 8 * H, 6 * H + 10 * M),
   ];
   const rough = [

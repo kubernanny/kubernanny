@@ -5,6 +5,7 @@ import { Text, t } from '../i18n/text';
 import { KubeClient } from '../kube/kube-client';
 import { SettingsService } from '../settings/settings.service';
 import { StatusService } from '../status/status.service';
+import { logSafe } from '../util/log-safe';
 
 const WORKLOAD_PATH: Record<WorkloadKind, string> = {
   Deployment: 'deployments',
@@ -13,11 +14,13 @@ const WORKLOAD_PATH: Record<WorkloadKind, string> = {
 };
 
 const enc = encodeURIComponent;
+/** The newest part of a pod's log the app shows: Kubernetes cuts it (`limitBytes`), and the client refuses anything larger. */
+export const LOG_LIMIT_BYTES = 256 * 1024;
 
 /**
  * Runs an action of an issue the agent currently sees. The request only names
  * the issue and the action type; namespace, name and kind come from the
- * agent's own check result, so a stolen token cannot restart arbitrary
+ * agent's own check result, so a stolen device key cannot restart arbitrary
  * workloads, only the ones that are broken right now.
  */
 @Injectable()
@@ -49,7 +52,7 @@ export class ActionsService {
   async run(issueId: string, type: IssueActionType, index = 0, who?: Principal): Promise<{ done: Text }> {
     const action = this.find(issueId, type, index);
     // The audit trail: who ran what on which object.
-    this.logger.log(`action ${type} by "${who?.name ?? 'unknown'}" (${who?.id ?? '-'}) on ${issueId}: ${JSON.stringify(action)}`);
+    this.logger.log(`action ${type} by "${who?.name ?? 'unknown'}" (${who?.id ?? '-'}) on ${logSafe(issueId)}: ${JSON.stringify(action)}`);
     let done: Text;
     switch (action.type) {
       case 'argocd-sync':
@@ -97,14 +100,14 @@ export class ActionsService {
       throw new NotFoundException();
     }
     this.logger.log(`logs of ${action.namespace}/${action.pod} read by "${who?.name ?? 'unknown'}" (${who?.id ?? '-'})`);
-    const params = new URLSearchParams({ tailLines: '300', timestamps: 'true' });
+    const params = new URLSearchParams({ tailLines: '300', timestamps: 'true', limitBytes: String(LOG_LIMIT_BYTES) });
     if (action.container) {
       params.set('container', action.container);
     }
     if (action.previous) {
       params.set('previous', 'true');
     }
-    const text = await this.kube.text(`/api/v1/namespaces/${enc(action.namespace)}/pods/${enc(action.pod)}/log?${params}`);
+    const text = await this.kube.text(`/api/v1/namespaces/${enc(action.namespace)}/pods/${enc(action.pod)}/log?${params}`, 2 * LOG_LIMIT_BYTES);
     return { pod: action.pod, container: action.container, previous: action.previous ?? false, text };
   }
 }

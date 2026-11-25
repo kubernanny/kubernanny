@@ -7,6 +7,7 @@ import { DevicesService } from './auth/devices.service';
 import { IdentityService } from './auth/identity.service';
 import { PrincipalGuard } from './auth/principal.guard';
 import { CONFIG, Config, loadConfig } from './config';
+import { checkSwitchIds } from './settings/switch-ids';
 import { E2eController } from './e2e/e2e.controller';
 import { E2eService } from './e2e/e2e.service';
 import { InternalServer } from './e2e/internal-server';
@@ -29,7 +30,8 @@ import { AcceptanceService } from './modules/vulnerabilities/acceptance.service'
 @Module({
   controllers: [AppController, E2eController, AcceptanceController, PushController],
   providers: [
-    { provide: CONFIG, useFactory: loadConfig },
+    // Unknown module ids or action types in the hard switches stop the start (switch-ids.ts).
+    { provide: CONFIG, useFactory: () => checkSwitchIds(loadConfig()) },
     // Texts leave the agent rendered in the request's language (docs/decisions/0006-agent-languages.md).
     { provide: APP_INTERCEPTOR, useClass: LocalizeInterceptor },
     { provide: APP_FILTER, useClass: LocalizeExceptionFilter },

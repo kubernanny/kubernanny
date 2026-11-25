@@ -32,7 +32,8 @@ export interface ImageRef {
 }
 
 const REPO = /^[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:\/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*$/;
-const TAG = /^[\w][\w.-]{0,127}$/;
+/** An OCI tag as the distribution spec allows it. */
+export const TAG = /^[\w][\w.-]{0,127}$/;
 
 /**
  * "traefik:v3.1.2" -> docker.io library/traefik v3.1.2; "ghcr.io/a/b:1.0@sha256:…" -> ghcr.io a/b 1.0.

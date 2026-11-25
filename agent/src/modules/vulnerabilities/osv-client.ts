@@ -10,6 +10,7 @@
  * reached, answers up to 7 days old are used and marked stale.
  */
 import { TextError, errorText, t as msg } from '../../i18n/text';
+import { readCapped } from '../../util/read-capped';
 
 export interface OsvQuery {
   ecosystem: string;
@@ -55,6 +56,14 @@ const STALE_MAX_MS = 7 * 24 * 3_600_000;
 /** After a failed lookup OSV.dev is left alone this long: the check runs every minute, and each try can wait 20 s. */
 export const OSV_BACKOFF_MS = 15 * 60_000;
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{1,80}$/;
+/** An answer from the database is read up to this size; OSV records are a few KB, a batch answer of ids a few hundred. */
+export const OSV_MAX_RESPONSE = 4 * 1024 * 1024;
+/** Advisory ids taken per queried version, and records fetched per lookup: a hostile mirror cannot make the check fetch thousands. */
+export const OSV_MAX_IDS_PER_QUERY = 200;
+export const OSV_MAX_IDS_PER_LOOKUP = 1000;
+/** Entries kept in memory; past the stale window they are useless anyway. */
+const MAX_QUERIES = 2000;
+const MAX_VULNS = 5000;
 
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -75,6 +84,7 @@ export class OsvClient implements VulnDb {
   async lookup(queries: OsvQuery[], now: Date): Promise<VulnLookup> {
     const t = now.getTime();
     const keyOf = (q: OsvQuery) => `${q.ecosystem}|${q.name}|${q.version}`;
+    this.prune(t);
     try {
       if (this.failure && t - this.failure.at < OSV_BACKOFF_MS) {
         throw this.failure.error;
@@ -88,7 +98,7 @@ export class OsvClient implements VulnDb {
           const answers = await this.batch(due);
           due.forEach((q, i) => this.queries.set(keyOf(q), { at: t, ids: answers[i] }));
         }
-        const ids = [...new Set(queries.flatMap((q) => this.queries.get(keyOf(q))!.ids))];
+        const ids = [...new Set(queries.flatMap((q) => this.queries.get(keyOf(q))!.ids))].slice(0, OSV_MAX_IDS_PER_LOOKUP);
         await this.details(ids.filter((id) => !this.vulns.has(id) || t - this.vulns.get(id)!.at >= OSV_TTL_MS), t);
         this.failure = null;
       } catch (err) {
@@ -105,6 +115,19 @@ export class OsvClient implements VulnDb {
     }
   }
 
+  /** Drops what is past the stale window, then the oldest beyond the size caps (Maps keep insertion order). */
+  private prune(t: number): void {
+    for (const map of [this.queries, this.vulns] as Map<string, { at: number }>[]) {
+      for (const [key, entry] of map) {
+        if (t - entry.at >= STALE_MAX_MS) {
+          map.delete(key);
+        }
+      }
+    }
+    trim(this.queries, MAX_QUERIES);
+    trim(this.vulns, MAX_VULNS);
+  }
+
   private resolve(ids: string[]): OsvVuln[] {
     return ids.map((id) => this.vulns.get(id)?.vuln).filter((v): v is OsvVuln => v !== undefined);
   }
@@ -116,7 +139,12 @@ export class OsvClient implements VulnDb {
     if (!Array.isArray(results) || results.length !== queries.length) {
       throw new TextError(msg('vulnerabilities.unexpectedAnswer'));
     }
-    return results.map((r) => (r?.vulns ?? []).map((v) => v?.id).filter((id): id is string => typeof id === 'string' && ID.test(id)));
+    return results.map((r) =>
+      (Array.isArray(r?.vulns) ? r.vulns : [])
+        .slice(0, OSV_MAX_IDS_PER_QUERY)
+        .map((v) => v?.id)
+        .filter((id): id is string => typeof id === 'string' && ID.test(id)),
+    );
   }
 
   private async details(ids: string[], t: number): Promise<void> {
@@ -132,37 +160,49 @@ export class OsvClient implements VulnDb {
   }
 
   private async request(url: string, init: RequestInit): Promise<unknown> {
-    const res = await this.fetchFn(url, { ...init, signal: AbortSignal.timeout(this.timeoutMs) });
+    // No redirects: a mirror must not send the agent to another host, and size-capped.
+    const res = await this.fetchFn(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(this.timeoutMs) });
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
     }
-    return res.json();
+    return JSON.parse(await readCapped(res, OSV_MAX_RESPONSE)) as unknown;
+  }
+}
+
+function trim<V>(map: Map<string, V>, max: number): void {
+  for (const key of map.keys()) {
+    if (map.size <= max) {
+      return;
+    }
+    map.delete(key);
   }
 }
 
 /** The database is outside the cluster: keep only well-formed fields, short. */
 export function sanitize(raw: unknown, id: string): OsvVuln {
   const r = (raw ?? {}) as Record<string, unknown>;
-  const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
-  const severity = Array.isArray(r['severity'])
-    ? (r['severity'] as unknown[]).filter((s): s is { type: string; score: string } => typeof (s as { type?: unknown })?.type === 'string' && typeof (s as { score?: unknown })?.score === 'string')
-    : [];
-  const dbSeverity = (r['database_specific'] as { severity?: unknown } | undefined)?.severity;
-  const affected = Array.isArray(r['affected']) ? (r['affected'] as OsvVuln['affected'] & unknown[]) : [];
+  const arr = (v: unknown, max: number): unknown[] => (Array.isArray(v) ? v.slice(0, max) : []);
+  const s = (v: unknown, max: number): string | undefined => (typeof v === 'string' ? v.slice(0, max) : undefined);
+  const strings = (v: unknown) => arr(v, 20).filter((x): x is string => typeof x === 'string');
+  const severity = arr(r['severity'], 10)
+    .filter((x): x is { type: string; score: string } => typeof (x as { type?: unknown })?.type === 'string' && typeof (x as { score?: unknown })?.score === 'string')
+    .map((x) => ({ type: x.type.slice(0, 40), score: x.score.slice(0, 200) }));
+  const dbSeverity = s((r['database_specific'] as { severity?: unknown } | undefined)?.severity, 40);
+  const affected = arr(r['affected'], 50) as NonNullable<OsvVuln['affected']>;
   return {
     id,
     aliases: strings(r['aliases']).filter((a) => ID.test(a)),
-    summary: typeof r['summary'] === 'string' ? r['summary'].slice(0, 200) : undefined,
+    summary: s(r['summary'], 200),
     severity,
-    database_specific: typeof dbSeverity === 'string' ? { severity: dbSeverity } : undefined,
+    database_specific: dbSeverity !== undefined ? { severity: dbSeverity } : undefined,
     affected: affected.map((a) => ({
-      package: { ecosystem: String(a?.package?.ecosystem ?? ''), name: String(a?.package?.name ?? '') },
-      ranges: (Array.isArray(a?.ranges) ? a.ranges : []).map((range) => ({
-        type: String(range?.type ?? ''),
-        events: (Array.isArray(range?.events) ? range.events : []).map((e) => ({
-          introduced: typeof e?.introduced === 'string' ? e.introduced : undefined,
-          fixed: typeof e?.fixed === 'string' ? e.fixed : undefined,
-          last_affected: typeof e?.last_affected === 'string' ? e.last_affected : undefined,
+      package: { ecosystem: s(a?.package?.ecosystem, 100) ?? '', name: s(a?.package?.name, 200) ?? '' },
+      ranges: (arr(a?.ranges, 20) as NonNullable<NonNullable<OsvVuln['affected']>[number]['ranges']>).map((range) => ({
+        type: s(range?.type, 40) ?? '',
+        events: (arr(range?.events, 100) as OsvEvent[]).map((e) => ({
+          introduced: s(e?.introduced, 100),
+          fixed: s(e?.fixed, 100),
+          last_affected: s(e?.last_affected, 100),
         })),
       })),
     })),

@@ -1,8 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CONFIG, Config } from '../config';
-import { Text, isText } from '../i18n/text';
+import { Text, reviveText } from '../i18n/text';
 import { KubeClient, KubeError } from '../kube/kube-client';
 import { Serial } from '../util/serial';
+import { upsertConfigMapData } from '../kube/configmap';
 import type { Pushed } from './notifier';
 
 /** SETTINGS_CONFIGMAP of settings.service, spelled out: importing it would close a cycle through the notifier (checked in the spec). */
@@ -46,8 +47,9 @@ export function parseNotified(text: string | undefined): Map<string, Pushed> {
       return out;
     }
     for (const [id, entry] of Object.entries(stored.issues).slice(-MAX_NOTIFIED)) {
-      if (typeof id === 'string' && id.length <= 512 && entry && (entry.s === 'w' || entry.s === 'c') && isText(entry.t)) {
-        out.set(id, { title: entry.t, severity: entry.s === 'c' ? 'critical' : 'warning' });
+      const title = entry && (entry.s === 'w' || entry.s === 'c') ? reviveText(entry.t) : null;
+      if (typeof id === 'string' && id.length <= 512 && title) {
+        out.set(id, { title, severity: entry.s === 'c' ? 'critical' : 'warning' });
       }
     }
   } catch {
@@ -106,22 +108,7 @@ export class NotifiedStore {
     });
   }
 
-  private async write(data: Record<string, string>): Promise<void> {
-    try {
-      await this.kube.mergePatch(`${this.path}/${SETTINGS_CONFIGMAP}`, { data });
-    } catch (err) {
-      if (!(err instanceof KubeError && err.status === 404)) {
-        throw err;
-      }
-      try {
-        await this.kube.create(this.path, { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name: SETTINGS_CONFIGMAP, labels: { 'app.kubernetes.io/name': 'kubernanny' } }, data });
-      } catch (createErr) {
-        // The settings or silences created it in the meantime.
-        if (!(createErr instanceof KubeError && createErr.status === 409)) {
-          throw createErr;
-        }
-        await this.kube.mergePatch(`${this.path}/${SETTINGS_CONFIGMAP}`, { data });
-      }
-    }
+  private write(data: Record<string, string>): Promise<void> {
+    return upsertConfigMapData(this.kube, this.config.namespace, SETTINGS_CONFIGMAP, data);
   }
 }

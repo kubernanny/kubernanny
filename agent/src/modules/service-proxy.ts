@@ -1,6 +1,8 @@
 import { Service } from '../inventory/inventory';
 import { KubeClient } from '../kube/kube-client';
 import { servicePort } from '../discovery/discovery';
+import { list, num, record, strings } from './untrusted';
+import { readCapped } from '../util/read-capped';
 
 /**
  * Reaches an in-cluster HTTP service. Inside the cluster directly over its DNS
@@ -43,32 +45,7 @@ export class ServiceHttp {
 /** In-cluster services answer with a few KB; anything far beyond that is refused rather than buffered. */
 export const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
-/** Reads a response body, aborting once it passes `max` bytes. */
-export async function readCapped(res: Response, max = MAX_RESPONSE_BYTES): Promise<string> {
-  const declared = Number(res.headers.get('content-length') ?? '0');
-  if (declared > max) {
-    throw new Error(`response of ${declared} bytes refused (limit ${max})`);
-  }
-  if (!res.body) {
-    return '';
-  }
-  const reader = res.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-    size += value.byteLength;
-    if (size > max) {
-      await reader.cancel();
-      throw new Error(`response passed ${max} bytes, refused`);
-    }
-    chunks.push(value);
-  }
-  return Buffer.concat(chunks).toString('utf8');
-}
+export { readCapped };
 
 class DirectHttp extends ServiceHttp {
   constructor(
@@ -89,7 +66,7 @@ class DirectHttp extends ServiceHttp {
     if (!res.ok) {
       throw new Error(`${res.status} from ${this.url}${path}`);
     }
-    return readCapped(res);
+    return readCapped(res, MAX_RESPONSE_BYTES);
   }
 }
 
@@ -103,23 +80,28 @@ export interface PromSeries {
   points: [number, number][];
 }
 
-interface PromResponse<T> {
-  status: string;
-  data: { resultType: string; result: T[] };
-  error?: string;
+/** Series one query may return; a homelab's queries stay far below, a forged answer is cut here. */
+export const MAX_PROM_SERIES = 10_000;
+/** Points per series of a range query (168 h at a 5 min step is ~2000). */
+const MAX_PROM_POINTS = 5_000;
+
+/** The result list of a Prometheus answer: anything can answer on its port, so nothing in it is taken on trust. */
+function promResult(answer: unknown): unknown[] {
+  const res = record(answer);
+  if (res.status !== 'success') {
+    throw new Error(typeof res.error === 'string' ? res.error.slice(0, 200) : 'Prometheus query failed');
+  }
+  return list(record(res.data).result, MAX_PROM_SERIES);
 }
 
 export class Prometheus {
   constructor(private readonly http: ServiceHttp) {}
 
   async query(expr: string): Promise<PromSample[]> {
-    const res = await this.http.get<PromResponse<{ metric: Record<string, string>; value: [number, string] }>>(
-      `/api/v1/query?query=${encodeURIComponent(expr)}`,
-    );
-    if (res.status !== 'success') {
-      throw new Error(res.error ?? 'Prometheus query failed');
-    }
-    return res.data.result.map((r) => ({ metric: r.metric, value: Number(r.value[1]) })).filter((s) => Number.isFinite(s.value));
+    const result = promResult(await this.http.get<unknown>(`/api/v1/query?query=${encodeURIComponent(expr)}`));
+    return result
+      .map((r) => ({ metric: strings(record(r).metric), value: num(list(record(r).value, 2)[1]) ?? NaN }))
+      .filter((s) => Number.isFinite(s.value));
   }
 
   async scalar(expr: string): Promise<number | null> {
@@ -134,15 +116,15 @@ export class Prometheus {
       end: String(Math.floor(end.getTime() / 1000)),
       step: String(stepSeconds),
     });
-    const res = await this.http.get<PromResponse<{ metric: Record<string, string>; values: [number, string][] }>>(
-      `/api/v1/query_range?${params}`,
-    );
-    if (res.status !== 'success') {
-      throw new Error(res.error ?? 'Prometheus query failed');
-    }
-    return res.data.result.map((r) => ({
-      metric: r.metric,
-      points: r.values.map(([t, v]) => [t * 1000, Number(v)] as [number, number]).filter(([, v]) => Number.isFinite(v)),
+    const result = promResult(await this.http.get<unknown>(`/api/v1/query_range?${params}`));
+    return result.map((r) => ({
+      metric: strings(record(r).metric),
+      points: list(record(r).values, MAX_PROM_POINTS)
+        .map((p) => {
+          const [t, v] = list(p, 2);
+          return [(num(t) ?? NaN) * 1000, num(v) ?? NaN] as [number, number];
+        })
+        .filter(([t, v]) => Number.isFinite(t) && Number.isFinite(v)),
     }));
   }
 }

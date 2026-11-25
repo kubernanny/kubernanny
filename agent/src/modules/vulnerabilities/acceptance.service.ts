@@ -6,6 +6,8 @@ import { KubeClient, KubeError } from '../../kube/kube-client';
 import { Notifier } from '../../notify/notifier';
 import { SETTINGS_CONFIGMAP, SettingsService } from '../../settings/settings.service';
 import { Serial } from '../../util/serial';
+import { logSafe } from '../../util/log-safe';
+import { upsertConfigMapData } from '../../kube/configmap';
 import { ACCEPT_DAYS, ADVISORY, Acceptance, AcceptanceState, COMPONENT, DAY, MAX_ACCEPTED, acceptanceKey, cleanReason, parseAccepted } from './acceptance';
 
 export { ACCEPT_DAYS, acceptanceKey } from './acceptance';
@@ -110,7 +112,7 @@ export class AcceptanceService implements OnModuleInit {
     // Before it takes effect: hiding a real advisory is what a stolen device would do.
     await this.notifier?.securityAlert(who.name, [{ kind: 'advisoryAccepted', component, advisory, days }]);
     await this.save(next);
-    this.audit.log(`advisory ${advisory} on ${component} accepted for ${days} days by "${who.name}" (${who.id})${text ? `: ${JSON.stringify(text)}` : ''}`);
+    this.audit.log(`advisory ${logSafe(advisory)} on ${logSafe(component)} accepted for ${days} days by "${who.name}" (${who.id})${text ? `: ${JSON.stringify(text)}` : ''}`);
     return new Date(now + days * DAY).toISOString();
   }
 
@@ -119,7 +121,7 @@ export class AcceptanceService implements OnModuleInit {
     const next = this.pruned(now);
     if (next.delete(acceptanceKey(component, advisory))) {
       await this.save(next);
-      this.audit.log(`advisory ${advisory} on ${component} no longer accepted, by "${who.name}" (${who.id})`);
+      this.audit.log(`advisory ${logSafe(advisory)} on ${logSafe(component)} no longer accepted, by "${who.name}" (${who.id})`);
     }
   }
 
@@ -128,23 +130,7 @@ export class AcceptanceService implements OnModuleInit {
   }
 
   private async save(next: Map<string, Acceptance>): Promise<void> {
-    const data = { accepted: JSON.stringify(Object.fromEntries(next)) };
-    try {
-      await this.kube.mergePatch(`${this.path}/${SETTINGS_CONFIGMAP}`, { data });
-    } catch (err) {
-      if (!(err instanceof KubeError && err.status === 404)) {
-        throw err;
-      }
-      try {
-        await this.kube.create(this.path, { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name: SETTINGS_CONFIGMAP, labels: { 'app.kubernetes.io/name': 'kubernanny' } }, data });
-      } catch (createErr) {
-        // The switches or a silence created it in the meantime.
-        if (!(createErr instanceof KubeError && createErr.status === 409)) {
-          throw createErr;
-        }
-        await this.kube.mergePatch(`${this.path}/${SETTINGS_CONFIGMAP}`, { data });
-      }
-    }
+    await upsertConfigMapData(this.kube, this.config.namespace, SETTINGS_CONFIGMAP, { accepted: JSON.stringify(Object.fromEntries(next)) });
     this.accepted = next;
   }
 }

@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, ForbiddenException, Res, Logger, Get, HttpCode, Inject, NotFoundException, Param, ParseIntPipe, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, Body, Controller, Delete, ForbiddenException, Res, Logger, Get, HttpCode, Inject, NotFoundException, Param, ParseIntPipe, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import type { Response } from 'express';
 import { AGENT_VERSION } from './version';
 import { ActionsService } from './actions/actions.service';
@@ -112,10 +112,11 @@ export class AppController {
   @Post('issues/silence')
   @HttpCode(200)
   async silence(@Query('issue') issue: string, @Query('hours', new ParseIntPipe()) hours: number, @CurrentPrincipal() who: Principal): Promise<{ silencedUntil: string }> {
-    if (!this.status.findIssue(issue)) {
+    const found = this.status.findIssue(issue);
+    if (!found) {
       throw new NotFoundException({ code: 'ISSUE_GONE', message: t('error.issueGone') });
     }
-    const silencedUntil = await this.silences.silence(issue, hours, who);
+    const silencedUntil = await this.silences.silence(issue, hours, who, Date.now(), found.severity);
     await this.status.refreshAfterChange();
     return { silencedUntil };
   }
@@ -259,9 +260,16 @@ export class AppController {
   @Post('notify/test')
   @HttpCode(200)
   async testNotification(): Promise<{ channels: string[] }> {
+    if (this.notifier.locked) {
+      throw new ForbiddenException({ code: 'NOTIFICATIONS_LOCKED', message: t('error.notificationsLocked') });
+    }
     if (this.notifier.channels.length === 0) {
       throw new BadRequestException({ code: 'NO_CHANNEL', message: t('error.noChannel') });
     }
-    return { channels: await this.notifier.test(this.config.clusterName) };
+    try {
+      return { channels: await this.notifier.test(this.config.clusterName) };
+    } catch (err) {
+      throw new BadGatewayException({ code: 'NOTIFY_FAILED', message: t('error.notifyTestFailed', { error: err instanceof Error ? err.message.slice(0, 300) : String(err) }) });
+    }
   }
 }

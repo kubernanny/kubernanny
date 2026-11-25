@@ -2,6 +2,7 @@ import { Detected } from '../../discovery/discovery';
 import { Integration } from '../module';
 import { raw, t } from '../../i18n/text';
 import { ModuleContext, ModuleResult, Stat } from '../types';
+import { str } from '../untrusted';
 
 export class LokiIntegration extends Integration {
   readonly id = 'loki';
@@ -12,7 +13,7 @@ export class LokiIntegration extends Integration {
     if (!l) {
       return { issues: [], stats: [], summary: t('integration.noServiceOnPort', { port: 3100 }) };
     }
-    const ready = (await l.text('/ready').catch((e: Error) => e.message)).trim();
+    const ready = (str(await l.text('/ready').catch((e: Error) => e.message), 200) ?? '').trim();
     const ok = ready === 'ready';
     const stats: Stat[] = [{ label: t('stat.ready'), value: ok ? t('common.yes') : ready.slice(0, 60), tone: ok ? 'ok' : 'warning' }];
     if (ctx.prom) {
@@ -22,7 +23,7 @@ export class LokiIntegration extends Integration {
       }
     }
     return {
-      issues: ok ? [] : [{ id: 'loki/ready', check: 'alertmanager', severity: 'warning', title: t('loki.notReady.title'), cause: raw(ready), actions: [] }],
+      issues: ok ? [] : [{ id: 'loki/ready', check: 'loki', severity: 'warning', title: t('loki.notReady.title'), cause: raw(ready), actions: [] }],
       stats,
       summary: ok ? t('loki.summary.ok') : t('loki.summary.notReady'),
     };

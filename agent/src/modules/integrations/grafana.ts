@@ -3,6 +3,7 @@ import { Integration } from '../module';
 import { Issue } from '../../checks/types';
 import { t } from '../../i18n/text';
 import { ModuleContext, ModuleResult } from '../types';
+import { record, str } from '../untrusted';
 
 export class GrafanaIntegration extends Integration {
   readonly id = 'grafana';
@@ -13,14 +14,15 @@ export class GrafanaIntegration extends Integration {
     if (!g) {
       return { issues: [], stats: [], summary: t('integration.noService') };
     }
-    const health = await g.get<{ database?: string; version?: string }>('/api/health');
+    const answer = record(await g.get<unknown>('/api/health'));
+    const health = { database: str(answer.database, 60), version: str(answer.version, 60) };
     const issues: Issue[] =
       health.database === 'ok'
         ? []
         : [
             {
               id: 'grafana/database',
-              check: 'alertmanager',
+              check: 'grafana',
               severity: 'warning',
               title: t('grafana.database.title'),
               cause: t('grafana.database.cause', { state: health.database }),

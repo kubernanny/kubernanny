@@ -8,6 +8,7 @@ import { evaluateEtcd } from './etcd.check';
 import { evaluateLonghorn } from './longhorn.check';
 import { evaluateNodes } from './nodes.check';
 import { Pod, evaluatePods, podOwner } from './pods.check';
+import { emptyInventory } from '../inventory/inventory';
 
 const NOW = new Date('2026-11-24T12:00:00Z');
 const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3_600_000).toISOString();
@@ -164,11 +165,19 @@ describe('certificates', () => {
   });
 });
 
+/** An inventory with one Deployment in `ns`, ready or not. */
+function invWith(ns: string, name: string, ready: boolean, kind: 'deployments' | 'daemonsets' = 'deployments') {
+  const inv = emptyInventory(NOW);
+  inv[kind].push({ metadata: { name, namespace: ns }, spec: { replicas: 2 }, status: kind === 'daemonsets' ? { desiredNumberScheduled: 3, numberReady: ready ? 3 : 1 } : { readyReplicas: ready ? 2 : 0 } });
+  return inv;
+}
+
 describe('argocd', () => {
   it('offers restart of the degraded deployment plus sync and refresh', () => {
     const [issue] = de(evaluateArgoApps([
       {
         metadata: { name: 'shop-api-chart', namespace: 'argocd' },
+        spec: { destination: { namespace: 'default' } },
         status: {
           sync: { status: 'Synced' },
           health: { status: 'Degraded' },
@@ -178,9 +187,41 @@ describe('argocd', () => {
           ],
         },
       },
-    ]));
+    ], invWith('default', 'api', false)));
+    expect(issue.id).toBe('argocd/argocd/shop-api-chart/health');
     expect(issue.cause).toBe('Deployment api: Deployment exceeded its progress deadline');
     expect(issue.actions.map((a) => a.type)).toEqual(['restart', 'argocd-sync', 'argocd-refresh']);
+  });
+
+  describe('restart targets (security review H2: they come from attacker-writable status)', () => {
+    const forged = (resources: { kind: string; namespace?: string; name: string }[], destination = 'tenant-a') => ({
+      metadata: { name: 'x', namespace: 'tenant-a' },
+      spec: { destination: { namespace: destination } },
+      status: { health: { status: 'Degraded' }, resources: resources.map((r) => ({ ...r, health: { status: 'Degraded' } })) },
+    });
+
+    it('never offers a workload outside the destination namespace, even when it is broken', () => {
+      const inv = invWith('kube-system', 'cilium', false, 'daemonsets');
+      const [issue] = evaluateArgoApps([forged([{ kind: 'DaemonSet', namespace: 'kube-system', name: 'cilium' }])], inv);
+      expect(issue!.actions.filter((a) => a.type === 'restart')).toEqual([]);
+    });
+
+    it('never offers a workload the inventory does not have, or shows ready', () => {
+      expect(evaluateArgoApps([forged([{ kind: 'Deployment', name: 'ghost' }])], invWith('tenant-a', 'web', false))[0]!.actions.filter((a) => a.type === 'restart')).toEqual([]);
+      expect(evaluateArgoApps([forged([{ kind: 'Deployment', name: 'web' }])], invWith('tenant-a', 'web', true))[0]!.actions.filter((a) => a.type === 'restart')).toEqual([]);
+    });
+
+    it('offers nothing without an inventory or a destination namespace', () => {
+      const app = forged([{ kind: 'Deployment', name: 'web' }]);
+      expect(evaluateArgoApps([app])[0]!.actions.filter((a) => a.type === 'restart')).toEqual([]);
+      expect(evaluateArgoApps([{ ...app, spec: {} }], invWith('tenant-a', 'web', false))[0]!.actions.filter((a) => a.type === 'restart')).toEqual([]);
+    });
+
+    it('offers a not-ready workload in the destination namespace, and names the Application namespace in the id', () => {
+      const [issue] = evaluateArgoApps([forged([{ kind: 'Deployment', name: 'web' }])], invWith('tenant-a', 'web', false));
+      expect(issue!.id).toBe('argocd/tenant-a/x/health');
+      expect(issue!.actions.filter((a) => a.type === 'restart')).toEqual([{ type: 'restart', kind: 'Deployment', namespace: 'tenant-a', name: 'web' }]);
+    });
   });
 
   it('treats OutOfSync of a manual app as a hint and of an automated app as a warning', () => {
@@ -209,7 +250,7 @@ describe('argocd', () => {
     const [issue] = de(evaluateArgoApps([
       { metadata: { name: 'a' }, status: { sync: { status: 'OutOfSync' }, operationState: { phase: 'Failed', message: 'one or more objects failed to apply' } } },
     ]));
-    expect(issue).toMatchObject({ id: 'argocd/a/operation', severity: 'critical' });
+    expect(issue).toMatchObject({ id: 'argocd/argocd/a/operation', severity: 'critical' });
   });
 });
 

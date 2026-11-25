@@ -35,7 +35,7 @@ describe('demo scenarios', () => {
     expect(s.light).toBe('yellow');
     const removal = s.issues.find((i) => i.id.startsWith('kubernetes-support/deprecated-apis/'));
     expect(removal?.severity).toBe('info');
-    expect(s.issues.map((i) => i.id).filter((id) => id !== removal?.id).sort()).toEqual(['argocd/weblate-chart/sync', 'certificates/weblate/weblate-tls', 'cnpg/default/shop-api-pg/backup']);
+    expect(s.issues.map((i) => i.id).filter((id) => id !== removal?.id).sort()).toEqual(['argocd/argocd/weblate-chart/sync', 'certificates/weblate/weblate-tls', 'cnpg/default/shop-api-pg/backup']);
   });
 
   it('broken is red', async () => {

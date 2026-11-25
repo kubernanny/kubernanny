@@ -29,7 +29,8 @@ export class E2eController {
   @HttpCode(200)
   async call(@Req() req: Request, @Res() res: Response): Promise<void> {
     const body = Buffer.isBuffer(req.body) ? new Uint8Array(req.body) : new Uint8Array(0);
-    const result = await this.e2e.handle(body);
+    // The socket's own address: X-Forwarded-For is whatever the caller writes.
+    const result = await this.e2e.handle(body, Date.now(), 'direct', req.socket.remoteAddress);
     if (result.kind === 'plain') {
       res.status(result.status).json({ code: result.code });
       return;
