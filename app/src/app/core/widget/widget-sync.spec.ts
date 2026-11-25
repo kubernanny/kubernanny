@@ -6,7 +6,7 @@ import { ClusterConfig, Issue, Snapshot } from '../agent.model';
 import { ClusterStore } from '../cluster-store.service';
 import { ClusterState, StatusStore } from '../status-store.service';
 import { WidgetBridge } from './widget-bridge';
-import { WidgetCluster, nextWidgetList, validWidgetList, widgetCluster } from './widget-summary';
+import { WidgetCluster, keepFresher, nextWidgetList, validWidgetList, widgetCluster } from './widget-summary';
 import { WidgetSync } from './widget-sync.service';
 
 /** Stands in for the native plugin: what it holds is what the device's shared storage would hold. */
@@ -73,14 +73,40 @@ const snapshot = (light: Snapshot['light'], issues: Issue[], checkedAt = '2026-1
 const state = (s: Snapshot): ClusterState => ({ snapshot: s, error: null, loading: false });
 
 describe('widgetCluster', () => {
-  it('counts like the headline and carries nothing but the summary', () => {
-    const s = snapshot('red', [issue('critical'), issue('critical'), issue('warning'), issue('info'), issue('critical', { silencedUntil: '2099-01-01T00:00:00Z' })]);
+  it('counts like the headline and carries nothing but the summary and the worst titles', () => {
+    const s = snapshot('red', [
+      issue('warning', { title: 'Certificate expires in 9 days' }),
+      issue('critical'),
+      issue('critical', { title: 'Node pi-03 is not ready' }),
+      issue('info', { title: 'a hint' }),
+      issue('critical', { silencedUntil: '2099-01-01T00:00:00Z', title: 'silenced one' }),
+    ]);
     const w = widgetCluster(config('a', { name: 'homelab' }), s);
-    expect(w).toEqual({ id: 'a', name: 'homelab', light: 'red', critical: 2, warning: 1, checkedAt: '2026-11-25T10:00:00Z', demo: false });
+    expect(w).toEqual({
+      id: 'a',
+      name: 'homelab',
+      light: 'red',
+      critical: 2,
+      warning: 1,
+      checkedAt: '2026-11-25T10:00:00Z',
+      demo: false,
+      problems: [
+        { title: 'Pod payments-db is crash looping', severity: 'critical' },
+        { title: 'Node pi-03 is not ready', severity: 'critical' },
+        { title: 'Certificate expires in 9 days', severity: 'warning' },
+      ],
+    });
     const json = JSON.stringify(w);
-    for (const secret of ['secret-host', 'AGENTKEY', 'PRIVATE-DEVICE-KEY', 'crash looping', 'secret-ns', 'k3s', 'prod-cluster', 'dev-1']) {
+    for (const secret of ['secret-host', 'AGENTKEY', 'PRIVATE-DEVICE-KEY', 'OOMKilled', 'secret-ns', 'k3s', 'prod-cluster', 'dev-1', 'a hint', 'silenced one']) {
       expect(json).not.toContain(secret);
     }
+  });
+
+  it('keeps at most three problems and shortens long titles', () => {
+    const w = widgetCluster(config('a'), snapshot('red', [1, 2, 3, 4].map(() => issue('critical', { title: 'x'.repeat(200) }))));
+    expect(w.problems).toHaveLength(3);
+    expect(Array.from(w.problems[0]!.title)).toHaveLength(120);
+    expect(widgetCluster(config('a'), snapshot('green', [])).problems).toEqual([]);
   });
 
   it('marks demo clusters', () => {
@@ -89,7 +115,7 @@ describe('widgetCluster', () => {
 });
 
 describe('nextWidgetList', () => {
-  const before: WidgetCluster = { id: 'a', name: 'old name', light: 'yellow', critical: 0, warning: 2, checkedAt: '2026-11-25T09:00:00Z', demo: false };
+  const before: WidgetCluster = { id: 'a', name: 'old name', light: 'yellow', critical: 0, warning: 2, checkedAt: '2026-11-25T09:00:00Z', demo: false, problems: [] };
 
   it('keeps the last entry of a cluster without an answer, renamed', () => {
     expect(nextWidgetList([before], [config('a', { name: 'new name' })], {}, false)).toEqual([{ ...before, name: 'new name' }]);
@@ -105,9 +131,33 @@ describe('nextWidgetList', () => {
 
 describe('validWidgetList', () => {
   it('drops malformed entries and unknown fields', () => {
-    const good = { id: 'a', name: 'x', light: 'green', critical: 0, warning: 0, checkedAt: null, demo: false };
-    expect(validWidgetList([{ ...good, extra: 'nope' }, { ...good, light: 'purple' }, null, 'x'])).toEqual([good]);
+    const good = { id: 'a', name: 'x', light: 'green', critical: 0, warning: 0, checkedAt: null, demo: false, problems: [{ title: 't', severity: 'warning' }] };
+    expect(validWidgetList([{ ...good, extra: 'nope' }, { ...good, light: 'purple' }, { ...good, problems: [{ title: 1, severity: 'warning' }] }, null, 'x'])).toEqual([good]);
     expect(validWidgetList('nope')).toEqual([]);
+  });
+
+  it('reads a list stored before problems existed', () => {
+    const old = { id: 'a', name: 'x', light: 'green', critical: 0, warning: 0, checkedAt: null, demo: false };
+    expect(validWidgetList([old])).toEqual([{ ...old, problems: [] }]);
+  });
+});
+
+describe('keepFresher', () => {
+  const app: WidgetCluster = { id: 'a', name: 'homelab', light: 'red', critical: 1, warning: 0, checkedAt: '2026-11-25T10:00:00Z', demo: false, problems: [] };
+  const pushed: WidgetCluster = { ...app, name: 'old', light: 'green', critical: 0, checkedAt: '2026-11-25T10:05:00Z' };
+
+  it('keeps a newer state a push stored, with the app\'s name', () => {
+    expect(keepFresher([app], [pushed])).toEqual([{ ...pushed, name: 'homelab' }]);
+  });
+
+  it('takes the app\'s entry when it is as new or newer, or the stored one has no time', () => {
+    expect(keepFresher([{ ...app, checkedAt: '2026-11-25T10:05:00Z' }], [pushed])[0]!.light).toBe('red');
+    expect(keepFresher([app], [{ ...pushed, checkedAt: null }])).toEqual([app]);
+    expect(keepFresher([app], [])).toEqual([app]);
+  });
+
+  it('never brings back a cluster the app left out', () => {
+    expect(keepFresher([], [pushed])).toEqual([]);
   });
 });
 
@@ -149,7 +199,21 @@ describe('WidgetSync', () => {
 
     status.states.set({ a: state(snapshot('red', [issue('critical'), issue('warning')])) });
     await settle(sync);
-    expect(bridge.stored).toEqual([{ id: 'a', name: 'homelab', light: 'red', critical: 1, warning: 1, checkedAt: '2026-11-25T10:00:00Z', demo: false }]);
+    expect(bridge.stored).toEqual([
+      {
+        id: 'a',
+        name: 'homelab',
+        light: 'red',
+        critical: 1,
+        warning: 1,
+        checkedAt: '2026-11-25T10:00:00Z',
+        demo: false,
+        problems: [
+          { title: 'Pod payments-db is crash looping', severity: 'critical' },
+          { title: 'Pod payments-db is crash looping', severity: 'warning' },
+        ],
+      },
+    ]);
 
     // A loading flag flipping is no new snapshot: no write.
     status.states.set({ a: { ...status.states()['a'], loading: true } });
@@ -165,11 +229,28 @@ describe('WidgetSync', () => {
   });
 
   it('keeps what the widget showed while the app has no answer yet after a start', async () => {
-    bridge.stored = [{ id: 'a', name: 'homelab', light: 'yellow', critical: 0, warning: 3, checkedAt: '2026-11-25T09:00:00Z', demo: false }];
+    bridge.stored = [{ id: 'a', name: 'homelab', light: 'yellow', critical: 0, warning: 3, checkedAt: '2026-11-25T09:00:00Z', demo: false, problems: [] }];
     clusters.clusters.set([config('a', { name: 'homelab' })]);
     const sync = await open();
     await settle(sync);
     expect(bridge.writes).toEqual([]);
+  });
+
+  it('does not write an older state over one a push stored in the meantime', async () => {
+    clusters.clusters.set([config('a', { name: 'homelab' }), config('b')]);
+    const sync = await open();
+    status.states.set({ a: state(snapshot('red', [issue('critical')], '2026-11-25T10:00:00Z')) });
+    await settle(sync);
+    // The push extension writes a newer, green state while the app is in the background.
+    const pushed: WidgetCluster = { ...bridge.stored[0]!, light: 'green', critical: 0, problems: [], checkedAt: '2026-11-25T10:20:00Z' };
+    bridge.stored = [pushed];
+    // Another cluster answers: the list is written again, with the push's state for `a`.
+    status.states.set({ ...status.states(), b: state(snapshot('green', [])) });
+    await settle(sync);
+    expect(bridge.stored.map((c) => [c.id, c.light, c.checkedAt])).toEqual([
+      ['a', 'green', '2026-11-25T10:20:00Z'],
+      ['b', 'green', '2026-11-25T10:00:00Z'],
+    ]);
   });
 
   it('deletes a cluster switched off at once and writes nothing more for it', async () => {
@@ -215,7 +296,7 @@ describe('WidgetSync', () => {
 
   it('removes a widget entry left from before when the app starts switched off', async () => {
     await Preferences.set({ key: 'widgetsOff', value: '1' });
-    bridge.stored = [{ id: 'a', name: 'homelab', light: 'red', critical: 1, warning: 0, checkedAt: null, demo: false }];
+    bridge.stored = [{ id: 'a', name: 'homelab', light: 'red', critical: 1, warning: 0, checkedAt: null, demo: false, problems: [] }];
     clusters.clusters.set([config('a')]);
     await open();
     expect(bridge.stored).toEqual([]);

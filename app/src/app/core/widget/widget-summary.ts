@@ -1,11 +1,21 @@
 import { ClusterConfig, Light, Snapshot } from '../agent.model';
 import { ClusterState } from '../status-store.service';
 
+/** One open problem as the larger widgets list it. */
+export interface WidgetProblem {
+  /** The issue's title as the app shows it, at most MAX_PROBLEM_TITLE characters. */
+  title: string;
+  severity: 'critical' | 'warning';
+}
+
 /**
  * One cluster as the home-screen widget sees it. This is everything that
- * leaves the app for the widget: no address, no keys, no issue texts, no
- * component names. Native code decodes exactly these fields, so add a field
- * there too (and to docs/SECURITY.md) or not at all.
+ * leaves the app for the widget: no address, no keys, no causes, no actions;
+ * the titles of the three worst problems at most (docs/SECURITY.md). Native
+ * code decodes exactly these fields (and the push extension / service writes
+ * them from a sealed push), so add a field there too or not at all. Fields
+ * added later are optional for the natives: a list stored by an older app
+ * version still reads.
  */
 export interface WidgetCluster {
   /** The app's id, for the kubernanny://cluster?id=… link a tap opens. */
@@ -20,22 +30,34 @@ export interface WidgetCluster {
   checkedAt: string | null;
   /** A built-in demo cluster: the widget marks it as such. */
   demo: boolean;
+  /** The worst open problems, outages first, at most MAX_PROBLEMS (none when all is well). */
+  problems: WidgetProblem[];
 }
 
 /** Long enough for any sensible name, short enough that a pasted essay stays in the app. */
 const MAX_NAME = 64;
+/** As many as the large widget lists; the same limits as a push's status (PUSH_STATUS_PROBLEMS, PUSH_STATUS_TITLE). */
+export const MAX_PROBLEMS = 3;
+export const MAX_PROBLEM_TITLE = 120;
+
+function clip(text: string, max: number): string {
+  const chars = Array.from(text);
+  return chars.length <= max ? text : chars.slice(0, max - 1).join('') + '…';
+}
 
 export function widgetCluster(cluster: ClusterConfig, snapshot: Snapshot): WidgetCluster {
   const counted = snapshot.issues.filter((i) => !i.silencedUntil && i.severity !== 'info');
-  const critical = counted.filter((i) => i.severity === 'critical').length;
+  const outages = counted.filter((i) => i.severity === 'critical');
+  const warnings = counted.filter((i) => i.severity !== 'critical');
   return {
     id: cluster.id,
     name: cluster.name.slice(0, MAX_NAME),
     light: snapshot.light,
-    critical,
-    warning: counted.length - critical,
+    critical: outages.length,
+    warning: warnings.length,
     checkedAt: snapshot.checkedAt,
     demo: cluster.demo !== undefined,
+    problems: [...outages, ...warnings].slice(0, MAX_PROBLEMS).map((i) => ({ title: clip(i.title, MAX_PROBLEM_TITLE), severity: i.severity === 'critical' ? 'critical' : 'warning' })),
   };
 }
 
@@ -67,6 +89,34 @@ export function nextWidgetList(previous: WidgetCluster[], clusters: ClusterConfi
   return out;
 }
 
+/**
+ * What to write: `next`, except where the stored entry of the same cluster
+ * is newer. A sealed push updates the stored list from the background (the
+ * iOS push extension, the Android messaging service) while the app holds an
+ * older answer or none, and that newer state must not be written over. Name
+ * and demo flag always come from the app.
+ */
+export function keepFresher(next: WidgetCluster[], stored: WidgetCluster[]): WidgetCluster[] {
+  return next.map((entry) => {
+    const other = stored.find((s) => s.id === entry.id);
+    if (!other?.checkedAt || (entry.checkedAt && Date.parse(other.checkedAt) <= Date.parse(entry.checkedAt))) {
+      return entry;
+    }
+    return { ...other, name: entry.name, demo: entry.demo };
+  });
+}
+
+function validProblems(value: unknown): WidgetProblem[] | null {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const ok = value.every((p) => typeof p === 'object' && p !== null && typeof p.title === 'string' && (p.severity === 'critical' || p.severity === 'warning'));
+  return ok ? value.slice(0, MAX_PROBLEMS).map((p: WidgetProblem) => ({ title: clip(p.title, MAX_PROBLEM_TITLE), severity: p.severity })) : null;
+}
+
 /** Reads back what native storage returned; anything malformed is dropped rather than trusted. */
 export function validWidgetList(value: unknown): WidgetCluster[] {
   if (!Array.isArray(value)) {
@@ -84,7 +134,8 @@ export function validWidgetList(value: unknown): WidgetCluster[] {
         Number.isInteger(c.critical) &&
         Number.isInteger(c.warning) &&
         (c.checkedAt === null || typeof c.checkedAt === 'string') &&
-        typeof c.demo === 'boolean',
+        typeof c.demo === 'boolean' &&
+        validProblems(c.problems) !== null,
     )
-    .map(({ id, name, light, critical, warning, checkedAt, demo }) => ({ id, name, light, critical, warning, checkedAt, demo }));
+    .map(({ id, name, light, critical, warning, checkedAt, demo, problems }) => ({ id, name, light, critical, warning, checkedAt, demo, problems: validProblems(problems)! }));
 }

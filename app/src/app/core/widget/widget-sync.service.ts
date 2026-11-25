@@ -4,7 +4,7 @@ import { ClusterConfig } from '../agent.model';
 import { ClusterStore } from '../cluster-store.service';
 import { StatusStore } from '../status-store.service';
 import { WidgetBridge } from './widget-bridge';
-import { WidgetCluster, nextWidgetList } from './widget-summary';
+import { WidgetCluster, keepFresher, nextWidgetList } from './widget-summary';
 
 const OFF_KEY = 'widgetsOff';
 
@@ -69,12 +69,20 @@ export class WidgetSync {
     }
     this.written = next;
     this.writtenJson = json;
-    this.queue = this.queue.then(() =>
-      this.bridge.write(next).catch(() => {
+    this.queue = this.queue.then(async () => {
+      try {
+        // A push may have stored a newer state since (push-written entries win, keepFresher).
+        const stored = await this.bridge.read().catch(() => [] as WidgetCluster[]);
+        const merged = keepFresher(next, stored);
+        if (JSON.stringify(merged) !== json) {
+          this.written = merged;
+        }
+        await this.bridge.write(merged);
+      } catch {
         // Retry with the next change rather than believe a failed write.
         this.writtenJson = null;
-      }),
-    );
+      }
+    });
     return this.queue;
   }
 
