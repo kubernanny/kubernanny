@@ -27,6 +27,41 @@ export const FAILURE_WINDOW_MS = 10 * 60_000;
 
 export type RedeemResult = 'ok' | 'invalid' | 'throttled';
 
+/** Draws the pairing link as a large QR code in the browser; the link stays in the fragment (docs/PROTOCOL.md#pairing). */
+export const QR_PAGE = 'https://kubernanny.app/qr';
+/** Light modules around the code: the QR standard asks for four. */
+const QUIET_ZONE = 4;
+
+/**
+ * The QR code as plain text, for the log: one line per module row, two full
+ * blocks per module (about square in a monospace font), dark modules drawn, a
+ * quiet zone of four, and no ANSI escapes (Loki and others show those as
+ * text, which shifts every row). 106 columns for a link with a relay.
+ *
+ * Why not half blocks (two rows per line, half as tall and wide): log
+ * viewers that space their lines apart (Argo CD: 1.5rem lines at 14px) leave
+ * a gap inside every line pair, and no decoder read that in our tests at line
+ * heights from 1.5 up; this one still decodes there once the image is a
+ * little blurred, as in a phone camera. It is the right way round on a light
+ * background and inverted on a dark one; most scanners read both. The image
+ * link printed under it works everywhere.
+ */
+export function terminalQr(link: string): string {
+  const { modules } = QRCode.create(link, { errorCorrectionLevel: 'L' });
+  const size = modules.size;
+  const lines: string[] = [];
+  for (let y = -QUIET_ZONE; y < size + QUIET_ZONE; y++) {
+    let line = '';
+    for (let x = -QUIET_ZONE; x < size + QUIET_ZONE; x++) {
+      const dark = x >= 0 && y >= 0 && x < size && y < size && modules.get(y, x) === 1;
+      line += dark ? '██' : '  ';
+    }
+    // Trailing quiet zone is blank anyway; viewers trim it.
+    lines.push(line.trimEnd());
+  }
+  return lines.join('\n');
+}
+
 const digest = (s: string) => createHash('sha256').update(s).digest();
 
 export interface PairingLinks {
@@ -34,6 +69,8 @@ export interface PairingLinks {
   app: string;
   /** The web UI the agent serves itself; the code travels in the fragment, which never reaches a server log. */
   web: string | null;
+  /** The app link drawn as a large QR code on kubernanny.app, for log viewers that tear the text one apart. */
+  image: string;
   /** How to reach the agent when it has no public URL. */
   portForward: string;
 }
@@ -113,16 +150,16 @@ export class PairingService {
     const relay: Record<string, string> = this.config.relayUrl ? { relay: relayHttpUrl(this.config.relayUrl) } : {};
     const app = `kubernanny://pair?${new URLSearchParams({ url, code, name: this.config.clusterName, key, ...relay })}`;
     const web = this.config.webRoot ? `${url}/#/pair?${new URLSearchParams({ code, name: this.config.clusterName, key, ...relay })}` : null;
-    return { app, web, portForward: `kubectl -n ${this.config.namespace} port-forward svc/kubernanny 8080:80` };
+    return { app, web, image: `${QR_PAGE}#${encodeURIComponent(app)}`, portForward: `kubectl -n ${this.config.namespace} port-forward svc/kubernanny 8080:80` };
   }
 
   /** The block the agent logs on start: `kubectl logs deploy/kubernanny` is the whole pairing step. */
   async banner(code: string): Promise<string> {
     const links = this.links(code);
-    const qr = await QRCode.toString(links.app, { type: 'terminal', small: true, errorCorrectionLevel: 'L' });
+    const qr = terminalQr(links.app);
     // Pod logs have no reader to ask, so the banner speaks the agent's LANGUAGE.
     const s = (text: Text) => render(text, this.config.language);
-    const lines = ['', s(t('banner.ready', { cluster: this.config.clusterName })), '', s(t('banner.scan')), qr, s(t('banner.link', { link: links.app }))];
+    const lines = ['', s(t('banner.ready', { cluster: this.config.clusterName })), '', s(t('banner.scan')), qr, s(t('banner.image', { link: links.image })), '', s(t('banner.link', { link: links.app }))];
     if (links.web) {
       lines.push('', s(t('banner.web', { link: links.web })));
     }

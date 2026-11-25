@@ -7,7 +7,7 @@ import { distribution, imageVersion } from '../discovery/discovery';
 import { emptyInventory, parseQuantity } from '../inventory/inventory';
 import { detectFormat, webhookBody } from '../notify/notifier';
 import type { IdentityService } from '../auth/identity.service';
-import { CODE_TTL_MS, MAX_FAILURES_PER_WINDOW, PairingService } from '../pairing/pairing';
+import { CODE_TTL_MS, MAX_FAILURES_PER_WINDOW, PairingService, terminalQr } from '../pairing/pairing';
 import { KubeClient } from '../kube/kube-client';
 import { ServiceHttp } from './service-proxy';
 import { lightFor, scoreFor } from '../status/status.service';
@@ -157,6 +157,34 @@ describe('notifications and pairing', () => {
     expect(english).toContain('Kubernanny for cluster is ready.');
     const german = await new PairingService({ ...loadConfig(), language: 'de' }, fakeIdentity).banner('ABCDE23456');
     expect(german).toContain('Pairing-Code: ABCDE-23456 (einmal verwendbar, 60 Minuten gültig).');
+    expect(german).toContain('QR als Bild (falls der Code im Log nicht scannbar ist): https://kubernanny.app/qr#kubernanny%3A%2F%2Fpair%3F');
+  });
+
+  it('links the QR code as an image, with the app link in the fragment', () => {
+    const pairing = new PairingService(loadConfig(), fakeIdentity);
+    const links = pairing.links('ABCDE23456');
+    expect(links.image).toBe(`https://kubernanny.app/qr#${encodeURIComponent(links.app)}`);
+    // One decode on the page gives the app link back, its own encoding intact.
+    expect(decodeURIComponent(new URL(links.image).hash.slice(1))).toBe(links.app);
+  });
+
+  const QUIET_ROWS = 4;
+  it('prints the QR code without ANSI escapes, with a quiet zone, right under it the image link', async () => {
+    const banner = await new PairingService({ ...loadConfig(), language: 'en' }, fakeIdentity).banner('ABCDE23456');
+    expect(banner).not.toMatch(/\x1b/);
+    const qr = terminalQr('kubernanny://pair?url=https%3A%2F%2Fa&code=ABCDE23456');
+    const rows = qr.split('\n');
+    // Four quiet rows on top, then the finder pattern four modules (eight columns) in, two columns per module.
+    expect(rows.slice(0, 4)).toEqual(['', '', '', '']);
+    expect(rows[4].startsWith(' '.repeat(8) + '█'.repeat(14) + '  ')).toBe(true);
+    expect(rows[5].startsWith(' '.repeat(8) + '██' + ' '.repeat(10) + '██')).toBe(true);
+    const lines = banner.split('\n');
+    const imageLine = lines.findIndex((l) => l.startsWith('QR as an image'));
+    // Right under the code: only its blank quiet zone lies between them.
+    const before = lines.slice(0, imageLine);
+    const lastDrawn = before.findLastIndex((l) => l !== '');
+    expect(before[lastDrawn]).toMatch(/█/);
+    expect(imageLine - lastDrawn).toBe(QUIET_ROWS + 1);
   });
 
   it('refuses the removed PULSE_TOKEN instead of ignoring it', () => {

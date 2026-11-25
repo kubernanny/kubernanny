@@ -666,6 +666,7 @@ export const de = {
   // ---------- pairing banner and admin CLI ----------
   'banner.ready': (p: { cluster: string }) => `Kubernanny für ${p.cluster} ist bereit.`,
   'banner.scan': 'Mit der App: diesen Code mit der Handykamera scannen.',
+  'banner.image': (p: { link: string }) => `QR als Bild (falls der Code im Log nicht scannbar ist): ${p.link}`,
   'banner.link': (p: { link: string }) => `Oder den Link öffnen: ${p.link}`,
   'banner.web': (p: { link: string }) => `Im Browser: ${p.link}`,
   'banner.noIngress': (p: { command: string }) => `Ohne Ingress: ${p.command}`,

@@ -631,6 +631,7 @@ export const en = {
 
   'banner.ready': (p) => `Kubernanny for ${p.cluster} is ready.`,
   'banner.scan': "With the app: scan this code with your phone's camera.",
+  'banner.image': (p) => `QR as an image (if the code above does not scan in your log viewer): ${p.link}`,
   'banner.link': (p) => `Or open the link: ${p.link}`,
   'banner.web': (p) => `In the browser: ${p.link}`,
   'banner.noIngress': (p) => `Without an ingress: ${p.command}`,
