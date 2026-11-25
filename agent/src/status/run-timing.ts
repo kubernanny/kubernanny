@@ -39,7 +39,7 @@ export function runTiming(r: RunTimingInput): DetailSection[] {
   phases.push({ name: t('timing.total'), value: ms(r.totalMs), tone: 'ok' });
   const modules: DetailRow[] = [...r.moduleMs.entries()]
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 6)
+    .slice(0, 5)
     .map(([id, n]) => ({ name: id, value: ms(n), tone: 'muted' }));
   const queries: DetailRow[] = [...(r.prometheus ?? [])]
     .sort((a, b) => b.ms - a.ms)
