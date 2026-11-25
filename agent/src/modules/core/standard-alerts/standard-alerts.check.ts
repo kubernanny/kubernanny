@@ -139,6 +139,9 @@ const AREA: Record<Area, Text> = {
 
 const RANK: Record<IssueSeverity, number> = { critical: 0, warning: 1, info: 2 };
 
+/** A rule whose metric is missing for a reason of the cluster's setup (no RAID, no quotas): not applying, not a gap. */
+const notApplying = (s: RuleState) => s.state === 'missing' && !!s.rule.absent;
+
 function ruleRows(states: RuleState[], issues: Issue[]): DetailRow[] {
   return states.map(({ rule, state }) => {
     const own = issues.filter((i) => i.id.startsWith(`${ID}/${rule.key}/`)).sort((a, b) => RANK[a.severity] - RANK[b.severity]);
@@ -148,7 +151,7 @@ function ruleRows(states: RuleState[], issues: Issue[]): DetailRow[] {
       name: rule.alerts.join(' / '),
       sub: AREA[rule.area],
       tone,
-      value: state === 'checked' ? (own.length ? t('std.rule.fires', { n: own.length }) : t('std.rule.ok')) : REASON[state],
+      value: state === 'checked' ? (own.length ? t('std.rule.fires', { n: own.length }) : t('std.rule.ok')) : state === 'missing' && rule.absent ? rule.absent : REASON[state],
     };
   });
 }
@@ -213,6 +216,11 @@ export class StandardAlertsCheck extends CoreCheck {
         }
       : null;
     const summary = (issues.find((i) => i.severity === 'critical') ?? issues.find((i) => i.severity === 'warning'))?.title ?? (ctx.prom ? t('std.summary.ok', { n: checked + INVENTORY_RULES }) : t('std.summary.noPrometheus'));
-    return { issues, stats, details: sections(peerSection, listSection(t('std.detail.rules'), ruleRows(prom.states, issues), false)), summary };
+    const details = sections(
+      peerSection,
+      listSection(t('std.detail.rules'), ruleRows(prom.states.filter((st) => !notApplying(st)), issues), false),
+      listSection(t('std.detail.notApplying'), ruleRows(prom.states.filter(notApplying), issues), false),
+    );
+    return { issues, stats, details, summary };
   }
 }
