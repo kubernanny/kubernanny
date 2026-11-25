@@ -160,6 +160,24 @@ test.describe('web demo (no agent, nothing leaves the browser)', () => {
   });
 });
 
+test.describe('demo host build (demo.kubernanny.app)', () => {
+  const DEMO_HOST = 'http://127.0.0.1:4330';
+
+  test('starts with the demo and has no way to pair or add a cluster', async ({ page }) => {
+    const errors = watchErrors(page, [/404/]);
+    await page.goto(`${DEMO_HOST}/`);
+    await expect(page.locator('app-clusters a', { hasText: 'homelab' }).first()).toBeVisible();
+    await expect(page.locator('ion-button:has(ion-icon[name="add-outline"])')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Eigenen Cluster verbinden' })).toHaveCount(0);
+    // A pairing link leads nowhere: the route does not exist in this build.
+    await page.goto(`${DEMO_HOST}/#/pair?url=https%3A%2F%2Fevil.example&code=ABCDE23456`);
+    await page.waitForURL(/#\/(clusters|c\/)/);
+    await page.goto(`${DEMO_HOST}/#/cluster/new`);
+    await page.waitForURL(/#\/(clusters|c\/)/);
+    expect(errors).toEqual([]);
+  });
+});
+
 test.describe('web demo in English', () => {
   test.use({ locale: 'en-US' });
 

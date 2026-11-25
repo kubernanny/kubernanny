@@ -242,6 +242,7 @@ sequenceDiagram
   G->>G: issue pairing code (10 chars, 60 min, 1 use)
   G->>L: QR + kubernanny://pair?url=…&code=…&key=<agent public key>
   P->>L: scan with the camera (kubectl logs)
+  P->>P: show name, address, relay, agent key fingerprint; wait for the tap
   P->>P: new key pair for this cluster, pin the agent key
   P->>G: POST /api/e2e: Noise message 1 { POST /pair, code, name }
   G->>K: patch secret kubernanny-devices (+ device public key)

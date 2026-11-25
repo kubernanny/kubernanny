@@ -48,6 +48,7 @@ Solid lines happen in every install, dotted ones only when you set them up.
 securityContext:                 # pod
   runAsNonRoot: true
   runAsUser: 1000
+  runAsGroup: 1000
   seccompProfile: { type: RuntimeDefault }
 containers:
   - name: agent
@@ -59,7 +60,7 @@ containers:
       - { name: tmp, mountPath: /tmp }   # emptyDir, medium: Memory, sizeLimit: 1Mi
 ```
 
-One process: `node dist/main.js`. It runs the checks once a minute (`CHECK_INTERVAL_SECONDS`), keeps the result in memory and answers the app. There is no database, no sidecar, no init container, no CRD, no webhook, no DaemonSet: Kubernanny never runs anything on your nodes.
+One process: `node dist/main.js`. It runs the checks once a minute (`CHECK_INTERVAL_SECONDS`), keeps the result in memory and answers the app. There is no database, no sidecar, no init container, no CRD, no webhook, no DaemonSet: Kubernanny never runs anything on your nodes. The only cluster-scoped objects besides the RBAC are the ValidatingAdmissionPolicies described below (Kubernetes 1.30+), which the API server evaluates itself: no webhook, no extra pod.
 
 Check it:
 
@@ -86,7 +87,9 @@ sequenceDiagram
   Note over A: audit log: who, which action, which object
 ```
 
-An action never names its target in the request: the app says "run `restart` for issue X", and the agent takes namespace, kind and name from its own check result. It can only touch what is broken right now. Every action and every log read is written to the agent's log with the device that asked (`kubectl -n kubernanny logs deploy/kubernanny | grep audit`).
+An action never names its target in the request: the app says "run `restart` for issue X", and the agent takes namespace, kind and name from its own check result. It can only touch what is broken right now. For an Argo CD Application the restart targets are not taken from the Application's `status` (anyone who can edit an Application writes that), only workloads the agent's own inventory shows not ready, in the Application's destination namespace.
+
+That binding lives in the agent's code. Should the pod itself be compromised, RBAC alone would let it use the cluster-wide `patch` for anything on those objects. On Kubernetes 1.30+ the chart therefore also installs ValidatingAdmissionPolicies that deny the agent's ServiceAccount every change but the restart annotation on workloads, a plain sync or refresh on Applications, and a plain Backup on CNPG ([PERMISSIONS.md](PERMISSIONS.md#admission-policy)). Check them with `kubectl get validatingadmissionpolicies | grep kubernanny`, and try one: `kubectl set image deploy/<any> '*=busybox' --as=system:serviceaccount:kubernanny:kubernanny --dry-run=server` must be refused. Every action and every log read is written to the agent's log with the device that asked (`kubectl -n kubernanny logs deploy/kubernanny | grep audit`).
 
 Check it yourself, as the agent's ServiceAccount:
 
@@ -131,6 +134,8 @@ Nothing else: no telemetry, no update check, no analytics, no font or script dow
 
 Optional egress policy (`networkPolicy.egress.enabled: true`) limits outbound traffic to DNS, the API server, the monitoring namespace and, if needed, HTTPS for notifications, the relay, the vulnerability database and the registries of `image-updates` (only while `imageUpdates.enabled` is set and `checks.disabled` does not name it). Test it on your cluster first: the API server's address and port differ between distributions. Gatus, Uptime Kuma, Grafana or Loki outside the monitoring namespace are then unreachable and show as not checkable.
 
+**The API-server rule is only as narrow as you make it.** A NetworkPolicy cannot name "the API server", and its address differs per distribution (node IPs on most). Without `networkPolicy.egress.apiServerCIDRs` that rule allows ports 443 and 6443 to *any* address, so `internetHttps: false` alone does not stop HTTPS to the internet; the chart notes say so after an install. Set the CIDRs from `kubectl get endpoints kubernetes -n default` (e.g. `[192.168.1.10/32]`) to make it hold.
+
 ## What it stores
 
 | Where | What | Who can read it |
@@ -155,6 +160,8 @@ None of these is created by Helm, so `helm uninstall` leaves them (and your pair
 | no look at Rook Ceph, Kyverno or Gatekeeper | `checks.disabled: [rook-ceph]`, `[kyverno]`, `[gatekeeper]`: not run, their reads leave the ClusterRole |
 | no error rates of the ingress controller | `checks.disabled: [traefik]` / `[ingress-nginx]`: no Prometheus query (the component then shows nothing at all, not even workload health) |
 | no clock check | `checks.disabled: [node-clocks]`: no Prometheus query |
+| no request to Prometheus at all | `checks.disabled: [prometheus]`: no module or view queries it (nodes, volumes, etcd, clocks, ingress error rates, history). Switching the Prometheus module off in the app only hides that module; the others keep using Prometheus |
+| no notification ever, security alerts included | `checks.disabled: [notifications]`: the chart passes no channel to the agent, the test route answers 403 |
 | fewer details in notifications | `notifications.detail: minimal` |
 | no native push to the app, ever | `notifications.appPush.enabled: false` (`APP_PUSH=off`): the push routes answer 404 before touching anything, stored push tokens are deleted on start, nothing is handed to the relay for push, and the app shows push as locked |
 

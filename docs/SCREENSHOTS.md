@@ -109,7 +109,7 @@ Every screen of Kubernanny, taken from the built-in demo clusters (`DEMO=broken`
 <table>
 <tr>
 <td valign="top" width="33%"><img src="screenshots/61-history.png" alt="Last 7 days: one cell per day, coloured by its worst incident, and the newest incidents with start and duration"><br><sub>Last 7 days: one cell per day, coloured by its worst incident, and the newest incidents with start and duration</sub></td>
-<td valign="top" width="33%"><img src="screenshots/62-history-all.png" alt=""Show all" unfolds the whole week"><br><sub>"Show all" unfolds the whole week</sub></td>
+<td valign="top" width="33%"><img src="screenshots/62-history-all.png" alt="“Show all” unfolds the whole week"><br><sub>"Show all" unfolds the whole week</sub></td>
 <td valign="top" width="33%"><img src="screenshots/63-silence.png" alt="Silence a known issue for an hour up to a week: it stays visible but no longer counts"><br><sub>Silence a known issue for an hour up to a week: it stays visible but no longer counts</sub></td>
 </tr>
 <tr>
@@ -142,7 +142,7 @@ Every screen of Kubernanny, taken from the built-in demo clusters (`DEMO=broken`
 
 <table>
 <tr>
-<td valign="top" width="33%"><img src="screenshots/60-demo.png" alt="The demo (demo.kubernanny.app, or "Try the demo first" in the app): three made-up clusters"><br><sub>The demo (demo.kubernanny.app, or "Try the demo first" in the app): three made-up clusters</sub></td>
+<td valign="top" width="33%"><img src="screenshots/60-demo.png" alt="The demo (demo.kubernanny.app, or “Try the demo first” in the app): three made-up clusters"><br><sub>The demo (demo.kubernanny.app, or "Try the demo first" in the app): three made-up clusters</sub></td>
 <td valign="top" width="33%"><img src="screenshots/70-de-clusters.png" alt="German: the cluster list"><br><sub>German: the cluster list</sub></td>
 <td valign="top" width="33%"><img src="screenshots/71-de-overview.png" alt="German: a cluster with outages"><br><sub>German: a cluster with outages</sub></td>
 </tr>

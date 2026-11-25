@@ -4,7 +4,7 @@
   "description": "End-to-end tests: the web demo and a real agent with its web UI, driven like a person would.",
   "license": "Apache-2.0",
   "scripts": {
-    "build": "cd ../protocol && npm run build && cd ../agent && npm run build && cd ../app && npx ng build",
+    "build": "cd ../protocol && npm run build && cd ../agent && npm run build && cd ../app && npx ng build && npm run build:demo",
     "test": "playwright test --trace off",
     "test:headed": "playwright test --headed"
   },

@@ -73,6 +73,7 @@ sequenceDiagram
 - The log may be shipped to Loki and read by many people. What they see is a code that is used or expired and a public key; neither is a credential.
 - A paired device can create a code for the next one; with kubectl, `kubectl -n kubernanny exec deploy/kubernanny -- node dist/cli.js pair` prints a fresh banner.
 - Without the QR code (address and code typed by hand), the agent key is fetched once over HTTPS or a port-forward, and the app shows its fingerprint, which the log shows too.
+- A pairing link never pairs by itself: anyone can make one. The app shows name, address, relay and the agent key's fingerprint and pairs on a tap; a link that would give a cluster already in the app another key is refused unless the person explicitly replaces it ([SECURITY.md](SECURITY.md#threats)).
 
 ### 3. Agent → Kubernetes API
 

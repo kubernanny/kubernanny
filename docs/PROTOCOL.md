@@ -81,11 +81,11 @@ A response opens only once, and only with the state of the request it answers.
 
 1. **Size and version byte**: over 65 536 bytes is plain `413 E2E_TOO_LARGE`, a wrong version byte or a body too short for an ephemeral key plain `400 E2E_VERSION`. Free: nothing is computed yet.
 2. **Replay cache**: the first 32 bytes after the version byte are the device's ephemeral key, unique per call. Seen before: plain `400 E2E_REPLAY`. Also free.
-3. **Handshake ceiling**: opening message 1 costs two X25519 operations (answering, two more), so the agent opens at most 400 at once, refilled at 200 per second, for everyone together. Over it: plain `429 E2E_RATE_LIMITED`. This only protects the CPU the checks need; it is far above what any honest use reaches.
+3. **Handshake ceilings**: opening message 1 costs two X25519 operations (answering, two more), so opening is limited in layers, all plain `429 E2E_RATE_LIMITED` when exceeded: direct and relayed calls have separate ceilings, so a flood on one path does not close the other; each direct source address has its own bucket (IPv6 per /64, at most 4 096 addresses, then one shared overflow bucket); and part of the direct ceiling is kept for addresses that made an authenticated call in the last 10 minutes. Behind an ingress every direct caller has the controller's address, so the per-address buckets do not separate callers there; the relay path stays usable.
 4. **Message 1**: decrypts only for the holder of the agent's private key, and authenticates the device's static key inside it. Failure: plain `400 E2E_HANDSHAKE`.
 5. **The caller's own budget**: each paired device has a bucket of its own (60, refilled at 20 per second); every unknown key, pairing attempts included, shares one small bucket (20, refilled at 2 per second). Over it: plain `429 E2E_RATE_LIMITED`. Strangers compete only with each other: however many junk calls arrive, a paired device's budget is untouched. (In DEMO mode, where every key is let in, that one demo device gets a device's budget.)
 6. **Replay entry**: for a paired device and for a pairing attempt, the ephemeral key is remembered now, **before** the clock check, until the request's own clock window has passed (at least 10 minutes). So a request refused because its time lies ahead cannot be replayed once that time comes. Unknown keys sending anything but `POST /pair` are not remembered, so they cannot fill the cache; at 20 000 entries (or 1 000 dated far ahead) the agent answers `503 E2E_BUSY`.
-7. **Clock**: `|t - now|` over 5 minutes for a `GET`, over **60 seconds** for a `POST` or `DELETE` (a captured call that changes something is worth less the sooner it expires), is answered sealed with `401 E2E_CLOCK_SKEW`. The answer's `t` is the agent's clock, authenticated, so the app corrects its own and retries once.
+7. **Clock**: a request dated before the agent process started (5 s margin) is refused, since the replay cache lives in memory and a restart empties it. Otherwise `|t - now|` over 5 minutes for a `GET`, over **60 seconds** for a `POST` or `DELETE` (a captured call that changes something is worth less the sooner it expires), is answered sealed with `401 E2E_CLOCK_SKEW`. The answer's `t` is the agent's clock, authenticated, so the app corrects its own and retries once.
 8. **Device**: a known key acts as that device. An unknown key may only send `POST /pair`; anything else is answered sealed with `401 DEVICE_UNKNOWN`.
 9. **Dispatch**: the request goes to the agent's internal API (a Unix socket, see [decisions/0003-internal-socket.md](decisions/0003-internal-socket.md)) as that device. Routes, validation and audit log are the same for every caller. If the internal call itself fails, the answer is sealed `502 E2E_INTERNAL`, so the device still gets an answer it can trust.
 
@@ -178,14 +178,14 @@ Native push ([NOTIFICATIONS.md](NOTIFICATIONS.md#native-push), [decisions/0007](
 | Suite | DHKEM(X25519, HKDF-SHA256) `0x0020`, HKDF-SHA256 `0x0001`, ChaCha20-Poly1305 `0x0003` |
 | Recipient key | the device's **push key** for this cluster: a separate X25519 pair the app makes when push is switched on; only its public half reaches the agent, in a sealed `POST /push/register` |
 | Sender key | the agent's static key, pinned by the device at pairing |
-| `info` | the ASCII bytes `kubernanny-push/1` (domain separation from the Noise prologue `kubernanny-e2e/1` and the relay label `kubernanny-relay/1`) |
+| `info` | the ASCII bytes `kubernanny-push/1` (domain separation from the Noise prologue `kubernanny-e2e/1` and the relay label `kubernanny-relay/2`) |
 | `aad` | empty |
 | Message | `0x01` (version) ‖ `enc` (the ephemeral public key, 32 bytes) ‖ ciphertext and tag |
 | Cross-check | both directions against [`@hpke/core`](https://github.com/dajiaji/hpke-js) in the test suite |
 
 The plaintext is JSON, keys in this order, at most 2048 bytes (the agent shortens the body to fit): `{"t": title, "b": body, "p": priority, "s": agent clock in ms}`. Next to the message travels the **key id** `k`: the first 16 characters of `base64url(BLAKE2b-256(push public key))`, so the phone picks the right key without trying each.
 
-Properties: only the holder of the push secret key opens a message (`DH(eph, push)`); it opens only if the agent made it (`mode_auth` mixes `DH(agent static, push)` in), so neither the relay nor Google nor anyone who learns the push public key can forge one; every message has a fresh ephemeral key. Not given: forward secrecy against a later theft of the push secret key (it opens every recorded push for that cluster, which is why it is a key of its own and not the device key), and replay protection (a replayed push shows an old message again; the plaintext carries the agent's time). Using the agent's static key in a second construction is safe here: HPKE feeds both DH results through its own labelled HKDF (`HPKE-v1` ‖ suite ‖ label), apart from Noise's HKDF over BLAKE2b, and the agent only ever computes `DH(agent static, push public)` for push keys that paired devices registered.
+Properties: only the holder of the push secret key opens a message (`DH(eph, push)`); it opens only if the agent made it (`mode_auth` mixes `DH(agent static, push)` in), so neither the relay nor Google nor anyone who learns the push public key can forge one; every message has a fresh ephemeral key. Not given: forward secrecy against a later theft of the push secret key (it opens every recorded push for that cluster, which is why it is a key of its own and not the device key), and replay protection in the construction itself. The phone adds it (**push replay**): it shows a message only if its `s` lies within an hour of the phone's clock and is later than the `s` of the last message it showed for that key id, which it keeps next to the push key (`pushFresh` in `app/src/app/core/push/push-content.ts`, mirrored by `PushFreshness.java` and `PushKeys.isFresh`). A replayed or stale message opens but is not shown (iOS shows its generic text instead, without the marker). Using the agent's static key in a second construction is safe here: HPKE feeds both DH results through its own labelled HKDF (`HPKE-v1` ‖ suite ‖ label), apart from Noise's HKDF over BLAKE2b, and the agent only ever computes `DH(agent static, push public)` for push keys that paired devices registered.
 
 ### Push test vector
 
@@ -196,6 +196,23 @@ All of them in [`protocol/test/push-vectors.json`](../protocol/test/push-vectors
 01b3634c526a0f09d99222c2d5dcea3c0cb0bd989084dcfec79585c9cbee88f1a455032dde3c51c5
 1cf226cf23ba91837341053214d97f1b3f4463695b0e5ca40942a35a878bcc136021b04f586b5938
 aa9c471e69fec6b33756624a2ba4d517df6f45bac9
+```
+
+## Relay registration
+
+When an agent dials a relay ([RELAY.md](RELAY.md)), it proves it holds the private key behind the agent id it registers. Relay protocol version 2 (`RELAY_PROTOCOL_VERSION`, label `kubernanny-relay/2`; version 1 was never released) binds that proof to the relay: the relay sends a 32-byte nonce and a fresh X25519 public key `E`, and the agent answers with its static public key `A` and
+
+```
+origin = relayOrigin(the URL the agent dialled)      e.g. "https://relay.example" for wss://relay.example
+K      = BLAKE2b-256("kubernanny-relay/2" ‖ u16be(len(origin)) ‖ origin ‖ X25519(a, E) ‖ E ‖ A)
+MAC    = first 32 bytes of HMAC-BLAKE2b(K, "kubernanny-relay/2" ‖ nonce)
+```
+
+`relayOrigin` is `http(s)://host[:port]` in lowercase, `ws` read as `http` and `wss` as `https`, the default port left out, no path. The relay recomputes `K` with its ephemeral secret and its own configured public origin, and checks that `A` hashes to the id. A relay that forwards another relay's challenge to an agent connected to it gets a proof for its own origin, which the other relay refuses. The test vector (agent key as above, nonce `07…07`, relay ephemeral secret `09…09`, dialled `wss://relay.example`, relay origin `https://relay.example`) is in [`protocol/test/relay-vectors.json`](../protocol/test/relay-vectors.json); Proof frame:
+
+```
+1100000000883186b800b41d5cf0429695da9b3cc4f328ebcd184a6e482fa578c103f06c7783d6c0
+7c864fb357ff0a70116f62f7a88dda187f798ca1c8a30c1d17d0009e5e
 ```
 
 ## Versioning

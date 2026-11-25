@@ -2,7 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * Two servers, both started from the builds (`npm run build` first):
- * - the app's static build, as demo.kubernanny.app serves it (port 4310);
+ * - the app's static build, the full app without an agent behind it (port 4310);
+ * - the demo host build (`npm run build:demo`), as demo.kubernanny.app serves it (port 4330);
  * - a real agent in demo mode serving its web UI (port 4320), paired like a
  *   phone would pair, everything over the end-to-end channel.
  */
@@ -26,6 +27,11 @@ export default defineConfig({
     {
       command: 'python3 -m http.server 4310 --bind 127.0.0.1 -d ../app/dist/app/browser',
       url: 'http://127.0.0.1:4310/index.html',
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      command: 'python3 -m http.server 4330 --bind 127.0.0.1 -d ../app/dist/demo/browser',
+      url: 'http://127.0.0.1:4330/index.html',
       reuseExistingServer: !process.env.CI,
     },
     {

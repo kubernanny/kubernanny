@@ -17,7 +17,8 @@ Errors carry the HTTP status and a body with a stable `code` and a `message` in 
 | Code | Status | Meaning |
 |---|---|---|
 | `E2E_REQUIRED` | 401 | an API route called directly instead of through `/api/e2e` |
-| `E2E_CLOCK_SKEW` | 401 | the device's clock is more than 5 minutes off (60 seconds for `POST` and `DELETE`); the sealed answer carries the agent's time |
+| `E2E_CLOCK_SKEW` | 401 | the device's clock is more than 5 minutes off (60 seconds for `POST` and `DELETE`), or the call is dated before the agent started (its replay cache is in memory only); the sealed answer carries the agent's time |
+| `E2E_BUSY` | 503 | too many calls in flight inside the agent (sealed), or the replay cache is full (plain); try again |
 | `E2E_INTERNAL` | 502 | the agent decrypted the call but could not carry it out internally (sealed); try again |
 | `DEVICE_UNKNOWN` | 401 | the device key is not (or no longer) paired |
 | `PAIRING_CODE_INVALID` | 401 | code wrong, expired or used |
@@ -32,6 +33,8 @@ Errors carry the HTTP status and a body with a stable `code` and a `message` in 
 | `ACTION_NOT_OFFERED` | 404 | the issue does not offer that action |
 | `ACTION_UNKNOWN` | 400 | not one of the four action types |
 | `NO_CHANNEL` | 400 | test notification without a configured channel |
+| `NOTIFICATIONS_LOCKED` | 403 | test notification while `checks.disabled: [notifications]` switches every channel off |
+| `NOTIFY_FAILED` | 502 | the test notification did not reach every channel; the message names the failing one |
 | `ACCEPT_LOCKED` | 403 | accepting advisories is switched off in the deployment (`vulnerabilities.allowAccept: false`) |
 | `MODULE_OFF` | 403 | accepting an advisory while neither the `vulnerabilities` module nor the `trivy` integration is running |
 | `ADVISORY_NOT_FOUND` | 404 | the advisory is not reported for that component right now |
@@ -49,7 +52,7 @@ Errors carry the HTTP status and a body with a stable `code` and a `message` in 
 
 ### `POST /api/e2e`
 
-`application/octet-stream`: one sealed call, see [PROTOCOL.md](PROTOCOL.md). 200 with a sealed answer once the handshake completed (the call's own status is inside); otherwise a plain `{ "code": … }`: `E2E_VERSION`, `E2E_HANDSHAKE`, `E2E_REPLAY` (400), `E2E_TOO_LARGE` (413, bodies over 64 KiB), `E2E_RATE_LIMITED` (429: the handshake ceiling, or the caller's own budget, per device or shared by unknown keys, see [PROTOCOL.md](PROTOCOL.md)), `E2E_BUSY` (503).
+`application/octet-stream`: one sealed call, see [PROTOCOL.md](PROTOCOL.md). 200 with a sealed answer once the handshake completed (the call's own status is inside); otherwise a plain `{ "code": … }`: `E2E_VERSION`, `E2E_HANDSHAKE`, `E2E_REPLAY` (400), `E2E_TOO_LARGE` (413, bodies over 64 KiB), `E2E_RATE_LIMITED` (429: the handshake ceiling of the path (direct or relayed), the source address's own bucket, or the caller's own budget, per device or shared by unknown keys, see [PROTOCOL.md](PROTOCOL.md)), `E2E_BUSY` (503).
 
 ## Pairing (inside the envelope)
 
@@ -239,7 +242,7 @@ The last 300 lines (with timestamps) of the pod named by the issue's `logs` acti
 | `DELETE /devices/:id` | revoke a device (204); its key stops working on the next call. Any paired device may revoke any other (the lost-phone case); each revocation is announced through the notification channels first. |
 | `POST /pair/code` | a new one-time code for another device: `{ code, app, web }` (links as in the log, with the agent key). The previous code stops working. |
 | `POST /pair/code/banner` | admin CLI only (`node dist/cli.js pair`): the start banner with a fresh code, as text |
-| `POST /issues/silence?issue=<id>&hours=<1, 8, 24 or 168>` | silences an open issue: it stays in `issues` with `silencedUntil`, but no longer counts for light and score and sends no notification. `{ silencedUntil }`; 404 `ISSUE_GONE`, 400 `SILENCE_HOURS`. |
+| `POST /issues/silence?issue=<id>&hours=<1, 8, 24 or 168>` | silences an open issue: it stays in `issues` with `silencedUntil`, but no longer counts for light and score and sends no notification. `{ silencedUntil }`; 404 `ISSUE_GONE`, 400 `SILENCE_HOURS`. Silencing a critical issue, and four or more silences within 10 minutes, are announced through the notification channels first. |
 | `POST /issues/unsilence?issue=<id>` | ends the silence at once (204) |
 | `POST /maintenance?hours=<1, 2, 4, 8 or 24>` | starts a maintenance window (or moves its end): checks go on, notifications wait until it ends; the snapshot carries `maintenanceUntil`. Starting one is announced through the notification channels first. `{ maintenanceUntil }`; 400 `MAINTENANCE_HOURS`. |
 | `POST /maintenance/end` | ends it at once (204) |

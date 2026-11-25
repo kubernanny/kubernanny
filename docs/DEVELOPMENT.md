@@ -48,7 +48,7 @@ cd app && npm run test:scripts   # node:test for the release and asset scripts
 cd e2e && npm test          # Playwright: the web demo in both languages, and the app against a running demo agent
 ```
 
-The e2e suite builds nothing itself: it serves `app/dist` and starts `agent/dist`, so run `npm run build` in both first (CI does).
+The e2e suite builds nothing itself: it serves `app/dist` and starts `agent/dist`, so run `npm run build` in both first, and `npm run build:demo` in `app/` for the demo host tests (`cd e2e && npm run build` does all of it, as CI does).
 
 What the tests guard beyond the logic itself:
 
@@ -70,6 +70,8 @@ cd agent && npm run demo:export   # writes app/public/demo/{broken,warning,healt
 ```
 
 Run it after changing a check, a text or the demo cluster, and commit the result.
+
+demo.kubernanny.app serves its own build, not the one in the agent's image: `cd app && npm run build:demo` (`ng build --configuration production,demo`, output `app/dist/demo/browser`). It swaps `src/environments/build-flags.ts` for `build-flags.demo.ts` (`DEMO_HOST = true`): the app starts with the demo clusters, `/pair` and `/cluster/new` lead home, the add buttons are gone and `AgentClient` refuses every call that is not the built-in demo. Its response headers (a CSP that lets it connect only to its own origin) are in `app/src/demo-host/_headers`, which only this configuration copies into the output; a host that does not read `_headers` files (Cloudflare Pages and Netlify do) must set them itself. The demo host is not deployed from this repository's workflows; CI builds the configuration, and the e2e tests serve it on port 4330. The flag is decided at build time on purpose: an agent someone serves at `demo.example.com` is an ordinary agent.
 
 Screenshots: `docs/SCREENSHOTS.md` explains how they are made.
 

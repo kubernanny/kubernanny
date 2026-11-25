@@ -14,7 +14,7 @@ Chart: `deploy/helm/kubernanny` (OCI: `oci://ghcr.io/kubernanny/charts/kubernann
 | `notifications.ntfyUrl` | `""` | ntfy topic URL |
 | `notifications.webhookUrl` | `""` | Discord, Slack, Gotify or any JSON endpoint |
 | `notifications.webhookFormat` | `auto` | `auto`, `discord`, `slack`, `gotify`, `json` |
-| `notifications.existingSecret` | `""` | Secret loaded as env: put `NTFY_TOKEN` and/or a secret `WEBHOOK_URL` there |
+| `notifications.existingSecret` | `""` | Secret with `NTFY_TOKEN` and/or a secret `WEBHOOK_URL`; only these two keys are read, `webhookUrl` wins |
 | `notifications.notifyAfterSeconds` | `300` | An issue must last this long before it is sent |
 | `notifications.detail` | `full` | `minimal`: only the cluster name and counts leave the cluster (for ntfy.sh and other public services) |
 | `checks.intervalSeconds` | `60` | |
@@ -24,11 +24,13 @@ Chart: `deploy/helm/kubernanny` (OCI: `oci://ghcr.io/kubernanny/charts/kubernann
 | `actions.disabled` | `[]` | Action types switched off for good: `restart`, `argocd-sync`, `argocd-refresh`, `cnpg-backup`, `logs`. A permission is dropped once no enabled action of an enabled module needs it (`argocd-sync` and `argocd-refresh` share theirs). |
 | `checks.prometheusUrl` / `alertmanagerUrl` | `""` | Override discovery |
 | `rbac.allowActions` | `true` | `false`: no write verbs at all, actions answer 403 |
+| `rbac.admissionPolicy.enabled` | `true` | ValidatingAdmissionPolicies that limit the agent's write permissions to exactly what its actions change (the restart annotation, a plain Argo CD sync or refresh, a plain CNPG Backup). Needs Kubernetes 1.30+; on older clusters the chart notes say it is missing |
 | `service.type` / `service.port` | `ClusterIP` / `80` | |
 | `ingress.enabled` / `className` / `host` / `annotations` / `tls` | off | Keep it on a VPN or behind SSO; see [SECURITY.md](SECURITY.md) |
 | `serviceMonitor.enabled` / `interval` | off / `60s` | Prometheus Operator scrape of `kubernanny_*` |
 | `networkPolicy.enabled` | `false` | Ingress to 8080 only from `networkPolicy.ingressControllerNamespace`, to 9100 only from `networkPolicy.monitoringNamespace` |
 | `networkPolicy.egress.enabled` | `false` | Also restrict outbound: DNS, API server ports (`apiServerPorts`, default 443 and 6443), the monitoring namespace, HTTPS out (`internetHttps`) |
+| `networkPolicy.egress.apiServerCIDRs` | `[]` | The API server's CIDRs. Empty: the API-server ports (443, 6443) stay open to any address, so `internetHttps: false` alone does not block HTTPS out |
 | `resources` | 20m / 128Mi, limit 256Mi | Measured around 96 MB resident |
 | `notifications.weeklyDigest` | `enabled: false, weekday: 1, hour: 9` | Weekly report through the configured channels ([NOTIFICATIONS.md](NOTIFICATIONS.md)) |
 | `timezone` | `""` (UTC) | `TZ` of the agent, for the weekly report, e.g. `Europe/Berlin` |
@@ -103,7 +105,7 @@ The chart sets these; set them yourself with `deploy/install.yaml` or `docker ru
 | `DEMO` | | Built-in demo cluster, every device counts as paired and any pairing code works: `broken`, `warning`, `healthy`, `1` or `true` (= `broken`) turn it on; unset, empty, `0`, `false` or `off` turn it off; any other value stops the agent at start |
 | `K8S_API_URL`, `K8S_TOKEN` | | Development outside a cluster, e.g. `kubectl proxy` on `http://127.0.0.1:8001` |
 
-Invalid numbers fail the start with a clear message instead of running with a surprise.
+Invalid values fail the start with a clear message instead of running with a surprise: unknown ids in `DISABLED_MODULES` / `DISABLED_ACTIONS` (the chart also refuses unknown ids in `checks.disabled` / `actions.disabled`), and any unrecognised value of `VULN_ACCEPT`, `NOTIFY_DETAIL`, `WEBHOOK_FORMAT`, `DIGEST`, `PAIRING_LOG`, `METRICS_PORT`, `APP_PUSH` or `DEMO`. `DIGEST_WEEKDAY` takes 0 to 6 and `DIGEST_HOUR` 0 to 23. `checks.disabled: [prometheus]` means no Prometheus request at all, from any module.
 
 ## The app
 

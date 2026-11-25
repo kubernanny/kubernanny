@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { expectToast, openTab, visiblePage, watchErrors } from './helpers';
 
@@ -9,7 +10,28 @@ test.describe('agent web UI', () => {
     const { publicKey } = (await (await page.request.get(`${AGENT}/api/identity`)).json()) as { publicKey: string };
     // A demo agent takes any code; the key is its real one, pinned like from the QR code.
     await page.goto(`${AGENT}/#/pair?code=E2ETEST000&name=homelab&key=${publicKey}`);
+    // A link never pairs by itself: the page shows what it would pair with, and waits for the tap.
+    await expect(visiblePage(page).getByRole('heading', { name: 'Mit diesem Agent koppeln?' })).toBeVisible();
+    await visiblePage(page).locator('ion-button', { hasText: 'Koppeln' }).click();
     await page.waitForURL(/#\/c\//);
+  });
+
+  test('shows the agent key from the log before pairing, and refuses a link with another key for the same cluster', async ({ page }) => {
+    const { fingerprint } = (await (await page.request.get(`${AGENT}/api/identity`)).json()) as { fingerprint: string };
+    const cluster = page.url();
+    // Someone else's link for the cluster already in the app: their key, their relay.
+    const forged = randomBytes(32).toString('base64url');
+    await page.goto(`${AGENT}/#/pair?code=E2ETEST001&name=homelab&key=${forged}&relay=${encodeURIComponent('https://relay.evil.example')}`);
+    const warning = visiblePage(page);
+    await expect(warning.getByRole('heading', { name: 'Der Schlüssel des Agents hat sich geändert' })).toBeVisible();
+    await expect(warning).toContainText(fingerprint);
+    await warning.locator('ion-button', { hasText: 'Abbrechen' }).click();
+    await page.waitForURL(/#\/clusters/);
+    // The cluster still talks to the real agent with its pinned key.
+    await page.goto(cluster);
+    await expect(visiblePage(page).getByText('Braucht dich')).toBeVisible();
+    await visiblePage(page).locator('ion-button:has(ion-icon[name="settings-outline"])').click();
+    await expect(visiblePage(page).locator('dd code')).toHaveText(fingerprint);
   });
 
   test('pairs, shows the cluster and refuses the plain API', async ({ page }) => {

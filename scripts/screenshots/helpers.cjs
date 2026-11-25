@@ -38,11 +38,20 @@ const closeSheet = async (page, L) => {
   await page.waitForTimeout(700);
 };
 
+/** A pairing link only opens a confirmation (name, address, key); pairing needs the tap, as a person would. */
+async function confirmPairing(page) {
+  const button = page.locator('app-pair ion-button[type=submit]');
+  await button.waitFor({ timeout: 15000 });
+  await button.click();
+}
+
 async function pairAll(page) {
   await page.goto(`${BASE}/#/pair?code=${CODE}&name=homelab&key=${await keyOf(8081)}`);
+  await confirmPairing(page);
   await page.waitForSelector('app-heartbeat', { timeout: 15000 });
   for (const [port, name] of [[8082, 'office'], [8083, 'staging']]) {
     await page.goto(`${BASE}/#/pair?url=http://localhost:${port}&code=${CODE}&name=${name}&key=${await keyOf(port)}`);
+    await confirmPairing(page);
     await page.waitForURL(/#\/c\//, { timeout: 15000 });
   }
   await page.goto(`${BASE}/#/clusters`);

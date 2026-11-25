@@ -186,6 +186,9 @@ Stats: certificates ready, ClusterIssuers, next expiry.
 
 No sync is offered while an operation is running. Stats: apps, synced, healthy, automated.
 
+
+Issue ids are `argocd/<namespace>/<app>/{health,operation,sync,comparison}`. A restart is offered only for a workload in the Application's `spec.destination.namespace` that the agent's own inventory shows not ready, never for a target taken from the Application's status alone.
+
 ### CloudNativePG (`cnpg`)
 
 | Issue id | Severity | When | Actions |

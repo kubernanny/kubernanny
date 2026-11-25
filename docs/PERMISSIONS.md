@@ -9,12 +9,12 @@ Two kinds of switches exist. **Hard switches** are Helm values: they remove the 
 The agent can change only these things in your cluster, each on one object an open issue names:
 
 <!-- generated:write -->
-| Action | Verb and resource | What exactly it changes | Offered by | How to make it impossible |
-|---|---|---|---|---|
-| `restart` | patch `apps/deployments`, `apps/statefulsets`, `apps/daemonsets` | merge patch of `spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"]` on the Deployment, StatefulSet or DaemonSet the issue names: the same as `kubectl rollout restart` | `argocd`, `pods` | `actions.disabled: [restart]`: the route answers 403 and removes the rule; so does `checks.disabled` for all of `argocd`, `pods`, or `rbac.allowActions: false` for every write action |
-| `argocd-sync` | patch `argoproj.io/applications` | merge patch of `operation` (a sync with `initiatedBy.username: kubernanny`) on the Application the issue names: the same as pressing Sync in Argo CD | `argocd` | `actions.disabled: [argocd-sync]`: the route answers 403 and removes the rule only together with `actions.disabled: [argocd-refresh]`, or with `checks.disabled` for `argocd`, or `rbac.allowActions: false` for every write action |
-| `argocd-refresh` | patch `argoproj.io/applications` | merge patch of the annotation `argocd.argoproj.io/refresh: hard` on the Application the issue names: the same as a hard refresh in Argo CD | `argocd` | `actions.disabled: [argocd-refresh]`: the route answers 403 and removes the rule only together with `actions.disabled: [argocd-sync]`, or with `checks.disabled` for `argocd`, or `rbac.allowActions: false` for every write action |
-| `cnpg-backup` | create `postgresql.cnpg.io/backups` | creates one `Backup` object (`generateName: <cluster>-kubernanny-`, label `app.kubernetes.io/created-by: kubernanny`) for the database cluster the issue names: the same as `kubectl cnpg backup` | `cnpg` | `actions.disabled: [cnpg-backup]`: the route answers 403 and removes the rule; so does `checks.disabled` for `cnpg`, or `rbac.allowActions: false` for every write action |
+| Action | Verb and resource | What exactly it changes | What the admission policy still allows the ServiceAccount (Kubernetes 1.30+) | Offered by | How to make it impossible |
+|---|---|---|---|---|---|
+| `restart` | patch `apps/deployments`, `apps/statefulsets`, `apps/daemonsets` | merge patch of `spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"]` on the Deployment, StatefulSet or DaemonSet the issue names: the same as `kubectl rollout restart` | only an UPDATE that changes nothing but that annotation (spec, template spec and labels, the other annotations, metadata compared); no create, no delete | `argocd`, `pods` | `actions.disabled: [restart]`: the route answers 403 and removes the rule; so does `checks.disabled` for all of `argocd`, `pods`, or `rbac.allowActions: false` for every write action |
+| `argocd-sync` | patch `argoproj.io/applications` | merge patch of `operation` (a sync with `initiatedBy.username: kubernanny`) on the Application the issue names: the same as pressing Sync in Argo CD | only `operation` (a sync initiated by `kubernanny`, without `revision(s)`, `source(s)`, `manifests` or `resources`) and the refresh annotation; spec, status, labels, other annotations unchanged; no create, no delete | `argocd` | `actions.disabled: [argocd-sync]`: the route answers 403 and removes the rule only together with `actions.disabled: [argocd-refresh]`, or with `checks.disabled` for `argocd`, or `rbac.allowActions: false` for every write action |
+| `argocd-refresh` | patch `argoproj.io/applications` | merge patch of the annotation `argocd.argoproj.io/refresh: hard` on the Application the issue names: the same as a hard refresh in Argo CD | the same policy as `argocd-sync`: the refresh annotation set to `hard` or `normal`, nothing else | `argocd` | `actions.disabled: [argocd-refresh]`: the route answers 403 and removes the rule only together with `actions.disabled: [argocd-sync]`, or with `checks.disabled` for `argocd`, or `rbac.allowActions: false` for every write action |
+| `cnpg-backup` | create `postgresql.cnpg.io/backups` | creates one `Backup` object (`generateName: <cluster>-kubernanny-`, label `app.kubernetes.io/created-by: kubernanny`) for the database cluster the issue names: the same as `kubectl cnpg backup` | only CREATE of a Backup naming a cluster, without `method`, `target`, `online`, `onlineConfiguration` or `pluginConfiguration`; whether the cluster exists is not checked (CNPG fails such a Backup) | `cnpg` | `actions.disabled: [cnpg-backup]`: the route answers 403 and removes the rule; so does `checks.disabled` for `cnpg`, or `rbac.allowActions: false` for every write action |
 <!-- /generated:write -->
 
 What starts a write:
@@ -22,6 +22,19 @@ What starts a write:
 - **Only a confirmed tap in the app**, on an action that an issue open right now offers. There is no schedule, no automatic repair and no other trigger.
 - **The target comes from the agent's own check**, never from the request. The app sends "run `restart` for issue X"; namespace, kind and name are taken from the issue the agent found itself. A stolen device key can therefore restart what is broken at this moment, and nothing else.
 - Before running, the agent checks that the action type is switched on, the issue is still open and still offers that action; otherwise it refuses (`ACTION_DISABLED`, `ISSUE_GONE`, `ACTION_NOT_OFFERED`).
+- **Restarts offered on an Argo CD issue** name only a workload the agent's inventory shows not ready, in the Application's destination namespace (`spec.destination.namespace`). The Application's `status.resources` alone is never believed: whoever can edit an Application writes it.
+
+### Admission policy
+
+The rules above are the agent's code. RBAC itself cannot bind a `patch` to one annotation, so a compromised agent pod could otherwise use the actions' permissions for anything on those objects (an image, a service account, an Application's source). The chart therefore installs ValidatingAdmissionPolicies (`templates/admission-policy.yaml`, also in `deploy/install.yaml`) that match only requests of the agent's ServiceAccount and deny everything beyond the column "What the admission policy still allows" in the table above:
+
+- **workloads**: an UPDATE whose pod template spec, template labels, workload labels, annotations, owner references, finalizers and every other spec field (per kind: replicas, selector, strategy, volume claim templates, …) are unchanged, and whose template annotations differ at most in `kubectl.kubernetes.io/restartedAt`. No CREATE, no DELETE.
+- **Argo CD Applications**: an UPDATE with spec, status, labels, finalizers and other annotations unchanged; `argocd.argoproj.io/refresh` only `hard` or `normal`; a changed `operation` only initiated by `kubernanny` and without `revision(s)`, `source(s)`, `manifests` or `resources`. No CREATE, no DELETE.
+- **CNPG Backups**: a CREATE naming a cluster, without `method`, `target`, `online`, `onlineConfiguration` or `pluginConfiguration`. Whether that cluster exists is not checked (a policy sees only the request; CNPG fails a Backup of a missing cluster).
+
+`failurePolicy: Fail`: an expression that cannot be evaluated denies the request. `rbac.admissionPolicy.enabled` (default `true`) renders them while at least one write action is enabled and the cluster serves `admissionregistration.k8s.io/v1` ValidatingAdmissionPolicy (Kubernetes 1.30+); on older clusters nothing is rendered and the chart notes say the policy is missing.
+
+What was verified and what was not: the expressions were evaluated with cel-go (optional types on, objects as plain maps) against allowed and forbidden requests for every resource, the chart was rendered with Helm 3.16. **They have not been run by a real API server**, which type-checks them against each resource's schema: a type-check warning (`kubectl get validatingadmissionpolicy -o yaml`, `status.typeChecking`) or a refused restart after installing is a bug to report. A field Kubernetes adds to a workload's spec in a later version is not compared until it is listed in the template.
 
 Switching it off, from soft to hard:
 
@@ -30,7 +43,7 @@ Switching it off, from soft to hard:
 - `checks.disabled: [<module>]`: the module is not run, so nothing offers its actions; the permissions only it needs leave the ClusterRole;
 - `rbac.allowActions: false`: every write verb leaves the ClusterRole, the agent is strictly read-only apart from its own Secrets and ConfigMap.
 
-Audit: every action and every log read is written to the agent's log with the device that asked, the action and the target object (`kubectl -n kubernanny logs deploy/kubernanny | grep audit`). Switching a module, an action or notifications off, maintenance windows, device changes and accepted vulnerability advisories are also announced through every notification channel at once.
+Audit: every action and every log read is written to the agent's log with the device that asked, the action and the target object (`kubectl -n kubernanny logs deploy/kubernanny | grep audit`). Switching a module, an action or notifications off, maintenance windows, silencing a critical issue (or four or more issues within 10 minutes), device changes and accepted vulnerability advisories are also announced through every notification channel at once.
 
 ## Per module
 
@@ -129,7 +142,8 @@ Every switch of `values.yaml` (a test fails when one is added without a row here
 | Switch | Hard | RBAC removed | Routes refused | Outbound removed | Other |
 |---|---|---|---|---|---|
 | `rbac.allowActions: false` | yes | every `patch` and `create` in the ClusterRole (the four write actions are added to `actions.disabled`) | `POST /api/actions/<type>` answers 403 `ACTION_DISABLED` for restart, argocd-sync, argocd-refresh, cnpg-backup |  | the app shows those action switches as locked |
-| `checks.disabled: [notifications]` | yes |  |  | no message to ntfy or the webhook: issue notifications and security alerts are not sent | the app shows notifications as locked |
+| `checks.disabled: [notifications]` | yes |  | `POST /api/notify/test` answers 403 `NOTIFICATIONS_LOCKED` | no message through any channel (ntfy, the webhook, app push): issue notifications, security alerts, the weekly report and the test message are not sent; the chart does not even pass NTFY_URL, WEBHOOK_URL or the existing Secret to the agent | the app shows notifications as locked. `checks.disabled: [prometheus]` likewise means no request to Prometheus from any module or view, not only the Prometheus module |
+| `rbac.admissionPolicy.enabled: true (default)` | yes |  |  |  | adds ValidatingAdmissionPolicies (Kubernetes 1.30+) that deny every request of the agent's ServiceAccount on workloads, Argo CD Applications and CNPG Backups beyond what its actions change (see the write table). false: the RBAC rules alone apply. Rendered only while a write action is enabled |
 | `actions.disabled: [<type>]` | yes | the permission of that action, unless another enabled action needs the same one (see the per-action table) | the action route answers 403 `ACTION_DISABLED`; issues no longer offer the action |  |  |
 | `vulnerabilities.enabled: false (default)` | no |  |  | no request to the vulnerability database until someone switches the module on in the app. To make that impossible: `checks.disabled: [vulnerabilities]` |  |
 | `imageUpdates.enabled: false (default)` | no |  |  | no request to any container registry until someone switches the module on in the app, and no NetworkPolicy egress rule for registries. To make that impossible: `checks.disabled: [image-updates]` (also drops the egress rule) |  |
@@ -141,7 +155,7 @@ Every switch of `values.yaml` (a test fails when one is added without a row here
 | `serviceMonitor.enabled: false (default)` | yes |  |  |  | no ServiceMonitor; `/metrics` on port 9100 stays, without names |
 | `networkPolicy.enabled: true` | yes |  |  |  | adds a NetworkPolicy: port 8080 only from the ingress controller namespace, 9100 only from the monitoring namespace |
 | `networkPolicy.egress.enabled: true` | yes |  |  | everything except DNS, the API server, the monitoring namespace and the HTTPS rules below |  |
-| `networkPolicy.egress.internetHttps: false` | yes |  |  | with egress on: HTTPS to the internet (notifications to public services, api.osv.dev) |  |
+| `networkPolicy.egress.internetHttps: false` | yes |  |  | with egress on: HTTPS to the internet (notifications to public services, api.osv.dev). Only together with `networkPolicy.egress.apiServerCIDRs`: without it the API-server rule allows its ports, 443 included, to any address |  |
 | `actions.disabled: [argocd-refresh]` | yes | patch `argoproj.io/applications`, once `argocd-sync` is disabled too | `POST /api/actions/argocd-refresh` answers 403 `ACTION_DISABLED` | | |
 | `actions.disabled: [argocd-sync]` | yes | patch `argoproj.io/applications`, once `argocd-refresh` is disabled too | `POST /api/actions/argocd-sync` answers 403 `ACTION_DISABLED` | | |
 | `actions.disabled: [cnpg-backup]` | yes | create `postgresql.cnpg.io/backups` | `POST /api/actions/cnpg-backup` answers 403 `ACTION_DISABLED` | | |
@@ -157,7 +171,7 @@ Every switch of `values.yaml` (a test fails when one is added without a row here
 | `checks.disabled: [cert-manager]` | yes | get, list `cert-manager.io/certificates`, `cert-manager.io/clusterissuers` |  |  | not run, no issues |
 | `checks.disabled: [argocd]` | yes | get, list `argoproj.io/applications`; the permissions of `argocd-refresh`, `argocd-sync` |  |  | not run, no issues |
 | `checks.disabled: [cnpg]` | yes | get, list `postgresql.cnpg.io/clusters`; the permissions of `cnpg-backup` |  |  | not run, no issues |
-| `checks.disabled: [prometheus]` | yes |  |  | HTTP to Prometheus | not run, no issues |
+| `checks.disabled: [prometheus]` | yes |  |  | every request to Prometheus, from every module and view (nodes, volumes, etcd, clocks, ingress error rates, history) | not run, no issues |
 | `checks.disabled: [alertmanager]` | yes |  |  | HTTP to Alertmanager | not run, no issues |
 | `checks.disabled: [grafana]` | yes |  |  | HTTP to Grafana | not run, no issues |
 | `checks.disabled: [loki]` | yes |  |  | HTTP to Loki | not run, no issues |
@@ -190,6 +204,9 @@ kubectl auth can-i get secrets -n default --as=$SA       # no
 kubectl auth can-i delete pods -n default --as=$SA       # no
 kubectl auth can-i create pods/exec -n default --as=$SA  # no
 kubectl auth can-i patch deployments -n default --as=$SA # yes, unless rbac.allowActions: false
+# The admission policy (Kubernetes 1.30+): RBAC says yes, the policy says no.
+kubectl -n default set image deploy/<any> '*=busybox' --as=$SA --dry-run=server     # denied
+kubectl -n default rollout restart deploy/<any> --as=$SA --dry-run=server           # allowed
 ```
 
 Before installing, render the chart with the switches you plan and read the ClusterRole:
