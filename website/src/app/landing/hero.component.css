@@ -35,52 +35,6 @@
   opacity: 0.55;
 }
 
-.heartbeat {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 18px;
-  width: 100%;
-  height: 120px;
-  z-index: -1;
-  overflow: visible;
-}
-
-.heartbeat path {
-  fill: none;
-  stroke-width: 2;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-  vector-effect: non-scaling-stroke;
-}
-
-.trace {
-  stroke: color-mix(in srgb, var(--ok) 26%, transparent);
-}
-
-.pulse {
-  stroke: var(--ok);
-  stroke-width: 2.5;
-  stroke-dasharray: 70 930;
-  stroke-dashoffset: 650;
-  filter: drop-shadow(0 0 6px var(--ok));
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .pulse {
-    animation: travel 6.8s linear infinite;
-  }
-}
-
-@keyframes travel {
-  from {
-    stroke-dashoffset: 1000;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
 .grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

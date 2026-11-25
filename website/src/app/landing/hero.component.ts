@@ -3,7 +3,6 @@ import { componentGroups } from 'virtual:kubernanny-components';
 import { SITE } from '../../site.config';
 import { IconComponent } from '../components/icon.component';
 import { NannyLogoComponent } from '../components/nanny-logo.component';
-import { heartbeatPath } from './heartbeat';
 import { SCREENSHOTS } from './screenshots';
 
 const COMPONENT_COUNT = componentGroups.reduce((sum, g) => sum + g.components.length, 0);
@@ -15,10 +14,6 @@ const COMPONENT_COUNT = componentGroups.reduce((sum, g) => sum + g.components.le
   template: `
     <section class="hero" aria-labelledby="hero-title">
       <div class="backdrop" aria-hidden="true"></div>
-      <svg class="heartbeat" viewBox="0 0 1600 120" preserveAspectRatio="none" aria-hidden="true">
-        <path class="trace" [attr.d]="vm.trace" pathLength="1000" />
-        <path class="pulse" [attr.d]="vm.trace" pathLength="1000" />
-      </svg>
 
       <div class="container grid">
         <div class="copy">
@@ -75,7 +70,6 @@ const COMPONENT_COUNT = componentGroups.reduce((sum, g) => sum + g.components.le
 })
 export class HeroComponent {
   protected readonly vm = {
-    trace: heartbeatPath(1600, 70, 200),
     demoUrl: SITE.demoUrl,
     licence: SITE.licence,
     count: COMPONENT_COUNT,
