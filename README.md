@@ -64,13 +64,13 @@ Other ways: `kubectl apply -f deploy/install.yaml`, or an Argo CD Application po
 | **Grafana · Loki · kured · Velero · Flux · External Secrets · System Upgrade Controller · metrics-server** | their own health |
 | **Kubernetes itself** | API server certificate, your Kubernetes minor against its end of support, deprecated APIs still in use before an upgrade removes them |
 | **Uptime · Gatus · Uptime Kuma** | your own endpoint monitors, failing ones listed |
-| **Security** | privileged containers, host access, root, missing memory limits, untagged images (hints); known vulnerabilities of the versions you run, from OSV.dev, off by default |
+| **Security** | privileged containers, host access, root, missing memory limits, untagged images (hints); known vulnerabilities: built in (OSV.dev, off by default) only for the Kubernetes version and 13 recognised components, not your own images; **every image, your own included, when [Trivy Operator](docs/SECURITY-CHECKS.md#trivy-operator-trivy) runs in the cluster** (Kubernanny reads its reports, nothing leaves the cluster) |
 | **Your own components** | anything you name in `customComponents`, matched by image |
 | **Everything else it recognises** | workload health, version, URL |
 
 Every threshold and issue: [docs/CHECKS.md](docs/CHECKS.md) and [docs/SECURITY-CHECKS.md](docs/SECURITY-CHECKS.md).
 
-Plus the last seven days at a glance (every incident with start and duration), a backups tab across CloudNativePG, Longhorn, etcd snapshots and Velero (including what has no backup at all), a plain-text status report to share when you ask for help in a forum (no ids, addresses or keys), and the details for checking a cluster yourself: per-node CPU, RAM and disk (used vs. requested), OS and kernel; every workload with pods, restarts and usage; volumes with fill level; every ingress host with its certificate; Kubernetes warning events; CPU, RAM, network, restarts, etcd and API server latency over up to seven days.
+Plus the last seven days at a glance (every incident with start and duration), a backups tab across CloudNativePG, Longhorn, etcd snapshots and Velero (including what has no backup at all), a plain-text status report to share when you ask for help in a forum (no ids, addresses or keys), home-screen widgets on iOS and Android with each cluster's light (switchable off per cluster or altogether), and the details for checking a cluster yourself: per-node CPU, RAM and disk (used vs. requested), OS and kernel; every workload with pods, restarts and usage; volumes with fill level; every ingress host with its certificate; Kubernetes warning events; CPU, RAM, network, restarts, etcd and API server latency over up to seven days.
 
 ## Actions, safely
 
@@ -78,11 +78,11 @@ Four, and only on an open problem: **sync** and **hard refresh** an Argo CD app,
 
 ## You decide what it looks at
 
-Every check and every action can be switched off, in Helm (`checks.disabled: [argocd]`, `actions.disabled: [restart]`) or in the app. Switched off in Helm, the permissions go too: the chart's RBAC is generated from what each module declares it reads, so an agent told to leave Argo CD alone cannot read an Argo CD Application. What the agent runs, reads, stores and connects to, and how to verify each with `kubectl auth can-i`: [docs/IN-CLUSTER.md](docs/IN-CLUSTER.md).
+Every check and every action can be switched off, in Helm (`checks.disabled: [argocd]`, `actions.disabled: [restart]`) or in the app. Switched off in Helm, the permissions go too: the chart's RBAC is generated from what each module declares it reads, so an agent told to leave Argo CD alone cannot read an Argo CD Application. What the agent runs, reads, stores and connects to, and how to verify each with `kubectl auth can-i`: [docs/IN-CLUSTER.md](docs/IN-CLUSTER.md). Every permission, why it is needed, exactly what each of the four write actions changes, and which Helm value removes what: [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
 
 ## Notifications
 
-ntfy, Discord, Slack, Gotify or any JSON webhook. A problem is sent once it has lasted five minutes (rollouts and planned reboots heal before), again if it turns critical, and once more when it is resolved. Known problems can be silenced for an hour up to a week, and an optional weekly digest sums up the week. [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md)
+Straight to the Kubernanny app (sealed per device: the relay and Google cannot read it), or ntfy, Discord, Slack, Gotify or any JSON webhook. A problem is sent once it has lasted five minutes (rollouts and planned reboots heal before), again if it turns critical, and once more when it is resolved. Known problems can be silenced for an hour up to a week, and an optional weekly digest sums up the week. [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md)
 
 ## How it works
 
@@ -107,6 +107,7 @@ No account, no telemetry, nothing to sign up for. Nothing leaves your network ex
 | | |
 |---|---|
 | [In the cluster](docs/IN-CLUSTER.md) | what runs in your cluster: processes, ports, permissions, connections, stored data, how to verify |
+| [Permissions](docs/PERMISSIONS.md) | every permission (generated from the code): write access at a glance, reads per module and why, which switch removes what |
 | [Relay](docs/RELAY.md) | reaching the cluster without a VPN, what the relay sees and cannot see, running your own |
 | [Architecture](docs/ARCHITECTURE.md) | components, the run loop, modules, data flow, design decisions |
 | [Checks](docs/CHECKS.md) | every issue, threshold and action |

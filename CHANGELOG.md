@@ -53,11 +53,26 @@
 
 ### Living with it
 
+- Push straight to the Kubernanny app (iOS, Android), sealed per device with HPKE: the relay and Google see a token and a size, never the text. Through the relay and Firebase Cloud Messaging; `notifications.appPush.enabled: false` makes it impossible. Decision record 0007.
+- Notification state survives agent restarts: no repeated "opened", "resolved" still sent.
+
 - Silence a known problem for 1, 8, 24 or 168 hours: still shown, but no light, score or notification. Stored in the `kubernanny-settings` ConfigMap, so it survives restarts.
 - Maintenance window: 1 to 24 hours without notifications for planned work; the checks and the app go on, and whatever is still broken afterwards is sent then.
 - Weekly digest (`notifications.weeklyDigest`): incidents of the week, open problems, on a weekday and hour in `timezone`.
 - The app says when a newer agent is out (`agentVersion` in the snapshot).
 - Share a status report from the app as plain text, without ids, addresses or keys (the native share sheet, Web Share, or the clipboard).
+
+### Checks for more of the stack
+
+- Rook Ceph (health with Ceph's own messages, raw capacity, operator), Traefik and ingress-nginx 5xx rates from Prometheus (only with enough traffic), Kyverno and Gatekeeper policy violations (hints), node clock offset.
+- Trivy Operator (`trivy`): reads its VulnerabilityReports (read only, nothing leaves the cluster), one issue per workload with the built-in lookup's severity rules and per-workload "does not apply here". Components Trivy covers are left to it. The built-in lookup now says plainly that it only compares Kubernetes and 13 recognised components, not your own images.
+- Available image updates for recognised components (off by default, `imageUpdates.enabled`; repository names only leave the cluster).
+- Mark one known-vulnerability advisory on one component as not applicable for 30, 90 or 365 days: announced, audited; `vulnerabilities.allowAccept: false` makes it impossible.
+
+### Permissions, documented from the code
+
+- `docs/PERMISSIONS.md` is generated from the same code as the chart's RBAC and kept in step by a test: every write verb with what exactly it changes, every read per module with its reason, the namespace Role, what the agent never holds, and which Helm switch removes what (RBAC rule, route, outbound connection).
+- The app shows under each action switch what it may change. The landing page lists the hard switches ("Off means gone").
 
 ### English and German
 
@@ -68,6 +83,9 @@
 - The app's first screen offers a demo, and https://demo.kubernanny.app is the web app straight in demo mode: a recorded cluster in three states, kept fresh by shifting its times, with actions that pretend to work. Recordings come from the agent's demo cluster (`npm run demo:export`).
 
 ### Apps and releases
+
+- Home-screen widgets (iOS WidgetKit, Android RemoteViews): each cluster's light, headline and last check, no keys and no issue texts on the device's shared storage; off per cluster or altogether.
+- `npm run store:shots` renders the store screenshots in every required size, English and German.
 
 - Native iOS and Android apps (Capacitor 8, Swift Package Manager), `kubernanny://` links, icons and splash (`npm run native-assets`). Device keys in the Keychain and Android Keystore, never in a backup.
 - fastlane: `npm run release`, `release:production`, `store:metadata`, `store:screenshots`. `docs/RELEASING.md`.
