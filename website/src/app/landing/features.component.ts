@@ -175,7 +175,7 @@ const CHANNELS = ['ntfy', 'Discord', 'Slack', 'Gotify', 'JSON webhook'];
           <h3>Open source, free, and staying that way</h3>
           <p>
             {{ vm.licence }}. No account, no backend of ours, no telemetry, no pro tier, no checks behind a paywall.
-            Nothing leaves your network except the notifications you set up.
+            Nothing leaves your network unless you switch it on: notifications, the relay, the vulnerability lookup.
           </p>
           <a [href]="vm.repoUrl" class="more"><kn-icon name="github" /> Source on GitHub</a>
         </article>

@@ -31,7 +31,7 @@ const PILLARS: Pillar[] = [
   {
     icon: 'radar',
     title: 'Nothing leaves your network',
-    text: 'No backend of ours, no account, no telemetry. The only traffic out of the cluster is the notifications you configure, and they can be reduced to counts.',
+    text: 'No backend of ours, no account, no telemetry. Out of the cluster goes only what you switch on: notifications (reducible to counts), the relay (sealed messages only) and the vulnerability lookup (names and versions only).',
     link: { route: '/docs/communication', label: 'Every connection' },
   },
 ];
