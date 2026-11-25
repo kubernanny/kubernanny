@@ -121,7 +121,7 @@ export function foldIssues(cards: IssueCard[], all: boolean, tr: Translator): { 
           <div class="charts">
             @for (s of charts(); track s.id) {
               <div class="card">
-                <app-area-chart [title]="s.label" [points]="s.points" [unit]="s.unit" />
+                <app-area-chart [title]="s.label" [points]="s.points" [unit]="s.unit" [loading]="rangeLoading()" />
               </div>
             }
           </div>
@@ -129,7 +129,14 @@ export function foldIssues(cards: IssueCard[], all: boolean, tr: Translator): { 
             <p class="muted note">{{ t('overview.historyFromAgent') }}</p>
           }
         } @else if (history().loading) {
-          <p class="muted note">{{ t('overview.loadingHistory') }}</p>
+          <!-- First load: empty chart frames with a shimmer in the place the charts will take. -->
+          <div class="charts" [attr.aria-label]="t('overview.loadingHistory')">
+            @for (n of skeletons; track n) {
+              <div class="card">
+                <app-area-chart title="" [points]="[]" [loading]="true" />
+              </div>
+            }
+          </div>
         } @else {
           <p class="muted note">{{ t('overview.noHistory') }}</p>
         }
@@ -418,6 +425,13 @@ export class OverviewTab {
   readonly changed = output<void>();
   readonly openModule = output<string>();
   readonly openPending = output<void>();
+  /** A new range is on its way (not the quiet reload after each check, which keeps the charts as they are). */
+  readonly rangeLoading = computed(() => {
+    const h = this.history();
+    return h.loading && h.value !== null && h.value.hours !== this.hours();
+  });
+  /** Placeholder charts while the first history loads. */
+  readonly skeletons = [1, 2, 3, 4];
   readonly setHours = output<number>();
   private readonly language = inject(LanguageService);
   readonly hourChoices = computed(() => hourChoices(this.language.translator()));

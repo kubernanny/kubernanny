@@ -44,10 +44,14 @@ export function chartGeometry(points: [number, number][], unit: Unit): Geometry 
     <ng-container *transloco="let t">
       <div class="head">
         <span class="title">{{ title() }}</span>
-        <span class="value display">{{ shown().value }}</span>
+        @if (loading()) {
+          <span class="spinner" role="status" [attr.aria-label]="t('chart.loading')"></span>
+        } @else {
+          <span class="value display">{{ shown().value }}</span>
+        }
       </div>
-      @if (geometry(); as g) {
-        <div class="plot" (pointermove)="track($event)" (pointerleave)="hover.set(null)" (pointerdown)="track($event)">
+      @for (g of drawn(); track g) {
+        <div class="plot" [class.loading]="loading()" [attr.aria-busy]="loading()" (pointermove)="track($event)" (pointerleave)="hover.set(null)" (pointerdown)="track($event)">
           <svg [attr.viewBox]="viewBox" preserveAspectRatio="none" role="img" [attr.aria-label]="ariaLabel()">
             <defs>
               <linearGradient [attr.id]="gradientId" x1="0" x2="0" y1="0" y2="1">
@@ -76,8 +80,19 @@ export function chartGeometry(points: [number, number][], unit: Unit): Geometry 
           <span>{{ axis().max }}</span>
           <span>{{ t('chart.now') }}</span>
         </div>
-      } @else {
-        <p class="empty">{{ t('chart.tooFew') }}</p>
+      } @empty {
+        @if (loading()) {
+          <!-- First load: the chart's frame with a shimmer, so nothing jumps when the data arrives. -->
+          <div class="plot loading skeleton" aria-hidden="true">
+            <svg [attr.viewBox]="viewBox" preserveAspectRatio="none">
+              <line class="grid" x1="0" [attr.y1]="padTop" [attr.x2]="width" [attr.y2]="padTop" />
+              <line class="grid" x1="0" [attr.y1]="height" [attr.x2]="width" [attr.y2]="height" />
+            </svg>
+          </div>
+          <div class="axis"><span>&nbsp;</span></div>
+        } @else {
+          <p class="empty">{{ t('chart.tooFew') }}</p>
+        }
       }
     </ng-container>
   `,
@@ -107,6 +122,64 @@ export function chartGeometry(points: [number, number][], unit: Unit): Geometry 
       position: relative;
       touch-action: pan-y;
       cursor: crosshair;
+    }
+    /* New data draws itself in: the element is created per data set, so this runs once per range. */
+    .plot svg {
+      animation: chart-in 0.45s ease-out;
+    }
+    @keyframes chart-in {
+      from {
+        opacity: 0;
+        transform: scaleY(0.85);
+        transform-origin: bottom;
+      }
+    }
+    /* While a range loads, the old curve stays, faded, under a moving sheen: same frame, no jump. */
+    .plot.loading svg {
+      opacity: 0.35;
+      transition: opacity 0.2s;
+      animation: none;
+    }
+    .plot.loading::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: var(--radius-s);
+      background: linear-gradient(100deg, transparent 20%, color-mix(in srgb, var(--ink) 9%, transparent) 50%, transparent 80%);
+      background-size: 200% 100%;
+      animation: sheen 1.2s linear infinite;
+    }
+    .skeleton {
+      cursor: default;
+    }
+    @keyframes sheen {
+      from {
+        background-position: 150% 0;
+      }
+      to {
+        background-position: -50% 0;
+      }
+    }
+    .spinner {
+      width: 0.9rem;
+      height: 0.9rem;
+      margin: 0.35rem 0.2rem;
+      border-radius: 50%;
+      border: 2px solid color-mix(in srgb, currentColor 25%, transparent);
+      border-top-color: currentColor;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .plot svg,
+      .plot.loading::after,
+      .spinner {
+        animation: none;
+      }
     }
     svg {
       display: block;
@@ -170,6 +243,8 @@ export class AreaChart {
   readonly title = input.required<string>();
   readonly points = input.required<[number, number][]>();
   readonly unit = input<Unit>('ratio');
+  /** A new range is loading: keep the frame, fade the old curve, show a small spinner. */
+  readonly loading = input(false);
 
   readonly viewBox = `0 0 ${W} ${H}`;
   readonly width = W;
@@ -180,6 +255,11 @@ export class AreaChart {
   private readonly language = inject(LanguageService);
 
   readonly geometry = computed(() => chartGeometry(this.points(), this.unit()));
+  /** The geometry as a one-element list: a new data set creates a new element, which plays the draw-in. */
+  readonly drawn = computed(() => {
+    const g = this.geometry();
+    return g ? [g] : [];
+  });
 
   readonly shown = computed(() => {
     const pts = this.points();
