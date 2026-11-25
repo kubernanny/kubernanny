@@ -1,8 +1,9 @@
-import { BadRequestException, ConflictException, Inject, Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '../http/errors';
+import { Logger } from '../logger';
 import { PUSH_PLATFORMS, PushOutcome, PushPlatform, encodePushContent, isPushToken, parsePublicKey, sealPush, toBase64Url } from '@kubernanny/protocol';
 import { DevicesService, Principal, PushTarget, validKey } from '../auth/devices.service';
 import { IdentityService } from '../auth/identity.service';
-import { CONFIG, Config } from '../config';
+import type { Config } from '../config';
 import { t } from '../i18n/text';
 import { UnregisteredStrikes } from '../relay/unregistered-strikes';
 import { PushTransport } from './push-transport';
@@ -39,18 +40,17 @@ export interface AppPushMessage {
  * never hands anything to the relay (which, in turn, is never attached as a
  * carrier: RelayClient checks the same switch).
  */
-@Injectable()
-export class AppPushService implements OnApplicationBootstrap {
+export class AppPushService {
   private readonly logger = new Logger('push');
   private readonly audit = new Logger('audit');
   /** The relay's `unregistered` is believed only after repeated strikes (a hostile relay must not wipe registrations). */
   private readonly unregistered = new UnregisteredStrikes();
 
   constructor(
-    @Inject(CONFIG) private readonly config: Config,
-    @Inject(DevicesService) private readonly devices: DevicesService,
-    @Inject(IdentityService) private readonly identity: IdentityService,
-    @Inject(PushTransport) private readonly transport: PushTransport,
+    private readonly config: Config,
+    private readonly devices: DevicesService,
+    private readonly identity: IdentityService,
+    private readonly transport: PushTransport,
   ) {}
 
   /** After every onModuleInit, so the device list is loaded. */

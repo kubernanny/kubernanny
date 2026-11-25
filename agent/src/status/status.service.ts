@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown, Optional } from '@nestjs/common';
+import { Logger } from '../logger';
 import { Issue } from '../checks/types';
-import { CONFIG, Config } from '../config';
+import type { Config } from '../config';
 import { Detected, discover, distribution } from '../discovery/discovery';
 import { Inventory, emptyInventory, gatherInventory } from '../inventory/inventory';
 import { errorText, t } from '../i18n/text';
@@ -29,8 +29,7 @@ export const UNREACHABLE_ISSUE_ID = 'agent/cluster-unreachable';
 /** One failed run is a blip (an API server restart); this many in a row are an outage worth a red light and a notification. */
 export const UNREACHABLE_AFTER_RUNS = 3;
 
-@Injectable()
-export class StatusService implements OnApplicationBootstrap, OnApplicationShutdown {
+export class StatusService {
   private readonly logger = new Logger(StatusService.name);
   private snapshotValue: Snapshot;
   private inventory: Inventory = emptyInventory(new Date());
@@ -48,14 +47,14 @@ export class StatusService implements OnApplicationBootstrap, OnApplicationShutd
   private readonly vulnDb: VulnDb;
 
   constructor(
-    @Inject(KubeClient) private readonly kube: KubeClient,
-    @Inject(CONFIG) private readonly config: Config,
-    @Inject(Notifier) private readonly notifier: Notifier,
-    @Inject(SettingsService) private readonly settings: SettingsService,
-    @Inject(SilenceService) private readonly silences: SilenceService,
-    @Inject(IncidentsService) private readonly incidents: IncidentsService,
+    private readonly kube: KubeClient,
+    private readonly config: Config,
+    private readonly notifier: Notifier,
+    private readonly settings: SettingsService,
+    private readonly silences: SilenceService,
+    private readonly incidents: IncidentsService,
     /** Advisories marked as not applicable; absent where nobody wires it (they then all count). */
-    @Optional() @Inject(AcceptanceService) private readonly acceptance?: AcceptanceService,
+    private readonly acceptance?: AcceptanceService,
   ) {
     // A switch in the app takes effect at once, not with the next run.
     settings.onChange(() => void this.refreshAfterChange());

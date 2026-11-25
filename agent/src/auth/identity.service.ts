@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Logger } from '../logger';
 import { KeyPair, fingerprint, fromBase64Url, generateKeyPair, keyPairFromSecret, toBase64Url } from '@kubernanny/protocol';
-import { CONFIG, Config } from '../config';
+import type { Config } from '../config';
 import { KubeClient } from '../kube/kube-client';
 import { readAtStartup } from '../util/startup-read';
 
@@ -13,16 +13,15 @@ export const IDENTITY_SECRET = 'kubernanny-identity';
  * someone impersonate the agent to the devices (and read recorded requests,
  * not responses: see docs/PROTOCOL.md).
  */
-@Injectable()
-export class IdentityService implements OnModuleInit {
+export class IdentityService {
   private readonly logger = new Logger(IdentityService.name);
   private pair: KeyPair | null = null;
   /** False when the key could not be stored: it then changes on every restart. */
   persistent = true;
 
   constructor(
-    @Inject(CONFIG) private readonly config: Config,
-    @Inject(KubeClient) private readonly kube: KubeClient,
+    private readonly config: Config,
+    private readonly kube: KubeClient,
   ) {}
 
   get keyPair(): KeyPair {

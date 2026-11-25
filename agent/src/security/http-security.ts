@@ -1,7 +1,4 @@
-import { MAX_SEALED_REQUEST } from '@kubernanny/protocol';
-import type { NestExpressApplication } from '@nestjs/platform-express';
-import { raw } from 'express';
-import type { NextFunction, Request, Response } from 'express';
+import type { ServerResponse } from 'node:http';
 
 /**
  * Content Security Policy for the web UI the agent serves.
@@ -29,7 +26,11 @@ export const CONTENT_SECURITY_POLICY = [
   "form-action 'none'",
 ].join('; ');
 
-export function securityHeaders(req: Request, res: Response, next: NextFunction): void {
+/** Largest JSON body of an internal route (over the socket only); the e2e route takes one sealed request. */
+export const MAX_JSON_BODY = 4 * 1024;
+
+/** The headers every answer carries, set before anything else runs. */
+export function securityHeaders(path: string, res: ServerResponse): void {
   res.setHeader('Content-Security-Policy', CONTENT_SECURITY_POLICY);
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -37,23 +38,11 @@ export function securityHeaders(req: Request, res: Response, next: NextFunction)
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), usb=(), payment=()');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-  res.removeHeader('X-Powered-By');
   // No HSTS: the agent never speaks TLS itself, and X-Forwarded-Proto is
   // whatever any caller writes. HSTS belongs on whatever terminates TLS (the
   // ingress controller), docs/SECURITY.md.
-  if (req.path.startsWith('/api/')) {
+  if (path.startsWith('/api/')) {
     // Cluster state and logs must never land in a browser or proxy cache.
     res.setHeader('Cache-Control', 'no-store');
   }
-  next();
-}
-
-/** Everything HTTP-level the agent enforces; used by main.ts and by the tests. */
-export function applyHttpSecurity(app: NestExpressApplication): void {
-  app.disable('x-powered-by');
-  // The end-to-end channel: one Noise message 1 plus the version byte.
-  app.use('/api/e2e', raw({ type: () => true, limit: MAX_SEALED_REQUEST }));
-  // Internal routes (over the socket only) take small JSON bodies.
-  app.useBodyParser('json', { limit: '4kb' });
-  app.use(securityHeaders);
 }

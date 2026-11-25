@@ -1,4 +1,3 @@
-import 'reflect-metadata';
 import { AddressInfo } from 'node:net';
 import { FrameType, KeyPair, RegistrationChallenge, decodeFrame, encodeFrame, generateKeyPair, randomBytes, relayAgentId } from '@kubernanny/protocol';
 import { afterEach, describe, expect, it } from 'vitest';

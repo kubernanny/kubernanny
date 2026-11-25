@@ -1,10 +1,8 @@
-import 'reflect-metadata';
-import { Test, TestingModule } from '@nestjs/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ADMIN } from '../auth/devices.service';
-import { AppModule } from '../app.module';
+import { Agent } from '../agent';
 import { DemoKubeClient } from '../demo/demo-cluster';
-import { KubeClient, KubeError } from '../kube/kube-client';
+import { KubeError } from '../kube/kube-client';
 import { renderMetrics } from '../metrics/exporter';
 import { Notifier } from '../notify/notifier';
 import { SilenceService } from '../silence/silence.service';
@@ -23,7 +21,7 @@ class FlakyKube extends DemoKubeClient {
 }
 
 describe('API server unreachable (review: was silent)', () => {
-  let moduleRef: TestingModule;
+  let moduleRef: Agent;
   afterEach(async () => {
     await moduleRef.close();
   });
@@ -33,7 +31,7 @@ describe('API server unreachable (review: was silent)', () => {
     const kube = new FlakyKube(undefined, scenario);
     const pushed: Snapshot[] = [];
     const notifier = { channels: ['ntfy'], update: async (s: Snapshot) => void pushed.push(s), securityAlert: async () => undefined, test: async () => [] };
-    moduleRef = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(KubeClient).useValue(kube).overrideProvider(Notifier).useValue(notifier).compile();
+    moduleRef = new Agent({ kube: kube, notifier: notifier as unknown as Notifier });
     const status = moduleRef.get(StatusService);
     await status.refresh();
     return { kube, status, pushed };

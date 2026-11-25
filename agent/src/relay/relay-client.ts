@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, Optional } from '@nestjs/common';
+import { Logger } from '../logger';
 import {
   FrameType,
   HEARTBEAT_PING,
@@ -17,7 +17,7 @@ import {
 } from '@kubernanny/protocol';
 import { RawData, WebSocket } from 'ws';
 import { IdentityService } from '../auth/identity.service';
-import { CONFIG, Config } from '../config';
+import type { Config } from '../config';
 import { E2eService } from '../e2e/e2e.service';
 import { PushCarrier, PushTransport } from '../push/push-transport';
 import { relayHttpUrl, relaySocketUrl } from './relay-url';
@@ -98,8 +98,7 @@ interface Session {
  * connection right away does not reset the backoff. A hostile relay gets no
  * more out of the agent than a direct caller could.
  */
-@Injectable()
-export class RelayClient implements OnApplicationBootstrap, OnModuleDestroy, PushCarrier {
+export class RelayClient implements PushCarrier {
   private readonly logger = new Logger('relay');
   private session: Session | null = null;
   private connected = false;
@@ -111,11 +110,11 @@ export class RelayClient implements OnApplicationBootstrap, OnModuleDestroy, Pus
   private nextPushId = 0;
 
   constructor(
-    @Inject(CONFIG) private readonly config: Config,
-    @Inject(IdentityService) private readonly identity: IdentityService,
-    @Inject(E2eService) private readonly e2e: E2eService,
+    private readonly config: Config,
+    private readonly identity: IdentityService,
+    private readonly e2e: E2eService,
     /** Where AppPushService finds this connection; absent in tests that do not push. */
-    @Optional() @Inject(PushTransport) private readonly transport?: PushTransport,
+    private readonly transport?: PushTransport,
   ) {}
 
   status(): RelayStatus | null {

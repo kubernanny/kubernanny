@@ -1,9 +1,7 @@
-import 'reflect-metadata';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Test } from '@nestjs/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AppModule } from '../app.module';
+import { Agent } from '../agent';
 import { loadConfig } from '../config';
 import { DemoKubeClient } from '../demo/demo-cluster';
 import { DemoRegistry } from '../demo/demo-registry';
@@ -67,7 +65,7 @@ async function run(kube: KubeClient, env: Record<string, string>) {
   const saved = { ...process.env };
   Object.assign(process.env, { CHECK_INTERVAL_SECONDS: '3600', ...env });
   try {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(KubeClient).useValue(kube).compile();
+    const moduleRef = new Agent({ kube: kube });
     const status = moduleRef.get(StatusService);
     await status.refresh();
     const snapshot = status.snapshot();

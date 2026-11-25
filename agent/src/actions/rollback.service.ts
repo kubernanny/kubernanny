@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, ForbiddenException, HttpException, HttpStatus, Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, HttpException, HttpStatus, NotFoundException } from '../http/errors';
+import { Logger } from '../logger';
 import type { Principal } from '../auth/devices.service';
 import { ArgoApplication } from '../checks/argocd.check';
 import { rollbackTarget, shortRevision } from '../checks/argocd-rollback';
@@ -28,17 +29,16 @@ export interface RollbackRequest {
  * patch never names a source, so the app's `spec.source` is synced at that
  * revision and nothing else. Every rollback is announced before it is sent.
  */
-@Injectable()
 export class RollbackService {
   private readonly audit = new Logger('audit');
   /** "namespace/app" to the time of its last rollback (ms). In memory: a restart forgets it, which costs at most one extra rollback. */
   private readonly last = new Map<string, number>();
 
   constructor(
-    @Inject(KubeClient) private readonly kube: KubeClient,
-    @Inject(SettingsService) private readonly settings: SettingsService,
-    @Inject(StatusService) private readonly status: StatusService,
-    @Optional() @Inject(Notifier) private readonly notifier?: Notifier,
+    private readonly kube: KubeClient,
+    private readonly settings: SettingsService,
+    private readonly status: StatusService,
+    private readonly notifier?: Notifier,
   ) {}
 
   /** Before anything is read: off (not opted in, disabled, or switched off in the app) or Argo CD not checked. */

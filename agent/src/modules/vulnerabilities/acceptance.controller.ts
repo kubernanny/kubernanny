@@ -1,6 +1,6 @@
-import { BadRequestException, Body, Controller, HttpCode, Inject, NotFoundException, Post } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '../../http/errors';
+import type { Route } from '../../http/server';
 import type { Principal } from '../../auth/devices.service';
-import { CurrentPrincipal } from '../../auth/principal.guard';
 import { t } from '../../i18n/text';
 import { StatusService } from '../../status/status.service';
 import { acceptComponentOfIssue } from './acceptance';
@@ -14,16 +14,13 @@ interface AcceptBody {
 }
 
 /** Marks one advisory on one component as not applicable, and takes that back (docs/API.md). */
-@Controller('vulnerabilities')
 export class AcceptanceController {
   constructor(
-    @Inject(AcceptanceService) private readonly acceptance: AcceptanceService,
-    @Inject(StatusService) private readonly status: StatusService,
+    private readonly acceptance: AcceptanceService,
+    private readonly status: StatusService,
   ) {}
 
-  @Post('accept')
-  @HttpCode(200)
-  async accept(@Body() body: AcceptBody, @CurrentPrincipal() who: Principal): Promise<{ acceptedUntil: string }> {
+  async accept(body: AcceptBody, who: Principal): Promise<{ acceptedUntil: string }> {
     // Locked in Helm or the module switched off: refused before anything is read or written.
     this.acceptance.assertAllowed();
     const { component, advisory } = this.target(body);
@@ -37,9 +34,7 @@ export class AcceptanceController {
     return { acceptedUntil };
   }
 
-  @Post('unaccept')
-  @HttpCode(204)
-  async unaccept(@Body() body: AcceptBody, @CurrentPrincipal() who: Principal): Promise<void> {
+  async unaccept(body: AcceptBody, who: Principal): Promise<void> {
     this.acceptance.assertAllowed();
     const { component, advisory } = this.target(body);
     await this.acceptance.unaccept(component, advisory, who);
@@ -52,4 +47,11 @@ export class AcceptanceController {
     }
     return { component: body.component, advisory: body.advisory };
   }
+}
+
+export function acceptanceRoutes(c: AcceptanceController): Route[] {
+  return [
+    { method: 'POST', path: '/api/vulnerabilities/accept', handle: (r) => c.accept(r.body as AcceptBody, r.principal) },
+    { method: 'POST', path: '/api/vulnerabilities/unaccept', status: 204, handle: (r) => c.unaccept(r.body as AcceptBody, r.principal) },
+  ];
 }

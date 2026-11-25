@@ -1,4 +1,3 @@
-import 'reflect-metadata';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from './config';
 import { DemoKubeClient } from './demo/demo-cluster';

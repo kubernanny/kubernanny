@@ -1,8 +1,8 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Logger } from '../logger';
 import { MAX_SEALED_REQUEST, OpenedRequest, ProtocolError, openRequest, peekEphemeral, toBase64Url } from '@kubernanny/protocol';
 import { DEMO_DEVICE, DevicesService, MAX_DEVICES, Principal } from '../auth/devices.service';
 import { IdentityService } from '../auth/identity.service';
-import { CONFIG, Config } from '../config';
+import type { Config } from '../config';
 import { Lang, Text, raw, render, t } from '../i18n/text';
 import { Notifier } from '../notify/notifier';
 import { PairingService } from '../pairing/pairing';
@@ -93,7 +93,6 @@ interface PairContext {
  * Before step 2 nothing can be authenticated, so failures there are plain
  * JSON with a code and no detail.
  */
-@Injectable()
 export class E2eService {
   private readonly audit = new Logger('audit');
   private readonly logger = new Logger(E2eService.name);
@@ -120,12 +119,12 @@ export class E2eService {
   private readonly demo: TokenBucket;
 
   constructor(
-    @Inject(IdentityService) private readonly identity: IdentityService,
-    @Inject(DevicesService) private readonly devices: DevicesService,
-    @Inject(PairingService) private readonly pairing: PairingService,
-    @Inject(InternalServer) private readonly internal: InternalServer,
-    @Inject(CONFIG) private readonly config: Config,
-    @Inject(Notifier) private readonly notifier: Notifier,
+    private readonly identity: IdentityService,
+    private readonly devices: DevicesService,
+    private readonly pairing: PairingService,
+    private readonly internal: InternalServer,
+    private readonly config: Config,
+    private readonly notifier: Notifier,
   ) {
     this.opens = new TokenBucket(OPEN_LIMIT.capacity, OPEN_LIMIT.perSecond);
     this.reserve = new TokenBucket(OPEN_RESERVE.capacity, OPEN_RESERVE.perSecond);

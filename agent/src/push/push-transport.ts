@@ -1,4 +1,3 @@
-import { Injectable } from '@nestjs/common';
 import type { PushOutcome, PushRequest } from '@kubernanny/protocol';
 
 /** What carries a push out of the agent: the relay connection, the agent's only outbound one. */
@@ -14,7 +13,6 @@ export interface PushCarrier {
  * so the notifier (which the end-to-end service and the relay depend on)
  * does not depend on the relay in turn.
  */
-@Injectable()
 export class PushTransport {
   private carrier: PushCarrier | null = null;
 

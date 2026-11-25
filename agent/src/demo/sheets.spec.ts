@@ -1,19 +1,13 @@
-import 'reflect-metadata';
-import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
 import { de } from '../testing/i18n';
-import { AppModule } from '../app.module';
-import { KubeClient } from '../kube/kube-client';
+import { Agent } from '../agent';
 import { StatusService } from '../status/status.service';
 import { DemoKubeClient, DemoScenario } from './demo-cluster';
 
 async function run(scenario: DemoScenario) {
   delete process.env.PULSE_TOKEN;
   process.env.CHECK_INTERVAL_SECONDS = '3600';
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-    .overrideProvider(KubeClient)
-    .useValue(new DemoKubeClient(undefined, scenario))
-    .compile();
+  const moduleRef = new Agent({ kube: new DemoKubeClient(undefined, scenario) });
   const status = moduleRef.get(StatusService);
   await status.refresh();
   const snapshot = de(status.snapshot());

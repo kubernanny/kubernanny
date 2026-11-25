@@ -1,4 +1,3 @@
-import 'reflect-metadata';
 import { AddressInfo } from 'node:net';
 import {
   FrameType,
@@ -15,7 +14,7 @@ import {
   pushKeyId,
   toBase64Url,
 } from '@kubernanny/protocol';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '../http/errors';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
 import { DevicesService, Principal } from '../auth/devices.service';

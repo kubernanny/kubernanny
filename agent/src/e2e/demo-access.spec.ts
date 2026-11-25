@@ -1,26 +1,19 @@
-import 'reflect-metadata';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { INestApplication } from '@nestjs/common';
-import { NestExpressApplication } from '@nestjs/platform-express';
-import { Test } from '@nestjs/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { AppModule } from '../app.module';
+import { Agent } from '../agent';
 import { IdentityService } from '../auth/identity.service';
-import { applyHttpSecurity } from '../security/http-security';
 import { E2eClient } from '../testing/e2e-client';
 
 describe('DEMO mode', () => {
-  let app: INestApplication;
+  let app: Agent;
 
   beforeAll(async () => {
     process.env.DEMO = 'healthy';
     process.env.INTERNAL_SOCKET = join(mkdtempSync(join(tmpdir(), 'kubernanny-')), 'agent.sock');
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false, bodyParser: false });
-    applyHttpSecurity(app as NestExpressApplication);
-    app.setGlobalPrefix('api', { exclude: ['healthz'] });
+    const moduleRef = new Agent();
+    app = moduleRef;
     await app.init();
   });
 
