@@ -41,6 +41,11 @@ const VM = {
         6(1)(f) GDPR). Details are in <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare's privacy
         policy</a>.
       </p>
+      <p>
+        The page kubernanny.app/qr draws the pairing QR code that a Kubernanny agent links to from its log. The
+        pairing link sits in the part of the address after the #, which browsers never send to a server; the code is
+        drawn in your browser, and the request for the page itself is the only thing that reaches Cloudflare.
+      </p>
 
       <h2>The app</h2>
       <p>
