@@ -12,7 +12,6 @@ import { ModuleView, NetworkView, NodeView, Snapshot, WorkloadView } from './cor
 import { bytes, cores, formatValue } from './core/format';
 import { translatorFor } from './i18n/translator';
 import { chartGeometry } from './ui/area-chart';
-import { heartbeatPath } from './ui/heartbeat';
 import { parseLog } from './ui/logs-modal';
 
 const NOW = new Date('2026-11-24T12:00:00Z');
@@ -126,7 +125,7 @@ describe('buildClusterView', () => {
     expect(v.checked).toBe('Checked 2 min ago in 31 ms');
     expect(v.issues[0].sinceText).toBe('for 1 h');
     expect(v.issues[0].buttons.map((b) => b.label)).toEqual(['Restart a', 'Restart b', 'Sync']);
-    expect(v.kpis.find((k) => k.label === 'RAM')).toMatchObject({ value: '90%', note: '55.0 GiB of 61.0 GiB' });
+    expect(v.kpis.find((k) => k.label === 'RAM')).toMatchObject({ value: '90%', note: '55.0 GiB / 61.0 GiB' });
     expect(v.groups.map((g) => g.label)).toEqual(['Kubernetes', 'Storage', 'GitOps', 'Monitoring']);
     expect(v.attention.map((r) => r.statusLabel)).toEqual(['Warning', 'Failing']);
     const many = buildClusterView({ ...snapshot, issues: [snapshot.issues[0], { ...snapshot.issues[0], id: 'b' }] }, null, NOW, en);
@@ -254,11 +253,6 @@ describe('transport', () => {
 });
 
 describe('ui helpers', () => {
-  it('draws a flat line when the state is unknown and beats otherwise', () => {
-    expect(heartbeatPath('unknown')).toBe('M0,46 L600,46');
-    expect(heartbeatPath('red').length).toBeGreaterThan(heartbeatPath('green').length);
-  });
-
   it('scales ratios to 100 % and other units to their peak', () => {
     const g = chartGeometry(
       [

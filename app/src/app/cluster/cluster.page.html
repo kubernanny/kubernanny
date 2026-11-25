@@ -41,14 +41,11 @@
         @if (viaRelay()) {
           <p class="via-relay" [title]="t('cluster.viaRelayTitle')">{{ t('cluster.viaRelay') }}</p>
         }
-        <app-heartbeat [light]="view().light" [label]="heartbeatLabel()" />
-        <p class="headline display">{{ view().headline }}</p>
-        <p class="checked">
-          {{ view().checked }}
-          @if (view().score !== null) {
-            <span class="score" [title]="t('cluster.scoreTitle')">{{ t('cluster.score', { score: view().score }) }}</span>
-          }
-        </p>
+        <div class="state">
+          <app-nanny-eye [light]="view().light" [label]="stateLabel()" [checking]="loading()" />
+          <p class="headline display">{{ view().headline }}</p>
+        </div>
+        <p class="checked">{{ view().checked }}</p>
         @if (view().kpis.length > 0) {
           <dl class="vitals">
             @for (k of view().kpis; track k.label) {
@@ -56,6 +53,10 @@
                 <dt>{{ k.label }}</dt>
                 <dd class="display">{{ k.value }}</dd>
                 <dd class="note">{{ k.note }}</dd>
+                @if (k.bar; as b) {
+                  <dd class="bar"><app-usage-bar [used]="b.used" [reserved]="b.reserved" [limit]="b.limit" /></dd>
+                  <dd class="note">{{ b.note }}</dd>
+                }
               </div>
             }
           </dl>

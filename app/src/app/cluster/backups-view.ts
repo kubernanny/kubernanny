@@ -37,6 +37,8 @@ export interface BackupsVM {
   groups: BackupGroup[];
   targets: { name: string; tone: Tone; text: string; availability: string }[];
   unprotected: { key: string; name: string; kind: string }[];
+  /** One quiet line about backups of deleted volumes; empty when there are none. */
+  orphaned: string;
 }
 
 const ORDER: BackupKind[] = ['cnpg', 'longhorn', 'etcd', 'velero'];
@@ -106,5 +108,6 @@ export function backupsView(view: BackupsView | null, now: Date, tr: Translator)
     groups,
     targets,
     unprotected,
+    orphaned: view?.orphaned?.backups ? tr.t('backups.orphaned', { backups: view.orphaned.backups, volumes: tr.n('backups.volumes', view.orphaned.volumes) }) : '',
   };
 }

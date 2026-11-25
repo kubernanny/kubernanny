@@ -22,7 +22,8 @@ import { ClusterDataStore } from '../core/cluster-data.store';
 import { ClusterStore } from '../core/cluster-store.service';
 import { StatusStore } from '../core/status-store.service';
 import { LanguageService } from '../i18n/language.service';
-import { Heartbeat } from '../ui/heartbeat';
+import { NannyEye } from '../ui/nanny-eye';
+import { UsageBar } from '../ui/usage-bar';
 import { buildClusterView, issueCards } from './cluster-view';
 import { historyView } from './history-view';
 import { statusReport } from './status-report';
@@ -66,7 +67,8 @@ const NEEDS: Record<Tab, Parameters<ClusterDataStore['need']>> = {
     IonRefresherContent,
     IonSegment,
     IonSegmentButton,
-    Heartbeat,
+    NannyEye,
+    UsageBar,
     OverviewTab,
     ServicesTab,
     NodesTab,
@@ -104,7 +106,7 @@ export class ClusterPage {
   private readonly state = computed(() => this.status.states()[this.id()] ?? null);
   readonly loading = computed(() => this.state()?.loading ?? false);
   readonly view = computed(() => buildClusterView(this.state()?.snapshot ?? null, this.state()?.error ?? null, this.now(), this.language.translator()));
-  readonly heartbeatLabel = computed(() => this.language.translator().t('cluster.heartbeat', { headline: this.view().headline }));
+  readonly stateLabel = computed(() => this.language.translator().t('cluster.stateLabel', { headline: this.view().headline }));
   readonly incidents = computed(() => {
     const value = this.data.incidents().value;
     return value ? historyView(value, this.state()?.snapshot?.modules ?? [], this.now(), this.language.translator()) : null;

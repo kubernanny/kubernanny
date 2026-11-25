@@ -1,6 +1,7 @@
 import { Category, CheckStatus, Issue, IssueAction, IssueActionType, Light, ModuleView, Snapshot, Tone } from '../core/agent.model';
 import { KNOWN_AGENT_VERSION, UPGRADE_COMMAND, olderThan } from '../core/version';
 import { LIGHT_TONE, STATUS_TONE, bytes, cores, duration, percent, ratio, relativeTime, sinceText, untilText } from '../core/format';
+import { nodeResourceNote, resourceNote } from '../core/resources-text';
 import { TranslationKey } from '../i18n/dictionary';
 import { Translator } from '../i18n/translator';
 import { MaintenanceVM, maintenanceView } from './maintenance-view';
@@ -38,6 +39,22 @@ export interface Kpi {
   value: string;
   note: string;
   tone: Tone;
+  /** CPU and RAM: use, requests and limits as shares of what there is, with requests and limits in numbers. */
+  bar?: { used: number | null; reserved: number | null; limit: number | null; note: string };
+}
+
+export interface NodeResourceBar {
+  used: number | null;
+  reserved: number | null;
+  limit: number | null;
+  text: string;
+  note: string;
+}
+
+export interface NodeResourceRow {
+  name: string;
+  cpu: NodeResourceBar;
+  memory: NodeResourceBar;
 }
 
 export interface ModuleRow {
@@ -60,7 +77,6 @@ export interface ClusterView {
   /** "RKE2 1.33.4, 3 Nodes, 31 Komponenten erkannt" / "RKE2 1.33.4, 3 nodes, 31 components detected" */
   subline: string;
   checked: string;
-  score: number | null;
   stale: boolean;
   /** Critical and warning: what needs someone. */
   issues: IssueCard[];
@@ -73,6 +89,8 @@ export interface ClusterView {
   critical: number;
   warning: number;
   kpis: Kpi[];
+  /** Use, requests and limits per node, under the cluster's figures. */
+  perNode: NodeResourceRow[];
   groups: CategoryGroup[];
   attention: ModuleRow[];
   hasPrometheus: boolean;
@@ -163,7 +181,13 @@ export function advisoryLinks(ids: string[] | undefined): { id: string; url: str
 }
 
 export function moduleRow(m: ModuleView, tr: Translator): ModuleRow {
-  const meta = [m.version, m.namespace].filter(Boolean).join(', ');
+  // A component installed several times (Redis per app) names how often, not the first copy's namespace.
+  const copies = m.instances?.length ?? 0;
+  const versions = new Set((m.instances ?? []).map((x) => x.version).filter(Boolean));
+  const meta =
+    copies > 1
+      ? [tr.n('services.instances', copies), versions.size > 1 ? tr.t('services.versionsDiffer') : m.version].filter(Boolean).join(', ')
+      : [m.version, m.namespace].filter(Boolean).join(', ');
   return { module: m, tone: STATUS_TONE[m.status], statusLabel: tr.t(STATUS_KEY[m.status]), meta };
 }
 
@@ -221,14 +245,20 @@ export function buildClusterView(snapshot: Snapshot | null, error: string | null
         {
           label: tr.t('cluster.kpi.cpu'),
           value: percent(cpu, lang),
-          note: o.cpu ? tr.t('cluster.kpi.cores', { used: cores(o.cpu.usedMilli, lang), total: cores(o.cpu.allocatableMilli, lang) }) : tr.t('cluster.kpi.noMetrics'),
+          note: o.cpu ? tr.t('resources.cores', { used: cores(o.cpu.usedMilli, lang), total: cores(o.cpu.allocatableMilli, lang) }) : tr.t('cluster.kpi.noMetrics'),
           tone: toneFor(cpu),
+          ...(o.cpu?.requestedMilli !== undefined
+            ? { bar: { used: cpu, reserved: ratio(o.cpu.requestedMilli, o.cpu.allocatableMilli), limit: ratio(o.cpu.limitMilli, o.cpu.allocatableMilli), note: resourceNote('cpu', o.cpu.requestedMilli, o.cpu.limitMilli, 0, tr) } }
+            : {}),
         },
         {
           label: tr.t('cluster.kpi.ram'),
           value: percent(mem, lang),
-          note: o.memory ? tr.t('cluster.kpi.of', { used: bytes(o.memory.used, lang), total: bytes(o.memory.allocatable, lang) }) : tr.t('cluster.kpi.noMetrics'),
+          note: o.memory ? tr.t('resources.of', { used: bytes(o.memory.used, lang), total: bytes(o.memory.allocatable, lang) }) : tr.t('cluster.kpi.noMetrics'),
           tone: toneFor(mem),
+          ...(o.memory?.requested !== undefined
+            ? { bar: { used: mem, reserved: ratio(o.memory.requested, o.memory.allocatable), limit: ratio(o.memory.limit, o.memory.allocatable), note: resourceNote('memory', o.memory.requested, o.memory.limit, 0, tr) } }
+            : {}),
         },
         {
           label: tr.t('cluster.kpi.podsRunning'),
@@ -268,7 +298,6 @@ export function buildClusterView(snapshot: Snapshot | null, error: string | null
           ? tr.t('cluster.checkedIn', { when: relativeTime(s.checkedAt, now, lang), ms: s.durationMs })
           : tr.t('cluster.checked', { when: relativeTime(s.checkedAt, now, lang) })
         : tr.t('cluster.connecting'),
-    score: s?.checkedAt ? s.score : null,
     stale,
     issues: issueCards(issues, s?.modules ?? [], now, tr),
     hints: issueCards(hints, s?.modules ?? [], now, tr),
@@ -280,6 +309,23 @@ export function buildClusterView(snapshot: Snapshot | null, error: string | null
     critical,
     warning,
     kpis,
+    perNode: (o?.perNode ?? []).map((n) => ({
+      name: n.name,
+      cpu: {
+        used: ratio(n.cpu.usedMilli, n.cpu.allocatableMilli),
+        reserved: ratio(n.cpu.requestedMilli, n.cpu.allocatableMilli),
+        limit: ratio(n.cpu.limitMilli, n.cpu.allocatableMilli),
+        text: tr.t('resources.cores', { used: cores(n.cpu.usedMilli, lang), total: cores(n.cpu.allocatableMilli, lang) }),
+        note: nodeResourceNote('cpu', n.cpu.requestedMilli, n.cpu.limitMilli, n.cpu.allocatableMilli, n.podsWithoutLimit.cpu, tr),
+      },
+      memory: {
+        used: ratio(n.memory.used, n.memory.allocatable),
+        reserved: ratio(n.memory.requested, n.memory.allocatable),
+        limit: ratio(n.memory.limit, n.memory.allocatable),
+        text: tr.t('resources.of', { used: bytes(n.memory.used, lang), total: bytes(n.memory.allocatable, lang) }),
+        note: nodeResourceNote('memory', n.memory.requested, n.memory.limit, n.memory.allocatable, n.podsWithoutLimit.memory, tr),
+      },
+    })),
     groups,
     attention: rows.filter((r) => r.tone === 'critical' || r.tone === 'warning' || r.module.status === 'error'),
     hasPrometheus: o?.prometheus ?? false,

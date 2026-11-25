@@ -32,7 +32,7 @@ export function hostRows(view: NetworkView | null, tr: Translator): HostRow[] {
         url: externalUrl(`${ing.tls ? 'https' : 'http'}://${host}`),
         tone,
         cert,
-        detail: [ing.component, `${ing.namespace}/${ing.backends.join(', ')}`, ing.className].filter(Boolean).join(', '),
+        detail: [ing.component, `${ing.namespace}/${ing.backends.join(', ')}`, ing.workloads?.length ? tr.t('network.workloads', { workloads: ing.workloads.join(', ') }) : null, ing.className].filter(Boolean).join(', '),
       };
     }),
   );

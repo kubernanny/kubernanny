@@ -158,8 +158,10 @@ test.describe('web demo (no agent, nothing leaves the browser)', () => {
     await expectToast(page, 'Zustand in die Zwischenablage kopiert.');
     const text = await page.evaluate(() => navigator.clipboard.readText());
     expect(text.split('\n')[0]).toBe('Kubernanny: Zustand von office');
-    expect(text).toMatch(/Zustand: 2 Warnungen \(Ampel gelb, \d+ von 100\)/);
-    expect(text).toContain('Offene Probleme (2):');
+    // The certificate, the late database backup and the slow etcd link (standard alerts).
+    expect(text).toMatch(/Zustand: 3 Warnungen \(Ampel gelb\)/);
+    expect(text).toContain('Offene Probleme (3):');
+    expect(text).toContain('rke2-node-1 → rke2-node-5');
     expect(text).not.toMatch(/demo:\/\/|cnpg\/default/);
   });
 

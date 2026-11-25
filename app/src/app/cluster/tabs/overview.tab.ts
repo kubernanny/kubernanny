@@ -4,6 +4,8 @@ import { IonIcon } from '@ionic/angular/standalone';
 import { ClusterConfig, HistoryView, Series } from '../../core/agent.model';
 import { Loadable } from '../../core/cluster-data.store';
 import { AreaChart } from '../../ui/area-chart';
+import { UsageBar } from '../../ui/usage-bar';
+import { Meter } from '../../ui/meter';
 import { IssueList } from '../../ui/issue-list';
 import { LanguageService } from '../../i18n/language.service';
 import { Translator } from '../../i18n/translator';
@@ -20,7 +22,7 @@ export function hourChoices(tr: Translator): { hours: number; label: string }[] 
 @Component({
   selector: 'app-overview-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, IssueList, AreaChart, IonIcon, HistorySection],
+  imports: [TranslocoDirective, IssueList, AreaChart, IonIcon, HistorySection, UsageBar, Meter],
   template: `
     <ng-container *transloco="let t">
       @if (view().update; as update) {
@@ -115,10 +117,30 @@ export function hourChoices(tr: Translator): { hours: number; label: string }[] 
               <dt>{{ k.label }}</dt>
               <dd class="display">{{ k.value }}</dd>
               <dd class="note">{{ k.note }}</dd>
+                @if (k.bar; as b) {
+                  <dd class="bar"><app-usage-bar [used]="b.used" [reserved]="b.reserved" [limit]="b.limit" /></dd>
+                  <dd class="note">{{ b.note }}</dd>
+                }
             </div>
           }
         </dl>
       </section>
+
+      @if (view().perNode.length > 0) {
+        <section class="per-node">
+          <h2>{{ t('resources.perNode') }}</h2>
+          <div class="nodes">
+            @for (n of view().perNode; track n.name) {
+              <div class="node">
+                <strong>{{ n.name }}</strong>
+                <app-meter [label]="t('nodes.cpu')" [used]="n.cpu.used" [reserved]="n.cpu.reserved" [limit]="n.cpu.limit" [text]="n.cpu.text" [note]="n.cpu.note" />
+                <app-meter [label]="t('nodes.ram')" [used]="n.memory.used" [reserved]="n.memory.reserved" [limit]="n.memory.limit" [text]="n.memory.text" [note]="n.memory.note" />
+              </div>
+            }
+          </div>
+          <p class="muted hint">{{ t('resources.perNodeHint') }}</p>
+        </section>
+      }
 
       @if (view().attention.length > 0) {
         <section>
@@ -286,6 +308,29 @@ export function hourChoices(tr: Translator): { hours: number; label: string }[] 
     }
     .kpi dd {
       margin: 0;
+    }
+    .nodes {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+      gap: 0.75rem;
+    }
+    .node {
+      display: grid;
+      gap: 0.7rem;
+      background: var(--surface);
+      border-radius: var(--radius-m);
+      padding: 0.85rem 1rem;
+    }
+    .node strong {
+      font-weight: 650;
+      overflow-wrap: anywhere;
+    }
+    .per-node .hint {
+      font-size: 0.8125rem;
+      margin: 0.6rem 0 0;
+    }
+    .kpi .bar {
+      margin: 0.45rem 0 0.2rem;
     }
     .kpi .display {
       font-size: 1.6rem;

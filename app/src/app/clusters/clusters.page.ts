@@ -8,7 +8,7 @@ import { copyText } from '../core/share';
 import { StatusStore } from '../core/status-store.service';
 import { DEMO_HOST } from '../../environments/build-flags';
 import { LangChoice, LanguageService } from '../i18n/language.service';
-import { Heartbeat } from '../ui/heartbeat';
+import { NannyEye } from '../ui/nanny-eye';
 import { WidgetSwitchComponent } from './widget-switch.component';
 
 export const INSTALL_COMMAND = 'helm install kubernanny oci://ghcr.io/kubernanny/charts/kubernanny -n kubernanny --create-namespace';
@@ -17,7 +17,7 @@ export const PAIR_COMMAND = 'kubectl -n kubernanny logs deploy/kubernanny';
 @Component({
   selector: 'app-clusters',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, RouterLink, IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonIcon, IonContent, Heartbeat, WidgetSwitchComponent],
+  imports: [TranslocoDirective, RouterLink, IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonIcon, IonContent, NannyEye, WidgetSwitchComponent],
   template: `
     <ng-container *transloco="let t">
       <ion-header class="ion-no-border">
@@ -54,15 +54,17 @@ export const PAIR_COMMAND = 'kubectl -n kubernanny logs deploy/kubernanny';
                 <li>
                   <a [routerLink]="['/c', c.id]" [class]="'tone-' + c.view.tone">
                     <div class="top">
-                      <h2 class="display">
-                        {{ c.name }}
-                        @if (c.demo) {
-                          <span class="pill">{{ t('common.demo') }}</span>
-                        }
-                      </h2>
-                      <span class="muted">{{ c.view.subline }}</span>
+                      <div>
+                        <h2 class="display">
+                          {{ c.name }}
+                          @if (c.demo) {
+                            <span class="pill">{{ t('common.demo') }}</span>
+                          }
+                        </h2>
+                        <span class="muted">{{ c.view.subline }}</span>
+                      </div>
+                      <app-nanny-eye [light]="c.view.light" [label]="c.view.headline" />
                     </div>
-                    <app-heartbeat [light]="c.view.light" [label]="c.view.headline" />
                     <div class="bottom">
                       <strong>{{ c.view.headline }}</strong>
                       <span class="muted">{{ c.view.checked }}</span>
@@ -149,7 +151,6 @@ export const PAIR_COMMAND = 'kubectl -n kubernanny logs deploy/kubernanny';
       border-radius: var(--radius-l);
       color: var(--ink);
       text-decoration: none;
-      --heartbeat-height: 56px;
     }
     a:hover {
       outline: 1px solid var(--line);
@@ -163,8 +164,19 @@ export const PAIR_COMMAND = 'kubectl -n kubernanny logs deploy/kubernanny';
     .top .muted {
       font-size: 0.875rem;
     }
-    app-heartbeat {
-      margin: 0.75rem -0.5rem;
+    .top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .top > div {
+      min-width: 0;
+    }
+    app-nanny-eye {
+      --eye-width: 60px;
+      margin-top: 0.35rem;
     }
     .bottom {
       display: grid;

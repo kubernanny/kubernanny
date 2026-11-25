@@ -3,19 +3,20 @@ import { TranslocoDirective } from '@jsverse/transloco';
 import { IonSpinner } from '@ionic/angular/standalone';
 import { HistoryView, NodeView, Series, Tone } from '../../core/agent.model';
 import { Loadable } from '../../core/cluster-data.store';
-import { NO_VALUE, age, bytes, cores, percent, ratio } from '../../core/format';
+import { NO_VALUE, age, bytes, cores, percent, ratio, sinceText } from '../../core/format';
 import { LanguageService } from '../../i18n/language.service';
 import { Translator } from '../../i18n/translator';
 import { AreaChart } from '../../ui/area-chart';
 import { Meter } from '../../ui/meter';
+import { nodeResourceNote } from '../../core/resources-text';
 
 export interface NodeCard {
   node: NodeView;
   tone: Tone;
   state: string;
   facts: { label: string; value: string }[];
-  cpu: { used: number | null; reserved: number | null; text: string };
-  memory: { used: number | null; reserved: number | null; text: string };
+  cpu: { used: number | null; reserved: number | null; limit: number | null; text: string; note: string };
+  memory: { used: number | null; reserved: number | null; limit: number | null; text: string; note: string };
   disk: { used: number | null; text: string } | null;
   pods: { used: number | null; text: string };
   cpuSeries: Series | null;
@@ -47,18 +48,22 @@ export function nodeCards(nodes: NodeView[], history: HistoryView | null, now: D
       cpu: {
         used: usedCpu,
         reserved: ratio(n.cpu.requestedMilli, n.cpu.allocatableMilli),
-        text: tr.t('nodes.cpuText', { used: percent(usedCpu, lang), reserved: percent(ratio(n.cpu.requestedMilli, n.cpu.allocatableMilli), lang), cores: cores(n.cpu.allocatableMilli, lang) }),
+        limit: n.cpu.limitMilli === undefined ? null : ratio(n.cpu.limitMilli, n.cpu.allocatableMilli),
+        text: tr.t('resources.cores', { used: cores(n.cpu.usedMilli, lang), total: cores(n.cpu.allocatableMilli, lang) }),
+        note: nodeResourceNote('cpu', n.cpu.requestedMilli, n.cpu.limitMilli, n.cpu.allocatableMilli, n.podsWithoutLimit?.cpu, tr),
       },
       memory: {
         used: usedMem,
         reserved: ratio(n.memory.requested, n.memory.allocatable),
-        text: tr.t('nodes.memoryText', { used: bytes(n.memory.used, lang), total: bytes(n.memory.allocatable, lang), reserved: percent(ratio(n.memory.requested, n.memory.allocatable), lang) }),
+        limit: n.memory.limit === undefined ? null : ratio(n.memory.limit, n.memory.allocatable),
+        text: tr.t('resources.of', { used: bytes(n.memory.used, lang), total: bytes(n.memory.allocatable, lang) }),
+        note: nodeResourceNote('memory', n.memory.requested, n.memory.limit, n.memory.allocatable, n.podsWithoutLimit?.memory, tr),
       },
       disk: n.disk === null ? null : { used: n.disk, text: tr.t('nodes.diskText', { used: percent(n.disk, lang) }) },
       pods: { used: ratio(n.pods.count, n.pods.capacity), text: tr.t('nodes.podsText', { count: n.pods.count, capacity: n.pods.capacity }) },
       cpuSeries: history?.series.find((s) => s.id === `node-cpu:${n.name}`) ?? null,
       memorySeries: history?.series.find((s) => s.id === `node-memory:${n.name}`) ?? null,
-      warnings: [...n.conditions.filter((c) => c.type !== 'Ready').map((c) => `${c.type}${c.message ? `: ${c.message}` : ''}`), ...n.taints.filter((t) => !t.includes('control-plane') && !t.includes('master') && !t.includes('etcd'))],
+      warnings: [...n.conditions.filter((c) => c.type !== 'Ready').map((c) => `${c.type}${c.since ? ` (${sinceText(c.since, now, lang)})` : ''}${c.message ? `: ${c.message}` : ''}`), ...n.taints.filter((t) => !t.includes('control-plane') && !t.includes('master') && !t.includes('etcd'))],
     };
   });
 }
@@ -82,8 +87,8 @@ export function nodeCards(nodes: NodeView[], history: HistoryView | null, now: D
               <span class="pill">{{ c.state }}</span>
             </header>
             <div class="meters">
-              <app-meter [label]="t('nodes.cpu')" [used]="c.cpu.used" [reserved]="c.cpu.reserved" [text]="c.cpu.text" />
-              <app-meter [label]="t('nodes.ram')" [used]="c.memory.used" [reserved]="c.memory.reserved" [text]="c.memory.text" />
+              <app-meter [label]="t('nodes.cpu')" [used]="c.cpu.used" [reserved]="c.cpu.reserved" [limit]="c.cpu.limit" [text]="c.cpu.text" [note]="c.cpu.note" />
+              <app-meter [label]="t('nodes.ram')" [used]="c.memory.used" [reserved]="c.memory.reserved" [limit]="c.memory.limit" [text]="c.memory.text" [note]="c.memory.note" />
               @if (c.disk; as d) {
                 <app-meter [label]="t('nodes.disk')" [used]="d.used" [text]="d.text" />
               }

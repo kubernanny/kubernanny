@@ -9,12 +9,14 @@ import { IssueList } from '../ui/issue-list';
 import { IssueCard, moduleRow } from './cluster-view';
 import { AcceptedRow, acceptedRows } from './vulnerability-acceptance';
 import { RollbackRow, markRolledBack, rollbackRows } from './argocd-rollback';
+import { SheetView, buildSheetView } from './module-sheet-view';
+import { DetailSectionView } from './detail-section';
 
 /** Everything Kubernanny knows about one component: its numbers, its problems, its pods and where to open it. */
 @Component({
   selector: 'app-module-sheet',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, IonHeader, IonToolbar, IonButtons, IonButton, IonContent, IonIcon, IssueList],
+  imports: [TranslocoDirective, IonHeader, IonToolbar, IonButtons, IonButton, IonContent, IonIcon, IssueList, DetailSectionView],
   template: `
     <ng-container *transloco="let t">
       <ion-header>
@@ -30,6 +32,9 @@ import { RollbackRow, markRolledBack, rollbackRows } from './argocd-rollback';
           <div>
             <h1 class="display">{{ module.name }}</h1>
             <p class="muted">{{ module.description }}</p>
+            @if (sheet().meta) {
+              <p class="meta">{{ sheet().meta }}</p>
+            }
           </div>
         </header>
         <p [class]="'summary tone-' + head().tone"><span class="pill">{{ head().statusLabel }}</span> {{ module.summary }}</p>
@@ -48,9 +53,9 @@ import { RollbackRow, markRolledBack, rollbackRows } from './argocd-rollback';
           </div>
         }
 
-        @if (module.stats.length > 0) {
-          <dl class="stats">
-            @for (s of module.stats; track s.label) {
+        @if (sheet().figures.length > 0) {
+          <dl class="figures" [attr.aria-label]="t('module.keyFigures')" [style.--n]="sheet().columns" [class.four]="sheet().columns === 4">
+            @for (s of sheet().figures; track s.label) {
               <div [class]="'tone-' + (s.tone ?? 'muted')">
                 <dt>{{ s.label }}</dt>
                 <dd>{{ s.value }}</dd>
@@ -62,6 +67,10 @@ import { RollbackRow, markRolledBack, rollbackRows } from './argocd-rollback';
         @if (issues().length > 0) {
           <h2>{{ t('module.issues') }}</h2>
           <app-issue-list [cards]="issues()" [cluster]="cluster" (changed)="changed.set(true)" />
+        }
+
+        @for (sec of sheet().sections; track sec.key) {
+          <app-detail-section [section]="sec" [expanded]="expanded().has(sec.key)" (toggle)="toggle(sec.key)" />
         }
 
         @if (rollbacks().length > 0) {
@@ -172,30 +181,45 @@ import { RollbackRow, markRolledBack, rollbackRows } from './argocd-rollback';
       font-weight: 600;
       font-size: 0.875rem;
     }
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
-      gap: 2px;
-      margin: 0 0 1.5rem;
-      border-radius: var(--radius-m);
-      overflow: hidden;
-    }
-    .stats div {
-      background: var(--raise);
-      padding: 0.7rem 0.85rem;
-    }
-    .stats dt {
-      color: var(--mute);
+    .meta {
+      margin: 0.25rem 0 0;
       font-size: 0.8125rem;
+      color: var(--mute);
+      overflow-wrap: anywhere;
     }
-    .stats dd {
-      margin: 0.15rem 0 0;
+    .figures {
+      display: grid;
+      grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr));
+      gap: 0.5rem;
+      margin: 0 0 1.5rem;
+    }
+    @media (max-width: 459px) {
+      .figures.four {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    .figures div {
+      background: var(--raise);
+      border-radius: var(--radius-m);
+      padding: 0.65rem 0.8rem 0.7rem;
+      min-width: 0;
+    }
+    .figures dt {
+      color: var(--mute);
+      font-size: 0.75rem;
+      line-height: 1.3;
+    }
+    .figures dd {
+      margin: 0.2rem 0 0;
+      font-family: var(--font-display);
       font-weight: 650;
+      font-size: 1.2rem;
+      line-height: 1.2;
       color: var(--ink);
       overflow-wrap: anywhere;
     }
-    .stats .tone-warning dd,
-    .stats .tone-critical dd {
+    .figures .tone-warning dd,
+    .figures .tone-critical dd {
       color: var(--tone);
     }
     h2 {
@@ -308,6 +332,12 @@ export class ModuleSheet implements OnInit {
     const m = this.view();
     return m ? rollbackRows(m, this.language.translator()) : [];
   });
+  /** Lists whose healthy rows are all shown. */
+  readonly expanded = signal<ReadonlySet<string>>(new Set());
+  readonly sheet = computed<SheetView>(() => {
+    const m = this.view();
+    return m ? buildSheetView(m, this.expanded(), this.language.translator()) : { meta: '', figures: [], columns: 0, sections: [] };
+  });
   readonly issues = signal<IssueCard[]>([]);
   readonly accepted = signal<AcceptedRow[]>([]);
   readonly busy = signal<string | null>(null);
@@ -326,6 +356,16 @@ export class ModuleSheet implements OnInit {
     this.issues.set(this.issueCards);
     this.accepted.set(acceptedRows(this.module, this.language.translator()));
     this.view.set(this.module);
+  }
+
+  toggle(key: string): void {
+    this.expanded.update((set) => {
+      const next = new Set(set);
+      if (!next.delete(key)) {
+        next.add(key);
+      }
+      return next;
+    });
   }
 
   /** Earlier deployments to pick from, then a confirmation naming from and to; the agent reads the revision itself. */

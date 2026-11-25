@@ -44,6 +44,35 @@ export interface Link {
   url: string;
 }
 
+/** A small fact under a detail row's name, tinted when it is the problem. */
+export interface DetailMeta {
+  text: string;
+  tone?: Tone;
+}
+
+/** One object of a module (agent/src/modules/types.ts, `DetailRow`). */
+export interface DetailRow {
+  name: string;
+  sub?: string;
+  tone: Tone;
+  value?: string;
+  meta?: DetailMeta[];
+}
+
+/** A structured part of a module sheet: its objects as a list or a short table (agents from 0.4 on). */
+export type DetailSection =
+  | { title: string; kind: 'list'; rows: DetailRow[]; more?: number }
+  | { title: string; kind: 'table'; columns: string[]; rows: { cells: string[]; tone: Tone }[]; more?: number };
+
+/** One copy of a component installed several times (Redis/Valkey per app). */
+export interface ComponentInstance {
+  namespace: string;
+  name: string;
+  version?: string;
+  ready: number;
+  desired: number;
+}
+
 export type Category =
   | 'core'
   | 'storage'
@@ -68,7 +97,11 @@ export interface ModuleView {
   version?: string;
   status: CheckStatus;
   summary: string;
+  /** Two to four key figures (older agents may send more). */
   stats: Stat[];
+  /** The module's objects, problems first (agents from 0.4 on). */
+  details?: DetailSection[];
+  instances?: ComponentInstance[];
   links: Link[];
   workloads: { ready: number; total: number; items: { kind: string; namespace: string; name: string; ready: number; desired: number }[] };
   issueIds: string[];
@@ -104,8 +137,9 @@ export interface AcceptedAdvisory {
 export interface Overview {
   nodes: { ready: number; total: number };
   pods: { running: number; total: number };
-  cpu: { usedMilli: number; allocatableMilli: number } | null;
-  memory: { used: number; allocatable: number } | null;
+  /** Requests and limits from agents 0.4 on. */
+  cpu: { usedMilli: number; allocatableMilli: number; requestedMilli?: number; limitMilli?: number } | null;
+  memory: { used: number; allocatable: number; requested?: number; limit?: number } | null;
   volumes: { bound: number; total: number };
   ingresses: number;
   namespaces: number;
@@ -113,6 +147,13 @@ export interface Overview {
   components: number;
   prometheus: boolean;
   metricsServer: boolean;
+  /** Per node: use, requests and limits of its pods against allocatable (agents from 0.4 on). */
+  perNode?: {
+    name: string;
+    cpu: { usedMilli: number | null; allocatableMilli: number; requestedMilli: number; limitMilli: number };
+    memory: { used: number | null; allocatable: number; requested: number; limit: number };
+    podsWithoutLimit: { cpu: number; memory: number };
+  }[];
 }
 
 export interface Snapshot {
@@ -147,11 +188,14 @@ export interface NodeView {
   arch?: string;
   internalIp?: string;
   createdAt?: string;
-  cpu: { allocatableMilli: number; requestedMilli: number; usedMilli: number | null };
-  memory: { allocatable: number; requested: number; used: number | null };
+  /** `limit` from agents 0.4 on. */
+  cpu: { allocatableMilli: number; requestedMilli: number; limitMilli?: number; usedMilli: number | null };
+  memory: { allocatable: number; requested: number; limit?: number; used: number | null };
   disk: number | null;
   pods: { count: number; capacity: number };
-  conditions: { type: string; status: string; message?: string }[];
+  /** Pods with a container that sets no CPU / memory limit (agents from 0.4 on). */
+  podsWithoutLimit?: { cpu: number; memory: number };
+  conditions: { type: string; status: string; message?: string; since?: string }[];
   taints: string[];
 }
 
@@ -168,7 +212,28 @@ export interface WorkloadView {
   createdAt?: string;
   cpuMilli: number | null;
   memBytes: number | null;
-  pods: { name: string; node?: string; phase?: string; ready: boolean; restarts: number }[];
+  /** Agents from 0.4 on: requests and limits of its pods (a limit is null when no container sets one). */
+  resources?: { cpuRequestMilli: number; cpuLimitMilli: number | null; memRequest: number; memLimit: number | null; cpuUnlimited: number; memUnlimited: number };
+  /** Agents from 0.4 on: the most recent restart of any of its containers. */
+  lastRestart?: Termination & { pod: string; container: string };
+  pods: { name: string; node?: string; phase?: string; ready: boolean; restarts: number; containers?: ContainerView[] }[];
+}
+
+/** How a container's previous run ended (`lastState.terminated`); `memLimit` only for an OOMKill. */
+export interface Termination {
+  reason?: string;
+  exitCode?: number;
+  signal?: number;
+  finishedAt?: string;
+  memLimit?: number;
+}
+
+export interface ContainerView {
+  name: string;
+  ready: boolean;
+  restarts: number;
+  waiting?: string;
+  lastTermination?: Termination;
 }
 
 export interface StorageView {
@@ -195,6 +260,8 @@ export interface NetworkView {
     tls: boolean;
     certificate?: { name: string; notAfter?: string; daysLeft: number | null; ready: boolean };
     backends: string[];
+    /** "Kind/name" of the workloads behind the backends (agents from 0.4 on). */
+    workloads?: string[];
     component?: string;
   }[];
   loadBalancers: { namespace: string; name: string; addresses: string[]; ports: string[] }[];
@@ -213,6 +280,8 @@ export interface EventView {
   firstSeen?: string;
   /** How many Event objects the agent merged into this row (1: none). */
   events?: number;
+  /** The workload behind the object (agents from 0.4 on). */
+  workload?: { kind: string; name: string };
 }
 
 /** One episode of an issue (agent/src/views/incidents.ts). */
@@ -270,6 +339,8 @@ export interface BackupsView {
   targets: BackupTargetView[];
   /** Databases and volumes without any backup; not judged. */
   unprotected: { kind: 'cnpg' | 'longhorn'; name: string; namespace?: string }[];
+  /** Backups of volumes deleted since; they protect nothing and are only counted (agents from 0.4 on). */
+  orphaned?: { kind: 'longhorn'; volumes: number; backups: number };
 }
 
 export type Unit = 'ratio' | 'bytesPerSecond' | 'count' | 'seconds';

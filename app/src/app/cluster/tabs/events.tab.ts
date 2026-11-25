@@ -13,6 +13,8 @@ export interface EventRow {
   when: string;
   reason: string;
   object: string;
+  /** "Deployment api": the workload behind a pod or ReplicaSet; empty when the event is about the workload itself or none is known. */
+  workload: string;
   message: string;
   /** "35× seit 39 min", "14×", or null for a single event. */
   repeat: string | null;
@@ -31,6 +33,7 @@ export function eventRows(events: EventView[], now: Date, tr: Translator): Event
       reason: e.reason ?? '',
       object: [e.kind, e.namespace ? `${e.namespace}/${e.name}` : e.name].filter(Boolean).join(' '),
       message: e.message ?? '',
+      workload: e.workload && !(e.workload.kind === e.kind && e.workload.name === e.name) ? tr.t('events.workload', { kind: e.workload.kind, name: e.workload.name }) : '',
       repeat: e.count > 1 ? (since ? tr.t('events.repeated', { count: e.count, span: since }) : `${e.count}×`) : null,
       merged: (e.events ?? 1) > 1 ? tr.t('events.merged', { count: e.events ?? 1 }) : null,
     };
@@ -60,6 +63,9 @@ export function eventRows(events: EventView[], now: Date, tr: Translator): Event
                 }
               </div>
               <p>{{ e.message }}</p>
+              @if (e.workload) {
+                <span class="muted workload">{{ e.workload }}</span>
+              }
             </div>
           </li>
         } @empty {
@@ -71,6 +77,11 @@ export function eventRows(events: EventView[], now: Date, tr: Translator): Event
     </ng-container>
   `,
   styles: `
+    .workload {
+      display: block;
+      font-size: 0.8125rem;
+      margin-top: 0.2rem;
+    }
     .intro {
       font-size: 0.9375rem;
       margin: 0 0 1.25rem;
