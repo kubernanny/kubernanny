@@ -46,6 +46,9 @@ export interface Snapshot {
   cluster: string;
   /** So the app can tell when the agent is older than itself. */
   agentVersion: string;
+  /** The image tag and git commit CI baked in (KUBERNANNY_BUILD, KUBERNANNY_COMMIT); absent in local builds. */
+  agentBuild?: string;
+  agentCommit?: string;
   light: Light;
   /** 0..100, see scoreFor. */
   score: number;

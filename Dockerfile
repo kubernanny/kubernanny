@@ -45,10 +45,15 @@ RUN rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /us
   && mkdir -p /app
 
 FROM scratch
+# What CI built this image as: the image tag and the git commit. The agent reports them (status, /api/info), the app shows them.
+ARG KUBERNANNY_BUILD=""
+ARG KUBERNANNY_COMMIT=""
 COPY --from=runtime / /
 ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     NODE_ENV=production \
-    WEB_ROOT=/app/web
+    WEB_ROOT=/app/web \
+    KUBERNANNY_BUILD=${KUBERNANNY_BUILD} \
+    KUBERNANNY_COMMIT=${KUBERNANNY_COMMIT}
 WORKDIR /app
 # `kubectl exec … node dist/cli.js pair` keeps working: the bundle lands where the build output was.
 COPY --from=agent /build/agent/bundle/main.js /build/agent/bundle/cli.js ./dist/

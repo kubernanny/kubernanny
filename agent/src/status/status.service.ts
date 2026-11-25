@@ -17,7 +17,7 @@ import { AcceptanceService } from '../modules/vulnerabilities/acceptance.service
 import { Notifier } from '../notify/notifier';
 import { SettingsService } from '../settings/settings.service';
 import { SilenceService } from '../silence/silence.service';
-import { AGENT_VERSION } from '../version';
+import { AGENT_BUILD, AGENT_COMMIT, AGENT_VERSION } from '../version';
 import { mergeIssues, runComponent, runCoreCheck } from './run-modules';
 import { dedupeAlerts } from '../modules/core/standard-alerts/alertmanager-dedupe';
 import { buildOverview, HistoryPoint, IssueView, lightFor, Overview, scoreFor, SEVERITY_RANK, Snapshot } from './snapshot';
@@ -190,6 +190,8 @@ export class StatusService {
     return {
       cluster: this.config.clusterName,
       agentVersion: AGENT_VERSION,
+      ...(AGENT_BUILD ? { agentBuild: AGENT_BUILD } : {}),
+      ...(AGENT_COMMIT ? { agentCommit: AGENT_COMMIT } : {}),
       light: 'unknown',
       score: 0,
       checkedAt: null,
@@ -249,6 +251,8 @@ export class StatusService {
     return {
       cluster: this.config.clusterName,
       agentVersion: AGENT_VERSION,
+      ...(AGENT_BUILD ? { agentBuild: AGENT_BUILD } : {}),
+      ...(AGENT_COMMIT ? { agentCommit: AGENT_COMMIT } : {}),
       light: lightFor(modules, audible),
       score: scoreFor(audible),
       checkedAt: now.toISOString(),

@@ -1,7 +1,7 @@
 import { BadGatewayException, BadRequestException, ForbiddenException, NotFoundException } from './http/errors';
 import { Route, intQuery, strQuery, uuidParam } from './http/server';
 import { Logger } from './logger';
-import { AGENT_VERSION } from './version';
+import { AGENT_BUILD, AGENT_COMMIT, AGENT_VERSION } from './version';
 import { ActionsService } from './actions/actions.service';
 import { DeviceView, DevicesService, Principal } from './auth/devices.service';
 import { IdentityService } from './auth/identity.service';
@@ -126,6 +126,8 @@ export class AppController {
     const { prom, detected } = this.status.state();
     return {
       agentVersion: AGENT_VERSION,
+      ...(AGENT_BUILD ? { agentBuild: AGENT_BUILD } : {}),
+      ...(AGENT_COMMIT ? { agentCommit: AGENT_COMMIT } : {}),
       cluster: this.config.clusterName,
       intervalSeconds: this.config.intervalSeconds,
       notifyAfterSeconds: this.config.notifyAfterSeconds,

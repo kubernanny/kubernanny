@@ -252,10 +252,14 @@ jobs:
         run: |
           OWNER=$(echo "$OWNER_NAME" | tr '[:upper:]' '[:lower:]')
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "tags=ghcr.io/$OWNER/agent:${GITHUB_REF_NAME#v},ghcr.io/$OWNER/agent:latest" >> "$GITHUB_OUTPUT"
+            BUILD="${GITHUB_REF_NAME#v}"
+            echo "tags=ghcr.io/$OWNER/agent:$BUILD,ghcr.io/$OWNER/agent:latest" >> "$GITHUB_OUTPUT"
           else
-            echo "tags=ghcr.io/$OWNER/agent:$(date -u +%Y-%m-%d)-${GITHUB_RUN_NUMBER},ghcr.io/$OWNER/agent:edge" >> "$GITHUB_OUTPUT"
+            BUILD="$(date -u +%Y-%m-%d)-${GITHUB_RUN_NUMBER}"
+            echo "tags=ghcr.io/$OWNER/agent:$BUILD,ghcr.io/$OWNER/agent:edge" >> "$GITHUB_OUTPUT"
           fi
+          # Baked into the image, so the agent can say which build it is.
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
       - id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -263,6 +267,9 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            KUBERNANNY_BUILD=${{ steps.tags.outputs.build }}
+            KUBERNANNY_COMMIT=${{ github.sha }}
           # Build provenance and an SBOM travel with the image as attestations.
           provenance: mode=max
           sbom: true
