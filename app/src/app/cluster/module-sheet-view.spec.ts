@@ -141,3 +141,33 @@ describe('overview rail', () => {
     ]);
   });
 });
+
+describe('apps ready to sync', () => {
+  it('lists the longest waiting first, with revisions, image tags and what changes', async () => {
+    const { pendingSyncRows } = await import('./pending-syncs');
+    const now = new Date('2026-11-25T12:00:00Z');
+    const rows = pendingSyncRows(
+      [
+        { id: 'argocd/argocd/b/sync', namespace: 'argocd', app: 'b', lastSyncAt: '2026-11-25T09:00:00Z', resources: [], images: [], canSync: false },
+        {
+          id: 'argocd/argocd/a/sync',
+          namespace: 'argocd',
+          app: 'a',
+          project: 'default',
+          destination: 'kubernanny',
+          lastSyncAt: '2026-11-24T12:00:00Z',
+          syncedRevision: 'aee71e4',
+          targetRevision: 'e7eb06b',
+          resources: [{ kind: 'Role', name: 'keys', change: 'new' }],
+          images: [{ from: 'ghcr.io/kubernanny/agent:2026-11-25-11', to: 'ghcr.io/kubernanny/agent:2026-11-25-14' }],
+          canSync: true,
+        },
+      ],
+      now,
+      de,
+    );
+    expect(rows.map((r) => r.app)).toEqual(['a', 'b']);
+    expect(rows[0]).toMatchObject({ where: 'nach kubernanny, Projekt default', since: 'wartet seit dem letzten Sync vor 24 h', revisions: 'aee71e4 → e7eb06b', images: ['agent:2026-11-25-11 → 2026-11-25-14'], canSync: true });
+    expect(rows[0]!.resources).toEqual([{ key: 'Role//keys', text: 'Role keys', change: 'new', label: 'neu' }]);
+  });
+});

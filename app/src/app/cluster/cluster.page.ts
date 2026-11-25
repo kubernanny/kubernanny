@@ -25,6 +25,8 @@ import { LanguageService } from '../i18n/language.service';
 import { NannyEye } from '../ui/nanny-eye';
 import { countdownView } from './countdown';
 import { ResourceRail } from './resource-rail';
+import { PendingSyncCard } from './pending-sync-card';
+import { PendingSyncSheet } from './pending-sync-sheet';
 import { buildClusterView, issueCards } from './cluster-view';
 import { historyView } from './history-view';
 import { statusReport } from './status-report';
@@ -70,6 +72,7 @@ const NEEDS: Record<Tab, Parameters<ClusterDataStore['need']>> = {
     IonSegmentButton,
     NannyEye,
     ResourceRail,
+    PendingSyncCard,
     OverviewTab,
     ServicesTab,
     NodesTab,
@@ -231,6 +234,22 @@ export class ClusterPage {
     if (outcome !== 'shared') {
       const toast = await this.toasts.create({ message: tr.t(outcome === 'copied' ? 'cluster.copiedReport' : 'cluster.shareFailed'), duration: 2500, position: 'bottom' });
       await toast.present();
+    }
+  }
+
+  /** "Bereit zum Sync": the manual Argo CD apps with a change waiting. */
+  async openPending(): Promise<void> {
+    const modal = await this.modals.create({
+      component: PendingSyncSheet,
+      cssClass: 'sheet',
+      breakpoints: [0, 0.6, 1],
+      initialBreakpoint: 1,
+      componentProps: { pending: this.view().pendingSyncs, cluster: this.cluster(), now: this.now() },
+    });
+    await modal.present();
+    const { data } = await modal.onDidDismiss<{ changed: boolean }>();
+    if (data?.changed) {
+      void this.refresh();
     }
   }
 
