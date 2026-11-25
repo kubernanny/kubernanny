@@ -2,11 +2,7 @@
 
 The public website: a landing page plus every markdown file in [`../docs`](../docs), prerendered to plain static HTML and deployed to Cloudflare Pages.
 
-> **TODO for the maintainer before going public**
->
-> 1. Fill in the imprint in [`src/site.config.ts`](src/site.config.ts) (`LEGAL`): name, summonable address, e-mail, phone or another direct contact. Every value starting with `TODO` is shown highlighted, and `/imprint` and `/privacy` print a "Draft" banner until none is left. German law (§ 5 DDG) requires a correct Impressum; nothing was invented here.
-> 2. Have `/privacy` (`src/app/pages/privacy.page.ts`) reviewed. It describes a site without cookies, analytics or third-party requests, hosted on Cloudflare Pages.
-> 3. Create the Ko-fi page or change `kofiUrl` in `src/site.config.ts` (it is a placeholder; GitHub Sponsors is `https://github.com/sponsors/kubernanny`).
+The imprint and the controller's details live in [`src/site.config.ts`](src/site.config.ts) (`LEGAL`). `/privacy` ([`src/app/pages/privacy.page.ts`](src/app/pages/privacy.page.ts)) covers the website, the demo, the app, the public relay and native push; keep it in step when any of them starts processing other data.
 
 ```sh
 npm ci

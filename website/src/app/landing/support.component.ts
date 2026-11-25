@@ -35,10 +35,6 @@ import { IconComponent } from '../components/icon.component';
             <kn-icon name="heart" />
             Sponsor on GitHub
           </a>
-          <a class="btn btn-ghost" [href]="vm.kofiUrl">
-            <kn-icon name="coffee" />
-            Buy a coffee on Ko-fi
-          </a>
           <a class="btn btn-ghost" [href]="vm.repoUrl">
             <kn-icon name="star" />
             Star on GitHub
@@ -137,5 +133,5 @@ import { IconComponent } from '../components/icon.component';
   `,
 })
 export class SupportComponent {
-  protected readonly vm = { demoUrl: SITE.demoUrl, sponsorsUrl: SITE.sponsorsUrl, kofiUrl: SITE.kofiUrl, repoUrl: SITE.repoUrl };
+  protected readonly vm = { demoUrl: SITE.demoUrl, sponsorsUrl: SITE.sponsorsUrl, repoUrl: SITE.repoUrl };
 }

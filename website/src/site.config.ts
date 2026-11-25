@@ -1,9 +1,6 @@
 /**
  * Everything about the site that is not documentation: names, links, and the
- * legal details for the imprint. Values starting with `TODO` are placeholders
- * the maintainer fills in before the site goes public (see README.md); the
- * imprint and privacy pages show them highlighted and print a warning banner
- * while any are left.
+ * legal details for the imprint and the privacy notice.
  */
 export const SITE = {
   name: 'Kubernanny',
@@ -15,8 +12,8 @@ export const SITE = {
   repoUrl: 'https://github.com/kubernanny/kubernanny',
   demoUrl: 'https://demo.kubernanny.app',
   sponsorsUrl: 'https://github.com/sponsors/kubernanny',
-  /** TODO: the Ko-fi page does not exist yet; replace once it does. */
-  kofiUrl: 'https://ko-fi.com/kubernanny',
+  /** The maintainer, credited in the footer. */
+  author: { name: 'Nico Lueg', url: 'https://nicolueg.com', github: 'https://github.com/NLueg' },
   licence: 'Apache-2.0',
   install: {
     helm: 'helm install kubernanny oci://ghcr.io/kubernanny/charts/kubernanny -n kubernanny --create-namespace',
@@ -28,20 +25,15 @@ export const SITE = {
 
 /**
  * Impressum (§ 5 DDG) and controller for the privacy notice (Art. 13 GDPR).
- * Do NOT ship placeholders: fill in real data, it must be correct and reachable.
+ * The same details as the maintainer's imprint on nicolueg.com: the e-mail
+ * address is the fast electronic contact, there is no phone line.
  */
 export const LEGAL = {
-  name: 'TODO: full name of the person responsible',
-  street: 'TODO: street and number (a summonable address, no PO box)',
-  city: 'TODO: postcode and city',
+  name: 'Nico Lueg',
+  street: 'Peukinger Weg 17',
+  city: '59423 Unna',
   country: 'Germany',
-  email: 'TODO: contact e-mail address',
-  /** § 5 DDG asks for a second fast way of contact; a phone number is the usual one. */
-  phone: 'TODO: phone number or another direct contact',
-  /** Person responsible for editorial content (§ 18 Abs. 2 MStV), usually the same person. */
-  responsibleForContent: 'TODO: name and address, if different from above',
+  email: 'info@nicolueg.com',
+  /** Umsatzsteuer-Identifikationsnummer (§ 27a UStG). */
+  vatId: 'DE366320011',
 } as const;
-
-export function isPlaceholder(value: string): boolean {
-  return value.startsWith('TODO');
-}

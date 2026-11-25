@@ -1,48 +1,28 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { LEGAL, SITE, isPlaceholder } from '../../site.config';
+import { LEGAL, SITE } from '../../site.config';
 import { SeoService } from '../core/seo.service';
 
-function field(value: string) {
-  return { value, todo: isPlaceholder(value) };
-}
-
-const VM = {
-  name: field(LEGAL.name),
-  street: field(LEGAL.street),
-  city: field(LEGAL.city),
-  country: LEGAL.country,
-  email: field(LEGAL.email),
-  phone: field(LEGAL.phone),
-  responsible: field(LEGAL.responsibleForContent),
-  draft: Object.values(LEGAL).some(isPlaceholder),
-  repoUrl: SITE.repoUrl,
-};
+const VM = { ...LEGAL, repoUrl: SITE.repoUrl };
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="container legal prose">
       <h1>Imprint <span lang="de">(Impressum)</span></h1>
-      @if (vm.draft) {
-        <p class="draft" role="note">Draft: the details below are placeholders and still have to be filled in.</p>
-      }
 
       <h2>Provider <span lang="de">(Angaben gemäß § 5 DDG)</span></h2>
       <address>
-        <span [class.todo]="vm.name.todo">{{ vm.name.value }}</span><br />
-        <span [class.todo]="vm.street.todo">{{ vm.street.value }}</span><br />
-        <span [class.todo]="vm.city.todo">{{ vm.city.value }}</span><br />
+        {{ vm.name }}<br />
+        {{ vm.street }}<br />
+        {{ vm.city }}<br />
         {{ vm.country }}
       </address>
 
       <h2>Contact</h2>
-      <p>
-        E-mail: <span [class.todo]="vm.email.todo">{{ vm.email.value }}</span><br />
-        Phone: <span [class.todo]="vm.phone.todo">{{ vm.phone.value }}</span>
-      </p>
+      <p>E-mail: <a [href]="'mailto:' + vm.email">{{ vm.email }}</a></p>
 
-      <h2>Responsible for the content <span lang="de">(§ 18 Abs. 2 MStV)</span></h2>
-      <p><span [class.todo]="vm.responsible.todo">{{ vm.responsible.value }}</span></p>
+      <h2>VAT ID <span lang="de">(USt-IdNr. gemäß § 27a UStG)</span></h2>
+      <p>{{ vm.vatId }}</p>
 
       <h2>About this project</h2>
       <p>

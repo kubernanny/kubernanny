@@ -16,6 +16,10 @@ import { SITE } from '../../site.config';
           </a>
           <p>{{ site.pitch }}</p>
           <p class="fine">Open source under {{ site.licence }}. No account, no telemetry, no backend of ours.</p>
+          <p class="fine">
+            A project by <a [href]="site.author.url">{{ site.author.name }}</a>
+            (<a [href]="site.author.github">GitHub</a>).
+          </p>
         </div>
         <nav aria-label="Footer">
           <div>
@@ -95,6 +99,13 @@ import { SITE } from '../../site.config';
     .about .fine {
       color: var(--mute);
       font-size: 0.875rem;
+    }
+    .about .fine a {
+      color: inherit;
+      text-underline-offset: 3px;
+    }
+    .about .fine a:hover {
+      color: var(--ink);
     }
     nav {
       display: grid;
