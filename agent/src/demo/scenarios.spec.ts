@@ -22,14 +22,18 @@ describe('demo scenarios', () => {
     expect(s.light).toBe('green');
     expect(s.score).toBe(100);
     expect(s.modules.filter((m) => m.status !== 'ok').map((m) => m.id)).toEqual([]);
+    // Changes waiting in Git for a manual sync are routine: listed as ready to sync, not as issues.
+    expect(s.modules.find((m) => m.id === 'argocd')?.pendingSyncs?.length).toBe(2);
   });
 
-  it('warning is yellow with the three things that want attention, and a hint about a coming API removal', async () => {
+  it('warning is yellow with the things that want attention, a hint about a coming API removal, and two apps ready to sync that are no issue', async () => {
     const s = await run('warning');
     expect(s.light).toBe('yellow');
     const removal = s.issues.find((i) => i.id.startsWith('kubernetes-support/deprecated-apis/'));
     expect(removal?.severity).toBe('info');
-    expect(s.issues.map((i) => i.id).filter((id) => id !== removal?.id).sort()).toEqual(['argocd/argocd/weblate-chart/sync', 
+    const argo = s.modules.find((m) => m.id === 'argocd');
+    expect(argo?.pendingSyncs?.map((p) => p.app)).toEqual(['weblate-chart', 'kubernanny-chart']);
+    expect(s.issues.map((i) => i.id).filter((id) => id !== removal?.id).sort()).toEqual([
       'certificates/weblate/weblate-tls',
       'cnpg/default/shop-api-pg/backup',
       'standard-alerts/etcd-peer-rtt/rke2-node-1/rke2-node-5',

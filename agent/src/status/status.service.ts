@@ -4,7 +4,7 @@ import type { Config } from '../config';
 import { Detected, discover, distribution } from '../discovery/discovery';
 import { ClusterCache } from '../inventory/cluster-cache';
 import { Inventory, emptyInventory, gatherInventory } from '../inventory/inventory';
-import { errorText, t } from '../i18n/text';
+import { errorText, raw, t } from '../i18n/text';
 import { IncidentsService } from '../incidents/incidents.service';
 import { KubeClient } from '../kube/kube-client';
 import { CORE_CHECKS } from '../modules/core';
@@ -171,7 +171,19 @@ export class StatusService {
   }
 
   findIssue(id: string): Issue | undefined {
-    return this.snapshotValue.issues.find((i) => i.id === id);
+    return this.snapshotValue.issues.find((i) => i.id === id) ?? this.pendingSyncIssue(id);
+  }
+
+  /**
+   * An app ready to sync is no issue, but its sync runs like one: under the
+   * id it had as an issue, with the target taken from this run's list, never
+   * from the request.
+   */
+  private pendingSyncIssue(id: string): Issue | undefined {
+    const pending = this.snapshotValue.modules.flatMap((m) => m.pendingSyncs ?? []).find((p) => p.id === id && p.canSync);
+    return pending
+      ? { id, check: 'argocd', severity: 'info', title: raw(pending.app), cause: raw(''), actions: [{ type: 'argocd-sync', namespace: pending.namespace, app: pending.app }] }
+      : undefined;
   }
 
   private emptySnapshot(): Snapshot {
@@ -212,7 +224,7 @@ export class StatusService {
     const data: RunData = {};
     const base = { inv, kube: this.kube, config: this.config, now, data };
     const prom = findPrometheus(base, detected);
-    const ctx: ModuleContext = { ...base, prom, detected, vulnDb: this.vulnDb, vulnAcceptance: this.acceptance?.state(now.getTime()), rollbackOn: this.settings.actionOn('argocd-rollback') };
+    const ctx: ModuleContext = { ...base, prom, detected, vulnDb: this.vulnDb, vulnAcceptance: this.acceptance?.state(now.getTime()), rollbackOn: this.settings.actionOn('argocd-rollback'), syncOn: this.settings.actionOn('argocd-sync') };
     const allowed = this.settings.actionOn;
 
     // Components first: some fill RunData the core checks read (kured lock, certificates).
