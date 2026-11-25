@@ -27,6 +27,8 @@ Every screen of Kubernanny, taken from the built-in demo clusters (`DEMO=broken`
 <td valign="top" width="33%"><img src="screenshots/08-overview-more-charts.png" alt="Components needing attention, broken first"><br><sub>Components needing attention, broken first</sub></td>
 <td valign="top" width="33%"><img src="screenshots/09-overview-kpis.png" alt="More of the same list"><br><sub>More of the same list</sub></td>
 <td valign="top" width="33%"><img src="screenshots/84-overview-per-node.png" alt="Per node: use, requests and limits of its pods, overbooking and pods without a limit"><br><sub>Per node: use, requests and limits of its pods, overbooking and pods without a limit</sub></td>
+<td valign="top" width="33%"><img src="screenshots/89-overview-ready-to-sync.png" alt="Manual Argo CD apps with a change waiting: one calm card, no issue"><br><sub>Manual Argo CD apps with a change waiting: one calm card, no issue</sub></td>
+<td valign="top" width="33%"><img src="screenshots/90-ready-to-sync-list.png" alt="Ready to sync: revisions, image tags and the resources that change, with Sync"><br><sub>Ready to sync: revisions, image tags and the resources that change, with Sync</sub></td>
 <td valign="top" width="33%"><img src="screenshots/37-overview-yellow.png" alt="A cluster with warnings only"><br><sub>A cluster with warnings only</sub></td>
 </tr>
 <tr>
