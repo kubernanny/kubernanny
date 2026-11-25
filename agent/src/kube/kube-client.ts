@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
 import { connect } from 'node:tls';
-import { Injectable } from '@nestjs/common';
 import { readCapped } from '../util/read-capped';
 
 const SA_DIR = '/var/run/secrets/kubernetes.io/serviceaccount';
@@ -30,7 +29,6 @@ export class KubeError extends Error {
  * rotated) and the cluster CA through NODE_EXTRA_CA_CERTS (set in the chart).
  * Locally, run `kubectl proxy` and set K8S_API_URL=http://127.0.0.1:8001.
  */
-@Injectable()
 export class KubeClient {
   private readonly baseUrl: string | null =
     process.env.K8S_API_URL ??

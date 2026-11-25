@@ -1,5 +1,4 @@
-import 'reflect-metadata';
-import { HttpException } from '@nestjs/common';
+import { HttpException } from '../http/errors';
 import { describe, expect, it, vi } from 'vitest';
 import type { ArgoApplication } from '../checks/argocd.check';
 import { rollbackApps, rollbackTarget } from '../checks/argocd-rollback';

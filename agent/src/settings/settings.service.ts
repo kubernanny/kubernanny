@@ -1,7 +1,8 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '../http/errors';
+import { Logger } from '../logger';
 import type { Principal } from '../auth/devices.service';
 import { ActionType, OPT_IN_ACTIONS } from '../checks/types';
-import { CONFIG, Config } from '../config';
+import type { Config } from '../config';
 import { DemoKubeClient } from '../demo/demo-cluster';
 import { CATALOG, CatalogEntry, Category } from '../discovery/catalog';
 import { customEntries } from '../discovery/discovery';
@@ -93,8 +94,7 @@ interface Stored {
  *    module on that sends data out of the cluster, is announced through the
  *    notification channels first (Notifier.securityAlert).
  */
-@Injectable()
-export class SettingsService implements OnModuleInit {
+export class SettingsService {
   private readonly logger = new Logger('audit');
   private stored: Stored = { disabledModules: [], enabledModules: [], disabledActions: [], notificationsPaused: false };
   /**
@@ -107,10 +107,10 @@ export class SettingsService implements OnModuleInit {
   private readonly writes = new Serial();
 
   constructor(
-    @Inject(CONFIG) private readonly config: Config,
-    @Inject(KubeClient) private readonly kube: KubeClient,
+    private readonly config: Config,
+    private readonly kube: KubeClient,
     /** Announces switches turned off; absent in unit tests that do not care. */
-    @Inject(Notifier) private readonly notifier?: Notifier,
+    private readonly notifier?: Notifier,
   ) {}
 
   private get path(): string {

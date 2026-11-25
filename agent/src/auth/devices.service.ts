@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Logger } from '../logger';
 import { PushPlatform, parsePublicKey, pushKeyId, toBase64Url } from '@kubernanny/protocol';
-import { CONFIG, Config } from '../config';
+import type { Config } from '../config';
 import { KubeClient, KubeError } from '../kube/kube-client';
 import { Serial } from '../util/serial';
 import { NotLoadedError, readAtStartup } from '../util/startup-read';
@@ -61,8 +61,7 @@ export const DEMO_DEVICE: Principal = { kind: 'demo', id: 'demo', name: 'Demo' }
  * names), the Secret only keeps it out of ConfigMap readers. A device is who
  * proves its private key in the handshake; revoking it is deleting its entry.
  */
-@Injectable()
-export class DevicesService implements OnModuleInit {
+export class DevicesService {
   private readonly logger = new Logger(DevicesService.name);
   private devices: Device[] = [];
   private readonly lastSeen = new Map<string, Date>();
@@ -72,8 +71,8 @@ export class DevicesService implements OnModuleInit {
   private loaded = false;
 
   constructor(
-    @Inject(CONFIG) private readonly config: Config,
-    @Inject(KubeClient) private readonly kube: KubeClient,
+    private readonly config: Config,
+    private readonly kube: KubeClient,
   ) {}
 
   private get path(): string {

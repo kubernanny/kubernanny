@@ -1,5 +1,5 @@
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { CONFIG, Config } from '../config';
+import { Logger } from '../logger';
+import type { Config } from '../config';
 import { render, t } from '../i18n/text';
 import type { Snapshot } from '../status/status.service';
 import { IncidentsService } from '../incidents/incidents.service';
@@ -16,7 +16,6 @@ export * from './webhook';
 const EMPTY_PLAN: NotifyPlan = { opened: [], resolved: [], escalated: [] };
 
 /** Pushes status changes to ntfy, a webhook (Discord, Slack, Gotify, JSON) and the app's native push. No-op without any. */
-@Injectable()
 export class Notifier {
   private readonly logger = new Logger(Notifier.name);
   private readonly pushed = new Map<string, Pushed>();
@@ -25,13 +24,13 @@ export class Notifier {
   private restored: Promise<void> | null = null;
 
   constructor(
-    @Inject(CONFIG) private readonly config: Config,
+    private readonly config: Config,
     /** The episodes of the week; the run loop records them, whether notifications are on or not. */
-    @Inject(IncidentsService) private readonly incidents: IncidentsService = new IncidentsService(),
+    private readonly incidents: IncidentsService = new IncidentsService(),
     /** The "app" channel: native push to registered devices. Absent in tests that do not care. */
-    @Optional() @Inject(AppPushService) private readonly appPush?: AppPushService,
+    private readonly appPush?: AppPushService,
     /** Keeps `pushed` across restarts (ConfigMap key `notified`). Absent in tests that do not care. */
-    @Optional() @Inject(NotifiedStore) private readonly store?: NotifiedStore,
+    private readonly store?: NotifiedStore,
   ) {}
 
   /** `checks.disabled: [notifications]`: no channel at all, so nothing is ever sent (issues, security alerts, digest, test). */

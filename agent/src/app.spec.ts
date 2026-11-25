@@ -1,20 +1,15 @@
-import 'reflect-metadata';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
-import { NestExpressApplication } from '@nestjs/platform-express';
 import { generateKeyPair, toBase64Url } from '@kubernanny/protocol';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { AppModule } from './app.module';
+import { Agent } from './agent';
 import { IdentityService } from './auth/identity.service';
 import { DemoKubeClient } from './demo/demo-cluster';
 import { call } from './e2e/internal-server';
 import { CLOCK_WINDOW_MS } from './e2e/e2e.service';
-import { KubeClient } from './kube/kube-client';
-import { CONTENT_SECURITY_POLICY, applyHttpSecurity } from './security/http-security';
+import { CONTENT_SECURITY_POLICY } from './security/http-security';
 import { renderMetrics } from './metrics/exporter';
 import { StatusService } from './status/status.service';
 import { PairingService } from './pairing/pairing';
@@ -22,7 +17,7 @@ import { Notifier } from './notify/notifier';
 import { E2eClient } from './testing/e2e-client';
 
 describe('agent against the demo cluster', () => {
-  let app: INestApplication;
+  let app: Agent;
   const kube = new DemoKubeClient();
   const socket = join(mkdtempSync(join(tmpdir(), 'kubernanny-')), 'agent.sock');
   /** A device paired in beforeAll; every view test talks through it. */
@@ -43,13 +38,8 @@ describe('agent against the demo cluster', () => {
     process.env.CHECK_INTERVAL_SECONDS = '3600';
     process.env.POD_NAMESPACE = 'kubernanny';
     process.env.INTERNAL_SOCKET = socket;
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(KubeClient)
-      .useValue(kube)
-      .compile();
-    app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false, bodyParser: false });
-    applyHttpSecurity(app as NestExpressApplication);
-    app.setGlobalPrefix('api', { exclude: ['healthz'] });
+    const moduleRef = new Agent({ kube: kube });
+    app = moduleRef;
     await app.init();
     await app.get(StatusService).refresh();
     phone = (await paired('Testhandy')).client;

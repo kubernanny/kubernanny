@@ -1,4 +1,3 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
 import { DemoKubeClient } from '../demo/demo-cluster';
 import { demoIncidents } from '../demo/demo-incidents';
 import { KubeClient } from '../kube/kube-client';
@@ -12,11 +11,10 @@ import { IncidentsView, buildIncidents } from '../views/incidents';
  * rest of the agent's state: after a restart the history starts again, and
  * `coveredSince` says from when.
  */
-@Injectable()
 export class IncidentsService {
   private readonly log: EpisodeLog;
 
-  constructor(@Optional() @Inject(KubeClient) kube?: KubeClient) {
+  constructor(kube?: KubeClient) {
     const now = Date.now();
     // The demo pretends to have watched for a week, so the app has a timeline to show.
     this.log = kube instanceof DemoKubeClient ? new EpisodeLog(now, demoIncidents(now, kube.scenario)) : new EpisodeLog(now);

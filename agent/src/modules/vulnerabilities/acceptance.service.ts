@@ -1,6 +1,7 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '../../http/errors';
+import { Logger } from '../../logger';
 import type { Principal } from '../../auth/devices.service';
-import { CONFIG, Config } from '../../config';
+import type { Config } from '../../config';
 import { t } from '../../i18n/text';
 import { KubeClient } from '../../kube/kube-client';
 import { Notifier } from '../../notify/notifier';
@@ -28,8 +29,7 @@ export type { Acceptance, AcceptanceState } from './acceptance';
  * change before reading or writing anything, and makes the check ignore what
  * is stored, so an acceptance made before the switch cannot hide anything.
  */
-@Injectable()
-export class AcceptanceService implements OnModuleInit {
+export class AcceptanceService {
   private readonly audit = new Logger('audit');
   private accepted = new Map<string, Acceptance>();
   /** True once the stored acceptances were read: a write before that would replace them with this empty map. */
@@ -37,11 +37,11 @@ export class AcceptanceService implements OnModuleInit {
   private readonly writes = new Serial();
 
   constructor(
-    @Inject(CONFIG) private readonly config: Config,
-    @Inject(KubeClient) private readonly kube: KubeClient,
-    @Inject(SettingsService) private readonly settings: SettingsService,
+    private readonly config: Config,
+    private readonly kube: KubeClient,
+    private readonly settings: SettingsService,
     /** Announces every acceptance; absent in unit tests that do not care. */
-    @Optional() @Inject(Notifier) private readonly notifier?: Notifier,
+    private readonly notifier?: Notifier,
   ) {}
 
   private get path(): string {

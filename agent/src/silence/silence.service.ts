@@ -1,6 +1,7 @@
-import { BadRequestException, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException } from '../http/errors';
+import { Logger } from '../logger';
 import type { Principal } from '../auth/devices.service';
-import { CONFIG, Config } from '../config';
+import type { Config } from '../config';
 import { t } from '../i18n/text';
 import { KubeClient } from '../kube/kube-client';
 import { IssueSeverity } from '../checks/types';
@@ -39,8 +40,7 @@ const MAINTENANCE = '*';
  * the issue had when it was silenced. A warning silenced today that turns
  * critical tomorrow is no longer silenced and notifies like any outage.
  */
-@Injectable()
-export class SilenceService implements OnModuleInit {
+export class SilenceService {
   private readonly audit = new Logger('audit');
   private until = new Map<string, Silence>();
   /** True once the stored silences were read: a write before that would replace them with this empty map. */
@@ -49,10 +49,10 @@ export class SilenceService implements OnModuleInit {
   private readonly writes = new Serial();
 
   constructor(
-    @Inject(CONFIG) private readonly config: Config,
-    @Inject(KubeClient) private readonly kube: KubeClient,
+    private readonly config: Config,
+    private readonly kube: KubeClient,
     /** Announces maintenance windows; absent in unit tests that do not care. */
-    @Inject(Notifier) private readonly notifier?: Notifier,
+    private readonly notifier?: Notifier,
   ) {}
 
   private get path(): string {

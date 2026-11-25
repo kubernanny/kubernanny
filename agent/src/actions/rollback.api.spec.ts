@@ -1,24 +1,18 @@
-import 'reflect-metadata';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { INestApplication } from '@nestjs/common';
-import { NestExpressApplication } from '@nestjs/platform-express';
-import { Test } from '@nestjs/testing';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AppModule } from '../app.module';
+import { Agent } from '../agent';
 import { IdentityService } from '../auth/identity.service';
 import { DemoKubeClient, ROLLBACK_APP } from '../demo/demo-cluster';
-import { KubeClient } from '../kube/kube-client';
 import { PairingService } from '../pairing/pairing';
-import { applyHttpSecurity } from '../security/http-security';
 import { StatusService } from '../status/status.service';
 import { E2eClient } from '../testing/e2e-client';
 
 const ENV = ['INTERNAL_SOCKET', 'LANGUAGE', 'ENABLED_ACTIONS', 'DISABLED_ACTIONS', 'CHECK_INTERVAL_SECONDS', 'POD_NAMESPACE'];
 
 /** The real route over the end-to-end channel, against the demo cluster (DEMO itself off, so the opt-in decides). */
-async function start(env: Record<string, string> = {}): Promise<{ app: INestApplication; phone: E2eClient; kube: DemoKubeClient }> {
+async function start(env: Record<string, string> = {}): Promise<{ app: Agent; phone: E2eClient; kube: DemoKubeClient }> {
   delete process.env.DEMO;
   process.env.LANGUAGE = 'en';
   process.env.CHECK_INTERVAL_SECONDS = '3600';
@@ -26,10 +20,8 @@ async function start(env: Record<string, string> = {}): Promise<{ app: INestAppl
   process.env.INTERNAL_SOCKET = join(mkdtempSync(join(tmpdir(), 'kubernanny-')), 'agent.sock');
   Object.assign(process.env, env);
   const kube = new DemoKubeClient();
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(KubeClient).useValue(kube).compile();
-  const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false, bodyParser: false });
-  applyHttpSecurity(app as NestExpressApplication);
-  app.setGlobalPrefix('api', { exclude: ['healthz'] });
+  const moduleRef = new Agent({ kube: kube });
+  const app = moduleRef;
   await app.init();
   await app.get(StatusService).refresh();
   const phone = new E2eClient(app.getHttpServer(), app.get(IdentityService).publicKey);
@@ -40,7 +32,7 @@ async function start(env: Record<string, string> = {}): Promise<{ app: INestAppl
 const argoWrites = (kube: DemoKubeClient) => kube.writes.filter((w) => w.path.includes('argoproj.io'));
 
 describe('POST /api/argocd/rollback', () => {
-  let app: INestApplication | undefined;
+  let app: Agent | undefined;
 
   afterEach(async () => {
     await app?.close();

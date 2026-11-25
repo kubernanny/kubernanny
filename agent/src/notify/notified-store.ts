@@ -1,5 +1,5 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { CONFIG, Config } from '../config';
+import { Logger } from '../logger';
+import type { Config } from '../config';
 import { Text, reviveText } from '../i18n/text';
 import { KubeClient, KubeError } from '../kube/kube-client';
 import { Serial } from '../util/serial';
@@ -64,15 +64,14 @@ export function parseNotified(text: string | undefined): Map<string, Pushed> {
  * that is still there nor forgets to send "resolved" for one that healed
  * while the agent was away.
  */
-@Injectable()
 export class NotifiedStore {
   private readonly logger = new Logger('notify');
   private readonly writes = new Serial();
   private lastWritten: string | null = null;
 
   constructor(
-    @Inject(CONFIG) private readonly config: Config,
-    @Inject(KubeClient) private readonly kube: KubeClient,
+    private readonly config: Config,
+    private readonly kube: KubeClient,
   ) {}
 
   private get path(): string {

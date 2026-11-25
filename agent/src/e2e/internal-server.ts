@@ -1,10 +1,9 @@
 import { chmodSync, existsSync, unlinkSync } from 'node:fs';
 import { IncomingMessage, Server, ServerResponse, createServer, request } from 'node:http';
-import { Inject, Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
-import { HttpAdapterHost } from '@nestjs/core';
 import type { Language } from '@kubernanny/protocol';
 import { INTERNAL, LANGUAGE_HEADER, PRINCIPAL_HEADER } from '../auth/principal.guard';
-import { CONFIG, Config } from '../config';
+import type { Config } from '../config';
+import { Logger } from '../logger';
 
 /** Largest response the internal routes may produce; the views stay far below. */
 export const MAX_INTERNAL_RESPONSE = 8 * 1024 * 1024;
@@ -38,19 +37,15 @@ export interface InternalResponse {
  * port, and outgoing HTTP calls of the agent (Prometheus, Grafana, webhooks)
  * cannot be steered onto a socket file.
  */
-@Injectable()
-export class InternalServer implements OnApplicationBootstrap, OnModuleDestroy {
+export class InternalServer {
   private readonly logger = new Logger(InternalServer.name);
   private server: Server | null = null;
   private inFlight = 0;
 
-  constructor(
-    @Inject(HttpAdapterHost) private readonly adapterHost: HttpAdapterHost,
-    @Inject(CONFIG) private readonly config: Config,
-  ) {}
+  constructor(private readonly config: Config) {}
 
-  async onApplicationBootstrap(): Promise<void> {
-    const handler = this.adapterHost.httpAdapter.getInstance() as (req: IncomingMessage, res: ServerResponse) => void;
+  /** Listens on the socket with the agent's own request handler (the same routes as the TCP port). */
+  async start(handler: (req: IncomingMessage, res: ServerResponse) => void): Promise<void> {
     const path = this.config.internalSocket;
     // sun_path holds 108 bytes on Linux (104 on macOS); longer paths are cut and collide.
     if (Buffer.byteLength(path) > 100) {
@@ -70,7 +65,7 @@ export class InternalServer implements OnApplicationBootstrap, OnModuleDestroy {
     this.logger.log(`internal API on ${path}`);
   }
 
-  async onModuleDestroy(): Promise<void> {
+  async close(): Promise<void> {
     await new Promise<void>((resolve) => (this.server ? this.server.close(() => resolve()) : resolve()));
   }
 

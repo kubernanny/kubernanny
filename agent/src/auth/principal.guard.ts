@@ -1,8 +1,5 @@
-import { CanActivate, ExecutionContext, Inject, Injectable, SetMetadata, UnauthorizedException, createParamDecorator } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import type { Request } from 'express';
-import { CONFIG, Config } from '../config';
-import { t } from '../i18n/text';
+import type { IncomingMessage } from 'node:http';
+import type { Config } from '../config';
 import { ADMIN, DEMO_DEVICE, DevicesService, Principal } from './devices.service';
 
 /**
@@ -16,54 +13,25 @@ export const PRINCIPAL_HEADER = 'x-kubernanny-principal';
 /** The app's language for the texts in the answer, from the sealed request (`l`). Only read when INTERNAL is set. */
 export const LANGUAGE_HEADER = 'x-kubernanny-language';
 
-type InternalRequest = Request & { [INTERNAL]?: true; principal?: Principal };
-
-export const IS_PUBLIC = 'kubernanny:public';
-/**
- * A route anyone on the network may call, without a device: only /healthz,
- * /api/identity and /api/e2e. Every other route is guarded by default
- * (PrincipalGuard is the global APP_GUARD), so a new one fails closed.
- */
-export const Public = () => SetMetadata(IS_PUBLIC, true);
+export type InternalRequest = IncomingMessage & { [INTERNAL]?: true };
 
 /**
- * The global guard. Requests on the public port never pass a guarded route:
- * the app reaches them only through the end-to-end channel, which hands them
- * in over the internal socket after the handshake proved the device.
+ * The guard in front of every route that is not public (`public: true` in the
+ * route table: only /healthz, /readyz, /api/identity and /api/e2e). Requests
+ * on the public port never pass it: the app reaches the other routes only
+ * through the end-to-end channel, which hands them in over the internal
+ * socket after the handshake proved the device. Null: answer 401.
  */
-@Injectable()
-export class PrincipalGuard implements CanActivate {
-  constructor(
-    @Inject(DevicesService) private readonly devices: DevicesService,
-    @Inject(CONFIG) private readonly config: Config,
-    @Inject(Reflector) private readonly reflector: Reflector,
-  ) {}
-
-  canActivate(context: ExecutionContext): boolean {
-    if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, [context.getHandler(), context.getClass()])) {
-      return true;
-    }
-    const req = context.switchToHttp().getRequest<InternalRequest>();
-    const principal = req[INTERNAL] === true ? this.resolve(req.headers[PRINCIPAL_HEADER]) : null;
-    if (!principal) {
-      throw new UnauthorizedException({ code: 'E2E_REQUIRED', message: t('error.e2eRequired') });
-    }
-    req.principal = principal;
-    return true;
+export function principalOf(req: InternalRequest, devices: DevicesService, config: Config): Principal | null {
+  if (req[INTERNAL] !== true) {
+    return null;
   }
-
-  private resolve(header: string | string[] | undefined): Principal | null {
-    if (header === 'admin') {
-      return ADMIN;
-    }
-    if (header === 'demo') {
-      return this.config.demo ? DEMO_DEVICE : null;
-    }
-    return typeof header === 'string' ? this.devices.byId(header) : null;
+  const header = req.headers[PRINCIPAL_HEADER];
+  if (header === 'admin') {
+    return ADMIN;
   }
+  if (header === 'demo') {
+    return config.demo ? DEMO_DEVICE : null;
+  }
+  return typeof header === 'string' ? devices.byId(header) : null;
 }
-
-/** The device (or the admin CLI) behind the request; set by PrincipalGuard. */
-export const CurrentPrincipal = createParamDecorator((_: unknown, ctx: ExecutionContext): Principal => {
-  return ctx.switchToHttp().getRequest<InternalRequest>().principal!;
-});

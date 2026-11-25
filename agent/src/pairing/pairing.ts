@@ -1,8 +1,8 @@
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Logger } from '../logger';
 import QRCode from 'qrcode';
 import { IdentityService } from '../auth/identity.service';
-import { CONFIG, Config } from '../config';
+import type { Config } from '../config';
 import { Text, render, t } from '../i18n/text';
 import { relayHttpUrl } from '../relay/relay-url';
 
@@ -48,7 +48,6 @@ export interface PairingLinks {
  * The links also carry the agent's public key (`key=`): the app pins it, so
  * it talks to this agent and nobody in between, whatever the network does.
  */
-@Injectable()
 export class PairingService {
   private readonly logger = new Logger(PairingService.name);
   private current: { hash: Buffer; expires: number } | null = null;
@@ -57,8 +56,8 @@ export class PairingService {
   private warnedAt = -Infinity;
 
   constructor(
-    @Inject(CONFIG) private readonly config: Config,
-    @Inject(IdentityService) private readonly identity: IdentityService,
+    private readonly config: Config,
+    private readonly identity: IdentityService,
   ) {}
 
   /** A fresh code; any earlier one stops working. */

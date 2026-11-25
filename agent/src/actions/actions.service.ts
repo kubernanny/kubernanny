@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '../http/errors';
+import { Logger } from '../logger';
 import { IssueAction, IssueActionType, WorkloadKind } from '../checks/types';
 import type { Principal } from '../auth/devices.service';
 import { Text, t } from '../i18n/text';
@@ -23,14 +24,13 @@ export const LOG_LIMIT_BYTES = 256 * 1024;
  * agent's own check result, so a stolen device key cannot restart arbitrary
  * workloads, only the ones that are broken right now.
  */
-@Injectable()
 export class ActionsService {
   private readonly logger = new Logger(ActionsService.name);
 
   constructor(
-    @Inject(KubeClient) private readonly kube: KubeClient,
-    @Inject(StatusService) private readonly status: StatusService,
-    @Inject(SettingsService) private readonly settings: SettingsService,
+    private readonly kube: KubeClient,
+    private readonly status: StatusService,
+    private readonly settings: SettingsService,
   ) {}
 
   find(issueId: string, type: IssueActionType, index = 0): IssueAction {

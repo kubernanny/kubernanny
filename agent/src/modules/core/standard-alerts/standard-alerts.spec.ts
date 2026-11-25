@@ -1,5 +1,3 @@
-import 'reflect-metadata';
-import { Test } from '@nestjs/testing';
 import { describe, expect, it, vi } from 'vitest';
 import { AmAlert, evaluateAlerts } from '../../../checks/alertmanager.check';
 import { render } from '../../../i18n/text';
@@ -11,9 +9,8 @@ import { dedupeAlerts, recordAlertMatches, recordFiringAlerts } from './alertman
 import { evaluateOvercommit, evaluateVersions, overcommit } from './inventory-rules';
 import { PROM_RULES } from './rules';
 import { runPromRules } from './standard-alerts.check';
-import { AppModule } from '../../../app.module';
+import { Agent } from '../../../agent';
 import { DemoKubeClient } from '../../../demo/demo-cluster';
-import { KubeClient } from '../../../kube/kube-client';
 import { StatusService } from '../../../status/status.service';
 
 const node = (name: string, ip: string, cpu = '4', memory = '16Gi', kubelet = 'v1.36.6+rke2r1') => ({
@@ -177,7 +174,7 @@ describe('switches', () => {
     try {
       const kube = new DemoKubeClient(undefined, 'warning');
       const gets = vi.spyOn(kube, 'get');
-      const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(KubeClient).useValue(kube).compile();
+      const moduleRef = new Agent({ kube: kube });
       const status = moduleRef.get(StatusService);
       await status.refresh();
       const snapshot = status.snapshot();
