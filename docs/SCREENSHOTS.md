@@ -19,13 +19,14 @@ Every screen of Kubernanny, taken from the built-in demo clusters (`DEMO=broken`
 
 <table>
 <tr>
-<td valign="top" width="33%"><img src="screenshots/05-overview-red.png" alt="A cluster with outages: heartbeat, one-sentence headline, score"><br><sub>A cluster with outages: heartbeat, one-sentence headline, score</sub></td>
+<td valign="top" width="33%"><img src="screenshots/05-overview-red.png" alt="A cluster with outages: the nanny's eye and a one-sentence headline"><br><sub>A cluster with outages: the nanny's eye and a one-sentence headline</sub></td>
 <td valign="top" width="33%"><img src="screenshots/06-overview-issues.png" alt="Problems with cause, age and the action that fixes them"><br><sub>Problems with cause, age and the action that fixes them</sub></td>
 <td valign="top" width="33%"><img src="screenshots/07-overview-charts.png" alt="Key numbers and components needing attention"><br><sub>Key numbers and components needing attention</sub></td>
 </tr>
 <tr>
 <td valign="top" width="33%"><img src="screenshots/08-overview-more-charts.png" alt="Components needing attention, broken first"><br><sub>Components needing attention, broken first</sub></td>
 <td valign="top" width="33%"><img src="screenshots/09-overview-kpis.png" alt="More of the same list"><br><sub>More of the same list</sub></td>
+<td valign="top" width="33%"><img src="screenshots/84-overview-per-node.png" alt="Per node: use, requests and limits of its pods, overbooking and pods without a limit"><br><sub>Per node: use, requests and limits of its pods, overbooking and pods without a limit</sub></td>
 <td valign="top" width="33%"><img src="screenshots/37-overview-yellow.png" alt="A cluster with warnings only"><br><sub>A cluster with warnings only</sub></td>
 </tr>
 <tr>
@@ -65,6 +66,16 @@ Every screen of Kubernanny, taken from the built-in demo clusters (`DEMO=broken`
 <tr>
 <td valign="top" width="33%"><img src="screenshots/22-sheet-kured.png" alt="kured: which node reboots, and a stuck lock"><br><sub>kured: which node reboots, and a stuck lock</sub></td>
 </tr>
+<tr>
+<td valign="top" width="33%"><img src="screenshots/75-sheet-cnpg-clusters.png" alt="CloudNativePG: one row per database cluster with primary, last backup and WAL archiving, problems first"><br><sub>CloudNativePG: one row per database cluster with primary, last backup and WAL archiving, problems first</sub></td>
+<td valign="top" width="33%"><img src="screenshots/76-sheet-longhorn-volumes.png" alt="Longhorn: volumes by PVC with node, size and replicas, and the nodes with free disk"><br><sub>Longhorn: volumes by PVC with node, size and replicas, and the nodes with free disk</sub></td>
+<td valign="top" width="33%"><img src="screenshots/77-sheet-argocd-apps.png" alt="Argo CD: every app with health and sync, healthy ones folded after five"><br><sub>Argo CD: every app with health and sync, healthy ones folded after five</sub></td>
+</tr>
+<tr>
+<td valign="top" width="33%"><img src="screenshots/78-sheet-prometheus-targets.png" alt="Prometheus: targets down with their error, up and down per job, retention and rule failures"><br><sub>Prometheus: targets down with their error, up and down per job, retention and rule failures</sub></td>
+<td valign="top" width="33%"><img src="screenshots/82-sheet-alertmanager-alerts.png" alt="Alertmanager: firing alerts grouped by name, active silences with who set them"><br><sub>Alertmanager: firing alerts grouped by name, active silences with who set them</sub></td>
+<td valign="top" width="33%"><img src="screenshots/83-sheet-redis-pods.png" alt="Any component: its pods, CPU and RAM against requests and limits, its volumes"><br><sub>Any component: its pods, CPU and RAM against requests and limits, its volumes</sub></td>
+</tr>
 </table>
 
 ## Nodes
@@ -82,11 +93,12 @@ Every screen of Kubernanny, taken from the built-in demo clusters (`DEMO=broken`
 <table>
 <tr>
 <td valign="top" width="33%"><img src="screenshots/26-workloads.png" alt="Workloads by namespace, problems first"><br><sub>Workloads by namespace, problems first</sub></td>
-<td valign="top" width="33%"><img src="screenshots/27-workloads-expanded.png" alt="A workload with its images and pods"><br><sub>A workload with its images and pods</sub></td>
+<td valign="top" width="33%"><img src="screenshots/27-workloads-expanded.png" alt="A workload with its images, use against requests and limits, and pods"><br><sub>A workload with its images, use against requests and limits, and pods</sub></td>
 <td valign="top" width="33%"><img src="screenshots/28-workloads-problems.png" alt="Filter: only workloads with problems"><br><sub>Filter: only workloads with problems</sub></td>
 </tr>
 <tr>
 <td valign="top" width="33%"><img src="screenshots/29-workloads-search.png" alt="Search by name, namespace or image"><br><sub>Search by name, namespace or image</sub></td>
+<td valign="top" width="33%"><img src="screenshots/79-workloads-restarts.png" alt="Restarted: when and why, an OOMKill with the memory limit it hit"><br><sub>Restarted: when and why, an OOMKill with the memory limit it hit</sub></td>
 </tr>
 </table>
 

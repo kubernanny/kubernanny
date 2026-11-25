@@ -31,7 +31,7 @@ Stats: nodes ready, cluster CPU and RAM %, cores, memory.
 | `node-clocks/<node>` | warning > 0.5 s, critical > 5 s | offset from `node_timex_offset_seconds` (else `node_ntp_offset_seconds`), via Prometheus |
 | `node-clocks/<node>` | warning | `node_timex_sync_status` 0 for 5 min and max error ≥ 16 s |
 
-0.5 s is half of etcd's 1 s peer clock-drift warning. Above 5 s the clock is not being corrected: new certificates are "not yet valid" and JWTs fail beyond the API server's one-minute leeway. Without Prometheus: no issue. Off: `checks.disabled: [node-clocks]`.
+chrony (the default on most distributions) disciplines the clock without the kernel's PLL and leaves `node_timex_offset_seconds` at exactly 0. A timex offset of exactly 0 therefore counts as "not reported", not as "0 ms off": without any offset the sheet shows how many clocks the kernel calls synchronised and the time daemon's own error estimate (`node_timex_estimated_error_seconds`) instead of a "largest offset". 0.5 s is half of etcd's 1 s peer clock-drift warning. Above 5 s the clock is not being corrected: new certificates are "not yet valid" and JWTs fail beyond the API server's one-minute leeway. Without Prometheus: no issue. Off: `checks.disabled: [node-clocks]`.
 
 ### etcd (`etcd`)
 
@@ -85,9 +85,13 @@ The owner of a pod is resolved through its ReplicaSet (`<deployment>-<pod-templa
 
 | Issue id | Severity | When |
 |---|---|---|
-| `pdb/<ns>/<name>` | warning | a PodDisruptionBudget allows zero disruptions while all its pods are healthy (`minAvailable` equal to the replica count, or `maxUnavailable: 0`). A node drain (kured, upgrades) then waits forever. |
+| `pdb/<ns>/<name>` | warning | a PodDisruptionBudget allows zero disruptions while all its pods are healthy (`minAvailable` equal to the replica count, or `maxUnavailable: 0`). A node drain (kured, upgrades) cannot evict the pod and waits until it gives up (kured: `--drain-timeout`, after which the node is uncordoned and not rebooted; `kubectl drain` without a timeout: forever). |
 
-A PDB that blocks only because pods are unhealthy right now is not reported: that is the PDB doing its job. Stats: PDBs, how many block drains.
+A PDB that blocks only because pods are unhealthy right now is not reported: that is the PDB doing its job. Nor are PDBs of operators that handle drains themselves:
+
+- CloudNativePG's `<cluster>-primary` PDB, when the cluster has replicas (recognised by its sibling `<cluster>` PDB with pods): when the primary's node is cordoned, CNPG switches the primary over and the old primary can then be evicted. A single-instance cluster with `enablePDB` has nothing to switch to and is reported, with a cause that says so.
+- Longhorn's per-node `instance-manager-*` PDBs (selector `longhorn.io/component: instance-manager`, `longhorn.io/managed-by: longhorn-manager`): longhorn-manager creates and removes them according to its `node-drain-policy`, moving replicas off the node first.
+ Stats: PDBs, how many block drains.
 
 ### Autoscalers (`hpa`)
 
@@ -147,6 +151,89 @@ A component whose every workload has a fresh Trivy Operator report is left to Tr
 
 `image-updates/<component>` (hint): a newer patch, minor or major tag of a recognised component with a plain `x.y.z` tag on Docker Hub, ghcr.io, quay.io or registry.k8s.io. Cached 12 h. Sends repository names only. Details: [SECURITY-CHECKS.md](SECURITY-CHECKS.md). Locked off: `checks.disabled: [image-updates]` (no registry contact, no egress rule).
 
+### Standard alerts (`standard-alerts`)
+
+The generally valid alerts of the community rule sets, built in, so every cluster gets them without writing Prometheus rules: etcd-mixin, kubernetes-mixin, node-exporter mixin, coredns-mixin and the Prometheus mixin, as kube-prometheus-stack ships them. Code: `agent/src/modules/core/standard-alerts/` (`rules.ts` holds every query with the upstream rule it comes from).
+
+How the upstream rules are carried over:
+
+- **Same expression and thresholds**, job selectors dropped (their values differ per install) and aggregated to the labels that identify a finding (`max by (instance, To)` and so on).
+- **`for` as a window.** The value is taken over the upstream `for` duration, `min_over_time(<value>[10m:1m])` for "above" thresholds and `max_over_time` for "below" ones: the condition held for the whole window, so a spike never alarms. Without an upstream `for` the current value counts.
+- **Threshold applied in the agent, not in PromQL.** An empty answer therefore means "metric missing", never "fine". One query per run (`group by (__name__) (…)`) tells which metrics exist; a rule whose metrics are missing raises nothing and is listed on the sheet as *not checked* (metric missing, query failed, needs Prometheus, no Alertmanager).
+- **Severity by Kubernanny's rule**, which sometimes differs from upstream (marked ↓ below).
+- **Hard switches.** `checks.disabled: [standard-alerts]` runs none of it. `checks.disabled: [prometheus]` means no Prometheus query at all (`findPrometheus`): only the three inventory rules run, and the sheet says the rest needs Prometheus.
+
+Issue ids are `standard-alerts/<rule>/<where>`; no rule offers actions. Stats: etcd peer round trip p99 (worst pair now), CPU and RAM requests against the cluster without its largest node, rules checked. The sheet lists the p99 of every etcd member pair (from, to) and every rule with its state.
+
+**No double reporting.** When Alertmanager fires the same upstream alert (same alert name, same identifying labels: `instance` + `To` for the etcd round trip, `instance` + `mountpoint` for a filesystem, …), Kubernanny shows one issue: its own, whose cause ends with "Alertmanager fires this too (<alert>)". The alert leaves the Alertmanager module (an alert of the same name with other labels stays there). The same holds for upstream alerts the older core checks raise under their own ids: KubeNodeNotReady and KubeNodeUnreachable (`nodes/<node>/not-ready`), KubeNodePressure, KubePersistentVolumeFillingUp (`volumes/…/full`), NodeFilesystem* on `/` (`nodes/<node>/disk`), NodeClockNotSynchronising and NodeClockSkewDetected (`node-clocks`), etcdMembersDown and etcdInsufficientMembers (`etcd/members`), TargetDown (`prometheus/down/<job>`), KubePodCrashLooping and KubeContainerWaiting (`pods/…`), KubeDeploymentReplicasMismatch and KubeStatefulSetReplicasMismatch (`workloads/…`). Only alert names from Kubernanny's own table are ever shown, never one read from Alertmanager.
+
+Every upstream alert considered:
+
+| Upstream alert | Decision | Kubernanny id | Threshold (window) | Severity |
+|---|---|---|---|---|
+| **etcd-mixin** | | | | |
+| etcdMemberCommunicationSlow (peer round trip) | taken | `etcd-peer-rtt/<from>/<to>` | p99 of `etcd_network_peer_round_trip_time_seconds` > 150 ms (10 min); names both members, shows the p99 | warning |
+| etcdHighFsyncDurations | taken | `etcd-fsync/<node>` | WAL fsync p99 > 0.5 s / > 1 s (10 min) | warning / critical |
+| etcdHighCommitDurations | taken | `etcd-commit/<node>` | backend commit p99 > 0.25 s (10 min) | warning |
+| etcdNoLeader | taken | `etcd-no-leader/<node>` | `etcd_server_has_leader` 0 (1 min) | warning ↓ (one member; with none the API server is down and the agent reports the cluster unreachable) |
+| etcdHighNumberOfLeaderChanges | taken | `etcd-leader-changes/cluster` | ≥ 4 changes in 15 min (5 min) | warning |
+| etcdDatabaseQuotaLowSpace | taken | `etcd-db-quota/<node>` | size / quota > 95 % (10 min) | critical |
+| etcdExcessiveDatabaseGrowth | taken | `etcd-db-growth/<node>` | `predict_linear(size[4h], 4h)` > quota (10 min) | warning |
+| etcdDatabaseHighFragmentationRatio | taken | `etcd-fragmentation/<node>` | in use / size < 0.5 and in use > 100 MiB (10 min) | hint ↓ |
+| etcdMembersDown, etcdInsufficientMembers | covered | `etcd/members` | | |
+| etcdHighNumberOfFailedGRPCRequests, etcdGRPCRequestsSlow | left out | | gRPC metrics need `--metrics=extensive`; the effect shows as API server errors, fsync and leader changes | |
+| etcdHighNumberOfFailedProposals | left out | | duplicate of no leader / leader changes | |
+| **kubernetes-mixin** | | | | |
+| KubeCPUOvercommit, KubeMemoryOvercommit | taken (inventory) | `overcommit/cpu`, `overcommit/memory` | requests of Pending and Running pods > allocatable minus the largest node (needs ≥ 2 nodes) | warning |
+| KubeletTooManyPods | taken (inventory) | `too-many-pods/<node>` | pods on the node > 95 % of its pod capacity | hint (as upstream) |
+| KubeVersionMismatch | taken (inventory) | `version-mismatch` | more than one minor among API server and kubelets | hint ↓ (normal during upgrades) |
+| KubeNodeReadinessFlapping | taken | `node-flapping/<node>` | > 2 Ready changes in 15 min (15 min), cordoned nodes skipped | warning |
+| KubePersistentVolumeInodesFillingUp | taken | `pv-inodes/<ns>/<pvc>` | < 3 % inodes free / < 15 % and out within 4 days (1 h) | critical / warning |
+| KubePersistentVolumeErrors | taken | `pv-errors/<pv>` | PV phase Failed or Pending (5 min) | warning ↓ (a claim waiting for it is the volumes module's) |
+| KubeQuotaExceeded | taken | `quota-exceeded/<ns>/<quota>/<resource>` | used / hard > 100 % (15 min) | warning |
+| KubeClientCertificateExpiration | taken | `client-certificate/<node>/<job>` | 1st percentile of presented client certificates < 7 days / < 1 day (5 min) | warning / critical |
+| KubeletClientCertificateExpiration, KubeletServerCertificateExpiration | taken | `kubelet-client-certificate/<node>`, `kubelet-server-certificate/<node>` | TTL < 7 days / < 1 day (metric only where the kubelet rotates its certificates; RKE2 does not) | warning / critical |
+| KubeAPIErrorBudgetBurn | taken, errors only | `api-errors/cluster` | 5xx share (no WATCH/CONNECT) 1 h and 5 m > 14.4 %; 6 h and 30 m > 6 %, or 1 d and 2 h > 3 % | critical / warning. The latency half needs upstream's recording rules and is not included. |
+| KubeNodeNotReady, KubeNodeUnreachable, KubeNodePressure | covered | `nodes/…` | | |
+| KubePersistentVolumeFillingUp | covered | `volumes/…/full` (85 % / 95 %) | the predicted variant needs < 15 % free, where the volumes module already warns | |
+| KubePodCrashLooping, KubePodNotReady, KubeContainerWaiting, KubeDeployment*/KubeStatefulSet*/KubeDaemonSet* mismatch and rollout, KubeJobFailed | covered | `pods/…`, `workloads/…`, `jobs/…` | | |
+| KubeHpaMaxedOut, KubeHpaReplicasMismatch | covered | `hpa/…` | | |
+| KubePdbNotEnoughHealthyPods | covered | `workloads/…` (the unhealthy pods themselves) | | |
+| KubeAPIDown, KubeletDown, KubeletInstanceUnreachable, KubeAPIInstanceUnreachable, KubeProxyDown, TargetDown | covered | agent unreachable, `prometheus/down/<job>` | | |
+| KubeAggregatedAPIDown, KubeAggregatedAPIErrors | covered | `metrics-server/api`, and as 5xx in `api-errors` | | |
+| KubeJobNotCompleted | left out | | 12 h is arbitrary; backups and migrations run long on purpose | |
+| KubeQuotaAlmostFull, KubeQuotaFullyUsed, KubeCPUQuotaOvercommit, KubeMemoryQuotaOvercommit | left out | | informational in upstream; the exceeded quota is what refuses pods | |
+| CPUThrottlingHigh | left out | | famously noisy (any container with a CPU limit and bursts), info in upstream, rarely actionable | |
+| KubeletPlegDurationHigh, KubeletPodStartUpLatencyHigh, KubeNodeEviction | left out | | need recording rules / dominated by image pulls / evictions show as pod issues | |
+| KubeClientErrors, KubeAPITerminatedRequests, KubeStateMetrics*, Kubelet*CertificateRenewalErrors | left out | | self-monitoring of components, or the expiry rule catches it first | |
+| **node-exporter mixin** | | | | |
+| NodeFilesystemSpaceFillingUp, NodeFilesystemAlmostOutOfSpace | taken, every mount but `/` | `filesystem/<node><mount>` | < 15 % free and full within 24 h (1 h), < 5 % (30 min): warning; < 10 % and full within 4 h (1 h), < 3 % (30 min): critical; read-only skipped | warning / critical |
+| … on `/` | covered | `nodes/<node>/disk` | | |
+| NodeFilesystemAlmostOutOfFiles | taken, `/` included | `inodes/<node><mount>` | < 5 % / < 3 % inodes free (1 h) | warning / critical |
+| NodeHighNumberConntrackEntriesUsed | taken | `conntrack/<node>` | > 75 % of `nf_conntrack_max` | warning |
+| NodeNetworkReceiveErrs, NodeNetworkTransmitErrs | taken | `network-errors/<node>/<device>/<direction>` | > 1 % of packets (1 h) | warning |
+| NodeFileDescriptorLimit | taken | `file-descriptors/<node>` | > 70 % / > 90 % (15 min) | warning / critical |
+| NodeRAIDDegraded, NodeRAIDDiskFailure | taken | `raid-degraded/…`, `raid-disk-failed/…` | fewer active disks than required (15 min); a disk marked failed | critical / warning |
+| NodeClockNotSynchronising, NodeClockSkewDetected | covered | `node-clocks/<node>` | | |
+| NodeMemoryHighUtilization | covered | `nodes/<node>/memory` | | |
+| NodeMemoryMajorPagesFaults | left out | | 500/s is an arbitrary line, noisy on nodes with swap; memory pressure is the nodes module's | |
+| NodeCPUHighUsage, NodeSystemSaturation, NodeDiskIOSaturation | left out | | load, not a fault; noisy in a homelab | |
+| NodeFilesystemFilesFillingUp | left out | | the 40 % prediction duplicates AlmostOutOfFiles for practical purposes | |
+| NodeNetworkInterfaceFlapping | left out | | CNI interfaces come and go with pods | |
+| NodeSystemdServiceFailed, NodeSystemdServiceCrashlooping, NodeTextFileCollectorScrapeError, NodeBondingDegraded | left out | | collectors off by default, or setup-specific | |
+| **coredns-mixin** | | | | |
+| CoreDNSErrorsHigh | taken | `dns-errors/<job>` | SERVFAIL share > 1 % / > 3 % (10 min) | warning / critical |
+| CoreDNSLatencyHigh | taken | `dns-latency/<server>/<zone>` | p99 > 4 s (10 min) | critical |
+| CoreDNSForwardHealthcheckBrokenCount | taken | `dns-forward-broken/cluster` | every upstream resolver marked down (10 min) | warning |
+| CoreDNSDown | covered | workloads of CoreDNS, `prometheus/down` | | |
+| CoreDNSForwardLatencyHigh, CoreDNSForwardErrorsHigh, CoreDNSForwardHealthcheckFailureCount | left out | | forwarded queries are part of the overall errors and latency; a single flaky upstream is not a fault | |
+| **Prometheus mixin** | | | | |
+| PrometheusBadConfig | taken | `prometheus-config/<instance>` | last reload failed (10 min) | warning ↓ (keeps the old configuration) |
+| PrometheusRuleFailures | taken | `prometheus-rule-failures/<group>` | evaluation failures (15 min) | warning ↓ |
+| PrometheusNotConnectedToAlertmanagers | taken, only where an Alertmanager exists | `prometheus-alertmanager/<instance>` | no Alertmanager discovered (10 min) | warning |
+| PrometheusTSDBCompactionsFailing | taken | `prometheus-compactions/<instance>` | failed compactions (4 h) | warning |
+| Prometheus remote write, notification queue, SD, scrape limits, duplicate or out-of-order samples, TSDB reloads, Alertmanager* and PrometheusOperator* | left out | | self-monitoring of a setup Kubernanny does not depend on; kube-prometheus-stack ships them | |
+
 ## Integrations (when the component is detected and switched on)
 
 ### Longhorn (`longhorn`)
@@ -159,9 +246,10 @@ A component whose every workload has a fresh Trivy Operator report is left to Tr
 | `longhorn/capacity` | warning < 15 % free, critical < 5 % | free disk across all Longhorn disks |
 | `longhorn/backup-target/<name>` | critical | a configured backup target (S3, NFS) is not available: no volume backups run |
 | `longhorn/backup/<volume>` | warning | the newest backup of a volume failed (Longhorn's message as cause) |
-| `longhorn/backup/<volume>` | warning older than `BACKUP_MAX_AGE_HOURS` *(config)*, critical older than twice that | age of the newest completed backup, for volumes that have backups (a RecurringJob that stopped) |
+| `longhorn/backup/<volume>` | warning older than `BACKUP_MAX_AGE_HOURS` *(config)*, critical older than twice that | age of the newest completed backup, for attached volumes that have backups (a RecurringJob that stopped) |
+| `longhorn/backup/<volume>` | hint | the same for a **detached** volume: Longhorn's RecurringJobs skip detached volumes unless `allow-recurring-job-while-volume-detached` is on, and nothing writes to them |
 
-Detached volumes report `unknown` robustness; that is normal and ignored. Stats: volumes healthy/attached, total, free disk, scheduled share, nodes.
+Only volumes that exist now are judged, titled by their PVC (`namespace/pvc`) where they have one. Longhorn keeps the backups of deleted volumes in the target until someone removes them; they protect nothing and only appear as a stat ("Backups of deleted volumes") and as `orphaned` in the Backups view, never as an issue or a row. Detached volumes report `unknown` robustness; that is normal and ignored. Stats: volumes healthy/attached, total, free disk, scheduled share, nodes.
 
 ### cert-manager (`cert-manager`)
 
@@ -184,7 +272,7 @@ Stats: certificates ready, ClusterIssuers, next expiry.
 | `argocd/<app>/sync` | warning | `OutOfSync` on an app with **automated** sync: Argo CD should have fixed it, so a sync is stuck or something changes the cluster behind Git's back | sync, hard refresh |
 | `argocd/<app>/comparison` | warning | `ComparisonError` condition | hard refresh |
 
-No sync is offered while an operation is running. Stats: apps, synced, healthy, automated.
+An app counts as automated when `spec.syncPolicy.automated` is set and not `enabled: false` (Argo CD 3). The "Synced" stat is only tinted as a warning when an automated app is out of sync. No sync is offered while an operation is running. Stats: apps, synced, healthy, automated.
 
 
 Issue ids are `argocd/<namespace>/<app>/{health,operation,sync,comparison}`. A restart is offered only for a workload in the Application's `spec.destination.namespace` that the agent's own inventory shows not ready, never for a target taken from the Application's status alone.
@@ -221,6 +309,7 @@ This follows Argo CD's code (the server's rollback handler and the controller's 
 | `cnpg/<ns>/<cluster>/instances` | warning | fewer ready instances than requested, or phase not healthy | logs |
 | `cnpg/<ns>/<cluster>/archiving` | critical | `ContinuousArchiving=False`: the primary keeps every WAL segment it cannot upload until its volume is full | logs |
 | `cnpg/<ns>/<cluster>/backup` | warning | backup configured but never succeeded, or last success older than 26 h *(config)* | start a backup |
+| `cnpg/<ns>/<cluster>/backup` | warning | the newest backup failed (`LastBackupSucceeded=False`, `lastFailedBackup` after `lastSuccessfulBackup`) while the last success is still within the limit | start a backup |
 | `cnpg/<ns>/<cluster>/backup` | critical | older than twice that | start a backup |
 
 Backup checks only run for clusters with `spec.backup` or a Barman plugin. Stats: clusters, instances ready, oldest last backup, per cluster ready instances and primary.
@@ -252,11 +341,11 @@ Stats: Grafana version and database; Loki readiness and lines received per secon
 |---|---|---|
 | `kured/lock` | warning | the reboot lock (`weave.works/kured-node-lock` on the DaemonSet) is held for more than 2 hours: no other node reboots and security updates wait |
 
-Stats: node rebooting now, nodes waiting for a reboot (`kured_reboot_required`). Nodes held by the lock show "Startet neu" in the Nodes tab, and their NotReady is a warning.
+Stats: node rebooting now, nodes waiting for a reboot (`kured_reboot_required`, only when Prometheus scrapes kured: without any such series the stat is left out rather than showing 0). The lock is read in both formats kured writes (single holder, and `{"maxOwners", "locks": […]}` with `--concurrency` above 1). Nodes held by the lock show "Startet neu" in the Nodes tab, and their NotReady is a warning.
 
 ### System Upgrade Controller (`system-upgrade-controller`)
 
-`upgrade/<plan>` (warning) when a plan cannot resolve its version (`LatestResolved=False`). Stats: each plan's version and the nodes it is applying to.
+`upgrade/<plan>` (warning) when a plan cannot resolve its version (`LatestResolved=False`). Stats: each plan's version (as written in the plan; the controller stores `v1.36.6+rke2r1` as `v1.36.6-rke2r1`) and the nodes it is applying to.
 
 ### Velero (`velero`)
 
@@ -264,7 +353,16 @@ Per schedule, the newest backup: `velero/<schedule>` critical on `Failed`, warni
 
 ### Flux, External Secrets, Infisical
 
-Every Kustomization, HelmRelease and GitRepository (Flux), ExternalSecret and ClusterSecretStore (External Secrets), InfisicalSecret (Infisical) with `Ready=False` is a warning with the controller's message. Stats: ready per kind.
+Every Kustomization, HelmRelease and GitRepository (Flux), ExternalSecret and ClusterSecretStore (External Secrets) with `Ready=False` is a warning with the controller's message. The Infisical operator (v0.11) has no `Ready` condition; each kind is judged by its own:
+
+| Kind | Condition | Failed when |
+|---|---|---|
+| InfisicalSecret (`v1alpha1`) | `secrets.infisical.com/ReadyToSyncSecrets` | `False` |
+| InfisicalStaticSecret (`v1beta1`) | `secrets.infisical.com/LastReconcileStatus` | `False` |
+| InfisicalDynamicSecret (`v1alpha1`) | `secrets.infisical.com/Reconcile` | `False` |
+| InfisicalPushSecret (`v1alpha1`) | `secrets.infisical.com/Reconcile` | `True` (inverted: reason `Error`) |
+
+Issue ids `<module>/<Kind>/<ns>/<name>`. Stats: ready per kind; the summary counts the same, and names resources the controller has not given a status yet instead of calling them ready.
 
 ### Gatus (`gatus`)
 
@@ -304,7 +402,7 @@ Reports older than 14 days or of an image the workload no longer runs are skippe
 
 ## Every other component
 
-Recognised components without an integration ([list](COMPONENTS.md)) are judged by their workloads: the status is critical when a workload has no ready replica, warning when some are missing, and the Workloads issues of their pods are attached to them. A component whose workloads are only CronJobs (e.g. descheduler) reads "Läuft nach Zeitplan"; a failed run is a `jobs/…` issue. Their sheet shows version, namespace, pods and ingress URLs, found through Ingresses, Gateway API HTTPRoutes and Traefik IngressRoutes.
+Recognised components without an integration ([list](COMPONENTS.md)) are judged by their workloads. A component that runs in several namespaces (Redis/Valkey once per app) lists each namespace as an instance (`instances` on its module, with the version and ready pods of each copy): the status is critical when a workload has no ready replica, warning when some are missing, and the Workloads issues of their pods are attached to them. A component whose workloads are only CronJobs (e.g. descheduler) reads "Läuft nach Zeitplan"; a failed run is a `jobs/…` issue. Their sheet shows version, namespace, pods and ingress URLs, found through Ingresses, Gateway API HTTPRoutes and Traefik IngressRoutes.
 
 ### Your own applications
 
