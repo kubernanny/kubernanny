@@ -30,11 +30,19 @@ A component's sheet answers "what is it doing?" in three layers:
 
 1. **Key figures**: one row of two to four numbers (`stats`), never a half-filled grid. Four become two by two on a phone. A module that has more to say puts it in a list.
 2. **Problems**: the module's issues, with their actions.
-3. **Its objects** (`details`): a list per kind (database clusters, volumes, apps, certificates) or a short table (targets per job, Longhorn nodes). Problems come first, tinted with a coloured rail; healthy rows are compact, and after five of them the rest folds behind "Show all". Facts under a name (last backup, WAL archiving, replicas) are small text, coloured only when they are the problem.
+3. **Its objects** (`details`): a list per kind (database clusters, volumes, apps, certificates) or a short table (targets per job, Longhorn nodes). Problems come first, on a raised surface with a coloured rail; every component also lists its workloads with their pods ("Laufzeit") and its volumes; healthy rows are compact, and after five of them the rest folds behind "Show all". Facts under a name (last backup, WAL archiving, replicas) are small text, coloured only when they are the problem.
 
 ## Resources
 
-CPU and RAM always show use against what is asked for: a bar of the use, the requests hatched behind it, a tick where the limits end (dashed at the edge when they add up to more than there is), and the numbers in words: "1,2 / 4 Kerne", "Requests 2,5, Limits 6". The same on the overview's vitals, on every node and in an opened workload.
+CPU and RAM are one component everywhere (`ui/resource-bar.ts`: hero vitals, overview figures and per node, node cards, opened workloads): a loading bar whose track is the capacity (allocatable; for a workload its limit, else its request).
+
+- **Reserved** (requests): a soft, finely striped layer from the left at full height, always visible.
+- **Used**: the solid bar in the figure's tone, inset 2 px so the reserved layer shows around it, with a bright tip; its width animates (not with reduced motion).
+- **Limit**: a marker with a small cap at the sum of the limits. Limits above the capacity put the marker at the end and an amber striped cap after it ("+60 % überbucht").
+- **Legend** right under the bar, one swatch each: "1,73 genutzt", "1,15 reserviert", "1,60 Limit + 8 Pods ohne Limit". The header keeps "43 % 1,73 / 4 Kerne".
+- CPU is always in cores with the locale's decimals (0,40, never 400m), RAM in MiB/GiB.
+- Tone: coral from 90 % use; amber from 80 % use, or when requests take 90 % (nothing more can be scheduled there).
+- 12 px high, 8 px in lists (`compact`). One `role="meter"` with an aria label naming all values.
 
 ## Tokens
 
