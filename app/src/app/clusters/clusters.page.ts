@@ -4,7 +4,9 @@ import { IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonTitle, IonToo
 import { TranslocoDirective } from '@jsverse/transloco';
 import { buildClusterView } from '../cluster/cluster-view';
 import { ClusterStore } from '../core/cluster-store.service';
+import { copyText } from '../core/share';
 import { StatusStore } from '../core/status-store.service';
+import { DEMO_HOST } from '../../environments/build-flags';
 import { LangChoice, LanguageService } from '../i18n/language.service';
 import { Heartbeat } from '../ui/heartbeat';
 import { WidgetSwitchComponent } from './widget-switch.component';
@@ -21,11 +23,13 @@ export const PAIR_COMMAND = 'kubectl -n kubernanny logs deploy/kubernanny';
       <ion-header class="ion-no-border">
         <ion-toolbar>
           <ion-title>{{ t('clusters.title') }}</ion-title>
-          <ion-buttons slot="end">
-            <ion-button routerLink="/cluster/new" [attr.aria-label]="t('clusters.add')">
-              <ion-icon slot="icon-only" name="add-outline" />
-            </ion-button>
-          </ion-buttons>
+          @if (!demoHost) {
+            <ion-buttons slot="end">
+              <ion-button routerLink="/cluster/new" [attr.aria-label]="t('clusters.add')">
+                <ion-icon slot="icon-only" name="add-outline" />
+              </ion-button>
+            </ion-buttons>
+          }
         </ion-toolbar>
       </ion-header>
       <ion-content class="ion-padding">
@@ -37,7 +41,9 @@ export const PAIR_COMMAND = 'kubectl -n kubernanny logs deploy/kubernanny';
                 <span class="muted">{{ t('clusters.demo.text') }}</span>
               </div>
               <div class="demo-actions">
-                <ion-button size="small" routerLink="/cluster/new">{{ t('clusters.demo.connect') }}</ion-button>
+                @if (!demoHost) {
+                  <ion-button size="small" routerLink="/cluster/new">{{ t('clusters.demo.connect') }}</ion-button>
+                }
                 <ion-button size="small" fill="clear" (click)="endDemo()">{{ t('clusters.demo.end') }}</ion-button>
               </div>
             </aside>
@@ -94,7 +100,9 @@ export const PAIR_COMMAND = 'kubectl -n kubernanny logs deploy/kubernanny';
                 </li>
               </ol>
               <div class="empty-actions">
-                <ion-button fill="outline" routerLink="/cluster/new">{{ t('clusters.empty.manual') }}</ion-button>
+                @if (!demoHost) {
+                  <ion-button fill="outline" routerLink="/cluster/new">{{ t('clusters.empty.manual') }}</ion-button>
+                }
                 <ion-button fill="clear" (click)="startDemo()">{{ t('clusters.empty.tryDemo') }}</ion-button>
               </div>
             </section>
@@ -318,6 +326,8 @@ export class ClustersPage implements OnInit {
   readonly install = INSTALL_COMMAND;
   readonly pair = PAIR_COMMAND;
   readonly origin = location.origin;
+  /** The demo host build: nothing to pair or add (build-flags.ts). */
+  readonly demoHost = DEMO_HOST;
   /** True when this page itself is served by a Kubernanny agent. */
   readonly thisAgent = signal(false);
 
@@ -350,8 +360,8 @@ export class ClustersPage implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
-    // demo.kubernanny.app is static hosting: no agent to ask.
-    if (location.protocol.startsWith('http') && !location.hostname.startsWith('demo.')) {
+    // The demo host is static hosting: no agent to ask.
+    if (location.protocol.startsWith('http') && !DEMO_HOST) {
       try {
         const res = await fetch('/healthz', { signal: AbortSignal.timeout(3000) });
         this.thisAgent.set(res.ok && ((await res.json()) as { ok?: boolean }).ok === true);
@@ -386,12 +396,10 @@ export class ClustersPage implements OnInit {
   }
 
   async copy(text: string): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(text);
+    // Refused (an old browser on an insecure origin): the text is selectable anyway.
+    if (await copyText(text)) {
       const toast = await this.toasts.create({ message: this.language.translator().t('common.copied'), duration: 1500, position: 'bottom' });
       await toast.present();
-    } catch {
-      // Clipboard not allowed (insecure origin): the text is selectable anyway.
     }
   }
 }

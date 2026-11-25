@@ -99,14 +99,29 @@ final class PushKeyStore {
     }
 
     static void remove(Context context, String kid) {
-        prefs(context).edit().remove("key." + kid).apply();
+        prefs(context).edit().remove("key." + kid).remove("seen." + kid).apply();
+    }
+
+    /**
+     * The sealed time of the last push shown for this key (PushFreshness), or
+     * null. Not secret, so not sealed; it goes with the key. commit(), not
+     * apply(): the service may be stopped right after showing the push.
+     */
+    static synchronized Long lastShown(Context context, String kid) {
+        SharedPreferences prefs = prefs(context);
+        return prefs.contains("seen." + kid) ? prefs.getLong("seen." + kid, 0L) : null;
+    }
+
+    static synchronized void markShown(Context context, String kid, long sealedAt) {
+        prefs(context).edit().putLong("seen." + kid, sealedAt).commit();
     }
 
     private static SharedPreferences prefs(Context context) {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    private static SecretKey wrappingKey() throws Exception {
+    /** Synchronized: the app and the messaging service may both ask first, and two generated keys would orphan entries sealed with the loser. */
+    private static synchronized SecretKey wrappingKey() throws Exception {
         KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
         keyStore.load(null);
         if (keyStore.containsAlias(ALIAS)) {

@@ -3,7 +3,8 @@ import UserNotifications
 /// Replaces the generic alert FCM delivers ("Kubernanny: new status from a
 /// cluster") with the text the agent sealed for this phone, its title
 /// prefixed with the person's authenticity marker. If the message does not
-/// open (no key for its id, not from the pinned agent, damaged), the generic
+/// open (no key for its id, not from the pinned agent, damaged), or is stale
+/// or not newer than the last one shown for its key (a replay), the generic
 /// text of this file is shown, whatever alert text arrived, and no marker.
 ///
 /// This extension only runs for alerts with `mutable-content`. Whoever holds
@@ -25,7 +26,7 @@ final class NotificationService: UNNotificationServiceExtension {
         // A message that did not open leads nowhere when tapped.
         content.userInfo = [:]
         fallback = content
-        defer { contentHandler(content) }
+        defer { deliver(content) }
         let info = request.content.userInfo
         guard
             let kid = info["k"] as? String,
@@ -34,10 +35,17 @@ final class NotificationService: UNNotificationServiceExtension {
             let plain = try? PushCrypto.open(pushSecret: entry.secretKey, pushPublic: entry.publicKey, agentPublic: entry.agentKey, message: sealed),
             let json = try? JSONSerialization.jsonObject(with: plain) as? [String: Any],
             let title = json["t"] as? String,
-            let body = json["b"] as? String
+            let body = json["b"] as? String,
+            let sealedAt = (json["s"] as? NSNumber)?.doubleValue
         else {
             return
         }
+        // A replayed or stale message opens fine (the agent made it once) but says something old.
+        // iOS shows every alert that arrives, so it gets the generic text, without the marker.
+        guard PushKeys.isFresh(sealedAt: sealedAt, now: Date().timeIntervalSince1970 * 1000, lastShown: PushKeys.lastShown(kid)) else {
+            return
+        }
+        PushKeys.markShown(kid, sealedAt: sealedAt)
         content.title = PushKeys.markedTitle(PushKeys.marker(), title)
         content.body = body
         content.threadIdentifier = entry.clusterId
@@ -50,8 +58,17 @@ final class NotificationService: UNNotificationServiceExtension {
 
     /// Out of time (about 30 s): show what there is, the generic text.
     override func serviceExtensionTimeWillExpire() {
-        if let handler = handler, let fallback = fallback {
-            handler(fallback)
+        if let fallback = fallback {
+            deliver(fallback)
         }
+    }
+
+    /// iOS takes exactly one answer per notification: whichever comes first wins, the other is dropped.
+    private func deliver(_ content: UNNotificationContent) {
+        guard let handler = handler else {
+            return
+        }
+        self.handler = nil
+        handler(content)
     }
 }

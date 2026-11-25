@@ -42,6 +42,16 @@ function copyWithSelection(text: string): void {
   }
 }
 
+/** Copies text to the clipboard, also on an insecure origin; false when the browser refused. */
+export async function copyText(text: string, api: Pick<ShareApi, 'copy'> = SYSTEM): Promise<boolean> {
+  try {
+    await api.copy(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** The person closed the share sheet: that is an answer, not a reason to copy instead. */
 function cancelled(err: unknown): boolean {
   return err instanceof Error && (err.name === 'AbortError' || /cancel/i.test(err.message));
@@ -63,10 +73,5 @@ export async function shareText(text: string, title: string, api: ShareApi = SYS
       return 'shared';
     }
   }
-  try {
-    await api.copy(text);
-    return 'copied';
-  } catch {
-    return 'failed';
-  }
+  return (await copyText(text, api)) ? 'copied' : 'failed';
 }

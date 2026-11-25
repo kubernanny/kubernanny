@@ -10,3 +10,11 @@ export class AgentError extends Error {
     this.name = 'AgentError';
   }
 }
+
+/** Fetching the agent's key without a pinned one is only safe where TLS or the local machine vouches for it. */
+export class InsecureTransportError extends Error {
+  constructor(readonly url: string) {
+    super(`refusing to fetch an agent key over plain http from ${url}`);
+    this.name = 'InsecureTransportError';
+  }
+}

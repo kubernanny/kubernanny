@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { App as CapApp } from '@capacitor/app';
 import { IonApp, IonRouterOutlet } from '@ionic/angular/standalone';
 import { registerIcons } from './core/icons';
-import { relayUrlAllowed } from './core/relay-route';
+import { pairingRoute } from './core/pairing-link';
 import { clusterLinkId } from './core/widget/widget-link';
 import { WidgetSync } from './core/widget/widget-sync.service';
 import { ClusterStore } from './core/cluster-store.service';
@@ -11,27 +11,8 @@ import { PushRegistration } from './core/push/push-registration.service';
 import { PushNative } from './core/push/push-native';
 import { clusterIdForPushKey, knownClusterId } from './core/push/push-tap';
 
-/** "kubernanny://pair?url=…&code=…&key=…[&relay=…]" -> the /pair page's params, or null for anything else. */
-export function pairingRoute(link: string): { url: string; code: string; name?: string; key?: string; relay?: string } | null {
-  try {
-    const u = new URL(link);
-    if (u.protocol !== 'kubernanny:' || (u.hostname !== 'pair' && !u.pathname.endsWith('pair'))) {
-      return null;
-    }
-    const url = u.searchParams.get('url');
-    const code = u.searchParams.get('code');
-    const key = u.searchParams.get('key') ?? undefined;
-    if (!url || !code || !/^https?:\/\//.test(url) || (key !== undefined && !/^[A-Za-z0-9_-]{43}$/.test(key))) {
-      return null;
-    }
-    // The relay only counts next to a key: without one the app fetches the key directly, never through a relay.
-    const relay = u.searchParams.get('relay');
-    const withRelay = key && relay && relayUrlAllowed(relay) ? { relay } : {};
-    return { url, code, name: u.searchParams.get('name') ?? undefined, ...(key ? { key } : {}), ...withRelay };
-  } catch {
-    return null;
-  }
-}
+// Kept importable from here for the specs written against it.
+export { pairingRoute } from './core/pairing-link';
 
 @Component({
   selector: 'app-root',

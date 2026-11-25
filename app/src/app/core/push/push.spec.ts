@@ -6,7 +6,7 @@ import { AgentClient } from '../agent-client.service';
 import { AgentPushView, ClusterConfig } from '../agent.model';
 import { ClusterStore } from '../cluster-store.service';
 import { translatorFor } from '../../i18n/translator';
-import { openPushMessage } from './push-content';
+import { MAX_PUSH_AGE_MS, openPushMessage, pushFresh } from './push-content';
 import { PushNative } from './push-native';
 import { PushRegistration } from './push-registration.service';
 import { pushView } from './push-view';
@@ -187,5 +187,26 @@ describe('PushRegistration', () => {
     const count = client.registered.length;
     await registration.refreshTokens();
     expect(client.registered.length).toBe(count);
+  });
+});
+
+describe('pushFresh (mirrored by PushFreshness.java and PushKeys.isFresh)', () => {
+  const now = 1_795_000_000_000;
+
+  it('shows a push sealed within the last hour, newer than the last one shown', () => {
+    expect(pushFresh(now - 5_000, now, null)).toBe(true);
+    expect(pushFresh(now - 5_000, now, now - 60_000)).toBe(true);
+    expect(pushFresh(now - MAX_PUSH_AGE_MS, now, null)).toBe(true);
+  });
+
+  it('drops a replayed or stale push', () => {
+    expect(pushFresh(now - MAX_PUSH_AGE_MS - 1, now, null)).toBe(false);
+    expect(pushFresh(now - 60_000, now, now - 60_000)).toBe(false);
+    expect(pushFresh(now - 60_000, now, now - 5_000)).toBe(false);
+  });
+
+  it('drops a push dated more than an hour ahead, so it cannot block the ones after it', () => {
+    expect(pushFresh(now + MAX_PUSH_AGE_MS + 1, now, null)).toBe(false);
+    expect(pushFresh(Number.NaN, now, null)).toBe(false);
   });
 });

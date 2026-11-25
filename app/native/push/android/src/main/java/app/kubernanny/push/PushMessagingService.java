@@ -17,7 +17,9 @@ import org.json.JSONObject;
 
 /**
  * Receives Kubernanny pushes (FCM data messages: `k` key id, `m` sealed
- * message), opens them with the push key of that cluster and shows them.
+ * message), opens them with the push key of that cluster and shows them,
+ * unless the sealed time says the message is stale or not newer than the
+ * last one shown for that key (PushFreshness).
  * Runs without the app's WebView. A message that does not open is dropped:
  * this service shows nothing the agent did not write, and what it shows
  * carries the person's authenticity marker (PushMarker). Someone holding the
@@ -46,8 +48,14 @@ public class PushMessagingService extends FirebaseMessagingService {
         try {
             byte[] plain = PushCrypto.open(new AndroidPrimitives(), entry.secretKey, entry.publicKey, entry.agentKey, PushKeyStore.unb64(sealed));
             JSONObject content = new JSONObject(new String(plain, StandardCharsets.UTF_8));
+            long sealedAt = content.getLong("s");
+            // A replayed or stale message opens fine (the agent made it once) but says something old: not shown.
+            if (!PushFreshness.fresh(sealedAt, System.currentTimeMillis(), PushKeyStore.lastShown(this, kid))) {
+                return;
+            }
+            PushKeyStore.markShown(this, kid, sealedAt);
             String title = PushMarker.title(PushKeyStore.getMarker(this), content.getString("t"));
-            show(this, entry.clusterId, title, content.getString("b"), content.optInt("p", 3), content.optLong("s", System.currentTimeMillis()));
+            show(this, entry.clusterId, title, content.getString("b"), content.optInt("p", 3), sealedAt);
         } catch (Exception ignored) {
             // Not from the pinned agent, or damaged: nothing to show.
         }

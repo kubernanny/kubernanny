@@ -7,7 +7,7 @@
 export function clusterLinkId(link: string): string | null {
   try {
     const u = new URL(link);
-    if (u.protocol !== 'kubernanny:' || (u.hostname !== 'cluster' && !u.pathname.endsWith('cluster'))) {
+    if (u.protocol !== 'kubernanny:' || u.hostname !== 'cluster' || (u.pathname !== '' && u.pathname !== '/')) {
       return null;
     }
     const id = u.searchParams.get('id');

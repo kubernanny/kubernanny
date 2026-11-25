@@ -61,6 +61,25 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "demo": {
+              "outputPath": "dist/demo",
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/build-flags.ts",
+                  "with": "src/environments/build-flags.demo.ts"
+                }
+              ],
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "public"
+                },
+                {
+                  "glob": "_headers",
+                  "input": "src/demo-host"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"

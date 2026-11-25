@@ -39,6 +39,47 @@ enum PushKeys {
         return m.isEmpty ? title : "\(m) \(title)"
     }
 
+    /// A push sealed longer ago (or further ahead) than this is not shown.
+    static let maxAge: Double = 60 * 60 * 1000
+
+    /// Mirrors `pushFresh` in push-content.ts and PushFreshness.java: within an
+    /// hour of the phone's clock and later than the last push shown for the key.
+    /// Times are milliseconds since the epoch, as the agent seals them.
+    static func isFresh(sealedAt: Double, now: Double, lastShown: Double?) -> Bool {
+        guard sealedAt.isFinite, abs(now - sealedAt) <= maxAge else {
+            return false
+        }
+        guard let last = lastShown else {
+            return true
+        }
+        return sealedAt > last
+    }
+
+    /// Key ids are 16 characters: `seen.<kid>` never names a key or the marker.
+    static func seenAccount(_ kid: String) -> String {
+        "seen.\(kid)"
+    }
+
+    /// The sealed time of the last push shown for this key, nil before the first.
+    static func lastShown(_ kid: String) -> Double? {
+        item(seenAccount(kid)).flatMap { String(data: $0, encoding: .utf8) }.flatMap(Double.init)
+    }
+
+    /// Kept next to the key, in the same group; the app's removeKey deletes it with the key.
+    static func markShown(_ kid: String, sealedAt: Double) {
+        var base: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: seenAccount(kid),
+            kSecAttrAccessGroup as String: accessGroup
+        ]
+        SecItemDelete(base as CFDictionary)
+        base[kSecValueData as String] = Data(String(format: "%.0f", sealedAt).utf8)
+        base[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        base[kSecAttrSynchronizable as String] = false
+        SecItemAdd(base as CFDictionary, nil)
+    }
+
     private static func item(_ account: String) -> Data? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,

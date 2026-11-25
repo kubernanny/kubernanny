@@ -27,12 +27,22 @@ export class ClusterStore {
     return this.state().find((c) => c.id === id);
   }
 
-  async save(cluster: Omit<ClusterConfig, 'id'> & { id?: string }): Promise<ClusterConfig> {
+  /**
+   * Adds or updates an entry. The keys of an existing entry (the pinned agent
+   * key, this device's key in the vault) change only with `replaceKeys`,
+   * which only the pairing page passes after the person confirmed: no other
+   * path may swap the agent a cluster talks to.
+   */
+  async save(cluster: Omit<ClusterConfig, 'id'> & { id?: string }, options: { replaceKeys?: boolean } = {}): Promise<ClusterConfig> {
     const saved: ClusterConfig = {
       ...cluster,
       id: cluster.id ?? crypto.randomUUID(),
       url: cluster.url.trim().replace(/\/+$/, ''),
     };
+    const before = this.state().find((c) => c.id === saved.id);
+    if (before && !options.replaceKeys && (before.agentKey !== saved.agentKey || (before.deviceKey && saved.deviceKey && before.deviceKey !== saved.deviceKey))) {
+      throw new Error(`refusing to change the keys of cluster ${saved.id} without confirmation`);
+    }
     if (saved.deviceKey) {
       await this.vault.set(saved.id, saved.deviceKey);
     }

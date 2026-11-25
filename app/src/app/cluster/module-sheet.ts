@@ -2,8 +2,8 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonToolbar, ModalController, ToastController } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { AgentClient, describeError } from '../core/agent-client.service';
-import { ClusterConfig, ModuleView } from '../core/agent.model';
-import { STATUS_TONE } from '../core/format';
+import { ClusterConfig, ModuleView, Tone } from '../core/agent.model';
+import { externalUrl } from '../core/external-url';
 import { LanguageService } from '../i18n/language.service';
 import { IssueList } from '../ui/issue-list';
 import { IssueCard, moduleRow } from './cluster-view';
@@ -24,22 +24,22 @@ import { AcceptedRow, acceptedRows } from './vulnerability-acceptance';
         </ion-toolbar>
       </ion-header>
       <ion-content class="ion-padding">
-        <header [class]="'tone-' + tone">
+        <header [class]="'tone-' + head().tone">
           <span class="icon"><ion-icon [name]="module.icon" aria-hidden="true" /></span>
           <div>
             <h1 class="display">{{ module.name }}</h1>
             <p class="muted">{{ module.description }}</p>
           </div>
         </header>
-        <p [class]="'summary tone-' + tone"><span class="pill">{{ statusLabel }}</span> {{ module.summary }}</p>
+        <p [class]="'summary tone-' + head().tone"><span class="pill">{{ head().statusLabel }}</span> {{ module.summary }}</p>
         @if (module.error) {
           <p class="error">{{ t('module.checkFailed', { error: module.error }) }}</p>
         }
 
-        @if (module.links.length > 0) {
+        @if (links().length > 0) {
           <div class="links">
-            @for (link of module.links; track link.url) {
-              <a [href]="link.url" target="_blank" rel="noopener">
+            @for (link of links(); track link.url) {
+              <a [href]="link.url" target="_blank" rel="noopener noreferrer">
                 <ion-icon name="open-outline" aria-hidden="true" />
                 {{ link.label }}
               </a>
@@ -281,13 +281,17 @@ export class ModuleSheet implements OnInit {
   readonly accepted = signal<AcceptedRow[]>([]);
   readonly busy = signal<string | null>(null);
   readonly changed = signal(false);
-  tone = STATUS_TONE.ok;
-  statusLabel = '';
+  readonly head = signal<{ tone: Tone; statusLabel: string }>({ tone: 'ok', statusLabel: '' });
+  /** The component's links that are web addresses; anything else the agent sent is not offered. */
+  readonly links = signal<{ url: string; label: string }[]>([]);
 
   ngOnInit(): void {
     const row = moduleRow(this.module, this.language.translator());
-    this.tone = row.tone;
-    this.statusLabel = row.statusLabel;
+    this.head.set({ tone: row.tone, statusLabel: row.statusLabel });
+    this.links.set(this.module.links.flatMap((l) => {
+      const url = externalUrl(l.url);
+      return url ? [{ url, label: l.label }] : [];
+    }));
     this.issues.set(this.issueCards);
     this.accepted.set(acceptedRows(this.module, this.language.translator()));
   }

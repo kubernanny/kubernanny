@@ -90,14 +90,14 @@ public class KubernannyPushPlugin extends Plugin {
 
     @PluginMethod
     public void setMarker(PluginCall call) {
-        String marker = call.getString("marker");
-        // The app normalises it (at most 12 characters as a person counts them); this only keeps the store bounded.
-        if (marker == null || marker.trim().isEmpty() || marker.length() > 64) {
-            call.reject("marker must be 1 to 12 characters");
+        // Same rule as normalizeMarker in push-marker.ts: 3 to 12 characters as a person counts them.
+        String marker = PushMarker.normalize(call.getString("marker"));
+        if (marker == null) {
+            call.reject("marker must be 3 to 12 characters");
             return;
         }
         try {
-            PushKeyStore.putMarker(getContext(), marker.trim());
+            PushKeyStore.putMarker(getContext(), marker);
             call.resolve();
         } catch (Exception e) {
             call.reject("cannot store the marker");

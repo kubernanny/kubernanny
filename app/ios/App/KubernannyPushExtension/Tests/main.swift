@@ -35,3 +35,14 @@ precondition(PushKeys.markedTitle(" Kiwi ", "homelab: ok") == "Kiwi homelab: ok"
 precondition(PushKeys.markedTitle(nil, "homelab: ok") == "homelab: ok")
 precondition(PushKeys.markedTitle("  ", "homelab: ok") == "homelab: ok")
 print("PushKeys.markedTitle: titles as in push-marker.ts")
+
+// Freshness: the same cases as pushFresh in push.spec.ts and PushFreshnessTest.java.
+let now = 1_795_000_000_000.0
+precondition(PushKeys.isFresh(sealedAt: now - 5_000, now: now, lastShown: nil))
+precondition(PushKeys.isFresh(sealedAt: now - 5_000, now: now, lastShown: now - 60_000))
+precondition(PushKeys.isFresh(sealedAt: now - PushKeys.maxAge, now: now, lastShown: nil))
+precondition(!PushKeys.isFresh(sealedAt: now - PushKeys.maxAge - 1, now: now, lastShown: nil))
+precondition(!PushKeys.isFresh(sealedAt: now - 60_000, now: now, lastShown: now - 60_000))
+precondition(!PushKeys.isFresh(sealedAt: now - 60_000, now: now, lastShown: now - 5_000))
+precondition(!PushKeys.isFresh(sealedAt: now + PushKeys.maxAge + 1, now: now, lastShown: nil))
+print("PushKeys.isFresh: as pushFresh in push-content.ts")

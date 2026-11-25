@@ -142,10 +142,13 @@ public class KubernannyPushPlugin: CAPPlugin, CAPBridgedPlugin, NotificationHand
         }
     }
 
-    /// The app normalises the marker (at most 12 characters as a person counts them); this only keeps the item bounded.
+    /// Same length rule as normalizeMarker in push-marker.ts: 3 to 12 characters as a person counts
+    /// them (Swift counts grapheme clusters), no line break or control character.
     @objc func setMarker(_ call: CAPPluginCall) {
-        guard let marker = call.getString("marker")?.trimmingCharacters(in: .whitespacesAndNewlines), !marker.isEmpty, marker.count <= 12 else {
-            call.reject("marker must be 1 to 12 characters")
+        guard let marker = call.getString("marker")?.trimmingCharacters(in: .whitespacesAndNewlines),
+              (3...12).contains(marker.count),
+              marker.unicodeScalars.allSatisfy({ $0.value == 0x200D || !(CharacterSet.controlCharacters.contains($0) || CharacterSet.newlines.contains($0)) }) else {
+            call.reject("marker must be 3 to 12 characters")
             return
         }
         SecItemDelete(query(Self.markerAccount) as CFDictionary)
@@ -163,6 +166,8 @@ public class KubernannyPushPlugin: CAPPlugin, CAPBridgedPlugin, NotificationHand
     @objc func removeKey(_ call: CAPPluginCall) {
         if let kid = call.getString("kid") {
             SecItemDelete(query(kid) as CFDictionary)
+            // The extension's record of the last push shown for this key (PushKeys.seenAccount).
+            SecItemDelete(query("seen.\(kid)") as CFDictionary)
         }
         call.resolve()
     }

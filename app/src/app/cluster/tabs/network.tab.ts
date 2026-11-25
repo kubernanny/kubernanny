@@ -3,13 +3,15 @@ import { TranslocoDirective } from '@jsverse/transloco';
 import { IonIcon, IonSpinner } from '@ionic/angular/standalone';
 import { NetworkView, Tone } from '../../core/agent.model';
 import { Loadable } from '../../core/cluster-data.store';
+import { externalUrl } from '../../core/external-url';
 import { LanguageService } from '../../i18n/language.service';
 import { Translator } from '../../i18n/translator';
 
 export interface HostRow {
   key: string;
   host: string;
-  url: string;
+  /** Null for a host that is no address to open (a wildcard, a bare name). */
+  url: string | null;
   tone: Tone;
   cert: string;
   detail: string;
@@ -27,7 +29,7 @@ export function hostRows(view: NetworkView | null, tr: Translator): HostRow[] {
       return {
         key: `${ing.namespace}/${ing.name}/${host}`,
         host,
-        url: `${ing.tls ? 'https' : 'http'}://${host}`,
+        url: externalUrl(`${ing.tls ? 'https' : 'http'}://${host}`),
         tone,
         cert,
         detail: [ing.component, `${ing.namespace}/${ing.backends.join(', ')}`, ing.className].filter(Boolean).join(', '),
@@ -59,10 +61,14 @@ export function loadBalancerRows(view: NetworkView | null, tr: Translator): { ke
       <ul class="hosts">
         @for (h of hosts(); track h.key) {
           <li [class]="'tone-' + h.tone">
-            <a [href]="h.url" target="_blank" rel="noopener">
+            @if (h.url) {
+              <a [href]="h.url" target="_blank" rel="noopener noreferrer">
+                <span class="host display">{{ h.host }}</span>
+                <ion-icon name="open-outline" aria-hidden="true" />
+              </a>
+            } @else {
               <span class="host display">{{ h.host }}</span>
-              <ion-icon name="open-outline" aria-hidden="true" />
-            </a>
+            }
             <span class="pill">{{ h.cert }}</span>
             <span class="muted detail">{{ h.detail }}</span>
           </li>

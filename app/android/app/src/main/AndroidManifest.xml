@@ -32,7 +32,8 @@
             </intent-filter>
 
             <!-- Pairing links from the agent's QR code: kubernanny://pair?url=…&code=…&key=…
-                 (handled by pairingRoute in src/app/app.ts). -->
+                 (parsed by pairingRoute in src/app/core/pairing-link.ts). Any app or site can
+                 open one, so the pairing page connects only after the person confirmed. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -42,15 +43,6 @@
 
         </activity>
 
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths"></meta-data>
-        </provider>
     </application>
 
     <!-- Permissions -->

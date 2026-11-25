@@ -13,5 +13,9 @@ describe('clusterLinkId', () => {
     expect(clusterLinkId('kubernanny://cluster?id=../../pair')).toBeNull();
     expect(clusterLinkId('kubernanny://cluster')).toBeNull();
     expect(clusterLinkId('not a url')).toBeNull();
+    // The host must be exactly `cluster`.
+    expect(clusterLinkId('kubernanny://evil/cluster?id=a')).toBeNull();
+    expect(clusterLinkId('kubernanny://xcluster?id=a')).toBeNull();
+    expect(clusterLinkId('kubernanny://cluster/x?id=a')).toBeNull();
   });
 });

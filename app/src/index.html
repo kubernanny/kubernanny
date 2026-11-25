@@ -3,6 +3,17 @@
 <html lang="de">
   <head>
     <meta charset="utf-8" />
+    <!--
+      The policy of the native apps' WebView, where no server sets one. The agent
+      sends its own, stricter header for the web UI (agent/src/security/http-security.ts);
+      a browser enforces both, so this one must never be the stricter of the two.
+      No inline scripts, no eval. connect-src is wide on purpose: the app talks
+      to whatever agent address the person paired, plain http in a LAN or VPN
+      included, and every one of those calls is end-to-end encrypted with the
+      pinned agent key (docs/PROTOCOL.md), so the transport only carries ciphertext.
+      No ws: or wss: (nothing in the app opens a socket); data: is for ionicons.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https: http: data:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'" />
     <title>Kubernanny</title>
     <base href="/" />
     <meta name="viewport" content="viewport-fit=cover, width=device-width, initial-scale=1.0" />

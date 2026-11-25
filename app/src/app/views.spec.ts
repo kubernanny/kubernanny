@@ -287,6 +287,9 @@ describe('ui helpers', () => {
     expect(pairingRoute('kubernanny://pair?url=https%3A%2F%2Fkubernanny.example')).toBeNull();
     expect(pairingRoute('kubernanny://pair?url=javascript%3Aalert(1)&token=t')).toBeNull();
     expect(pairingRoute('https://evil.example/pair?url=https://x&token=t')).toBeNull();
+    // The host must be exactly `pair`.
+    expect(pairingRoute('kubernanny://cluster/pair?url=https%3A%2F%2Fx&code=C')).toBeNull();
+    expect(pairingRoute('kubernanny://repair?url=https%3A%2F%2Fx&code=C')).toBeNull();
   });
 });
 

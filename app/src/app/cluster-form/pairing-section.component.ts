@@ -3,6 +3,8 @@ import { IonButton, ToastController } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { AgentClient, describeError } from '../core/agent-client.service';
 import { ClusterConfig } from '../core/agent.model';
+import { externalUrl } from '../core/external-url';
+import { pairingRoute } from '../core/pairing-link';
 import { LanguageService } from '../i18n/language.service';
 
 /** Asks the agent for a one-time pairing code, to add another device. */
@@ -17,9 +19,11 @@ import { LanguageService } from '../i18n/language.service';
         @if (pairing(); as p) {
           <p class="hint">{{ t('form.codeHint') }}</p>
           <p class="code display">{{ p.display }}</p>
-          <a class="link" [href]="p.app">{{ p.app }}</a>
+          @if (p.app) {
+            <a class="link" [href]="p.app">{{ p.app }}</a>
+          }
           @if (p.web) {
-            <a class="link" [href]="p.web" target="_blank" rel="noopener">{{ p.web }}</a>
+            <a class="link" [href]="p.web" target="_blank" rel="noopener noreferrer">{{ p.web }}</a>
           }
         } @else {
           <ion-button fill="outline" (click)="newCode()">{{ t('form.newCode') }}</ion-button>
@@ -53,7 +57,7 @@ export class PairingSectionComponent {
   private readonly toasts = inject(ToastController);
   private readonly language = inject(LanguageService);
 
-  readonly pairing = signal<{ display: string; app: string; web: string | null } | null>(null);
+  readonly pairing = signal<{ display: string; app: string | null; web: string | null } | null>(null);
 
   async newCode(): Promise<void> {
     const cluster = this.cluster();
@@ -62,7 +66,8 @@ export class PairingSectionComponent {
     }
     try {
       const { code, app, web } = await this.client.newPairingCode(cluster);
-      this.pairing.set({ display: `${code.slice(0, 5)}-${code.slice(5)}`, app, web });
+      // Links from the agent: only a real pairing link and a web address are offered.
+      this.pairing.set({ display: `${code.slice(0, 5)}-${code.slice(5)}`, app: pairingRoute(app) ? app : null, web: externalUrl(web) });
     } catch (err) {
       const toast = await this.toasts.create({ message: describeError(err, this.language.translator()), duration: 3000, position: 'bottom' });
       await toast.present();
