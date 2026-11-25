@@ -301,13 +301,14 @@ export const de = {
   'argocd.drift.cause': 'Automatischer Sync ist an, trotzdem weicht der Cluster ab: ein Sync hängt, oder eine Ressource wird außerhalb von Git geändert.',
   'argocd.pending.title': (p: { app: string }) => `ArgoCD-App ${p.app}: Änderung wartet auf Sync`,
   'argocd.pending.cause': 'Manueller Sync: im Repo liegt eine Änderung, die noch nicht ausgerollt ist. Kein Fehler, nur zur Info.',
+  'argocd.pending.longCause': (p: { age: string }) => `Manueller Sync: im Repo liegt eine Änderung, und der letzte Sync ist ${p.age} her. Vergessen? Unter "Bereit zum Sync" steht, was sich ändert.`,
   'argocd.comparison.title': (p: { app: string }) => `ArgoCD kann ${p.app} nicht vergleichen`,
   'argocd.stat.apps': 'Apps',
   'argocd.stat.synced': 'Synchron',
   'argocd.stat.healthy': 'Gesund',
   'argocd.stat.automated': 'Automatischer Sync',
   'argocd.summary.ok': (p: { n: number }) => `${p.n} Apps synchron und gesund`,
-  'argocd.summary.waiting': (p: { n: number }) => (p.n === 1 ? '1 App wartet auf einen Sync' : `${p.n} Apps warten auf einen Sync`),
+  'argocd.summary.waiting': (p: { n: number }) => (p.n === 1 ? '1 App bereit zum Sync' : `${p.n} Apps bereit zum Sync`),
   'argocd.summary.problems': (p: { outOfSync: number; unhealthy: number }) => `${p.outOfSync} nicht synchron, ${p.unhealthy} nicht gesund`,
 
   // ---------- CloudNativePG ----------
