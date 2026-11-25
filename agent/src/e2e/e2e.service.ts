@@ -17,7 +17,13 @@ export const WRITE_CLOCK_WINDOW_MS = 60_000;
 const REPLAY_TTL_MS = 2 * CLOCK_WINDOW_MS;
 const REPLAY_CAPACITY = 20_000;
 /** Requests dated further ahead than the replay TTL covers, remembered until their own window has passed. */
-const FUTURE_CAPACITY = 1_000;
+export const FUTURE_CAPACITY = 1_000;
+/**
+ * Of those, at most this many per paired device: one device with a broken
+ * clock (or a stolen key) cannot fill the map and leave every other
+ * fast-clock device with E2E_BUSY instead of the sealed E2E_CLOCK_SKEW.
+ */
+export const FUTURE_PER_PRINCIPAL = 50;
 
 /**
  * Rate limits (docs/PROTOCOL.md, "What the agent checks"). Opening message 1
@@ -93,8 +99,14 @@ export class E2eService {
   private readonly logger = new Logger(E2eService.name);
   /** Insertion order is expiry order (fixed TTL). */
   private readonly seen = new Map<string, number>();
-  /** Requests dated ahead of the clock: each kept until its own window has passed, so a replay at that time still fails. */
-  private readonly future = new Map<string, number>();
+  /**
+   * Requests of paired devices dated ahead of the clock: each kept until its
+   * own window has passed, so a replay at that time still fails. Never filled
+   * by unknown keys (see `handle`).
+   */
+  private readonly future = new Map<string, { until: number; owner: string }>();
+  /** Entries in `future` per principal id. */
+  private readonly futurePerOwner = new Map<string, number>();
   private readonly opens: TokenBucket;
   private readonly reserve: TokenBucket;
   private readonly relayOpens: TokenBucket;
@@ -170,8 +182,17 @@ export class E2eService {
       // No side effect, so no replay entry: unknown keys cannot fill the cache.
       return this.checkClock(opened, now) ?? seal(401, error('DEVICE_UNKNOWN', t('error.deviceUnknown'), lang));
     }
+    if (!principal) {
+      // Pairing from an unknown key: refused outside the clock window before anything is remembered, so strangers never
+      // occupy the future map. Letting such a request pass once its time comes is harmless: the code is single-use and
+      // pairs the key inside the request, which only its sender holds.
+      const strangerSkew = this.checkClock(opened, now);
+      if (strangerSkew) {
+        return strangerSkew;
+      }
+    }
     // Remembered before the clock check: a request refused as dated too far ahead must not pass once that time comes.
-    if (!this.remember(replayKey, opened, now)) {
+    if (!this.remember(replayKey, opened, now, principal?.id ?? '')) {
       return plain(503, 'E2E_BUSY');
     }
     const skew = this.checkClock(opened, now) ?? this.checkStart(opened, lang);
@@ -231,14 +252,16 @@ export class E2eService {
     return { kind: 'sealed', body: opened.respond(401, error('E2E_CLOCK_SKEW', t('error.clockSkew'), lang), Date.now()) };
   }
 
-  /** False when the cache is full. */
-  private remember(replayKey: string, opened: OpenedRequest, now: number): boolean {
+  /** False when the cache is full, or `owner` already holds its share of the future map. */
+  private remember(replayKey: string, opened: OpenedRequest, now: number, owner: string): boolean {
     const until = opened.request.time + windowFor(opened.request.method);
     if (until > now + REPLAY_TTL_MS) {
-      if (this.future.size >= FUTURE_CAPACITY) {
+      const held = this.futurePerOwner.get(owner) ?? 0;
+      if (this.future.size >= FUTURE_CAPACITY || held >= FUTURE_PER_PRINCIPAL) {
         return false;
       }
-      this.future.set(replayKey, until);
+      this.future.set(replayKey, { until, owner });
+      this.futurePerOwner.set(owner, held + 1);
       return true;
     }
     if (this.seen.size >= REPLAY_CAPACITY) {
@@ -283,9 +306,15 @@ export class E2eService {
       this.seen.delete(key);
     }
     // Small (FUTURE_CAPACITY), so a full pass is cheap.
-    for (const [key, expires] of this.future) {
-      if (expires <= now) {
+    for (const [key, { until, owner }] of this.future) {
+      if (until <= now) {
         this.future.delete(key);
+        const held = (this.futurePerOwner.get(owner) ?? 1) - 1;
+        if (held > 0) {
+          this.futurePerOwner.set(owner, held);
+        } else {
+          this.futurePerOwner.delete(owner);
+        }
       }
     }
   }
