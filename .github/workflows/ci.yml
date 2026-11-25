@@ -6,9 +6,11 @@ on:
     tags: ['v*']
   pull_request:
 
+# Every job reads only; the publishing jobs below grant themselves packages
+# and id-token. Third-party actions are pinned by commit (the comment names the
+# release), so a moved tag cannot change what runs with those permissions.
 permissions:
   contents: read
-  packages: write
 
 jobs:
   protocol:
@@ -17,8 +19,8 @@ jobs:
       run:
         working-directory: protocol
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: npm
@@ -34,8 +36,8 @@ jobs:
       run:
         working-directory: agent
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: npm
@@ -52,8 +54,8 @@ jobs:
       run:
         working-directory: app
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: npm
@@ -67,6 +69,8 @@ jobs:
       - run: npm test
         working-directory: app/native/push
       - run: npx ng build
+      # The demo host build (demo.kubernanny.app): no pairing, no agent calls (src/environments/build-flags.ts).
+      - run: npm run build:demo
 
   relay:
     runs-on: ubuntu-latest
@@ -74,8 +78,8 @@ jobs:
       run:
         working-directory: relay
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: npm
@@ -98,11 +102,16 @@ jobs:
   chart:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: azure/setup-helm@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
       - name: Lint and validate
+        env:
+          # kubeconform v0.7.0, linux-amd64, from the release's CHECKSUMS file.
+          KUBECONFORM_SHA256: c31518ddd122663b3f3aa874cfe8178cb0988de944f29c74a0b9260920d115d3
         run: |
-          curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz | tar xz -C /usr/local/bin kubeconform
+          curl -fsSL -o kubeconform.tar.gz https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz
+          echo "$KUBECONFORM_SHA256  kubeconform.tar.gz" | sha256sum -c -
+          tar xzf kubeconform.tar.gz -C /usr/local/bin kubeconform
           helm lint deploy/helm/kubernanny
           for values in "" "--set ingress.enabled=true --set serviceMonitor.enabled=true --set rbac.allowActions=false --set notifications.ntfyUrl=https://ntfy.sh/x" "--set relay.enabled=true --set networkPolicy.enabled=true --set networkPolicy.egress.enabled=true --set networkPolicy.egress.internetHttps=false"; do
             helm template kubernanny deploy/helm/kubernanny -n kubernanny $values | kubeconform -strict -ignore-missing-schemas -summary
@@ -136,8 +145,8 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
       - name: Install
@@ -152,7 +161,7 @@ jobs:
       - run: npm test
         working-directory: e2e
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-report
           path: e2e/playwright-report
@@ -167,24 +176,27 @@ jobs:
       # Keyless signing with the workflow's own identity (Sigstore).
       id-token: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-qemu-action@v4
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Expressions go through env, never into the script text.
       - id: tags
+        env:
+          OWNER_NAME: ${{ github.repository_owner }}
         run: |
-          OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
-          if [[ '${{ github.ref }}' == refs/tags/v* ]]; then
+          OWNER=$(echo "$OWNER_NAME" | tr '[:upper:]' '[:lower:]')
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             echo "tags=ghcr.io/$OWNER/agent:${GITHUB_REF_NAME#v},ghcr.io/$OWNER/agent:latest" >> "$GITHUB_OUTPUT"
           else
-            echo "tags=ghcr.io/$OWNER/agent:$(date -u +%Y-%m-%d)-${{ github.run_number }},ghcr.io/$OWNER/agent:edge" >> "$GITHUB_OUTPUT"
+            echo "tags=ghcr.io/$OWNER/agent:$(date -u +%Y-%m-%d)-${GITHUB_RUN_NUMBER},ghcr.io/$OWNER/agent:edge" >> "$GITHUB_OUTPUT"
           fi
       - id: build
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -195,12 +207,16 @@ jobs:
           sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - uses: sigstore/cosign-installer@v3
-      # Signs the digest, not a tag: verify with
-      # cosign verify ghcr.io/kubernanny/agent@<digest> --certificate-identity-regexp 'https://github.com/kubernanny/kubernanny/' --certificate-oidc-issuer https://token.actions.githubusercontent.com
-      - run: |
-          OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
-          cosign sign --yes "ghcr.io/$OWNER/agent@${{ steps.build.outputs.digest }}"
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+      # Signs the digest, not a tag. The certificate names this workflow file and
+      # the ref it ran for; verify with
+      # cosign verify ghcr.io/kubernanny/agent@<digest> --certificate-identity-regexp '^https://github\.com/kubernanny/kubernanny/\.github/workflows/ci\.yml@refs/(tags/v.*|heads/main)$' --certificate-oidc-issuer https://token.actions.githubusercontent.com
+      - env:
+          OWNER_NAME: ${{ github.repository_owner }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          OWNER=$(echo "$OWNER_NAME" | tr '[:upper:]' '[:lower:]')
+          cosign sign --yes "ghcr.io/$OWNER/agent@$DIGEST"
 
   relay-image:
     needs: [protocol, relay]
@@ -211,24 +227,26 @@ jobs:
       packages: write
       id-token: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-qemu-action@v4
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: tags
+        env:
+          OWNER_NAME: ${{ github.repository_owner }}
         run: |
-          OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
-          if [[ '${{ github.ref }}' == refs/tags/v* ]]; then
+          OWNER=$(echo "$OWNER_NAME" | tr '[:upper:]' '[:lower:]')
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             echo "tags=ghcr.io/$OWNER/relay:${GITHUB_REF_NAME#v},ghcr.io/$OWNER/relay:latest" >> "$GITHUB_OUTPUT"
           else
             echo "tags=ghcr.io/$OWNER/relay:edge" >> "$GITHUB_OUTPUT"
           fi
       - id: build
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: relay/Dockerfile
@@ -239,10 +257,13 @@ jobs:
           sbom: true
           cache-from: type=gha,scope=relay
           cache-to: type=gha,mode=max,scope=relay
-      - uses: sigstore/cosign-installer@v3
-      - run: |
-          OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
-          cosign sign --yes "ghcr.io/$OWNER/relay@${{ steps.build.outputs.digest }}"
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+      - env:
+          OWNER_NAME: ${{ github.repository_owner }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          OWNER=$(echo "$OWNER_NAME" | tr '[:upper:]' '[:lower:]')
+          cosign sign --yes "ghcr.io/$OWNER/relay@$DIGEST"
 
   helm-release:
     needs: [image]
@@ -253,12 +274,16 @@ jobs:
       packages: write
       id-token: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: azure/setup-helm@v4
-      - uses: sigstore/cosign-installer@v3
-      - run: |
-          OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
-          echo '${{ secrets.GITHUB_TOKEN }}' | helm registry login ghcr.io -u '${{ github.actor }}' --password-stdin
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+      - env:
+          OWNER_NAME: ${{ github.repository_owner }}
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          OWNER=$(echo "$OWNER_NAME" | tr '[:upper:]' '[:lower:]')
+          echo "$REGISTRY_TOKEN" | helm registry login ghcr.io -u "$REGISTRY_USER" --password-stdin
           helm package deploy/helm/kubernanny --version "${GITHUB_REF_NAME#v}" --app-version "${GITHUB_REF_NAME#v}"
           helm push kubernanny-*.tgz "oci://ghcr.io/$OWNER/charts" 2>&1 | tee push.log
           DIGEST=$(grep -o 'sha256:[0-9a-f]*' push.log | head -1)
