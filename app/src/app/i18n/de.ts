@@ -90,6 +90,7 @@ export const de = {
       both: '{{outages}} und {{warnings}}',
     },
     subline: {
+      agent: 'Kubernanny {{version}}',
       nodes: { one: '{{count}} Node', other: '{{count}} Nodes' },
       components: { one: '{{count}} Komponente erkannt', other: '{{count}} Komponenten erkannt' },
     },
@@ -515,6 +516,8 @@ export const de = {
     save: 'Verbinden und speichern',
     agent: 'Agent',
     version: 'Version',
+    build: 'Build',
+    appVersion: 'App-Version',
     interval: 'Prüft alle',
     seconds: '{{count}} s',
     prometheus: 'Prometheus',

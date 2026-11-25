@@ -86,6 +86,7 @@ export const en: Dictionary = {
       both: '{{outages}} and {{warnings}}',
     },
     subline: {
+      agent: 'Kubernanny {{version}}',
       nodes: { one: '{{count}} node', other: '{{count}} nodes' },
       components: { one: '{{count}} component detected', other: '{{count}} components detected' },
     },
@@ -511,6 +512,8 @@ export const en: Dictionary = {
     save: 'Connect and save',
     agent: 'Agent',
     version: 'Version',
+    build: 'Build',
+    appVersion: 'App version',
     interval: 'Checks every',
     seconds: '{{count}} s',
     prometheus: 'Prometheus',

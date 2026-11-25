@@ -181,6 +181,9 @@ export interface Snapshot {
   cluster: string;
   /** Missing on agents before 0.3. */
   agentVersion?: string;
+  /** The image tag and git commit of the agent (agents from 0.5 on, CI builds only). */
+  agentBuild?: string;
+  agentCommit?: string;
   /** Set while a maintenance window holds back notifications (agents from 0.4 on). */
   maintenanceUntil?: string;
   light: Light;
@@ -383,6 +386,8 @@ export interface HistoryView {
 
 export interface AgentInfo {
   agentVersion: string;
+  agentBuild?: string;
+  agentCommit?: string;
   cluster: string;
   intervalSeconds: number;
   notifyAfterSeconds: number;
