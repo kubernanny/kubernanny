@@ -1,9 +1,21 @@
 /* Home-screen widget texts. Same wording as the app (app/src/app/i18n/en.ts). */
 "widget.name" = "Kubernanny";
-"widget.description" = "Traffic light of your clusters. Updated while the app is open.";
+"widget.description" = "All your clusters at a glance. Updated by every push and while the app is open.";
+"widget.clusterName" = "Cluster";
+"widget.clusterDescription" = "One cluster with its worst problems. Updated by every push and while the app is open.";
 "widget.empty" = "Open Kubernanny to see your clusters here.";
-"widget.stale" = "Not updated for over 30 minutes. The widget is refreshed while the app is open: tap to open it.";
+"widget.stale" = "Not updated for over 30 minutes.";
 "widget.staleShort" = "Open the app to refresh";
+"widget.staleTag" = "Not current";
+"widget.justNow" = "just now";
+"widget.noProblems" = "No open problems";
+"widget.outagesTile" = "Outages";
+"widget.warningsTile" = "Warnings";
+"widget.outageLabel" = "Outage";
+"widget.warningLabel" = "Warning";
+"widget.cluster" = "Cluster";
+"widget.chooseCluster" = "Choose cluster";
+"widget.chooseClusterHint" = "Which cluster this widget shows. Without a choice: the one in the worst state.";
 "widget.demo" = "Demo";
 "widget.asOf" = "as of %@";
 "widget.notChecked" = "Not checked yet";

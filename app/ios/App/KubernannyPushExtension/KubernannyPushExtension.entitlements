@@ -2,10 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- The App Group whose keychain access group holds the push keys; the app target needs the same (scripts/add-push-extension.rb adds it). -->
+	<!-- group.app.kubernanny.push: its keychain access group holds the push keys; the app target needs the same (scripts/add-push-extension.rb adds it).
+	     group.app.kubernanny: the widget's, where a push's cluster state is written (WidgetPushStatus.swift). -->
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.app.kubernanny.push</string>
+		<string>group.app.kubernanny</string>
 	</array>
 </dict>
 </plist>

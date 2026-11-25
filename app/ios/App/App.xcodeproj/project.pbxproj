@@ -12,6 +12,8 @@
 		2B0801D0510B1EDC971C704A /* KubernannyPushExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6DF8BB14BD4BB4949B992B88 /* KubernannyPushExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		3768F323D73C066D5D4A0DB5 /* Localizable.stringsdict in Resources */ = {isa = PBXBuildFile; fileRef = 6DE4614530C3568E2F0BD908 /* Localizable.stringsdict */; };
+		3B78C8C24C80AEE93469AC1E /* WidgetViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8051DAC31A9316D94DD15895 /* WidgetViews.swift */; };
+		401D79EA0B73EA72673F80A2 /* ClusterIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 947CA105DE4DFBC75AF1839B /* ClusterIntent.swift */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
@@ -19,6 +21,7 @@
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
+		50D90FFFC910975A508EE8D4 /* WidgetPushStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A382D4FB71C82280655A2C /* WidgetPushStatus.swift */; };
 		55DE0EBD6C8679EC8B2B9C6D /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D1235CE4F3ED1CBD58A5055B /* SwiftUI.framework */; };
 		5CA73CC1B6A662F0427557B7 /* PushCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6781E34BC5CB059E92C4B0F /* PushCrypto.swift */; };
 		69745779DFD7BDC27FD81408 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 58557FE8854EEAEED4DC6359 /* Foundation.framework */; };
@@ -78,14 +81,17 @@
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		55FFC70D46CE488F2965618A /* App.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
+		57A382D4FB71C82280655A2C /* WidgetPushStatus.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WidgetPushStatus.swift; sourceTree = "<group>"; };
 		58557FE8854EEAEED4DC6359 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		6DF8BB14BD4BB4949B992B88 /* KubernannyPushExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = KubernannyPushExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		6E28077FA52ECD197C267A8E /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		6F9E5849B543326714090B47 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		77DE9F1439088189E08EE1B0 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		8051DAC31A9316D94DD15895 /* WidgetViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WidgetViews.swift; sourceTree = "<group>"; };
 		815587D4CAF0E6E959303C30 /* KubernannyWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KubernannyWidget.swift; sourceTree = "<group>"; };
 		89F0E127DBB3A846C0CE1896 /* de */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.stringsdict; name = de; path = de.lproj/Localizable.stringsdict; sourceTree = "<group>"; };
 		8BFA10C54D6461599FFDFB3B /* WidgetData.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WidgetData.swift; sourceTree = "<group>"; };
+		947CA105DE4DFBC75AF1839B /* ClusterIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ClusterIntent.swift; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		98FA6FD80A47A404D95A229B /* en */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.stringsdict; name = en; path = en.lproj/Localizable.stringsdict; sourceTree = "<group>"; };
@@ -138,6 +144,8 @@
 				6DE4614530C3568E2F0BD908 /* Localizable.stringsdict */,
 				6E28077FA52ECD197C267A8E /* Info.plist */,
 				A88B2D13D5A4814282389E03 /* KubernannyWidget.entitlements */,
+				8051DAC31A9316D94DD15895 /* WidgetViews.swift */,
+				947CA105DE4DFBC75AF1839B /* ClusterIntent.swift */,
 			);
 			name = KubernannyWidget;
 			path = KubernannyWidget;
@@ -201,6 +209,7 @@
 				2315C1B8AB85F8E8A1F0A150 /* PushKeys.swift */,
 				77DE9F1439088189E08EE1B0 /* Info.plist */,
 				25DEFDC98BE22F17248A3FB1 /* KubernannyPushExtension.entitlements */,
+				57A382D4FB71C82280655A2C /* WidgetPushStatus.swift */,
 			);
 			name = KubernannyPushExtension;
 			path = KubernannyPushExtension;
@@ -399,6 +408,8 @@
 			files = (
 				DC847C81D357F8EFA63B745F /* KubernannyWidget.swift in Sources */,
 				B388E2F99A0D3838D7DACE12 /* WidgetData.swift in Sources */,
+				3B78C8C24C80AEE93469AC1E /* WidgetViews.swift in Sources */,
+				401D79EA0B73EA72673F80A2 /* ClusterIntent.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -418,6 +429,7 @@
 				C834F874D0600AAE2B8A2E8B /* NotificationService.swift in Sources */,
 				5CA73CC1B6A662F0427557B7 /* PushCrypto.swift in Sources */,
 				0E112BCB8F1A069805A8B418 /* PushKeys.swift in Sources */,
+				50D90FFFC910975A508EE8D4 /* WidgetPushStatus.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

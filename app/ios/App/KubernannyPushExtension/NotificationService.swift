@@ -1,4 +1,5 @@
 import UserNotifications
+import WidgetKit
 
 /// Replaces the generic alert FCM delivers ("Kubernanny: new status from a
 /// cluster") with the text the agent sealed for this phone, its title
@@ -46,6 +47,10 @@ final class NotificationService: UNNotificationServiceExtension {
             return
         }
         PushKeys.markShown(kid, sealedAt: sealedAt)
+        // The cluster's state for the home-screen widget (agents that send it; docs/PROTOCOL.md "Push status").
+        if let status = json["w"] as? [String: Any], WidgetPushStatus.apply(clusterId: entry.clusterId, status: status) {
+            WidgetCenter.shared.reloadAllTimelines()
+        }
         content.title = PushKeys.markedTitle(PushKeys.marker(), title)
         content.body = body
         content.threadIdentifier = entry.clusterId

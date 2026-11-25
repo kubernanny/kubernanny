@@ -22,7 +22,7 @@ PROJECT = File.join(ROOT, ENV.fetch('XCODEPROJ', 'App.xcodeproj'))
 NAME = 'KubernannyWidget'
 BUNDLE_ID = 'app.kubernanny.KubernannyWidget'
 GROUP = 'group.app.kubernanny'
-SOURCES = %w[KubernannyWidget.swift WidgetData.swift].freeze
+SOURCES = %w[KubernannyWidget.swift WidgetData.swift WidgetViews.swift ClusterIntent.swift].freeze
 LOCALIZED = %w[Localizable.strings Localizable.stringsdict].freeze
 LANGUAGES = %w[en de].freeze
 
@@ -106,6 +106,14 @@ unless extension
   build_file = embed.add_file_reference(extension.product_reference, true)
   build_file.settings = { 'ATTRIBUTES' => ['RemoveHeadersOnCopy'] }
   app.add_dependency(extension)
+end
+
+# Sources added after the target was made.
+ext_group = project.main_group.children.find { |g| g.respond_to?(:path) && g.path == NAME }
+SOURCES.each do |file|
+  next if extension.source_build_phase.files_references.any? { |f| f.path == file }
+  ref = ext_group.files.find { |f| f.path == file } || ext_group.new_reference(file)
+  extension.add_file_references([ref])
 end
 
 project.save

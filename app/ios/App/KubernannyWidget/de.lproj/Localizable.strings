@@ -1,9 +1,21 @@
 /* Texte des Widgets, im Wortlaut der App (app/src/app/i18n/de.ts). */
 "widget.name" = "Kubernanny";
-"widget.description" = "Ampel deiner Cluster. Aktualisiert, solange die App offen ist.";
+"widget.description" = "Alle Cluster auf einen Blick. Aktualisiert mit jeder Push-Nachricht und solange die App offen ist.";
+"widget.clusterName" = "Cluster";
+"widget.clusterDescription" = "Ein Cluster mit seinen größten Problemen. Aktualisiert mit jeder Push-Nachricht und solange die App offen ist.";
 "widget.empty" = "Öffne Kubernanny, um deine Cluster hier zu sehen.";
-"widget.stale" = "Seit über 30 Minuten nicht aktualisiert. Das Widget wird aktualisiert, solange die App offen ist: Tippen öffnet sie.";
+"widget.stale" = "Seit über 30 Minuten nicht aktualisiert.";
 "widget.staleShort" = "Zum Aktualisieren App öffnen";
+"widget.staleTag" = "Nicht aktuell";
+"widget.justNow" = "gerade eben";
+"widget.noProblems" = "Keine offenen Probleme";
+"widget.outagesTile" = "Ausfälle";
+"widget.warningsTile" = "Warnungen";
+"widget.outageLabel" = "Ausfall";
+"widget.warningLabel" = "Warnung";
+"widget.cluster" = "Cluster";
+"widget.chooseCluster" = "Cluster wählen";
+"widget.chooseClusterHint" = "Welchen Cluster dieses Widget zeigt. Ohne Auswahl: den mit dem schlechtesten Zustand.";
 "widget.demo" = "Demo";
 "widget.asOf" = "Stand %@";
 "widget.notChecked" = "Noch nicht geprüft";

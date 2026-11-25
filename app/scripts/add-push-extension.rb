@@ -7,7 +7,9 @@
 # - the Notification Service Extension target KubernannyPushExtension
 #   (ios/App/KubernannyPushExtension), embedded in the app, iOS 15;
 # - its entitlements file (App Group group.app.kubernanny.push, whose keychain
-#   access group holds the push keys);
+#   access group holds the push keys, and group.app.kubernanny, the widget's,
+#   where it writes the cluster state a push carries);
+# - sources added later (WidgetPushStatus.swift) to an extension made before;
 # - on the App target: the same App Group and aps-environment (push), merged
 #   into the entitlements file the target already uses, or a new
 #   App/App.entitlements. Other entries (the widget's App Group) stay;
@@ -23,7 +25,8 @@ ROOT = File.expand_path('../ios/App', __dir__)
 PROJECT = File.join(ROOT, ENV.fetch('XCODEPROJ', 'App.xcodeproj'))
 NAME = 'KubernannyPushExtension'
 GROUP = 'group.app.kubernanny.push'
-SOURCES = %w[NotificationService.swift PushCrypto.swift PushKeys.swift].freeze
+SOURCES = %w[NotificationService.swift PushCrypto.swift PushKeys.swift WidgetPushStatus.swift].freeze
+WIDGET_GROUP = 'group.app.kubernanny'
 
 project = Xcodeproj::Project.open(PROJECT)
 app = project.targets.find { |t| t.name == 'App' } or abort('no App target')
@@ -104,6 +107,22 @@ unless extension
   build_file = embed.add_file_reference(extension.product_reference, true)
   build_file.settings = { 'ATTRIBUTES' => ['RemoveHeadersOnCopy'] }
   app.add_dependency(extension)
+end
+
+# Sources added after the target was made.
+ext_group = project.main_group.children.find { |g| g.respond_to?(:path) && g.path == NAME }
+SOURCES.each do |file|
+  next if extension.source_build_phase.files_references.any? { |f| f.path == file }
+  ref = ext_group.files.find { |f| f.path == file } || ext_group.new_reference(file)
+  extension.add_file_references([ref])
+end
+
+# The widget's App Group: the extension writes a push's cluster state there (WidgetPushStatus.swift).
+ext_entitlements = File.join(ROOT, NAME, "#{NAME}.entitlements")
+plist = Xcodeproj::Plist.read_from_path(ext_entitlements)
+unless (plist['com.apple.security.application-groups'] || []).include?(WIDGET_GROUP)
+  plist['com.apple.security.application-groups'] = (plist['com.apple.security.application-groups'] || []) | [GROUP, WIDGET_GROUP]
+  Xcodeproj::Plist.write_to_path(plist, ext_entitlements)
 end
 
 project.save
