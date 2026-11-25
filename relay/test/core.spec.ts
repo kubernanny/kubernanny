@@ -438,6 +438,26 @@ describe('second security review (relay core)', () => {
     expect(callers.size).toBe(2);
   });
 
+  it('counts IPv6 callers per /64: rotating addresses neither gets a fresh share nor pushes other callers out', () => {
+    const limits: RelayLimits = { ...DEFAULT_LIMITS, callBurst: 10, callsPerMinute: 10, callerShare: 0.5 };
+    const callers = new CallerLimiter(limits, 256);
+    callers.charge('203.0.113.7', 1, 0);
+    // 5 calls of the /64's share of 5, each from another address of it.
+    for (let i = 0; i < 5; i++) {
+      expect(callers.allows(`2001:db8:1:2::${(i + 1).toString(16)}`, 1, 0)).toBe(true);
+      callers.charge(`2001:db8:1:2:${i}::1`, 1, 0);
+    }
+    expect(callers.allows('2001:db8:1:2:ffff:ffff:ffff:ffff', 1, 0)).toBe(false);
+    for (let i = 0; i < 1_000; i++) {
+      callers.charge(`2001:db8:1:2::${i.toString(16)}`, 1, 0);
+    }
+    // One entry for the whole /64, so the IPv4 caller is still remembered (and still has its share).
+    expect(callers.size).toBe(2);
+    expect(callers.allows('203.0.113.7', 1, 0)).toBe(true);
+    // Another /64 is another caller.
+    expect(callers.allows('2001:db8:1:3::1', 1, 0)).toBe(true);
+  });
+
   it('L4: a refused byte check leaves the call bucket untouched', async () => {
     const limits: RelayLimits = { ...DEFAULT_LIMITS, callBurst: 1, callsPerMinute: 1, bytesPerHour: 10 };
     const link = new AgentLink(socket(), limits, { now: () => 0 });

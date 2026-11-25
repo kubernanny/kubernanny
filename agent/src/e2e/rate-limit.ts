@@ -105,26 +105,5 @@ export class RecentKeys {
   }
 }
 
-/** The bucket key of a source address: IPv4 as is, IPv6 by its /64 (one host usually owns a whole /64). */
-export function sourceKey(address: string | undefined): string {
-  if (!address) {
-    return 'unknown';
-  }
-  const v4 = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address);
-  if (v4) {
-    return v4[1]!;
-  }
-  if (!address.includes(':')) {
-    return address;
-  }
-  // Expand "::" so the first four groups are the /64.
-  const [head, tail = ''] = address.toLowerCase().split('::');
-  const left = head ? head.split(':') : [];
-  const right = tail ? tail.split(':') : [];
-  if (left.length + right.length > 8) {
-    // Not a valid address (more than eight groups): one shared bucket, never an exception.
-    return 'invalid';
-  }
-  const groups = address.includes('::') ? [...left, ...Array(8 - left.length - right.length).fill('0'), ...right] : left;
-  return `${groups.slice(0, 4).join(':')}::/64`;
-}
+/** The bucket key of a source address: IPv4 as is, IPv6 by its /64. Shared with the relay. */
+export { sourceKey } from '@kubernanny/protocol';
