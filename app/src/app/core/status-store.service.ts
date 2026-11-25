@@ -1,6 +1,6 @@
 import { DestroyRef, Injectable, effect, inject, signal } from '@angular/core';
 import { App } from '@capacitor/app';
-import { AgentClient, describeError } from './agent-client.service';
+import { AgentClient, describeError, isTransient } from './agent-client.service';
 import { ClusterConfig, Snapshot } from './agent.model';
 import { ClusterStore } from './cluster-store.service';
 import { RELAY_INFO_EVERY_MS, adoptedRelay } from './relay-route';
@@ -13,6 +13,12 @@ export interface ClusterState {
 }
 
 const POLL_MS = 30_000;
+/**
+ * Quiet retries after a transient failure before the cluster is shown as
+ * unreachable: a rolling update of the agent or a dropped relay connection
+ * is over within seconds, and must not flash "offline".
+ */
+export const QUIET_RETRY_MS = [1500, 3000, 6000];
 const EMPTY: ClusterState = { snapshot: null, error: null, loading: false };
 
 /**
@@ -70,13 +76,22 @@ export class StatusStore {
   /** `force` asks the agent to run its checks now instead of answering from its last run. */
   async refresh(cluster: ClusterConfig, force = false): Promise<void> {
     this.patch(cluster.id, { loading: true });
-    try {
-      const snapshot = await this.client.status(cluster, force);
-      this.patch(cluster.id, { snapshot, error: null, loading: false });
-      void this.learnRelay(cluster);
-    } catch (err) {
-      // Keep the last snapshot: it is still the best we know, shown as stale.
-      this.patch(cluster.id, { error: describeError(err, this.language.translator()), loading: false });
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const snapshot = await this.client.status(cluster, force);
+        this.patch(cluster.id, { snapshot, error: null, loading: false });
+        void this.learnRelay(cluster);
+        return;
+      } catch (err) {
+        if (attempt < QUIET_RETRY_MS.length && isTransient(err)) {
+          // The last snapshot and its state stay as they are meanwhile.
+          await new Promise((resolve) => setTimeout(resolve, QUIET_RETRY_MS[attempt]));
+          continue;
+        }
+        // Keep the last snapshot: it is still the best we know, shown as stale.
+        this.patch(cluster.id, { error: describeError(err, this.language.translator()), loading: false });
+        return;
+      }
     }
   }
 

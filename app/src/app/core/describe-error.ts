@@ -29,6 +29,23 @@ function plainCode(err: HttpErrorResponse): string | undefined {
   }
 }
 
+/**
+ * A failure that a rolling update of the agent (or a blip on the way) causes
+ * and that goes away within seconds: no answer at all, a gateway error, the
+ * relay without its agent for a moment, the agent's own "being updated"
+ * (AGENT_HANDOVER). Polls retry these quietly before showing anything.
+ */
+export function isTransient(err: unknown): boolean {
+  if (err instanceof AgentError) {
+    return err.code === 'AGENT_HANDOVER' || err.status === 503;
+  }
+  if (err instanceof HttpErrorResponse) {
+    const code = plainCode(err);
+    return err.status === 0 || err.status === 502 || err.status === 503 || err.status === 504 || code === 'RELAY_AGENT_OFFLINE' || code === 'RELAY_TIMEOUT';
+  }
+  return err instanceof Error && err.name === 'TimeoutError';
+}
+
 /** A sentence for the person, from whatever the call threw, in the UI language. */
 export function describeError(err: unknown, tr: Translator): string {
   if (err instanceof InsecureTransportError) {
