@@ -163,7 +163,7 @@ No system is 100 % secure. These are the risks that remain:
 
 - **Requests are not forward-secret against the agent's key** (see PROTOCOL.md, "Limits"). Answers are. Requests carry paths and action names, no cluster data.
 - **Device private keys** live in the iOS Keychain and the Android Keystore, marked "this device only": not synced through iCloud Keychain and not restored onto another phone from a backup. In the browser (the web UI) they sit in the origin's storage, guarded by the CSP; anyone with access to that browser profile has the key.
-- **Logs of broken pods** are readable with any paired device. If your applications log secrets, restrict who gets a device, or set `rbac.allowActions: false` and drop `pods/log` from a custom role.
+- **Logs of broken pods** are readable with any paired device, also with `rbac.allowActions: false` (reading a log is no write). If your applications log secrets, restrict who gets a device, or set `actions.disabled: [logs]`: the chart then grants no `pods/log` and `GET /api/logs` answers 403 ([PERMISSIONS.md](PERMISSIONS.md)). With the plain manifest (`deploy/install.yaml`), remove the `pods/log` rule and set `DISABLED_ACTIONS=logs`.
 - **Custom URL schemes can be claimed by other apps.** A malicious app registered for `kubernanny://` could receive the pairing link and pair itself; it would show in the device list and the log, and can be revoked. Verified app links will replace the scheme with the native apps.
 - **Manual pairing without the QR code** trusts TLS (or the port-forward) once, to fetch the agent key. Compare the fingerprint with the log if in doubt.
 - **The agent is exposed to whoever can reach it.** Authentication happens before anything is dispatched, but an agent reachable from the internet is still a target for the next bug in Node or express. Prefer a VPN or the relay over a public ingress.
@@ -178,4 +178,5 @@ No system is 100 % secure. These are the risks that remain:
 - [ ] `networkPolicy.enabled: true` with the right ingress-controller and monitoring namespaces
 - [ ] Notifications over HTTPS; `notifications.detail: minimal` for public services
 - [ ] `rbac.allowActions: false` if you only want to look
+- [ ] `actions.disabled: [logs]` if your applications may log secrets
 - [ ] Revoke devices you no longer use (settings → Paired devices, or `node dist/cli.js revoke <id>`)

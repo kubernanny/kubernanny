@@ -50,7 +50,7 @@ What it **cannot** do in any switch combination (a test enforces it): read Secre
 
 **Every channel** (app, pairing, Kubernetes API, monitoring, notifications, metrics, logs) with its protection and residual risks: [COMMUNICATION.md](COMMUNICATION.md).
 
-**Logs of pods with an issue** are readable by every paired device. They can contain secrets your application logs. If that matters, restrict who may use the app, or set `rbac.allowActions: false` and remove `pods/log` from a custom ClusterRole.
+**Logs of pods with an issue** are readable by every paired device. They can contain secrets your application logs. `rbac.allowActions: false` does not change that (reading a log is no write). If it matters, restrict who may use the app, or set `actions.disabled: [logs]`: the chart then grants no `pods/log` and the logs route answers 403.
 
 ## Home-screen widgets
 
