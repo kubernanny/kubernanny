@@ -53,6 +53,10 @@ export class StatusService {
   /** The watches behind the inventory; null where the client cannot watch (demo, tests). */
   readonly cache: ClusterCache | null;
   private earlyTimer: ReturnType<typeof setTimeout> | null = null;
+  /** When the pending early run fires; null without one. */
+  private earlyAt: number | null = null;
+  /** When the interval timer was started: its ticks are this plus whole intervals. */
+  private intervalSince: number | null = null;
   private lastRunStarted = 0;
   private stopped = false;
   /** True once the first run has finished, good or failed: what /readyz waits for. */
@@ -88,6 +92,7 @@ export class StatusService {
       if (!this.stopped) {
         void this.refresh();
         this.timer = setInterval(() => void this.refresh(), this.config.intervalSeconds * 1000);
+        this.intervalSince = Date.now();
       }
     });
   }
@@ -98,6 +103,7 @@ export class StatusService {
     if (this.earlyTimer) {
       clearTimeout(this.earlyTimer);
       this.earlyTimer = null;
+      this.earlyAt = null;
     }
     this.cache?.stop();
   }
@@ -114,8 +120,10 @@ export class StatusService {
       return;
     }
     const wait = Math.max(EARLY_RUN_DEBOUNCE_MS, this.lastRunStarted + EARLY_RUN_MIN_GAP_MS - Date.now());
+    this.earlyAt = Date.now() + wait;
     this.earlyTimer = setTimeout(() => {
       this.earlyTimer = null;
+      this.earlyAt = null;
       void this.refresh();
     }, wait);
     this.earlyTimer.unref?.();
@@ -144,7 +152,13 @@ export class StatusService {
   }
 
   snapshot(): Snapshot {
-    return this.snapshotValue;
+    const next = this.nextCheckAt(Date.now());
+    return next === null ? this.snapshotValue : { ...this.snapshotValue, nextCheckAt: new Date(next).toISOString() };
+  }
+
+  /** The next scheduled run in ms: the next interval tick, or a pending early run if that comes first. */
+  nextCheckAt(now: number): number | null {
+    return this.stopped ? null : nextRunAt(now, this.intervalSince, this.config.intervalSeconds * 1000, this.earlyAt);
   }
 
   state(): { inv: Inventory; detected: Detected[]; data: RunData; prom: Prometheus | null } {
@@ -336,4 +350,17 @@ export class StatusService {
       this.historyBuffer.splice(0, this.historyBuffer.length - keep);
     }
   }
+}
+
+/**
+ * The next run: the interval timer's next tick after `now` (it ticks at
+ * `since` plus whole intervals), or a pending early run when that is sooner.
+ * Null before the timer runs and without an early run.
+ */
+export function nextRunAt(now: number, since: number | null, intervalMs: number, earlyAt: number | null): number | null {
+  if (since === null) {
+    return earlyAt;
+  }
+  const tick = since + Math.max(1, Math.ceil((now - since) / intervalMs + 1e-9)) * intervalMs;
+  return earlyAt !== null ? Math.min(earlyAt, tick) : tick;
 }
