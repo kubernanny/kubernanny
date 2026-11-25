@@ -1,35 +1,45 @@
 Ist mein Cluster okay, und wenn nicht, was genau ist kaputt?
 
-Kubernanny beantwortet genau diese Frage für selbst gehostetes Kubernetes. Ein kleiner Agent in deinem Cluster erkennt, was dort läuft (Longhorn, Argo CD, cert-manager, CloudNativePG, Prometheus, Loki, kured und rund 70 weitere), prüft jedes davon so, wie du es von Hand tun würdest, und zeigt pro Cluster eine Ampel. Darunter steht nur, was gerade kaputt ist, warum, und die eine Aktion, die meistens hilft.
+Kubernanny beantwortet genau diese Frage für selbst gehostetes Kubernetes. Ein kleiner Agent in deinem Cluster erkennt, was dort läuft (Longhorn, Argo CD, cert-manager, CloudNativePG, Prometheus, Loki, kured und rund 70 weitere), prüft jedes davon so, wie du es von Hand tun würdest, und zeigt die Ampel jedes Clusters im Auge der Nanny. Darunter steht nur, was gerade kaputt ist, warum, und was meistens hilft.
 
-Gemacht für den Moment, in dem um 4:10 Uhr das Handy brummt, oder für den Blick vor dem Schlafengehen. Kein weiterer Cluster-Browser, sondern eine klare Antwort.
+Gemacht für den Moment, in dem um 4:10 Uhr das Handy brummt. Kein weiterer Cluster-Browser, sondern eine klare Antwort.
 
 WAS GEPRÜFT WIRD
 • Nodes: NotReady, Druck, RAM und Platte. Geplante kured-Neustarts sind eine Warnung, kein Alarm.
-• etcd: Mitglieder, Quorum, WAL-fsync, Leader-Wechsel
+• etcd: Mitglieder, Quorum, Snapshots
 • Workloads: CrashLoopBackOff mit den Logs des abgestürzten Laufs, hängende Rollouts, fehlgeschlagene CronJobs
 • Volumes: Pending, Lost, fast voll
-• Longhorn, cert-manager, Argo CD, CloudNativePG, Prometheus und Alertmanager, Grafana, Loki, Velero, Flux und mehr
-• Dazu Nodes, Workloads, Volumes, Ingress-Zertifikate, Events und Verläufe über bis zu sieben Tage
+• Die Standard-Alerts der Community-Regelwerke, fertig eingebaut: Latenz zwischen den etcd-Mitgliedern, fsync- und Commit-Zeiten, Dateisysteme und Volumes, die bald voll laufen, ablaufende Zertifikate, DNS-Fehler und ob die reservierten Ressourcen noch reichen, wenn der größte Node ausfällt. Die meisten brauchen Prometheus.
+
+DETAILS, WENN DU GENAUER HINSCHAUST
+• CPU und RAM pro Node und pro Workload: genutzt, reserviert (Requests) und Limit
+• Neustarts mit Grund, etwa OOMKilled am Speicherlimit
+• Jeder Dienst im Detail, etwa CloudNativePG-Cluster mit Primary und Backups, Longhorn-Volumes mit ihren Replicas, Argo-CD-Apps, Zertifikate, Prometheus-Targets, Alerts und Silences aus dem Alertmanager
+• Bereit zum Sync: Argo-CD-Apps mit manuellem Sync und einer Änderung im Repo, samt Revision, Images und Ressourcen, die sich ändern
+• Backups von CloudNativePG, Longhorn, etcd und Velero auf einen Blick, auch, was noch keins hat
+• Die letzten sieben Tage: jeder Vorfall mit Beginn und Dauer, dazu Verläufe für CPU, RAM, Netz und etcd
+• Widgets mit der Ampel jedes Clusters
 
 AKTIONEN, ABER SICHER
-Genau vier, und nur bei einem offenen Problem: Sync und Hard Refresh einer Argo-CD-App, Neustart eines Workloads, ein CloudNativePG-Backup starten. Der Agent nimmt das Ziel aus seiner eigenen Prüfung, nie aus der App. Löschen kann die App nichts, und auf Wunsch liest der Agent nur.
+Vier, und nur bei einem offenen Problem oder einer App, die bereit zum Sync ist: Sync und Neu einlesen einer Argo-CD-App, Neustart eines Workloads, ein CloudNativePG-Backup starten. Der Agent nimmt das Ziel aus seiner eigenen Prüfung, nie aus der App. Löschen kann die App nichts. Rollbacks von Argo-CD-Apps gibt es nur, wenn du sie einschaltest. Auf Wunsch liest der Agent nur.
 
 BENACHRICHTIGUNGEN
-Der Agent meldet Probleme selbst über ntfy, Discord, Slack, Gotify oder einen Webhook, sobald sie fünf Minuten bestehen.
+Der Agent meldet Probleme selbst, sobald sie fünf Minuten bestehen, noch einmal, wenn sie kritisch werden, und wenn sie behoben sind:
+• als Push direkt an die App, Ende-zu-Ende verschlüsselt: Weder das Relay noch Google oder Apple können ihn lesen. Jeder echte Push beginnt mit deinem Zeichen, das nur auf deinem Gerät liegt. Dafür braucht der Agent das optionale Relay, das öffentliche oder dein eigenes.
+• oder über ntfy, Discord, Slack, Gotify oder einen Webhook.
+Bekannte Probleme schaltest du bis zu einer Woche stumm, ein Wartungsfenster hält Benachrichtigungen zurück.
 
 PRIVAT VON GRUND AUF
-• Ende-zu-Ende verschlüsselt: Jeder Aufruf zwischen App und Agent ist ein Noise-Handshake mit dem Schlüssel deines Geräts. Ingress, Proxy oder WLAN sehen nur Chiffretext. Deshalb reicht auch einfaches HTTP im LAN oder VPN.
-• Kein Konto, kein Server von uns, kein Tracking, keine Werbung.
-• Der private Schlüssel deines Geräts verlässt es nie. Ein verlorenes Handy sperrst du mit einem Tipp.
+• Ende-zu-Ende verschlüsselt mit Noise und dem Schlüssel deines Geräts. Ingress, Proxy, Relay oder WLAN sehen nur Chiffretext. Deshalb reicht im LAN oder VPN auch einfaches HTTP.
+• Kein Konto, kein Tracking, keine Werbung. Ohne Relay und Push spricht die App nur mit deinem Agent. Mit ihnen laufen versiegelte Nachrichten über das Relay und Googles Firebase Cloud Messaging.
+• Der private Schlüssel deines Geräts verlässt es nie, ein verlorenes Handy sperrst du mit einem Tipp.
 
 SO GEHT ES LOS
 1. Den Agent per Helm-Chart oder kubectl apply installieren.
-2. Im Log des Agents steht ein QR-Code.
-3. Mit der Kamera scannen. Fertig.
+2. Den QR-Code aus dem Log des Agents mit der Kamera scannen. Fertig.
 
 Noch kein Cluster zur Hand? Die eingebaute Demo zeigt drei erfundene Cluster, je einen pro Ampelfarbe.
 
-Open Source (Apache-2.0) und kostenlos, ohne Abo und ohne Pro-Version. Quellcode und Anleitung: github.com/kubernanny/kubernanny
+Open Source (Apache-2.0) und kostenlos, ohne Abo und ohne Pro-Version: github.com/kubernanny/kubernanny
 
 Kubernanny braucht den Kubernanny-Agent in deinem Cluster. Kubernetes ist eine Marke der Linux Foundation; Kubernanny ist ein unabhängiges Projekt.

@@ -1,1 +1,1 @@
-A traffic light for your self-hosted Kubernetes: what is broken, why, and what fixes it. Open source, free, no account, end-to-end encrypted.
+A traffic light for your self-hosted Kubernetes: what is broken, why, and what fixes it. Push straight to your phone, end-to-end encrypted. Open source, no account.

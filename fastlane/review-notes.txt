@@ -1,12 +1,15 @@
-Kubernanny shows the health of a self-hosted Kubernetes cluster. It talks only to the Kubernanny agent that the user installs in their own cluster. There is no backend of ours, no account and no sign-in, so no demo account is needed.
+Kubernanny shows the health of a self-hosted Kubernetes cluster. It talks only to the Kubernanny agent that the user installs in their own cluster. There is no account and no sign-in, so no demo account is needed.
 
 HOW TO REVIEW WITHOUT A CLUSTER
-On the start screen, tap the demo button ("Erst mal die Demo ansehen", German for "Try the demo first"). It opens three invented clusters built into the app: one red (outages), one yellow (warnings), one green. Every screen of the app is reachable there: the overview with the problems and their cause and action, services, nodes, workloads, storage, network, events and settings. Actions in the demo are simulated; nothing leaves the device.
+On the start screen, tap the demo button: "Try the demo first" when the device is set to English, "Erst mal die Demo ansehen" when it is set to German. It opens three invented clusters built into the app: one red (outages), one yellow (warnings), one green. Every screen of the app is reachable there: the overview with the problems and their cause and action, services with their detail sheets, nodes, workloads, storage, backups, network, events and settings. Actions in the demo are simulated; nothing leaves the device.
+
+PUSH NOTIFICATIONS
+Push is optional and off until the user turns it on for a paired cluster (cluster settings, "Push to this device"). The app asks for notification permission only then, never at start. Push needs a real agent in a cluster, configured to use a relay, so it is not part of the built-in demo and the option is not shown there. When it is on, the agent seals every message for this one device (end-to-end encrypted); the relay and Firebase Cloud Messaging / APNs only carry ciphertext, and the Notification Service Extension opens it on the device. The device's FCM token is used only to deliver these notifications. The app contains no analytics and no advertising.
 
 WITH A REAL CLUSTER
-The agent is installed with Helm or kubectl (https://github.com/kubernanny/kubernanny). Its log shows a QR code; scanning it with the camera opens the app through the kubernanny:// URL scheme and pairs the device.
+The agent is installed with Helm or kubectl (https://github.com/kubernanny/kubernanny). Its log shows a QR code; scanning it with the camera opens the app through the kubernanny:// URL scheme, which shows the cluster's name, address and key and pairs the device after a tap.
 
 NETWORK AND ENCRYPTION
-The app connects only to the user's own agent, often by plain HTTP inside a home network or VPN, where certificates are rare. Every request and answer is end-to-end encrypted and authenticated with the Noise protocol: the device has its own key pair, and the agent's public key is pinned at pairing. The transport therefore only ever carries ciphertext. This is why the app sets NSAllowsArbitraryLoadsInWebContent (all requests go through the web view; the app has no other networking) and asks for local network access.
+The app connects only to the user's own agent, often by plain HTTP inside a home network or VPN, where certificates are rare, or through an optional relay that only passes sealed messages along. Every request and answer is end-to-end encrypted and authenticated with the Noise protocol: the device has its own key pair, and the agent's public key is pinned at pairing. The transport therefore only ever carries ciphertext. This is why the app sets NSAllowsArbitraryLoadsInWebContent (all requests to the agent go through the web view; the app has no other networking apart from registering for push notifications) and asks for local network access.
 
 The app is open source under the Apache-2.0 licence: https://github.com/kubernanny/kubernanny

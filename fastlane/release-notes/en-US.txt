@@ -1,1 +1,1 @@
-First release of the app.
+The first version in the store: the traffic light of your clusters and only what is broken, with cause and action. Plus CPU and RAM per node and workload, every service in detail, backups, the last seven days, Argo CD apps ready to sync, and push straight to your phone, end-to-end encrypted.
