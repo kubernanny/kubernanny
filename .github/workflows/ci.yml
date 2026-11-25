@@ -63,6 +63,9 @@ jobs:
       - run: npm ci
       - run: npx ng test --watch=false
       - run: npm run test:scripts
+      # The Java copy of the push decryption, against protocol/test/push-vectors.json (runner JDK).
+      - run: npm test
+        working-directory: app/native/push
       - run: npx ng build
 
   relay:
@@ -115,6 +118,20 @@ jobs:
           render --set 'actions.disabled={argocd-sync}' | grep -q '"patch"'
           ! render --set rbac.allowActions=false | grep -Eq '"(patch|create)"'
           ! render --set 'actions.disabled={logs}' | grep -q 'pods/log'
+          # vulnerabilities.allowAccept: false must reach the agent (it then refuses and ignores acceptances).
+          ! render | grep -q 'VULN_ACCEPT'
+          render --set vulnerabilities.allowAccept=false | grep -A1 'name: VULN_ACCEPT' | grep -q '"off"'
+          # notifications.appPush.enabled: false must reach the agent as APP_PUSH=off.
+          ! render | grep -q 'APP_PUSH'
+          render --set notifications.appPush.enabled=false | grep -A1 'name: APP_PUSH' | grep -q '"off"'
+          render | grep -q 'ceph.rook.io'
+          ! render --set 'checks.disabled={rook-ceph,kyverno,gatekeeper}' | grep -Eq 'ceph.rook.io|kyverno.io|wgpolicyk8s.io|gatekeeper.sh'
+          # image-updates: off unless enabled, and no registry egress once checks.disabled names it.
+          np() { render --set networkPolicy.enabled=true --set networkPolicy.egress.enabled=true --set networkPolicy.egress.internetHttps=false "$@"; }
+          ! render | grep -q 'image-updates'
+          np --set imageUpdates.enabled=true | grep -q 'image-updates module'
+          np --set imageUpdates.enabled=true | grep -q 'value: "image-updates"'
+          ! np --set imageUpdates.enabled=true --set 'checks.disabled={image-updates}' | grep -q 'image-updates module'
 
   e2e:
     runs-on: ubuntu-latest

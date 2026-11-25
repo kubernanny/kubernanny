@@ -3,6 +3,12 @@ dist/
 coverage/
 .angular/
 scripts/screenshots/raw/
+scripts/store-screenshots/raw/
+# Store screenshots: about 50 MB, rendered by `npm run store:shots`, never committed.
+# Play's icon.png and featureGraphic.png next to them stay committed.
+/fastlane/screenshots/ios/
+/fastlane/screenshots/android/*/images/phoneScreenshots/
+/fastlane/screenshots/android/*/images/tenInchScreenshots/
 *.tsbuildinfo
 # fastlane: generated, never committed. Store credentials live in
 # ~/.config/kubernanny-store/ (docs/RELEASING.md), never in the repo.
@@ -22,3 +28,11 @@ test-results/
 playwright-report/
 .wrangler/
 .DS_Store
+# Firebase config for native push (docs/NOTIFICATIONS.md, "Native push"): per
+# build, never committed. Builds without them have no push and run as before.
+google-services.json
+GoogleService-Info.plist
+# Service account keys of a relay with push.
+*firebase-adminsdk*.json
+fcm-service-account*.json
+/app/native/push/build/

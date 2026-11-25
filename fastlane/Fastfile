@@ -63,7 +63,22 @@ end
 
 # The web app the native shells load. `cap sync` copies it and the plugins.
 def build_web(platform)
+  copy_firebase_config(platform)
   sh("cd #{APP} && npx ng build && npx cap sync #{platform}")
+end
+
+# Native push needs the Firebase config of the project the relay's service
+# account belongs to (docs/NOTIFICATIONS.md, "Native push"). It is never in
+# the repository: taken from the store directory when it is there, else the
+# build goes on without push.
+def copy_firebase_config(platform)
+  name, target = platform == 'ios' ? ['GoogleService-Info.plist', 'ios/App/App'] : ['google-services.json', 'android/app']
+  source = File.join(STORE_DIR, name)
+  if File.exist?(source)
+    FileUtils.cp(source, File.join(APP, target, name))
+  else
+    UI.important("No #{source}: this #{platform} build has no native push")
+  end
 end
 
 # The release notes of this version, one file per locale, written by hand
