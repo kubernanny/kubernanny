@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { Light } from '../core/agent.model';
 
 /**
@@ -13,6 +13,10 @@ import { Light } from '../core/agent.model';
   template: `
     <svg viewBox="0 0 440 210" role="img" [attr.aria-label]="label()" [class]="'eye ' + light()" [class.checking]="checking()">
       <circle class="glow" cx="320" cy="105" r="118" />
+      @if (progress() !== null) {
+        <circle class="ring-track" cx="322" cy="105" r="104" />
+        <circle class="ring" cx="322" cy="105" r="104" pathLength="100" [attr.stroke-dasharray]="ringDash()" />
+      }
       <path class="bridge" d="M196 99 Q220 83 244 99" />
       <circle class="lens" cx="118" cy="105" r="82" />
       <circle class="lens" cx="322" cy="105" r="82" />
@@ -79,6 +83,24 @@ import { Light } from '../core/agent.model';
       stroke: var(--mute);
       stroke-width: 8;
     }
+    .ring-track,
+    .ring {
+      fill: none;
+      stroke-width: 7;
+    }
+    .ring-track {
+      stroke: color-mix(in srgb, var(--eye-light) 18%, transparent);
+    }
+    .ring {
+      stroke: var(--eye-light);
+      stroke-linecap: round;
+      transform: rotate(-90deg);
+      transform-origin: 322px 105px;
+      transition: stroke-dasharray 1s linear;
+    }
+    .checking .ring {
+      transition: none;
+    }
     .checking .glow {
       animation: breathe 2.4s ease-in-out infinite;
     }
@@ -97,6 +119,9 @@ import { Light } from '../core/agent.model';
       .checking .glow {
         animation: none;
       }
+      .ring {
+        transition: none;
+      }
     }
   `,
 })
@@ -105,4 +130,7 @@ export class NannyEye {
   readonly label = input('');
   /** A check runs right now: the light breathes. */
   readonly checking = input(false);
+  /** 0..1 of the way to the next scheduled check: a thin ring around the right lens fills; null for none. */
+  readonly progress = input<number | null>(null);
+  readonly ringDash = computed(() => `${Math.round((this.checking() ? 0 : (this.progress() ?? 0)) * 1000) / 10} 100`);
 }

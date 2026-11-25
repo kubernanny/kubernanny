@@ -78,6 +78,47 @@ app-nanny-eye {
   gap: 0.3rem 1rem;
 }
 
+/* The countdown line and the eye check now when tapped; they look like what they are, not like buttons. */
+.as-link,
+.eye-button {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+.as-link {
+  color: var(--mute);
+}
+
+.as-link:hover:not(:disabled) {
+  color: var(--ink-2);
+}
+
+.eye-button {
+  flex: none;
+  border-radius: 999px;
+  color: inherit;
+}
+
+.eye-button:focus-visible,
+.as-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .tabs {
   position: sticky;
   top: 0;
@@ -146,10 +187,13 @@ ion-segment-button {
     display: contents;
   }
 
-  .hero.compact app-nanny-eye {
-    --eye-width: 48px;
+  .hero.compact .eye-button {
     grid-column: 2;
     grid-row: 1 / span 2;
+  }
+
+  .hero.compact app-nanny-eye {
+    --eye-width: 48px;
   }
 
   .hero.compact .headline {

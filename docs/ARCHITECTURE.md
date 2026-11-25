@@ -91,7 +91,7 @@ agent/src
 
 ### One run
 
-`StatusService` runs every `CHECK_INTERVAL_SECONDS` (60), on `POST /api/status/refresh`, and 3 s after a watched change that can open or close an issue (a pod into CrashLoopBackOff or an image pull error, a node condition changing, a workload losing or regaining its replicas, a PVC phase, a failed job), at most every 15 s, so the app sees it within seconds. Concurrent triggers share one run. Notifications keep their own rules (`NOTIFY_AFTER_SECONDS`, each change sent once), so an early run never sends more.
+`StatusService` runs every `CHECK_INTERVAL_SECONDS` (60), on `POST /api/status/refresh`, and 3 s after a watched change that can open or close an issue (a pod into CrashLoopBackOff or an image pull error, a node condition changing, a workload losing or regaining its replicas, a PVC phase, a failed job), at most every 15 s, so the app sees it within seconds. Concurrent triggers share one run. Every status answer carries `nextCheckAt`, the next interval tick or the pending early run if that comes first (`nextRunAt`), which the app counts down to. Notifications keep their own rules (`NOTIFY_AFTER_SECONDS`, each change sent once), so an early run never sends more.
 
 ```mermaid
 sequenceDiagram
@@ -329,6 +329,8 @@ flowchart TB
 ```
 
 **View models, not template logic.** Every screen derives its display values in one `computed()` (`buildClusterView`, `nodeCards`, `workloadGroups`, `volumeRows`, `hostRows`). Templates only read properties; there are no getters or method calls in bindings. The view-model functions are pure and carry the app's unit tests.
+
+**Countdown**: the hero shows "Geprüft vor 12 s · nächste in 48 s" and a ring around the eye's right lens that fills towards `nextCheckAt` (`cluster/countdown.ts`), driven by one one-second timer (five seconds with reduced motion) that stops while the page is hidden; tapping the eye or the line checks at once. Agents without `nextCheckAt` get the line without "nächste" and no ring.
 
 **Polling** stops when the app goes to the background or the tab is hidden, and resumes on return; push takes over in between. A cluster that stops answering keeps its last snapshot, greyed out, with the reason ("Agent nicht erreichbar. Bist du im VPN?").
 

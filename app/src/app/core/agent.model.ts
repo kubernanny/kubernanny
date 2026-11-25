@@ -167,6 +167,8 @@ export interface Snapshot {
   light: Light;
   score: number;
   checkedAt: string | null;
+  /** When the agent runs its next scheduled check (agents from 0.5 on); without it the app shows no countdown. */
+  nextCheckAt?: string;
   durationMs: number | null;
   kubernetes: { version?: string; distribution: string } | null;
   overview: Overview | null;

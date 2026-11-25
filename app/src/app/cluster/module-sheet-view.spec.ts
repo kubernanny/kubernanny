@@ -100,3 +100,23 @@ describe('resource bar', () => {
     expect(resourceBarView({ kind: 'cpu', used: 400, capacity: 4000, limit: 0, withoutLimit: 3 }, 'CPU', de).legend.at(-1)).toEqual({ kind: 'limit', text: 'kein Limit', extra: '+ 3 Pods ohne Limit' });
   });
 });
+
+describe('countdown to the next check', () => {
+  it('says how long ago and how long until, and fills the ring', async () => {
+    const { countdownView } = await import('./countdown');
+    const at = Date.parse('2026-11-25T10:00:00Z');
+    const s = { checkedAt: new Date(at).toISOString(), nextCheckAt: new Date(at + 60_000).toISOString() };
+    const v = countdownView(s, at + 12_000, de)!;
+    expect(v.text).toBe('Geprüft vor 12 s · nächste in 48 s');
+    expect(v.progress).toBeCloseTo(0.2);
+    expect(v.label).toMatch(/^Jetzt prüfen\. Die nächste Prüfung ist um \d\d:\d\d\.$/);
+    expect(countdownView(s, at + 13_000, de, 5000)!.progress).toBeCloseTo(10 / 60);
+    expect(countdownView(s, at + 61_000, de)!.text).toBe('Geprüft vor 1 min · nächste gleich');
+  });
+
+  it('shows no ring and no "next" for an agent that does not say when', async () => {
+    const { countdownView } = await import('./countdown');
+    const v = countdownView({ checkedAt: '2026-11-25T10:00:00Z' }, Date.parse('2026-11-25T10:03:00Z'), translatorFor('en'))!;
+    expect([v.text, v.progress]).toEqual(['Checked 3 min ago', null]);
+  });
+});
