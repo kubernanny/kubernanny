@@ -193,6 +193,8 @@ Every screen of Kubernanny, taken from the built-in demo clusters (`DEMO=broken`
 <tr>
 <td valign="top" width="50%"><img src="screenshots/45-desktop-clusters.png" alt="Desktop: cluster list"><br><sub>Desktop: cluster list</sub></td>
 <td valign="top" width="50%"><img src="screenshots/46-desktop-overview.png" alt="Desktop: vital signs stay on the left"><br><sub>Desktop: vital signs stay on the left</sub></td>
+<td valign="top" width="33%"><img src="screenshots/85-desktop-1920-overview.png" alt="The rail at 1920 px: counts in a row, CPU and RAM with a bar per node"><br><sub>The rail at 1920 px: counts in a row, CPU and RAM with a bar per node</sub></td>
+<td valign="top" width="33%"><img src="screenshots/86-hero-ring.png" alt="The eye with the countdown ring to the next check"><br><sub>The eye with the countdown ring to the next check</sub></td>
 </tr>
 <tr>
 <td valign="top" width="50%"><img src="screenshots/47-desktop-charts.png" alt="Desktop: history"><br><sub>Desktop: history</sub></td>
@@ -224,5 +226,14 @@ Every screen of Kubernanny, taken from the built-in demo clusters (`DEMO=broken`
 </tr>
 <tr>
 <td valign="top" width="50%"><img src="screenshots/58-terminal-api.png" alt="The status API"><br><sub>The status API</sub></td>
+</tr>
+</table>
+
+## Large text
+
+<table>
+<tr>
+<td valign="top" width="33%"><img src="screenshots/87-phone-23px-overview.png" alt="Overview at a 23 px root font"><br><sub>Overview at a 23 px root font</sub></td>
+<td valign="top" width="33%"><img src="screenshots/88-phone-23px-nodes.png" alt="Nodes at a 23 px root font"><br><sub>Nodes at a 23 px root font</sub></td>
 </tr>
 </table>
