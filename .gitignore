@@ -28,6 +28,10 @@ test-results/
 playwright-report/
 .wrangler/
 .DS_Store
+# Editor settings.
+.idea/
+.vscode/
+*.iml
 # Firebase config for native push (docs/NOTIFICATIONS.md, "Native push"): per
 # build, never committed. Builds without them have no push and run as before.
 google-services.json
@@ -35,5 +39,8 @@ GoogleService-Info.plist
 # Service account keys of a relay with push.
 *firebase-adminsdk*.json
 fcm-service-account*.json
-/app/native/push/build/
+# Gradle and Xcode output of the native plugins (push, widget bridge, ...).
+/app/native/*/build/
+/app/native/*/android/build/
+/app/native/*/ios/build/
 agent/bundle/
