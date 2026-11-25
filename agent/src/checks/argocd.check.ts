@@ -2,7 +2,8 @@ import { allWorkloads, readiness } from '../discovery/discovery';
 import { raw, rawOr, t } from '../i18n/text';
 import type { Inventory } from '../inventory/inventory';
 import type { ArgoHistoryEntry, ArgoSource } from './argocd-rollback';
-import { Issue, IssueAction, ObjectMeta, WorkloadKind } from './types';
+import { lastSyncAt, PENDING_HINT_DAYS } from './argocd-pending';
+import { ageText, Issue, IssueAction, ObjectMeta, WorkloadKind } from './types';
 
 interface AppResource {
   kind: string;
@@ -10,6 +11,8 @@ interface AppResource {
   namespace?: string;
   status?: string;
   health?: { status?: string; message?: string };
+  /** In the cluster, no longer in Git: a sync with pruning removes it. */
+  requiresPruning?: boolean;
 }
 
 /**
@@ -32,7 +35,7 @@ export interface ArgoApplication {
     history?: ArgoHistoryEntry[];
     sync?: { status?: string; revision?: string };
     health?: { status?: string; message?: string };
-    operationState?: { phase?: string; message?: string };
+    operationState?: { phase?: string; message?: string; finishedAt?: string; syncResult?: { revision?: string } };
     resources?: AppResource[];
     conditions?: { type: string; message?: string }[];
   };
@@ -76,7 +79,7 @@ export function restartTargets(app: ArgoApplication, broken: AppResource[], inv:
 }
 
 /** `inv`: the agent's inventory, the only source of restart targets; without it no restart is offered. */
-export function evaluateArgoApps(apps: ArgoApplication[], inv?: Inventory): Issue[] {
+export function evaluateArgoApps(apps: ArgoApplication[], inv?: Inventory, now: Date = new Date()): Issue[] {
   const issues: Issue[] = [];
   for (const app of apps) {
     const ns = app.metadata.namespace ?? 'argocd';
@@ -124,19 +127,26 @@ export function evaluateArgoApps(apps: ArgoApplication[], inv?: Inventory): Issu
         actions: syncActions,
       });
     } else if (sync === 'OutOfSync') {
-      // Manual sync: OutOfSync is the normal state between a commit and the
-      // sync someone chooses to run. Automated: Argo should have fixed it
-      // within minutes, so a sync is stuck or something edits the cluster
-      // behind Git's back.
+      // Automated: Argo should have fixed it within minutes, so a sync is
+      // stuck or something edits the cluster behind Git's back. Manual: the
+      // normal state between a commit and the sync someone chooses to run,
+      // listed as "ready to sync" (argocd-pending.ts), not as an issue; only
+      // after PENDING_HINT_DAYS without any sync a hint says it waits long.
       const automated = isAutomated(app);
-      issues.push({
-        id: `${id}/sync`,
-        check: 'argocd',
-        severity: automated ? 'warning' : 'info',
-        title: automated ? t('argocd.drift.title', { app: name }) : t('argocd.pending.title', { app: name }),
-        cause: automated ? t('argocd.drift.cause') : t('argocd.pending.cause'),
-        actions: syncActions,
-      });
+      const last = Date.parse(lastSyncAt(app) ?? '');
+      const waited = Number.isFinite(last) ? now.getTime() - last : null;
+      if (automated) {
+        issues.push({ id: `${id}/sync`, check: 'argocd', severity: 'warning', title: t('argocd.drift.title', { app: name }), cause: t('argocd.drift.cause'), actions: syncActions });
+      } else if (health !== 'Degraded' && health !== 'Missing' && waited !== null && waited > PENDING_HINT_DAYS * 86_400_000) {
+        issues.push({
+          id: `${id}/sync`,
+          check: 'argocd',
+          severity: 'info',
+          title: t('argocd.pending.title', { app: name }),
+          cause: t('argocd.pending.longCause', { age: ageText(waited) }),
+          actions: syncActions,
+        });
+      }
     }
 
     const comparisonError = app.status?.conditions?.find((c) => c.type === 'ComparisonError');

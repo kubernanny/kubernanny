@@ -99,6 +99,7 @@ export async function runComponent(ctx: ModuleContext, d: Detected, integration:
       ...(result.accepted ? { accepted: result.accepted } : {}),
       ...(result.canAccept !== undefined ? { canAccept: result.canAccept } : {}),
       ...(result.rollbacks ? { rollbacks: result.rollbacks } : {}),
+      ...(result.pendingSyncs?.length ? { pendingSyncs: result.pendingSyncs } : {}),
     },
   };
 }

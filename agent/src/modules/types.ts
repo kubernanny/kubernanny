@@ -14,6 +14,7 @@ import type { VeleroBackup } from './integrations/velero';
 import type { VulnDb } from './vulnerabilities/osv-client';
 import type { AcceptanceState } from './vulnerabilities/acceptance';
 import type { RollbackApp } from '../checks/argocd-rollback';
+import type { PendingSync } from '../checks/argocd-pending';
 
 export type Tone = 'ok' | 'warning' | 'critical' | 'muted';
 
@@ -78,6 +79,8 @@ export interface ModuleResult {
   canAccept?: boolean;
   /** Argo CD only, while `argocd-rollback` is on: manual-sync apps and the earlier deployments they can go back to. */
   rollbacks?: RollbackApp[];
+  /** Argo CD only: manual apps with a change waiting ("Bereit zum Sync"), not issues. */
+  pendingSyncs?: PendingSync[];
 }
 
 /** An accepted advisory as the app shows it: which component, until when, why and by whom. */
@@ -135,6 +138,8 @@ export interface ModuleContext {
   vulnAcceptance?: AcceptanceState;
   /** `argocd-rollback` is on: the Argo CD module lists what can be rolled back. */
   rollbackOn?: boolean;
+  /** `argocd-sync` is on: apps ready to sync can be synced from the app. */
+  syncOn?: boolean;
 }
 
 /** An API resource a module reads; the RBAC test checks the chart and install.yaml grant it. */
@@ -169,4 +174,6 @@ export interface ModuleView {
   canAccept?: boolean;
   /** Argo CD only, while `argocd-rollback` is on. */
   rollbacks?: RollbackApp[];
+  /** Argo CD only: manual apps ready to sync, shown on the overview as one calm card. */
+  pendingSyncs?: PendingSync[];
 }

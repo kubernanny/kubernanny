@@ -87,7 +87,7 @@ describe('POST /api/argocd/rollback', () => {
     const { phone, kube } = started;
     const cases: [unknown, number, string][] = [
       [{ namespace: 'argocd', app: 'shop-api-chart', id: 1 }, 409, 'ROLLBACK_AUTOMATED'],
-      [{ namespace: 'argocd', app: 'weblate-chart', id: 1 }, 409, 'ROLLBACK_NO_SOURCE'],
+      [{ namespace: 'argocd', app: 'cert-manager-chart', id: 1 }, 409, 'ROLLBACK_NO_SOURCE'],
       [{ namespace: 'argocd', app: ROLLBACK_APP, id: 1 }, 409, 'ROLLBACK_HISTORY_NOT_FOUND'],
       [{ namespace: 'argocd', app: ROLLBACK_APP, id: 9 }, 409, 'ROLLBACK_CURRENT'],
       [{ namespace: 'argocd', app: 'nope', id: 7 }, 404, 'APP_NOT_FOUND'],

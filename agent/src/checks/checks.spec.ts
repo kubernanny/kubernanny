@@ -224,24 +224,29 @@ describe('argocd', () => {
     });
   });
 
-  it('treats OutOfSync of a manual app as a hint and of an automated app as a warning', () => {
+  it('treats OutOfSync of a manual app as routine, of an automated app as a warning, and a manual one waiting a week as a hint', () => {
+    const now = new Date('2026-11-25T12:00:00Z');
     const issues = de(evaluateArgoApps([
-      { metadata: { name: 'manual' }, status: { sync: { status: 'OutOfSync' }, health: { status: 'Healthy' } } },
+      { metadata: { name: 'manual' }, status: { sync: { status: 'OutOfSync' }, health: { status: 'Healthy' }, operationState: { phase: 'Succeeded', finishedAt: '2026-11-24T12:00:00Z' } } },
+      { metadata: { name: 'forgotten' }, status: { sync: { status: 'OutOfSync' }, health: { status: 'Healthy' }, operationState: { phase: 'Succeeded', finishedAt: '2026-11-10T12:00:00Z' } } },
       {
         metadata: { name: 'auto' },
         spec: { syncPolicy: { automated: {} } },
         status: { sync: { status: 'OutOfSync' }, health: { status: 'Healthy' } },
       },
-    ]));
-    expect(issues.map((i) => i.severity)).toEqual(['info', 'warning']);
-    expect(issues[0].cause).toContain('Kein Fehler');
+    ], undefined, now));
+    expect(issues.map((i) => [i.id, i.severity])).toEqual([
+      ['argocd/argocd/forgotten/sync', 'info'],
+      ['argocd/argocd/auto/sync', 'warning'],
+    ]);
+    expect(issues[0].cause).toContain('15 Tagen');
     expect(issues[1].cause).toContain('Automatischer Sync');
     expect(issues[0].actions.map((a) => a.type)).toEqual(['argocd-sync', 'argocd-refresh']);
   });
 
   it('offers no sync while one is running', () => {
     const [issue] = de(evaluateArgoApps([
-      { metadata: { name: 'a' }, status: { sync: { status: 'OutOfSync' }, operationState: { phase: 'Running' } } },
+      { metadata: { name: 'a' }, spec: { syncPolicy: { automated: {} } }, status: { sync: { status: 'OutOfSync' }, operationState: { phase: 'Running' } } },
     ]));
     expect(issue.actions).toEqual([]);
   });

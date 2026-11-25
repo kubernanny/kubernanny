@@ -109,7 +109,7 @@ describe('kured', () => {
 });
 
 describe('Argo CD sync policy', () => {
-  it('treats automated.enabled: false (Argo CD 3) as manual sync, so OutOfSync is a hint', () => {
+  it('treats automated.enabled: false (Argo CD 3) as manual sync, so OutOfSync is routine (ready to sync), not an issue', () => {
     const app = (automated: unknown) => ({
       metadata: { name: 'shop-web', namespace: 'argocd' },
       spec: { syncPolicy: { automated } },
@@ -118,8 +118,8 @@ describe('Argo CD sync policy', () => {
     expect(isAutomated(app({ prune: true, selfHeal: true }))).toBe(true);
     expect(isAutomated(app({ enabled: false, prune: true }))).toBe(false);
     expect(isAutomated(app(null))).toBe(false);
-    expect(evaluateArgoApps([app({ enabled: false })], emptyInventory(NOW)).map((i) => i.severity)).toEqual(['info']);
-    expect(evaluateArgoApps([app({ selfHeal: true })], emptyInventory(NOW)).map((i) => i.severity)).toEqual(['warning']);
+    expect(evaluateArgoApps([app({ enabled: false })], emptyInventory(NOW), NOW).map((i) => i.severity)).toEqual([]);
+    expect(evaluateArgoApps([app({ selfHeal: true })], emptyInventory(NOW), NOW).map((i) => i.severity)).toEqual(['warning']);
   });
 });
 
