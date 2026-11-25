@@ -25,6 +25,19 @@
 
 ### Security fixes after review
 
+- Data from in-cluster services (Grafana, Loki, Prometheus, Alertmanager, kured) is type-checked and capped and can never pose as a text of the agent; a failed run can no longer crash the agent.
+- Argo CD restarts are offered only for workloads the agent itself sees not ready in the Application's destination namespace; ids include the namespace.
+- `checks.disabled: [notifications]` and `[prometheus]` are now hard: nothing is sent, no Prometheus request is made. Unknown ids and switch values stop the start (and the chart render).
+- ValidatingAdmissionPolicies limit the agent's write verbs to exactly what its actions change (`rbac.admissionPolicy.enabled`, Kubernetes 1.30+).
+- Silencing a critical issue, or many issues at once, is announced like other security-relevant changes.
+- Separate handshake ceilings for direct and relayed calls, per-address buckets for direct calls with a share kept for recently authenticated callers; requests dated before the agent started are refused.
+- Outbound clients (OSV, registries, Kubernetes) read size-capped and refuse redirects; Slack and Discord messages are escaped; pod logs are capped; `existingSecret` is read by key only; `runAsGroup` is set; the agent no longer sends HSTS (set it on the ingress).
+- Relay protocol 2: registration proofs are bound to the relay (`RELAY_PUBLIC_URL` is required for remote agents on the Node relay). A fake agent that stops reading can no longer fill the relay's memory (`RELAY_MAX_SOCKET_BUFFER_BYTES`, request bytes in the budget, random call ids); each calling address gets only a share of an agent's buckets (`RELAY_CALLER_SHARE`); push limits per agent, address, token and relay-wide outlive reconnects (`RELAY_PUSH_TOKENS_PER_DAY`, `RELAY_PUSHES_PER_ADDRESS_PER_HOUR`, `RELAY_PUSHES_TOTAL_PER_HOUR`), on the Worker through a `TokenLimiter` Durable Object.
+- Pairing links never pair without confirmation (name, address, relay and the agent key's fingerprint are shown); a changed agent key for an existing cluster is refused unless explicitly replaced.
+- Pushes older than one hour, or not newer than the last one shown, are not shown (replay protection).
+- A content security policy for the native WebView, the demo host and the website (no inline scripts); agent-provided links open only as http(s).
+- CI workflows have least-privilege permissions and actions pinned by commit; the image base is pinned by digest and the final image has no npm.
+- `npm run build:demo` builds demo.kubernanny.app without pairing, by a build flag instead of the hostname.
 - Rate limits no longer let strangers lock out paired devices: size, version and replay checks cost nothing, the handshake has only a generous CPU ceiling, and after it each paired device spends its own budget while unknown keys and pairing share one small one.
 - Pairing codes: the right code is compared before any throttle and is never burnt by wrong attempts, so nobody who knows the agent key can block pairing (`PAIRING_RATE_LIMITED` past 5 wrong codes in 10 minutes, direct or through the relay).
 - Replay entries are written before the clock check; calls that change something get a 60 s clock window (reads keep 5 minutes).
