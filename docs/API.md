@@ -88,6 +88,8 @@ The last snapshot, answered from memory.
   "score": 28,                          // 0..100
   "checkedAt": "2026-11-24T16:27:22.410Z",
   "durationMs": 19,
+  "agentBuild": "2026-11-25-16",           // image tag CI baked in (KUBERNANNY_BUILD); absent in local builds
+  "agentCommit": "3d36a32c1f0e",           // git commit (KUBERNANNY_COMMIT), 12 characters
   "nextCheckAt": "2026-11-24T16:28:22.000Z", // next scheduled run: the next interval tick, or a pending early run after a watched change (agents from 0.5 on)
   "kubernetes": { "version": "v1.33.4+rke2r1", "distribution": "RKE2" },
   "overview": {
