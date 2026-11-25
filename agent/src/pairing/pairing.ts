@@ -33,30 +33,32 @@ export const QR_PAGE = 'https://kubernanny.app/qr';
 const QUIET_ZONE = 4;
 
 /**
- * The QR code as plain text, for the log: one line per module row, two full
- * blocks per module (about square in a monospace font), dark modules drawn, a
- * quiet zone of four, and no ANSI escapes (Loki and others show those as
- * text, which shifts every row). 106 columns for a link with a relay.
+ * The QR code as plain text, for the log: half blocks (two module rows per
+ * line, 53 columns for a link with a relay, so it fits an 80-column
+ * terminal), a quiet zone of four and no ANSI escapes (Loki and others show
+ * those as text, which shifts every row).
  *
- * Why not half blocks (two rows per line, half as tall and wide): log
- * viewers that space their lines apart (Argo CD: 1.5rem lines at 14px) leave
- * a gap inside every line pair, and no decoder read that in our tests at line
- * heights from 1.5 up; this one still decodes there once the image is a
- * little blurred, as in a phone camera. It is the right way round on a light
- * background and inverted on a dark one; most scanners read both. The image
- * link printed under it works everywhere.
+ * The blocks draw the LIGHT modules: terminals and log viewers (Argo CD's
+ * included) are dark, so the dark modules are the background and the code
+ * reads the right way round there; on a light background it is inverted,
+ * which phone scanners read too.
+ *
+ * Log viewers that space their lines apart (Argo CD: 1.5rem lines at 14px)
+ * tear any text QR code apart; no layout decoded reliably at that spacing in
+ * our tests. The image link printed under it is the fix there.
  */
 export function terminalQr(link: string): string {
   const { modules } = QRCode.create(link, { errorCorrectionLevel: 'L' });
   const size = modules.size;
+  const light = (x: number, y: number) => !(x >= 0 && y >= 0 && x < size && y < size && modules.get(y, x) === 1);
   const lines: string[] = [];
-  for (let y = -QUIET_ZONE; y < size + QUIET_ZONE; y++) {
+  for (let y = -QUIET_ZONE; y < size + QUIET_ZONE; y += 2) {
     let line = '';
     for (let x = -QUIET_ZONE; x < size + QUIET_ZONE; x++) {
-      const dark = x >= 0 && y >= 0 && x < size && y < size && modules.get(y, x) === 1;
-      line += dark ? '██' : '  ';
+      const top = light(x, y);
+      const bottom = y + 1 < size + QUIET_ZONE ? light(x, y + 1) : false;
+      line += top && bottom ? '█' : top ? '▀' : bottom ? '▄' : ' ';
     }
-    // Trailing quiet zone is blank anyway; viewers trim it.
     lines.push(line.trimEnd());
   }
   return lines.join('\n');

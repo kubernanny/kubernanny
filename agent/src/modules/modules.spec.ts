@@ -168,23 +168,23 @@ describe('notifications and pairing', () => {
     expect(decodeURIComponent(new URL(links.image).hash.slice(1))).toBe(links.app);
   });
 
-  const QUIET_ROWS = 4;
-  it('prints the QR code without ANSI escapes, with a quiet zone, right under it the image link', async () => {
+  it('prints the QR code without ANSI escapes, light modules as blocks, the image link right under it', async () => {
     const banner = await new PairingService({ ...loadConfig(), language: 'en' }, fakeIdentity).banner('ABCDE23456');
     expect(banner).not.toMatch(/\x1b/);
     const qr = terminalQr('kubernanny://pair?url=https%3A%2F%2Fa&code=ABCDE23456');
     const rows = qr.split('\n');
-    // Four quiet rows on top, then the finder pattern four modules (eight columns) in, two columns per module.
-    expect(rows.slice(0, 4)).toEqual(['', '', '', '']);
-    expect(rows[4].startsWith(' '.repeat(8) + '█'.repeat(14) + '  ')).toBe(true);
-    expect(rows[5].startsWith(' '.repeat(8) + '██' + ' '.repeat(10) + '██')).toBe(true);
+    // Quiet zone of four light modules on top: two full lines of blocks, as wide as the code.
+    const width = rows[0].length;
+    expect(rows[0]).toBe('█'.repeat(width));
+    expect(rows[1]).toBe('█'.repeat(width));
+    // Then the finder pattern starts four modules in: light quiet zone, dark module (blank).
+    expect(rows[2].slice(0, 4)).toBe('████');
+    expect(rows[2][4]).not.toBe('█');
+    // Half blocks: about 1 column per module plus the zone, well under 80 columns.
+    expect(width).toBeLessThan(80);
     const lines = banner.split('\n');
     const imageLine = lines.findIndex((l) => l.startsWith('QR as an image'));
-    // Right under the code: only its blank quiet zone lies between them.
-    const before = lines.slice(0, imageLine);
-    const lastDrawn = before.findLastIndex((l) => l !== '');
-    expect(before[lastDrawn]).toMatch(/█/);
-    expect(imageLine - lastDrawn).toBe(QUIET_ROWS + 1);
+    expect(lines[imageLine - 1]).toMatch(/[█▀▄]/);
   });
 
   it('refuses the removed PULSE_TOKEN instead of ignoring it', () => {
