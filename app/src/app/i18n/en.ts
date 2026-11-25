@@ -171,6 +171,16 @@ export const en: Dictionary = {
     versionsDiffer: 'versions differ',
     intro: 'Kubernanny recognizes components by their container images, however they were installed. Tap one for details.',
   },
+  countdown: {
+    seconds: '{{n}} s',
+    minutes: '{{n}} min',
+    hours: '{{n}} h',
+    checked: 'Checked {{span}} ago',
+    next: 'next in {{span}}',
+    due: 'next any moment',
+    label: 'Check now. The next check is at {{time}}.',
+    labelNoSchedule: 'Check now.',
+  },
   bar: {
     cores: 'cores',
     used: '{{value}} used',

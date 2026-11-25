@@ -23,6 +23,7 @@ import { ClusterStore } from '../core/cluster-store.service';
 import { StatusStore } from '../core/status-store.service';
 import { LanguageService } from '../i18n/language.service';
 import { NannyEye } from '../ui/nanny-eye';
+import { countdownView } from './countdown';
 import { ResourceBar } from '../ui/resource-bar';
 import { buildClusterView, issueCards } from './cluster-view';
 import { historyView } from './history-view';
@@ -94,6 +95,16 @@ export class ClusterPage {
   private readonly language = inject(LanguageService);
 
   readonly now = signal(new Date());
+  /** The countdown's clock: one timer, every second (every 5 s with reduced motion), stopped while the page is hidden. */
+  readonly clock = signal(Date.now());
+  private readonly reducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  readonly countdown = computed(() => {
+    const state = this.state();
+    if (!state?.snapshot || state.error || state.snapshot.failingSince) {
+      return null;
+    }
+    return countdownView(state.snapshot, this.clock(), this.language.translator(), this.reducedMotion ? 5000 : 1000);
+  });
   readonly tab = signal<Tab>('lage');
   readonly cluster = computed(() => this.clusters.clusters().find((c) => c.id === this.id()) ?? null);
   readonly multiple = computed(() => this.clusters.clusters().length > 1);
@@ -132,7 +143,27 @@ export class ClusterPage {
 
   constructor() {
     const tick = setInterval(() => this.now.set(new Date()), 20_000);
-    inject(DestroyRef).onDestroy(() => clearInterval(tick));
+    let clock: ReturnType<typeof setInterval> | null = null;
+    const runClock = () => {
+      if (clock) {
+        clearInterval(clock);
+        clock = null;
+      }
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        this.clock.set(Date.now());
+        clock = setInterval(() => this.clock.set(Date.now()), this.reducedMotion ? 5000 : 1000);
+      }
+    };
+    runClock();
+    const onVisibility = () => runClock();
+    document.addEventListener('visibilitychange', onVisibility);
+    inject(DestroyRef).onDestroy(() => {
+      clearInterval(tick);
+      if (clock) {
+        clearInterval(clock);
+      }
+      document.removeEventListener('visibilitychange', onVisibility);
+    });
 
     effect(() => {
       const cluster = this.cluster();

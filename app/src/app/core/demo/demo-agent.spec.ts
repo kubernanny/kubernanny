@@ -55,7 +55,9 @@ describe('DemoAgent', () => {
   it('answers the status as of now', async () => {
     const snapshot = await agent.call<Snapshot>('broken', 'GET', '/status');
     expect(snapshot.light).toBe('red');
-    expect(Math.abs(Date.parse(snapshot.checkedAt!) - Date.now())).toBeLessThan(5000);
+    // A run once a minute on the minute: the last one within the minute, the next one a minute after it.
+    expect(Date.now() - Date.parse(snapshot.checkedAt!)).toBeLessThan(61_000);
+    expect(Date.parse(snapshot.nextCheckAt!) - Date.parse(snapshot.checkedAt!)).toBe(60_000);
     // Issue ages read like the recording's, moved to now.
     expect(snapshot.issues.every((i) => Date.parse(i.since) <= Date.now() + 1000)).toBe(true);
   });

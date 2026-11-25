@@ -42,10 +42,19 @@
           <p class="via-relay" [title]="t('cluster.viaRelayTitle')">{{ t('cluster.viaRelay') }}</p>
         }
         <div class="state">
-          <app-nanny-eye [light]="view().light" [label]="stateLabel()" [checking]="loading()" />
+          <button type="button" class="eye-button" (click)="refresh()" [disabled]="loading()" [attr.aria-label]="countdown()?.label ?? t('cluster.checkNow')" [title]="countdown()?.label ?? t('cluster.checkNow')">
+            <app-nanny-eye [light]="view().light" [label]="stateLabel()" [checking]="loading()" [progress]="countdown()?.progress ?? null" />
+          </button>
           <p class="headline display">{{ view().headline }}</p>
         </div>
-        <p class="checked">{{ view().checked }}</p>
+        @if (countdown(); as c) {
+          <button type="button" class="checked as-link" (click)="refresh()" [disabled]="loading()" [title]="view().checked">
+            <span aria-hidden="true">{{ c.text }}</span>
+            <span class="sr-only">{{ c.label }}</span>
+          </button>
+        } @else {
+          <p class="checked">{{ view().checked }}</p>
+        }
         @if (view().kpis.length > 0) {
           <dl class="vitals">
             @for (k of view().kpis; track k.label) {

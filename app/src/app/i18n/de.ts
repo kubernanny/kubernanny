@@ -175,6 +175,16 @@ export const de = {
     versionsDiffer: 'Versionen verschieden',
     intro: 'Kubernanny erkennt Komponenten an ihren Container-Images, egal wie sie installiert wurden. Tippe auf eine für Details.',
   },
+  countdown: {
+    seconds: '{{n}} s',
+    minutes: '{{n}} min',
+    hours: '{{n}} h',
+    checked: 'Geprüft vor {{span}}',
+    next: 'nächste in {{span}}',
+    due: 'nächste gleich',
+    label: 'Jetzt prüfen. Die nächste Prüfung ist um {{time}}.',
+    labelNoSchedule: 'Jetzt prüfen.',
+  },
   bar: {
     cores: 'Kerne',
     used: '{{value}} genutzt',
