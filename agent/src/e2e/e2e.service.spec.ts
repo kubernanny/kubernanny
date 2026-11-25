@@ -5,7 +5,7 @@ import { IdentityService } from '../auth/identity.service';
 import { Config } from '../config';
 import { Notifier } from '../notify/notifier';
 import { PairingService } from '../pairing/pairing';
-import { CLOCK_WINDOW_MS, DEVICE_LIMIT, E2eResult, E2eService, OPEN_LIMIT, OPEN_RESERVE, SOURCE_LIMIT, STRANGER_LIMIT, WRITE_CLOCK_WINDOW_MS, tunnelsIntoItself } from './e2e.service';
+import { CLOCK_WINDOW_MS, DEVICE_LIMIT, FUTURE_PER_PRINCIPAL, E2eResult, E2eService, OPEN_LIMIT, OPEN_RESERVE, SOURCE_LIMIT, STRANGER_LIMIT, WRITE_CLOCK_WINDOW_MS, tunnelsIntoItself } from './e2e.service';
 import { DispatchBusyError, InternalServer } from './internal-server';
 import { sourceKey } from './rate-limit';
 
@@ -245,5 +245,46 @@ describe('E2eService pairing (review)', () => {
     expect((await call(owner, 'POST', '/pair', NOW, NOW, { code, name: 'Nicos iPhone' })).status).toBe(200);
     expect(alerts).toEqual([['Nicos iPhone', [{ kind: 'devicePaired' }]]]);
     expect((await call(owner, 'GET', '/status')).status).toBe(200);
+  });
+});
+
+describe('E2eService future replay entries (review: strangers could fill them)', () => {
+  it('never remembers a pairing attempt from an unknown key dated far ahead; a fast-clock phone still gets E2E_CLOCK_SKEW', async () => {
+    const { call, pair } = setup();
+    const phone = pair('phone');
+    const farAhead = NOW + 365 * 24 * 3_600_000;
+    // Spread over time so the strangers' shared bucket refills: far more than FUTURE_CAPACITY attempts.
+    for (let i = 0; i < 1_200; i++) {
+      const now = NOW + i * 1_000;
+      const attempt = await call(generateKeyPair(), 'POST', '/pair', farAhead, now, { code: 'x', name: 'x' });
+      expect(attempt.code).toBe('E2E_CLOCK_SKEW');
+    }
+    const later = NOW + 1_200 * 1_000;
+    const fast = await call(phone, 'GET', '/status', later + CLOCK_WINDOW_MS + 60_000, later);
+    expect(fast.code).toBe('E2E_CLOCK_SKEW');
+  }, 60_000);
+
+  it('caps the entries one paired device holds; another device is not affected', async () => {
+    const { call, pair } = setup();
+    const broken = pair('broken');
+    const other = pair('other');
+    const ahead = NOW + 30 * 24 * 3_600_000;
+    const codes: (string | undefined)[] = [];
+    for (let i = 0; i < FUTURE_PER_PRINCIPAL + 5; i++) {
+      // A second apart, so the device's own bucket never runs dry.
+      codes.push((await call(broken, 'GET', '/status', ahead, NOW + i * 1_000)).code);
+    }
+    expect(codes.slice(0, FUTURE_PER_PRINCIPAL).every((c) => c === 'E2E_CLOCK_SKEW')).toBe(true);
+    expect(codes.slice(FUTURE_PER_PRINCIPAL).every((c) => c === 'E2E_BUSY')).toBe(true);
+    const at = NOW + (FUTURE_PER_PRINCIPAL + 5) * 1_000;
+    expect((await call(other, 'GET', '/status', at + CLOCK_WINDOW_MS + 60_000, at)).code).toBe('E2E_CLOCK_SKEW');
+  });
+
+  it('still refuses a replayed pairing attempt inside the clock window', async () => {
+    const { service, call, pairing } = setup();
+    const code = pairing.issue();
+    const first = await call(generateKeyPair(), 'POST', '/pair', NOW, NOW, { code, name: 'Phone' });
+    expect(first.status).toBe(200);
+    expect(await service.handle(first.sealed.body, NOW + 1_000)).toEqual({ kind: 'plain', status: 400, code: 'E2E_REPLAY' });
   });
 });
