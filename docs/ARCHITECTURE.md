@@ -73,7 +73,7 @@ agent/src
 ├── status/                 the run loop (status.service), running modules and merging issues (run-modules), snapshot types, light and score (snapshot)
 ├── views/                  nodes, workloads, storage, network, events, backups, incidents, history for the detail tabs
 ├── incidents/              the episode log: incident history (GET /incidents) and the weekly report's data
-├── actions/                the four actions, bound to open issues
+├── actions/                the four issue actions, plus the opt-in Argo CD rollback
 ├── notify/                 when to notify, and the body for ntfy, Discord, Slack, Gotify, JSON
 ├── settings/               what runs: module, action and notification switches (Helm + app)
 ├── rbac/                   the permissions each module and action needs; feeds the chart
@@ -193,7 +193,7 @@ History (`views/history.ts`) comes from Prometheus when one was found: cluster C
 
 ### Actions
 
-Four actions exist: Argo CD **sync** and **hard refresh**, **restart** of a Deployment/StatefulSet/DaemonSet (the same patch as `kubectl rollout restart`) and **CNPG backup** (a `Backup` resource). Logs of a pod (including the previous, crashed container) are read the same way.
+Four actions are bound to open issues: Argo CD **sync** and **hard refresh**, **restart** of a Deployment/StatefulSet/DaemonSet (the same patch as `kubectl rollout restart`) and **CNPG backup** (a `Backup` resource). Logs of a pod (including the previous, crashed container) are read the same way. A fifth, the Argo CD **rollback**, is the one exception to that binding and off by default (below).
 
 ```mermaid
 sequenceDiagram
@@ -209,6 +209,8 @@ sequenceDiagram
 ```
 
 The request names an issue and an action type, never a target. Namespace, name and kind come from the agent's own check result. A stolen device key can therefore restart what is broken right now, and nothing else; it cannot delete anything, read Secrets, or patch a healthy workload. RBAC is the second line: without `rbac.allowActions` the ServiceAccount has no write verbs at all.
+
+**The exception: Argo CD rollback (`argocd-rollback`).** A bad deploy is not always something Kubernanny can see (a release that is healthy to Kubernetes but broken for its users), so `POST /api/argocd/rollback` names a target: the app's namespace and name and an id from its `status.history`, **with or without an open issue**. It is off unless the deployment opts in (`actions.enabled: [argocd-rollback]`), and the agent narrows it as far as it can: only manual-sync, single-source apps, only a revision from the app's own history with the same repository and path or chart, never a source, never a prune, at most once per app in 5 minutes, announced through the channels first, and the admission policy only renders the branch that lets the agent set a revision when the action is opted in. With it on, a stolen device key can roll any such app back to one of its recent deployments, healthy or not; [SECURITY.md](SECURITY.md) lists it as its own row in the threat model. Details: [CHECKS.md](CHECKS.md#rolling-back-argocd-rollback-off-by-default).
 
 What a stolen device key *can* do beyond that is blind and lock out the owner: any paired device may switch notifications, modules and actions off, silence issues, start a maintenance window of up to 24 h and revoke every other device (the lost-phone case needs exactly that power). So each of these changes, and every new pairing, sends one short notification through the configured channels **before** it takes effect, naming the device, past the app's notification switch and any maintenance window (`Notifier.securityAlert`); only `checks.disabled: [notifications]` in Helm silences them. The owner then revokes that device from another one, or rotates the keys if it already revoked theirs. See [SECURITY.md](SECURITY.md).
 
@@ -249,7 +251,7 @@ sequenceDiagram
   P->>G: POST /api/e2e: Noise message 1 { POST /pair, code, name }
   G->>K: patch secret kubernanny-devices (+ device public key)
   G-->>P: message 2 { deviceId }
-  P->>P: store url, agent key, own private key (Capacitor Preferences)
+  P->>P: store url and agent key (Capacitor Preferences), own private key (Keychain / Keystore)
 ```
 
 After pairing, every call goes the same way:
@@ -295,7 +297,8 @@ app/src/app
 ├── core/
 │   ├── agent.model.ts          the agent's API types (mirrors agent/src)
 │   ├── agent-client.service.ts HTTP client, error texts
-│   ├── cluster-store.service.ts clusters on the device (Capacitor Preferences)
+│   ├── cluster-store.service.ts clusters on the device (Capacitor Preferences; private keys through device-key-vault.ts)
+│   ├── device-key-vault.ts      the device key per cluster in the iOS Keychain / Android Keystore (origin storage on the web)
 │   ├── status-store.service.ts  polls every 30 s while visible, keeps the last answer
 │   ├── cluster-data.store.ts    detail views per cluster, loaded per tab
 │   ├── format.ts                bytes, cores, percent, relative times (German formats)
@@ -381,7 +384,7 @@ flowchart TB
 
 **Pure check functions.** Every check is a function of Kubernetes objects. That makes them testable without a cluster and lets the same code run in demo mode.
 
-**Actions bound to issues.** The alternative, an API taking a namespace and a name, would turn every paired device into a cluster-wide restart button. Binding to an open issue keeps the blast radius to what is already broken.
+**Actions bound to issues.** The alternative, an API taking a namespace and a name, would turn every paired device into a cluster-wide restart button. Binding to an open issue keeps the blast radius to what is already broken. The opt-in Argo CD rollback is the one documented exception (see [Actions](#actions)): binding it to an issue would make it useless for the bad deploys Kubernanny cannot see, so it is off by default and narrowed to the app's own history instead.
 
 **Services over cluster DNS, not the API server proxy.** Reaching Prometheus through `services/proxy` would work everywhere, but needs a cluster-wide grant that reaches every internal service. Inside a pod the agent calls `http://<service>.<namespace>.svc:<port>` directly (NetworkPolicies apply); the proxy path is only used outside a cluster, during development with `kubectl proxy`.
 
