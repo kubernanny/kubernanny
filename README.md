@@ -74,7 +74,7 @@ Plus the last seven days at a glance (every incident with start and duration), a
 
 ## Actions, safely
 
-Four, and only on an open problem: **sync** and **hard refresh** an Argo CD app, **restart** a workload, **start a CNPG backup**. The app never says what to change, only which problem and which action; the agent takes the target from its own check. A stolen phone can restart what is broken right now and nothing else (and is revoked with one tap), and delete nothing. `rbac.allowActions=false` makes the agent strictly read-only. [docs/SECURITY.md](docs/SECURITY.md)
+Four, and only on an open problem: **sync** and **hard refresh** an Argo CD app, **restart** a workload, **start a CNPG backup**. A fifth, **rolling back** a manual-sync Argo CD app to an earlier deployment, is off until you switch it on (`actions.enabled: [argocd-rollback]`, [docs/CHECKS.md](docs/CHECKS.md#rolling-back-argocd-rollback-off-by-default)). The app never says what to change, only which problem and which action; the agent takes the target from its own check. A stolen phone can restart what is broken right now and nothing else (and is revoked with one tap), and delete nothing. `rbac.allowActions=false` makes the agent strictly read-only. [docs/SECURITY.md](docs/SECURITY.md)
 
 ## You decide what it looks at
 
@@ -151,3 +151,5 @@ No paid tier and no features held back. If Kubernanny saves you a night, you can
 ## Licence
 
 [Apache-2.0](LICENSE)
+
+Made by Nico Lueg ([nicolueg.com](https://nicolueg.com)).
