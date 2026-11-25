@@ -258,8 +258,8 @@ export class StatusService {
     const own = modules.find((m) => m.id === 'kubernanny');
     if (own) {
       own.details = [
-        ...(own.details ?? []),
         ...runTiming({ inventoryMs, componentsMs: t1 - t0, coreMs: t2 - t1, totalMs: Date.now() - started, moduleMs, prometheus: prom?.timings ?? null }),
+        ...(own.details ?? []),
       ];
     }
     const overview = buildOverview(inv, detected.length, prom !== null);
