@@ -29,6 +29,7 @@ Every screen of Kubernanny, taken from the built-in demo clusters (`DEMO=broken`
 <td valign="top" width="33%"><img src="screenshots/84-overview-per-node.png" alt="Per node: use, requests and limits of its pods, overbooking and pods without a limit"><br><sub>Per node: use, requests and limits of its pods, overbooking and pods without a limit</sub></td>
 <td valign="top" width="33%"><img src="screenshots/89-overview-ready-to-sync.png" alt="Manual Argo CD apps with a change waiting: one calm card, no issue"><br><sub>Manual Argo CD apps with a change waiting: one calm card, no issue</sub></td>
 <td valign="top" width="33%"><img src="screenshots/90-ready-to-sync-list.png" alt="Ready to sync: revisions, image tags and the resources that change, with Sync"><br><sub>Ready to sync: revisions, image tags and the resources that change, with Sync</sub></td>
+<td valign="top" width="33%"><img src="screenshots/93-sheet-kubernanny-timing.png" alt="Kubernanny's own sheet: where the last check spent its time"><br><sub>Kubernanny's own sheet: where the last check spent its time</sub></td>
 <td valign="top" width="33%"><img src="screenshots/37-overview-yellow.png" alt="A cluster with warnings only"><br><sub>A cluster with warnings only</sub></td>
 </tr>
 <tr>
@@ -200,6 +201,7 @@ Every screen of Kubernanny, taken from the built-in demo clusters (`DEMO=broken`
 </tr>
 <tr>
 <td valign="top" width="50%"><img src="screenshots/47-desktop-charts.png" alt="Desktop: history"><br><sub>Desktop: history</sub></td>
+<td valign="top" width="33%"><img src="screenshots/91-desktop-charts-loading.png" alt="A new range loading: the charts keep their frame and shimmer"><br><sub>A new range loading: the charts keep their frame and shimmer</sub></td>
 <td valign="top" width="50%"><img src="screenshots/48-desktop-services.png" alt="Desktop: components"><br><sub>Desktop: components</sub></td>
 </tr>
 <tr>
