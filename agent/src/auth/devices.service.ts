@@ -80,9 +80,10 @@ export class DevicesService {
   }
 
   /** Reads the paired devices, retrying transient errors; throws when they stay unreadable, so the process ends and restarts. */
-  async onModuleInit(): Promise<void> {
+  async onModuleInit(delaysMs?: readonly number[]): Promise<void> {
     const secret = await readAtStartup(`Secret ${DEVICES_SECRET}`, () => this.kube.get<{ data?: { devices?: string } }>(`${this.path}/${DEVICES_SECRET}`), {
       onRetry: (err, attempt) => this.logger.warn(`cannot read Secret ${DEVICES_SECRET} (${err instanceof Error ? err.message : err}), attempt ${attempt}; retrying`),
+      ...(delaysMs ? { delaysMs } : {}),
     });
     let parsed: Device[] = [];
     try {
@@ -97,30 +98,20 @@ export class DevicesService {
     this.devices = parsed.filter((d) => typeof d.id === 'string' && validKey(d.publicKey)).map((d) => (d.push && !validPush(d.push) ? withoutPush(d) : d));
     this.loaded = true;
   }
+  /**
+   * Reads it again once, throwing on any failure but 404 and keeping nothing
+   * old: a pod taking over the lease, or answering next to the pod in charge
+   * during a rolling update, must not act on state the other pod changed
+   * (a revoked device, an action switched off). See agent.ts.
+   */
+  reload(): Promise<void> {
+    return this.onModuleInit([]);
+  }
+
 
   /** False until the stored list was read: pairing then fails instead of pairing devices over a list it never saw. */
   get persistent(): boolean {
     return this.loaded;
-  }
-
-  /**
-   * Reads the device list again and throws on any failure but 404 (no list
-   * yet), keeping nothing old: a pod taking over from another, or answering
-   * next to it during a rolling update, must not accept a device the other
-   * pod revoked (agent.ts, lease handover).
-   */
-  async reload(): Promise<void> {
-    let devices: Device[] = [];
-    try {
-      const secret = await this.kube.get<{ data?: { devices?: string } }>(`${this.path}/${DEVICES_SECRET}`);
-      const parsed = JSON.parse(Buffer.from(secret.data?.devices ?? '', 'base64').toString('utf8') || '[]') as Device[];
-      devices = parsed.filter((d) => typeof d.id === 'string' && validKey(d.publicKey)).map((d) => (d.push && !validPush(d.push) ? withoutPush(d) : d));
-    } catch (err) {
-      if (!(err instanceof KubeError && err.status === 404)) {
-        throw err;
-      }
-    }
-    this.devices = devices;
   }
 
   /** The device holding this key, or null. */
