@@ -270,9 +270,11 @@ Stats: certificates ready, ClusterIssuers, next expiry.
 |---|---|---|---|
 | `argocd/<app>/health` | critical | health `Degraded` or `Missing`; the cause names the broken resources | restart of up to three degraded workloads, sync, hard refresh |
 | `argocd/<app>/operation` | critical | last sync `Failed` or `Error` | sync, hard refresh |
-| `argocd/<app>/sync` | **hint** | `OutOfSync` on an app with **manual** sync: a commit waits for someone to sync it. That is the normal state of a manual app, not a fault. | sync, hard refresh |
+| `argocd/<app>/sync` | **hint** | `OutOfSync` on an app with **manual** sync whose last sync is more than 7 days ago (`PENDING_HINT_DAYS`): a change may have been forgotten. Sooner it is no issue at all, see "Ready to sync" below. | sync, hard refresh |
 | `argocd/<app>/sync` | warning | `OutOfSync` on an app with **automated** sync: Argo CD should have fixed it, so a sync is stuck or something changes the cluster behind Git's back | sync, hard refresh |
 | `argocd/<app>/comparison` | warning | `ComparisonError` condition | hard refresh |
+
+**Ready to sync.** A manual app that is `OutOfSync`, neither `Degraded` nor `Missing`, and whose last sync did not fail, is routine maintenance, not a problem: no issue, no hint, no notification. The `argocd` module lists it in `pendingSyncs` instead, and the app shows one calm card ("3 Apps bereit zum Sync") that opens the list. Each entry is read from the Application resource alone (the agent has no Argo CD API token, so no commit messages): the revision deployed (`status.operationState.syncResult.revision`, else the newest `status.history` entry) and the one Git has (`status.sync.revision`), the resources that differ (`status.resources[]` with `OutOfSync`; `health: Missing` is new, `requiresPruning` is removed by the sync), and image changes where Git names the image (Helm parameters `<prefix>.repository|name` + `<prefix>.tag`, Kustomize `images`) and `status.summary.images` says what runs. Since when the change waits is not recorded; the list says "since the last sync", which is the upper bound. The Sync button appears while `argocd-sync` is on; it runs under the id the app had as an issue (`argocd/<ns>/<app>/sync`), with the target taken from the agent's own list.
 
 An app counts as automated when `spec.syncPolicy.automated` is set and not `enabled: false` (Argo CD 3). The "Synced" stat is only tinted as a warning when an automated app is out of sync. No sync is offered while an operation is running. Stats: apps, synced, healthy, automated.
 
@@ -292,7 +294,7 @@ operation:
 
 No source, no prune, no sync options. Argo CD's controller syncs `spec.source` at `sync.revision` when the operation names no source, the same as `argocd app sync <app> --revision <rev>`. What runs afterwards is that revision of the app's own repository and path or chart. Two consequences:
 
-- **The cluster then differs from Git.** Argo CD compares against `spec.source.targetRevision` again, so the app shows `OutOfSync` (a hint in Kubernanny, since the app syncs manually) until you `git revert` the bad change, or until someone presses Sync, which rolls forward again. A rollback is a stopgap, not a fix.
+- **The cluster then differs from Git.** Argo CD compares against `spec.source.targetRevision` again, so the app shows `OutOfSync` ("ready to sync" in Kubernanny, since the app syncs manually) until you `git revert` the bad change, or until someone presses Sync, which rolls forward again. A rollback is a stopgap, not a fix.
 - **Only for manual sync.** With automated sync Argo CD would sync straight back to Git; `argocd app rollback` refuses such apps for the same reason, and so does Kubernanny.
 
 How it differs from `argocd app rollback`: Argo CD's own rollback copies the history entry's `source` into the operation (so it can also go back to an older repository or path) and uses the apply strategy with optional prune. Kubernanny never names a source: it refuses any entry whose repository, path or chart differs from the current `spec.source`, because `status` is writable by anyone who can edit the Application and must not steer the agent to another repository. It keeps the hook strategy of a normal sync and never prunes.
