@@ -48,6 +48,28 @@ describe('NodeClocksCheck', () => {
     ]);
   });
 
+  // Real shape: chrony on all three nodes, node-exporter's timex offset is exactly 0 everywhere.
+  it('does not take chrony\'s zero timex offset for a measurement', async () => {
+    const r = await new NodeClocksCheck().run(
+      {
+        inv,
+        prom: prom({
+          node_timex_offset_seconds: [{ metric: { instance: '10.0.0.1:9100' }, value: 0 }, { metric: { nodename: 'n2' }, value: 0 }],
+          node_timex_sync_status: [{ metric: { instance: '10.0.0.1:9100' }, value: 1 }, { metric: { nodename: 'n2' }, value: 1 }],
+          node_timex_maxerror_seconds: [{ metric: { instance: '10.0.0.1:9100' }, value: 0.210436 }],
+          node_timex_estimated_error_seconds: [{ metric: { instance: '10.0.0.1:9100' }, value: 0.000071 }, { metric: { nodename: 'n2' }, value: 0.000409 }],
+        }),
+      } as unknown as ModuleContext,
+      () => true,
+    );
+    expect(r.issues).toEqual([]);
+    expect(de(r.summary)).toBe('2 Uhren synchronisiert');
+    expect(de(r.stats).map((s) => [s.label, s.value])).toEqual([
+      ['Synchronisiert', '2/2'],
+      ['Geschätzter Fehler', '< 1 ms'],
+    ]);
+  });
+
   it('without Prometheus raises nothing and says why', async () => {
     const r = await new NodeClocksCheck().run({ inv, prom: null } as unknown as ModuleContext, () => true);
     expect(r.issues).toEqual([]);

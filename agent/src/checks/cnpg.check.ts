@@ -102,6 +102,18 @@ export function evaluateCnpg(clusters: CnpgCluster[], now: Date, opts: CnpgOptio
           : t('cnpg.oldBackup.expected', { hours: opts.backupMaxAgeHours }),
         actions: [backupAction],
       });
+    } else if (condition(c.status?.conditions, 'LastBackupSucceeded')?.status === 'False' && Number.isFinite(lastFailed) && lastFailed > lastOk) {
+      // The newest run failed while the last good one is still young: the
+      // same warning Longhorn and etcd get, before the age limit is reached.
+      const failed = condition(c.status?.conditions, 'LastBackupSucceeded')!;
+      issues.push({
+        id: `${base}/backup`,
+        check: 'cnpg',
+        severity: 'warning',
+        title: t('cnpg.backupFailed.title', { cluster: `${ns}/${name}` }),
+        cause: rawOr(failed.message, t('cnpg.oldBackup.failing', { at: c.status?.lastFailedBackup?.slice(0, 16).replace('T', ' ') ?? '' })),
+        actions: [backupAction],
+      });
     }
   }
   return issues;

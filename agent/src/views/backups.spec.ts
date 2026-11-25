@@ -79,11 +79,34 @@ describe('backups view', () => {
       {
         longhornBackups: [{ metadata: { name: 'x' }, status: { state: 'Completed', volumeName: 'v', backupCreatedAt: ago(2) } }],
         longhornBackupTargets: [{ metadata: { name: 'default' }, spec: { backupTargetURL: 's3://b@r/' }, status: { available: false } }],
+        longhornVolumes: [{ metadata: { name: 'v' }, status: { state: 'attached' } }],
       },
       NOW,
       26,
     );
     expect(de(view.rows)).toMatchObject([{ id: 'longhorn/v', name: 'v', state: 'critical', note: 'Backup-Ziel nicht erreichbar' }]);
+  });
+
+  // Real shape: Longhorn keeps BackupVolumes of deleted volumes in the target; they showed as 23 rows "217 days old".
+  it('lists only volumes that exist, counts backups of deleted ones, and does not fault a detached volume', () => {
+    const backup = (volume: string, h: number) => ({ metadata: { name: `b-${volume}-${h}` }, status: { state: 'Completed', volumeName: volume, backupCreatedAt: ago(h) } });
+    const view = buildBackups(
+      {
+        longhornBackups: [backup('pvc-live', 10), backup('pvc-idle', 24 * 60), backup('pvc-gone-1', 24 * 217), backup('pvc-gone-1', 24 * 218), backup('pvc-gone-2', 24 * 225)],
+        longhornBackupTargets: [{ metadata: { name: 'default' }, spec: { backupTargetURL: 's3://b@r/' }, status: { available: true } }],
+        longhornVolumes: [
+          { metadata: { name: 'pvc-live' }, status: { state: 'attached', kubernetesStatus: { namespace: 'shop', pvcName: 'shop-data' } } },
+          { metadata: { name: 'pvc-idle' }, status: { state: 'detached', kubernetesStatus: { namespace: 'shop', pvcName: 'shop-reports-state' } } },
+        ],
+      },
+      NOW,
+      26,
+    );
+    expect(de(view.rows).map((r) => [r.name, r.state, r.note])).toEqual([
+      ['shop-reports-state', 'ok', 'Nicht eingehängt, wird nicht automatisch gesichert'],
+      ['shop-data', 'ok', undefined],
+    ]);
+    expect(view.orphaned).toEqual({ kind: 'longhorn', volumes: 2, backups: 3 });
   });
 
   it('has no etcd row without snapshot data, and calls an empty snapshot list a warning', () => {

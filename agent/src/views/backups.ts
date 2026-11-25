@@ -6,7 +6,7 @@
  */
 import { CnpgCluster, hasBackup } from '../checks/cnpg.check';
 import { LonghornVolume } from '../checks/longhorn.check';
-import { EtcdSnapshot, LonghornBackup, LonghornBackupTarget } from '../checks/maintenance.check';
+import { EtcdSnapshot, LonghornBackup, LonghornBackupTarget, groupLonghornBackups, longhornBackupTime } from '../checks/maintenance.check';
 import { condition } from '../checks/types';
 import { Text, raw, t } from '../i18n/text';
 import { MANUAL, VeleroBackup, newestBySchedule } from '../modules/integrations/velero';
@@ -64,6 +64,12 @@ export interface BackupsView {
   targets: BackupTargetView[];
   /** Databases without a backup configured, volumes without any backup. Not judged: not every volume needs one. */
   unprotected: UnprotectedView[];
+  /**
+   * Backups Longhorn still keeps in its target for volumes that were deleted
+   * (`volumes` distinct deleted volumes, `backups` in all). They protect
+   * nothing and get no row; absent when there are none.
+   */
+  orphaned?: { kind: 'longhorn'; volumes: number; backups: number };
 }
 
 const H = 3_600_000;
@@ -148,27 +154,36 @@ function longhornRows(
   volumes: LonghornVolume[],
   now: number,
   maxAgeHours: number,
-): { rows: BackupRow[]; targets: BackupTargetView[]; unprotected: UnprotectedView[] } {
+): { rows: BackupRow[]; targets: BackupTargetView[]; unprotected: UnprotectedView[]; orphaned: { volumes: number; backups: number } } {
   const targetViews: BackupTargetView[] = targets
     .filter((x) => x.spec?.backupTargetURL)
     .map((x) => ({ kind: 'longhorn', name: x.metadata.name, type: targetFromUrl(x.spec!.backupTargetURL)!.type, location: targetFromUrl(x.spec!.backupTargetURL)!.location!, available: x.status?.available ?? null }));
   const main = targetViews.find((x) => x.name === 'default') ?? targetViews[0];
   const unreachable = targetViews.some((x) => x.available === false);
-  const time = (b: LonghornBackup) => Date.parse(b.status?.backupCreatedAt || b.status?.snapshotCreatedAt || b.metadata.creationTimestamp || '');
-  const byVolume = new Map<string, LonghornBackup[]>();
-  for (const b of backups) {
-    const v = b.status?.volumeName;
-    if (v) {
-      byVolume.set(v, [...(byVolume.get(v) ?? []), b]);
-    }
-  }
+  const time = longhornBackupTime;
+  // Only volumes that exist now: the target keeps backups of deleted volumes, which get a count, not a row.
+  const { byVolume, orphaned } = groupLonghornBackups(volumes, backups);
   const rows: BackupRow[] = [];
-  for (const [volume, list] of byVolume) {
+  for (const v of volumes) {
+    const volume = v.metadata.name;
+    const list = byVolume.get(volume);
+    if (!list) {
+      continue;
+    }
     const sorted = list.filter((b) => Number.isFinite(time(b))).sort((a, b) => time(b) - time(a));
     const lastOk = sorted.find((b) => b.status?.state === 'Completed');
     const ageMs = lastOk ? now - time(lastOk) : null;
-    let state = ageState(ageMs, maxAgeHours, 'critical');
-    let note: Text | undefined = ageMs === null ? t('backups.note.none') : state !== 'ok' ? t('backups.note.overdue', { hours: maxAgeHours }) : undefined;
+    // As the check: recurring jobs skip detached volumes, so their age is no fault (a hint there, ok here).
+    const detached = v.status?.state === 'detached';
+    let state = detached ? 'ok' : ageState(ageMs, maxAgeHours, 'critical');
+    let note: Text | undefined =
+      detached && (ageMs === null || ageMs > maxAgeHours * H)
+        ? t('backups.note.detached')
+        : ageMs === null
+          ? t('backups.note.none')
+          : state !== 'ok'
+            ? t('backups.note.overdue', { hours: maxAgeHours })
+            : undefined;
     if (sorted[0]?.status?.state === 'Error') {
       // As the check: a failed newest backup is a warning however recent the last good one is.
       state = worse(state, 'warning');
@@ -178,7 +193,7 @@ function longhornRows(
       state = 'critical';
       note = t('backups.note.targetUnreachable');
     }
-    const k8s = volumes.find((v) => v.metadata.name === volume)?.status?.kubernetesStatus;
+    const k8s = v.status?.kubernetesStatus;
     rows.push({
       id: `longhorn/${volume}`,
       kind: 'longhorn',
@@ -196,7 +211,7 @@ function longhornRows(
   const unprotected: UnprotectedView[] = volumes
     .filter((v) => !byVolume.has(v.metadata.name) && v.status?.state === 'attached')
     .map((v) => ({ kind: 'longhorn', name: v.status?.kubernetesStatus?.pvcName ?? v.metadata.name, ...(v.status?.kubernetesStatus?.namespace ? { namespace: v.status.kubernetesStatus.namespace } : {}) }));
-  return { rows, targets: targetViews, unprotected };
+  return { rows, targets: targetViews, unprotected, orphaned };
 }
 
 function etcdRow(snapshots: EtcdSnapshot[], now: number, maxAgeHours: number): BackupRow {
@@ -278,5 +293,11 @@ export function buildBackups(data: RunData, now: Date, maxAgeHours: number): Bac
   const rows = [...cnpg.rows, ...longhorn.rows, ...etcd, ...veleroRows(data.veleroBackups ?? [], at, maxAgeHours)].sort(
     (a, b) => RANK[a.state] - RANK[b.state] || order[a.kind] - order[b.kind] || a.id.localeCompare(b.id),
   );
-  return { maxAgeHours, rows, targets: longhorn.targets, unprotected: [...cnpg.unprotected, ...longhorn.unprotected] };
+  return {
+    maxAgeHours,
+    rows,
+    targets: longhorn.targets,
+    unprotected: [...cnpg.unprotected, ...longhorn.unprotected],
+    ...(longhorn.orphaned.backups > 0 ? { orphaned: { kind: 'longhorn' as const, ...longhorn.orphaned } } : {}),
+  };
 }
