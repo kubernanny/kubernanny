@@ -48,7 +48,7 @@ export const de = {
       connectLocal: 'Mit diesem Agent verbinden',
       installTitle: 'Agent installieren',
       installNote:
-        'Oder als Argo-CD-App, oder mit <code>kubectl apply -f</code>. Der Agent liest nur und darf genau vier Dinge tun: Sync, Refresh, Neustart, Backup.',
+        'Oder als Argo-CD-App, oder mit <code>kubectl apply -f</code>. Außer Lesen darf der Agent vier Dinge tun, jeweils nur, wo eine Prüfung sie anbietet: Sync, Refresh, Neustart, Backup. Rollbacks von Argo-CD-Apps kommen nur dazu, wenn du sie einschaltest.',
       logsTitle: 'Logs öffnen',
       logsNote: 'Dort steht ein QR-Code mit Adresse, Einmal-Code und dem Schlüssel des Agents.',
       scanTitle: 'Code scannen',

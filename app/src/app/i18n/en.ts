@@ -44,7 +44,7 @@ export const en: Dictionary = {
       connectLocal: 'Connect to this agent',
       installTitle: 'Install the agent',
       installNote:
-        'Or as an Argo CD app, or with <code>kubectl apply -f</code>. The agent only reads, and there are exactly four things it may do: sync, refresh, restart and back up.',
+        'Or as an Argo CD app, or with <code>kubectl apply -f</code>. Besides reading, the agent may do four things, each only where a check offers it: sync, refresh, restart and back up. Rolling back Argo CD apps comes on top only if you switch it on.',
       logsTitle: 'Open the logs',
       logsNote: 'They show a QR code with the address, a one-time code and the agent’s key.',
       scanTitle: 'Scan the code',
