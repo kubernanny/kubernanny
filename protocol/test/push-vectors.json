@@ -1,0 +1,24 @@
+[
+  {
+    "name": "status",
+    "agentStaticSecret": "8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0",
+    "agentStaticPublic": "883186b800b41d5cf0429695da9b3cc4f328ebcd184a6e482fa578c103f06c77",
+    "pushSecret": "2122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40",
+    "pushPublic": "5869aff450549732cbaaed5e5df9b30a6da31cb0e5742bad5ad4a1a768f1a67b",
+    "ephemeralSecret": "6162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80",
+    "keyId": "LbUGLxX9BNGEjdbP",
+    "plaintext": "{\"t\":\"homelab: 2 problems\",\"b\":\"🔴 default/api: CrashLoopBackOff\",\"p\":5,\"s\":1795000000000}",
+    "message": "01244fe3b963e899dd295baffce248d3530f3a9a7479ba063002680ebfe7adad4927773b1cba3e1201b3634c526a0f09d99222c2d5dcea3c0cb0bd989084dcfec79585c9cbee88f1a455032dde3c51c51cf226cf23ba91837341053214d97f1b3f4463695b0e5ca40942a35a878bcc136021b04f586b5938aa9c471e69fec6b33756624a2ba4d517df6f45bac9"
+  },
+  {
+    "name": "minimal",
+    "agentStaticSecret": "b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0",
+    "agentStaticPublic": "cd700e88f9e99b19c1a8a8dcd58182fd101e5e032a69ce317fde23e8ee265c51",
+    "pushSecret": "5152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f70",
+    "pushPublic": "0233f006ef4bed144ea0a5bb46c7067c7c2acec5f8cc811f3df59fdcd5ac7614",
+    "ephemeralSecret": "9192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0",
+    "keyId": "fG8DBY1Locv5Pm0p",
+    "plaintext": "{\"t\":\"homelab: new problems\",\"b\":\"1 critical. Details in Kubernanny.\",\"p\":5,\"s\":1795000060000}",
+    "message": "019cced751b301bbd16c4fb8deddd82f18925d71ed90c844fa0158f845b0fa7f4b642f404542353d951d63d2c1a65554f9b614336d234143627eb5492943064fd4d68fdac095a16f5fcb279fc49f56535fd24564202998653e057dd5c4abe1f14c8b3bb3324f2bbcb0e9b0956f247f390369ca69df8c0ed6a7e77afb11891946d3751c9799ff2b68ccd947ee37adb4"
+  }
+]

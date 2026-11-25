@@ -27,6 +27,10 @@ export const FrameType = {
   ReplyEnd: 0x03,
   /** relay -> agent: nobody waits for this call any more (timeout); the agent may drop its answer. */
   Cancel: 0x04,
+  /** agent -> relay: one native push to deliver (PushRequest as JSON); the id is the agent's own. Only when Ready said `push: true`. */
+  Push: 0x05,
+  /** relay -> agent: what became of that push (`{"s": PushOutcome}`), same id. */
+  PushResult: 0x06,
   /** relay -> agent, call id 0: `nonce (32) | relay ephemeral public key (32)`. */
   Challenge: 0x10,
   /** agent -> relay, call id 0: `agent static public key (32) | proof (32)`. */
@@ -74,6 +78,78 @@ export interface RelayLimitsInfo {
   maxResponseBytes: number;
   maxConcurrent: number;
   callTimeoutMs: number;
+  /** The relay delivers native push (Push frames); absent or false: it does not, and the agent sends none. */
+  push?: boolean;
+}
+
+/**
+ * One push for the relay to hand to Firebase Cloud Messaging. The relay sees
+ * the device's FCM token, its platform, the key id and the size of the
+ * sealed message; never what it says (protocol/src/push.ts).
+ */
+export interface PushRequest {
+  /** FCM registration token. */
+  token: string;
+  platform: 'ios' | 'android';
+  /** pushKeyId() of the device's push key. */
+  kid: string;
+  /** sealPush() output, base64url. */
+  message: string;
+  /** Language of the generic iOS alert shown when the phone cannot open the message (the agent's LANGUAGE). */
+  lang?: 'en' | 'de';
+}
+
+/**
+ * sent: FCM took it. unregistered: FCM says the token is gone (the agent forgets it).
+ * rate_limited, unavailable: try a later message. invalid: the request was malformed.
+ * failed: anything else. disabled: this relay has no push.
+ */
+export type PushOutcome = 'sent' | 'unregistered' | 'rate_limited' | 'unavailable' | 'invalid' | 'failed' | 'disabled';
+export const PUSH_OUTCOMES: readonly PushOutcome[] = ['sent', 'unregistered', 'rate_limited', 'unavailable', 'invalid', 'failed', 'disabled'];
+/** The largest Push frame payload either side accepts: a token, a sealed MAX_PUSH_PLAINTEXT in base64url and the JSON around it. */
+export const MAX_PUSH_FRAME = 8 * 1024;
+
+export function encodePushRequest(id: number, push: PushRequest): Uint8Array {
+  return encodeFrame(FrameType.Push, id, encoder.encode(JSON.stringify({ t: push.token, o: push.platform, k: push.kid, m: push.message, ...(push.lang ? { l: push.lang } : {}) })));
+}
+
+/** The relay's side: the request, or null when it is not one (the relay then answers `invalid`). */
+export function decodePushRequest(payload: Uint8Array): PushRequest | null {
+  if (payload.length > MAX_PUSH_FRAME) {
+    return null;
+  }
+  try {
+    const raw = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(payload)) as Record<string, unknown> | null;
+    const { t, o, k, m, l } = raw ?? {};
+    if (
+      typeof t !== 'string' ||
+      !/^[A-Za-z0-9:_\-.]{20,4096}$/.test(t) ||
+      (o !== 'ios' && o !== 'android') ||
+      typeof k !== 'string' ||
+      !/^[A-Za-z0-9_-]{16}$/.test(k) ||
+      typeof m !== 'string' ||
+      !/^[A-Za-z0-9_-]{66,4000}$/.test(m)
+    ) {
+      return null;
+    }
+    return { token: t, platform: o, kid: k, message: m, ...(l === 'de' || l === 'en' ? { lang: l } : {}) };
+  } catch {
+    return null;
+  }
+}
+
+export function encodePushResult(id: number, outcome: PushOutcome): Uint8Array {
+  return encodeFrame(FrameType.PushResult, id, encoder.encode(JSON.stringify({ s: outcome })));
+}
+
+/** The agent's side; anything it does not know reads as `failed`. */
+export function decodePushResult(payload: Uint8Array): PushOutcome {
+  try {
+    const s = (JSON.parse(new TextDecoder().decode(payload)) as { s?: unknown } | null)?.s;
+    return PUSH_OUTCOMES.includes(s as PushOutcome) ? (s as PushOutcome) : 'failed';
+  } catch {
+    return 'failed';
+  }
 }
 
 export class RelayFrameError extends Error {
