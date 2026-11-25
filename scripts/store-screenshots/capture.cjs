@@ -5,7 +5,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium, devices } = require('playwright');
-const { LABELS, scroll, tab, closeSheet, pairAll, openCluster } = require('../screenshots/helpers.cjs');
+const { LABELS, tab, closeSheet, pairAll, openCluster } = require('../screenshots/helpers.cjs');
 
 const ROOT = path.resolve(__dirname, '../..');
 const FASTLANE = path.join(ROOT, 'fastlane/screenshots');
@@ -27,20 +27,21 @@ const TARGETS = [
 ].filter((t) => !process.env.ONLY || process.env.ONLY.split(',').includes(t.id));
 
 const LOCALES = {
-  'en-US': { browser: 'en-US', labels: LABELS.en },
-  'de-DE': { browser: 'de-DE', labels: { ...LABELS.en, ...LABELS.de } },
+  'en-US': { browser: 'en-US', labels: { ...LABELS.en, overview: 'Overview' } },
+  'de-DE': { browser: 'de-DE', labels: { ...LABELS.en, ...LABELS.de, overview: 'Lage', restarted: 'Mit Neustarts' } },
 };
 
 /** The screens, in store order, with their captions. Claims only what the app really does. */
 const SCREENS = [
   { file: '01-overview', en: 'Your cluster at a glance', de: 'Dein Cluster auf einen Blick', go: (p) => openCluster(p, 'homelab') },
   { file: '02-issues', en: 'Only what is broken, with cause and fix', de: 'Nur was kaputt ist, mit Ursache und Abhilfe', go: (p) => scrollToTop(p, 'app-issue-list') },
-  { file: '03-last-7-days', en: 'The last 7 days', de: 'Die letzten 7 Tage', go: (p) => scrollToTop(p, 'app-history-section') },
-  { file: '04-services', en: 'Recognizes your tools by their images', de: 'Erkennt deine Tools an ihren Images', go: (p, L) => tab(p, L.services) },
-  { file: '05-component', en: 'Each component in detail', de: 'Jede Komponente im Detail', go: openSheet, after: (p, L) => closeSheet(p, L) },
-  { file: '06-backups', en: 'Are your backups current?', de: 'Sind deine Backups aktuell?', go: (p, L) => tab(p, L.backups) },
+  { file: '03-nodes', en: 'CPU and RAM: used, reserved, limit', de: 'CPU und RAM: genutzt, reserviert, Limit', go: (p, L) => tab(p, L.nodes) },
+  { file: '04-restarts', en: 'Restarts with their reason', de: 'Neustarts mit Grund', go: showRestarts },
+  { file: '05-service', en: 'Every service in detail', de: 'Jeder Dienst im Detail', go: (p, L) => openService(p, L, 'CloudNativePG'), after: (p, L) => closeSheet(p, L) },
+  { file: '06-ready-to-sync', en: 'Ready to sync, with what changes', de: 'Bereit zum Sync, mit allen Änderungen', go: showReadyToSync, after: (p, L) => closeReadyToSync(p, L) },
   { file: '07-clusters', en: 'All your clusters, one traffic light each', de: 'Alle deine Cluster, je eine Ampel', go: showClusters },
-  { file: '08-all-good', en: 'End-to-end encrypted. Open source.', de: 'Ende-zu-Ende verschlüsselt. Open Source.', go: (p) => openCluster(p, 'staging') },
+  // Push exists only in the native app; pushPlugin and showPush play it.
+  { file: '08-push', en: 'Push notifications, end-to-end encrypted', de: 'Ende-zu-Ende verschlüsselte Pushes', go: showPush },
 ];
 
 /** Puts a section's heading at the top of the screen (scrollIntoViewIfNeeded would leave it at the bottom edge). */
@@ -53,12 +54,92 @@ async function scrollToTop(page, selector) {
   await page.waitForTimeout(600);
 }
 
-/** The Argo CD sheet from the services tab: a component with its own checks and issues. */
-async function openSheet(page, labels) {
+/** A service's sheet, scrolled to its own list (CloudNativePG: the database clusters with primary and backups). */
+async function openService(page, labels, name) {
   await tab(page, labels.services);
-  await scroll(page, 0);
-  await page.locator('app-services-tab button', { hasText: 'Argo CD' }).first().click();
-  await page.waitForTimeout(1200);
+  await page.locator('app-services-tab button').filter({ has: page.locator('strong', { hasText: new RegExp(`^${name}$`) }) }).first().click();
+  await page.waitForSelector('app-module-sheet app-detail-section', { timeout: 10000 });
+  await page.waitForTimeout(900);
+  await page.locator('app-module-sheet ion-content').evaluate(async (el) => {
+    const target = el.querySelector('app-detail-section');
+    const scroller = await el.getScrollElement();
+    await el.scrollToPoint(0, target.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 24);
+  });
+  await page.waitForTimeout(600);
+}
+
+/** The workloads that restarted, the first OOMKill opened: why the last run ended, against its limit. */
+async function showRestarts(page, labels) {
+  await tab(page, labels.workloads);
+  await page.locator('app-workloads-tab .filters button', { hasText: labels.restarted }).click();
+  await page.waitForTimeout(500);
+  const oom = page.locator('app-workloads-tab li', { has: page.locator('.restart.oom') }).first();
+  await oom.locator('.row').click();
+  await page.waitForTimeout(500);
+  await oom.evaluate((el) => {
+    el.scrollIntoView({ block: 'start' });
+    return el.closest('ion-content')?.scrollByPoint(0, -96, 0);
+  });
+  await page.waitForTimeout(600);
+}
+
+/** The "ready to sync" card on the overview opens the list of manual Argo CD apps with a change waiting. */
+async function showReadyToSync(page, labels) {
+  await tab(page, labels.overview);
+  // Under the overview on a phone, in the side column on a tablet.
+  await page.locator('app-pending-sync-card button:visible').last().click();
+  await page.waitForSelector('app-pending-sync-sheet li', { timeout: 10000 });
+  await page.waitForTimeout(900);
+}
+
+async function closeReadyToSync(page, labels) {
+  await page.locator('app-pending-sync-sheet ion-button', { hasText: labels.close }).click();
+  await page.waitForTimeout(700);
+}
+
+/** Cluster settings, "Push to this device" tapped: the sign picker with its preview. */
+async function showPush(page) {
+  await openCluster(page, 'homelab');
+  // openCluster reloads the page; the native platform is played from here on, for the settings page only.
+  await page.evaluate(() => {
+    window.Capacitor.isNativePlatform = () => true;
+  });
+  await page.locator('.ion-page:not(.ion-page-hidden) ion-button:has(ion-icon[name="settings-outline"])').first().click();
+  await page.waitForSelector('app-push-section ion-button', { timeout: 15000 });
+  await page.locator('app-push-section ion-button').first().click();
+  await page.waitForSelector('app-push-marker-picker', { timeout: 5000 });
+  await page.waitForTimeout(400);
+  await scrollToTop(page, 'app-push-section');
+  // On a short screen (Play's 16:9 phone) the preview of a push matters more than the section's intro.
+  await page.locator('app-push-marker-picker').evaluate((el) => {
+    if (el.getBoundingClientRect().bottom > window.innerHeight) {
+      el.scrollIntoView({ block: 'end' });
+    }
+  });
+  await page.waitForTimeout(600);
+}
+
+/**
+ * The push plugin as a build with Firebase has it, for the push screen. Only
+ * its header is set at load, so the app stays on the web platform everywhere
+ * else; showPush then lets PushNative see a native platform, after the page
+ * has loaded and just before the settings ask for it.
+ */
+function pushPlugin(platform) {
+  const answers = { isAvailable: { available: true, platform }, getMarker: { marker: null } };
+  window.Capacitor = {
+    PluginHeaders: [
+      {
+        name: 'KubernannyPush',
+        methods: [
+          ...['isAvailable', 'requestPermission', 'getToken', 'storeKey', 'removeKey', 'getMarker', 'setMarker', 'removeListener'].map((name) => ({ name, rtype: 'promise' })),
+          { name: 'addListener', rtype: 'callback' },
+        ],
+      },
+    ],
+    nativePromise: async (plugin, method) => answers[method] ?? {},
+    nativeCallback: () => 'store-screenshot',
+  };
 }
 
 async function showClusters(page) {
@@ -86,26 +167,30 @@ async function captureTarget(browser, target, locale) {
     colorScheme: 'dark',
     locale: lang,
   });
+  await ctx.addInitScript(pushPlugin, target.dir(locale).startsWith('ios') ? 'ios' : 'android');
   const page = await ctx.newPage();
   const label = `${target.id}/${locale}`;
   page.on('pageerror', (e) => errors.push(`${label}: ${e.message}`));
-  await pairAll(page);
   const shots = [];
-  for (const screen of SCREENS) {
-    try {
-      await screen.go(page, labels);
-      await page.waitForTimeout(500);
-      const raw = path.join(RAW, `${target.id}-${locale}-${screen.file}.png`);
-      await page.screenshot({ path: raw });
-      shots.push({ raw, screen });
-      if (screen.after) {
-        await screen.after(page, labels);
+  try {
+    await pairAll(page);
+    for (const screen of SCREENS) {
+      try {
+        await screen.go(page, labels);
+        await page.waitForTimeout(500);
+        const raw = path.join(RAW, `${target.id}-${locale}-${screen.file}.png`);
+        await page.screenshot({ path: raw });
+        shots.push({ raw, screen });
+        if (screen.after) {
+          await screen.after(page, labels);
+        }
+      } catch (e) {
+        errors.push(`${label} ${screen.file}: ${e.message.split('\n')[0]}`);
       }
-    } catch (e) {
-      errors.push(`${label} ${screen.file}: ${e.message.split('\n')[0]}`);
     }
+  } finally {
+    await ctx.close();
   }
-  await ctx.close();
   return shots.map((s) => ({ ...s, band, cssW, cssH }));
 }
 

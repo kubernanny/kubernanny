@@ -13,6 +13,8 @@ ROOT=$(cd ../.. && pwd)
 OUT=$(pwd)/raw
 mkdir -p "$OUT"
 export OUT
+# A relay address makes the agents offer push (the push screen); nothing listens there, nothing leaves the machine.
+export DEMO_RELAY_URL=ws://localhost:9
 source ../screenshots/demo-agents.sh
 
 node capture.cjs
