@@ -1,0 +1,201 @@
+{{- /*
+A ValidatingAdmissionPolicy that holds the agent's own write permissions to
+what its actions change (docs/SECURITY.md, "the pod (RCE)"). RBAC can only say
+"patch Deployments"; with this policy, a request from the agent's
+ServiceAccount may only
+  - on Deployments, StatefulSets, DaemonSets: change the pod template annotation
+    kubectl.kubernetes.io/restartedAt (a restart), nothing else;
+  - on Argo CD Applications: set `operation` to a plain sync (no other
+    revision, source or manifests) and the refresh annotation, nothing else;
+  - on CNPG Backups: create one that names only a cluster.
+Everything else from the agent on these resources (other fields, create,
+delete) is denied. Other users and controllers are not matched at all.
+
+Needs Kubernetes 1.30+ (admissionregistration.k8s.io/v1). On older clusters
+nothing is rendered and the chart notes say so.
+*/ -}}
+{{- $writes := include "kubernanny.enabledWriteActions" . | fromJsonArray }}
+{{- if and .Values.rbac.admissionPolicy.enabled $writes (.Capabilities.APIVersions.Has "admissionregistration.k8s.io/v1/ValidatingAdmissionPolicy") }}
+{{- $agent := printf "system:serviceaccount:%s:%s" .Release.Namespace (include "kubernanny.name" .) }}
+{{- $prefix := printf "%s-%s" .Release.Name (include "kubernanny.name" .) }}
+{{- /* Every spec field of each kind outside the pod template; none of them may change. */ -}}
+{{- $workloads := dict
+  "deployments" (list "replicas" "selector" "strategy" "minReadySeconds" "revisionHistoryLimit" "progressDeadlineSeconds" "paused")
+  "statefulsets" (list "replicas" "selector" "serviceName" "podManagementPolicy" "updateStrategy" "revisionHistoryLimit" "minReadySeconds" "volumeClaimTemplates" "persistentVolumeClaimRetentionPolicy" "ordinals")
+  "daemonsets" (list "selector" "updateStrategy" "minReadySeconds" "revisionHistoryLimit") }}
+{{- if has "restart" $writes }}
+{{- range $resource, $fields := $workloads }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $prefix }}-restart-{{ $resource }}
+  labels:
+    {{- include "kubernanny.labels" $ | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [apps]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [{{ $resource }}]
+  matchConditions:
+    - name: only-the-agent
+      expression: request.userInfo.username == {{ $agent | quote }}
+  variables:
+    - name: restartedAt
+      expression: "'kubectl.kubernetes.io/restartedAt'"
+    - name: newAnn
+      expression: "request.operation == 'UPDATE' ? object.spec.template.metadata.?annotations.orValue({}) : {}"
+    - name: oldAnn
+      expression: "request.operation == 'UPDATE' ? oldObject.spec.template.metadata.?annotations.orValue({}) : {}"
+  validations:
+    - expression: request.operation == 'UPDATE'
+      message: the Kubernanny agent may not create or delete workloads
+      reason: Forbidden
+    - expression: >-
+        object.spec.template.spec == oldObject.spec.template.spec &&
+        object.spec.template.metadata.?labels == oldObject.spec.template.metadata.?labels &&
+        variables.newAnn.all(k, k == variables.restartedAt || (k in variables.oldAnn && variables.oldAnn[k] == variables.newAnn[k])) &&
+        variables.oldAnn.all(k, k == variables.restartedAt || k in variables.newAnn)
+      message: the Kubernanny agent may only change the restartedAt annotation of the pod template
+      reason: Forbidden
+    - expression: >-
+        object.metadata.?labels == oldObject.metadata.?labels &&
+        object.metadata.?annotations == oldObject.metadata.?annotations &&
+        object.metadata.?ownerReferences == oldObject.metadata.?ownerReferences &&
+        object.metadata.?finalizers == oldObject.metadata.?finalizers
+        {{- range $fields }} &&
+        object.spec.?{{ . }} == oldObject.spec.?{{ . }}
+        {{- end }}
+      message: the Kubernanny agent may only restart a workload, not change it
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $prefix }}-restart-{{ $resource }}
+  labels:
+    {{- include "kubernanny.labels" $ | nindent 4 }}
+spec:
+  policyName: {{ $prefix }}-restart-{{ $resource }}
+  validationActions: [Deny]
+{{- end }}
+{{- end }}
+{{- if or (has "argocd-sync" $writes) (has "argocd-refresh" $writes) }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $prefix }}-argocd-applications
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [argoproj.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [applications]
+  matchConditions:
+    - name: only-the-agent
+      expression: request.userInfo.username == {{ $agent | quote }}
+  variables:
+    - name: refresh
+      expression: "'argocd.argoproj.io/refresh'"
+    - name: newAnn
+      expression: "request.operation == 'UPDATE' ? object.metadata.?annotations.orValue({}) : {}"
+    - name: oldAnn
+      expression: "request.operation == 'UPDATE' ? oldObject.metadata.?annotations.orValue({}) : {}"
+    - name: opChanged
+      expression: "request.operation == 'UPDATE' && object.?operation != oldObject.?operation"
+  validations:
+    - expression: request.operation == 'UPDATE'
+      message: the Kubernanny agent may not create or delete Applications
+      reason: Forbidden
+    - expression: >-
+        object.?spec == oldObject.?spec &&
+        object.?status == oldObject.?status &&
+        object.metadata.?labels == oldObject.metadata.?labels &&
+        object.metadata.?finalizers == oldObject.metadata.?finalizers &&
+        object.metadata.?ownerReferences == oldObject.metadata.?ownerReferences
+      message: the Kubernanny agent may only start a sync or a refresh, not change an Application
+      reason: Forbidden
+    - expression: >-
+        variables.newAnn.all(k, k == variables.refresh || (k in variables.oldAnn && variables.oldAnn[k] == variables.newAnn[k])) &&
+        variables.oldAnn.all(k, k == variables.refresh || k in variables.newAnn) &&
+        (!(variables.refresh in variables.newAnn) || variables.newAnn[variables.refresh] in ['hard', 'normal'])
+      message: the Kubernanny agent may only set the refresh annotation
+      reason: Forbidden
+    - expression: >-
+        !variables.opChanged || (
+          has(object.operation) &&
+          object.operation.?initiatedBy.?username == optional.of('kubernanny') &&
+          object.operation.?sync.?revision == optional.none() &&
+          object.operation.?sync.?revisions == optional.none() &&
+          object.operation.?sync.?source == optional.none() &&
+          object.operation.?sync.?sources == optional.none() &&
+          object.operation.?sync.?manifests == optional.none() &&
+          object.operation.?sync.?resources == optional.none()
+        )
+      message: the Kubernanny agent may only start a plain sync of the Application as it is
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $prefix }}-argocd-applications
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  policyName: {{ $prefix }}-argocd-applications
+  validationActions: [Deny]
+{{- end }}
+{{- if has "cnpg-backup" $writes }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $prefix }}-cnpg-backups
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [postgresql.cnpg.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [backups]
+  matchConditions:
+    - name: only-the-agent
+      expression: request.userInfo.username == {{ $agent | quote }}
+  validations:
+    - expression: request.operation == 'CREATE'
+      message: the Kubernanny agent may only create Backups
+      reason: Forbidden
+    # Whether the named cluster exists cannot be checked here (a policy sees
+    # only the request); CNPG fails a Backup of a missing cluster itself.
+    - expression: >-
+        object.spec.?cluster.?name.orValue('') != '' &&
+        object.spec.?method == optional.none() &&
+        object.spec.?target == optional.none() &&
+        object.spec.?online == optional.none() &&
+        object.spec.?onlineConfiguration == optional.none() &&
+        object.spec.?pluginConfiguration == optional.none()
+      message: the Kubernanny agent may only create a plain Backup naming a cluster
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $prefix }}-cnpg-backups
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  policyName: {{ $prefix }}-cnpg-backups
+  validationActions: [Deny]
+{{- end }}
+{{- end }}

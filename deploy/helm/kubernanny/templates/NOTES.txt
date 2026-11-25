@@ -11,8 +11,27 @@ Without an ingress, open the web UI through a port-forward:
   kubectl -n {{ .Release.Namespace }} port-forward svc/kubernanny 8080:{{ .Values.service.port }}
   open http://localhost:8080
 {{- end }}
-{{- if not (or .Values.notifications.ntfyUrl .Values.notifications.webhookUrl .Values.notifications.existingSecret) }}
+{{- if include "kubernanny.notificationsLocked" . }}
+
+Notifications are switched off for good (checks.disabled: [notifications]): no
+channel is passed to the agent, and it sends nothing, security alerts included.
+{{- else if not (or .Values.notifications.ntfyUrl .Values.notifications.webhookUrl .Values.notifications.existingSecret) }}
 
 No notifications are set up. Set notifications.ntfyUrl or notifications.webhookUrl
 to hear about problems when the app is closed.
+{{- end }}
+{{- if and .Values.networkPolicy.enabled .Values.networkPolicy.egress.enabled (not .Values.networkPolicy.egress.apiServerCIDRs) }}
+
+Note: networkPolicy.egress.apiServerCIDRs is empty, so the rule for the API
+server allows ports {{ join ", " .Values.networkPolicy.egress.apiServerPorts }} to any address{{ if not .Values.networkPolicy.egress.internetHttps }}: internetHttps: false
+does not stop HTTPS to the internet until you set it{{ end }}. Find the addresses with
+`kubectl get endpoints kubernetes -n default`.
+{{- end }}
+{{- $writes := include "kubernanny.enabledWriteActions" . | fromJsonArray }}
+{{- if and .Values.rbac.admissionPolicy.enabled $writes (not (.Capabilities.APIVersions.Has "admissionregistration.k8s.io/v1/ValidatingAdmissionPolicy")) }}
+
+Note: this cluster has no ValidatingAdmissionPolicy (Kubernetes 1.30+), so the
+policy that limits the agent's write actions was not installed. The agent's
+ServiceAccount can patch any Deployment, StatefulSet, DaemonSet{{ if or (has "argocd-sync" $writes) (has "argocd-refresh" $writes) }} and Argo CD Application{{ end }}.
+Upgrade Kubernetes, or set rbac.allowActions: false for a read-only agent.
 {{- end }}

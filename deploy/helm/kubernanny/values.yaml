@@ -31,7 +31,10 @@ notifications:
   webhookUrl: ""
   # auto | discord | slack | gotify | json
   webhookFormat: auto
-  # Secret holding NTFY_TOKEN and/or WEBHOOK_URL, for URLs that are secret themselves.
+  # Secret holding NTFY_TOKEN and/or WEBHOOK_URL, for URLs that are secret
+  # themselves. Only those two keys are read (secretKeyRef), nothing else of
+  # the Secret reaches the agent's environment. webhookUrl above wins over the
+  # Secret's WEBHOOK_URL.
   existingSecret: ""
   # Issues shorter than this are never sent (rollouts, planned reboots).
   notifyAfterSeconds: 300
@@ -129,6 +132,16 @@ rbac:
   # start CNPG backups. The agent only runs an action an open issue offers.
   # false: strictly read-only (adds the four write actions to actions.disabled).
   allowActions: true
+  # A ValidatingAdmissionPolicy that limits the agent's write permissions to
+  # what its actions change: on Deployments, StatefulSets and DaemonSets only
+  # the restartedAt annotation of the pod template, on Argo CD Applications
+  # only a plain sync and the refresh annotation, on CNPG only creating a
+  # plain Backup. A compromised agent pod then cannot change images, service
+  # accounts or Argo CD sources with the permissions the actions need.
+  # Rendered while any write action is enabled; needs Kubernetes 1.30+
+  # (skipped, with a note, on older clusters). docs/PERMISSIONS.md.
+  admissionPolicy:
+    enabled: true
 # Prometheus, Alertmanager, Grafana and Loki are reached directly over cluster
 # DNS (no services/proxy grant). With NetworkPolicies, allow egress from the
 # agent to them.
@@ -175,7 +188,13 @@ networkPolicy:
     enabled: false
     # Ports the API server listens on behind the kubernetes Service (6443 on most distributions).
     apiServerPorts: [443, 6443]
-    # Allow HTTPS to anywhere for ntfy/webhooks; false: only in-cluster.
+    # The API server's addresses as CIDRs, e.g. [192.168.1.10/32] for one
+    # control-plane node (`kubectl get endpoints kubernetes`). Empty: the
+    # API-server rule allows those ports to ANY address, so with
+    # internetHttps: false the agent can still reach port 443 anywhere.
+    apiServerCIDRs: []
+    # Allow HTTPS to anywhere for ntfy/webhooks; false: only in-cluster, and
+    # only effective together with apiServerCIDRs (see above).
     internetHttps: true
 
 resources:

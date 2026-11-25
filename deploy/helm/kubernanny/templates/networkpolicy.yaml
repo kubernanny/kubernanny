@@ -39,12 +39,21 @@ spec:
           protocol: UDP
         - port: 53
           protocol: TCP
-    # The API server (its address is node IPs on most distributions).
+    # The API server (its address is node IPs on most distributions). Without
+    # apiServerCIDRs this rule has no `to:` and allows these ports to any
+    # address, internet included: internetHttps: false then does not stop 443.
     - ports:
         {{- range .Values.networkPolicy.egress.apiServerPorts }}
         - port: {{ . }}
           protocol: TCP
         {{- end }}
+      {{- with .Values.networkPolicy.egress.apiServerCIDRs }}
+      to:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
+      {{- end }}
     # Prometheus, Alertmanager, Grafana, Loki.
     - to:
         - namespaceSelector:

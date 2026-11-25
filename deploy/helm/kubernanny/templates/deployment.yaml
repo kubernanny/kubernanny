@@ -1,3 +1,5 @@
+{{- include "kubernanny.validateSwitches" . }}
+{{- $notificationsLocked := include "kubernanny.notificationsLocked" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -26,6 +28,7 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
+        runAsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -107,13 +110,32 @@ spec:
             - name: CUSTOM_COMPONENTS
               value: {{ toJson . | quote }}
             {{- end }}
+            {{- /* checks.disabled: [notifications] renders no channel at all, so not even a wrong agent could send. */}}
+            {{- if not $notificationsLocked }}
             {{- with .Values.notifications.ntfyUrl }}
             - name: NTFY_URL
               value: {{ . | quote }}
             {{- end }}
-            {{- with .Values.notifications.webhookUrl }}
+            {{- if .Values.notifications.webhookUrl }}
             - name: WEBHOOK_URL
-              value: {{ . | quote }}
+              value: {{ .Values.notifications.webhookUrl | quote }}
+            {{- else if .Values.notifications.existingSecret }}
+            - name: WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.notifications.existingSecret }}
+                  key: WEBHOOK_URL
+                  optional: true
+            {{- end }}
+            {{- with .Values.notifications.existingSecret }}
+            # Only these two keys of the Secret: the whole Secret as environment could set any variable (DEMO, RELAY_URL, K8S_API_URL, ...).
+            - name: NTFY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . }}
+                  key: NTFY_TOKEN
+                  optional: true
+            {{- end }}
             {{- end }}
             - name: WEBHOOK_FORMAT
               value: {{ .Values.notifications.webhookFormat | quote }}
@@ -142,12 +164,6 @@ spec:
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- with .Values.notifications.existingSecret }}
-          envFrom:
-            - secretRef:
-                name: {{ . }}
-                optional: true
-          {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz
