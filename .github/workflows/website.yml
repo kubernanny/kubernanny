@@ -1,6 +1,8 @@
 name: Website
 
-# Builds kubernanny.app from website/ and docs/ and deploys it to Cloudflare Pages.
+# Builds kubernanny.app from website/ and docs/, and demo.kubernanny.app from the app's demo build, and
+# deploys both to Cloudflare Pages (projects `kubernanny` and `kubernanny-demo`). The custom domains are
+# attached in the maintainer's infrastructure (OpenTofu); a deploy only needs the two repository secrets.
 on:
   push:
     branches: [main]
@@ -8,11 +10,15 @@ on:
       - 'website/**'
       - 'docs/**'
       - 'branding/**'
+      - 'app/**'
+      - 'protocol/**'
+      - 'agent/src/demo/**'
       - '.github/workflows/website.yml'
   pull_request:
     paths:
       - 'website/**'
       - 'docs/**'
+      - '.github/workflows/website.yml'
   workflow_dispatch:
 
 permissions:
@@ -47,20 +53,67 @@ jobs:
           path: website/dist/analog/public
           retention-days: 7
 
+  demo:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: protocol
+      - run: npm ci && npm run build:demo
+        working-directory: app
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: demo
+          path: app/dist/demo/browser
+          retention-days: 7
+
   deploy:
-    needs: build
+    needs: [build, demo]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: website
       url: https://kubernanny.app
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
+      # Forks and a fresh clone have no token: skip instead of failing main.
+      - name: Check for the Cloudflare secrets
+        id: secrets
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is not set; nothing is deployed."
+          fi
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.secrets.outputs.present == 'true'
+        with:
+          node-version: '24'
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: steps.secrets.outputs.present == 'true'
         with:
           name: website
           path: site
-      - uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: steps.secrets.outputs.present == 'true'
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy site --project-name=kubernanny --branch=main --commit-dirty=true
+          name: demo
+          path: demo
+      # The projects are created on the first run; later runs find them and move on.
+      - name: Deploy to Cloudflare Pages
+        if: steps.secrets.outputs.present == 'true'
+        run: |
+          W="npx --yes wrangler@4.168.0"
+          for project in kubernanny kubernanny-demo; do
+            $W pages project list | grep -q "\b$project\b" || $W pages project create "$project" --production-branch=main
+          done
+          $W pages deploy site --project-name=kubernanny --branch=main --commit-dirty=true
+          $W pages deploy demo --project-name=kubernanny-demo --branch=main --commit-dirty=true
