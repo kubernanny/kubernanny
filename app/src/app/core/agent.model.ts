@@ -1,4 +1,4 @@
-/** Mirrors the agent's API (agent/src). Keep in step with status.service.ts and views/*.ts there. */
+/** Mirrors the agent's API (agent/src). Keep in step with status/snapshot.ts and views/*.ts there; agent/drift/app-model.ts fails the agent's typecheck and tests when it drifts. */
 export type Light = 'green' | 'yellow' | 'red' | 'unknown';
 export type Severity = 'warning' | 'critical';
 /** `info`: a hint. Shown, but never colours the light, costs score or notifies. */
