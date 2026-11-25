@@ -92,7 +92,7 @@ All devices must pair again; the app reports the old agent key as no longer answ
 
 ## Supply chain
 
-One image, built by GitHub Actions from this repository (`Dockerfile`, multi-arch). Runtime dependencies: NestJS, rxjs, reflect-metadata, qrcode, and `@noble/curves`, `@noble/ciphers`, `@noble/hashes` (audited, pure JavaScript, pinned to exact versions) through the shared `protocol/` package. The web UI is built in the same pipeline and copied into the image; it loads no third-party resources at runtime (fonts are bundled).
+One image, built by GitHub Actions from this repository (`Dockerfile`, multi-arch). Runtime dependencies (bundled into one file with esbuild, no `node_modules` in the image): `ws` (the relay connection), `qrcode`, and `@noble/curves`, `@noble/ciphers`, `@noble/hashes` (audited, pure JavaScript, pinned to exact versions) through the shared `protocol/` package. The web UI is built in the same pipeline and copied into the image; it loads no third-party resources at runtime (fonts are bundled).
 
 Every published image carries a build provenance attestation and an SBOM, and is signed keyless with Sigstore by the workflow itself (no long-lived key exists). Verify before you deploy:
 

@@ -93,7 +93,7 @@ A module's reads are granted only while the module is not in `checks.disabled`. 
 
 ## Always: the inventory every run reads
 
-These lines are in the ClusterRole whatever is switched off: every check builds on them.
+These lines are in the ClusterRole whatever is switched off: every check builds on them. `watch` is there because the agent keeps these lists current with watches instead of listing them every minute; without it the agent falls back to listing them on every run.
 
 <!-- generated:inventory -->
 | Resources | Verbs | Why |

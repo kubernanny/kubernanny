@@ -2,7 +2,7 @@
 
 Kubernanny has three parts and no backend of its own:
 
-- **The agent** runs as one pod in the cluster it watches. It reads the Kubernetes API once a minute, recognises what runs there, checks it, keeps the result in memory, and serves it over HTTP together with the web UI. It also sends notifications.
+- **The agent** runs as one pod in the cluster it watches. It keeps what it reads from the Kubernetes API current with watches, checks it once a minute (and within seconds of a change that matters), recognises what runs there, keeps the result in memory, and serves it over HTTP together with the web UI. It also sends notifications.
 - **The app** (iOS, Android, web) talks only to agents. Every cluster is an agent URL, the agent's pinned public key and this device's own key pair, stored on the device.
 - **The protocol** (`protocol/`) is shared by both: every call is one end-to-end encrypted Noise handshake between device key and agent key ([PROTOCOL.md](PROTOCOL.md)).
 
@@ -18,7 +18,7 @@ flowchart LR
     prom["Prometheus · Alertmanager<br/>Grafana · Loki"]
     agent["kubernanny<br/>(one pod)"]
     secret[("Secrets<br/>kubernanny-identity<br/>kubernanny-devices")]
-    agent -- "list / get every 60 s<br/>patch / create on actions" --> api
+    agent -- "list + watch, CRDs every 60 s<br/>patch / create on actions" --> api
     agent -- "HTTP over cluster DNS" --> prom
     agent -- "key pair, device public keys" --> secret
   end
@@ -52,16 +52,19 @@ Nothing leaves your network except the notifications you configure. There is no 
 
 ## The agent
 
-NestJS 12 on Node 24, no Kubernetes client library: a thin `fetch` wrapper (`src/kube/kube-client.ts`) is all it needs, and it never falls behind a Kubernetes release.
+Node 24 (22 works), no web framework and no Kubernetes client library: a route table on `node:http` (`src/http/server.ts`) serves about thirty routes, and a thin `fetch` wrapper (`src/kube/kube-client.ts`) with a watch cache on top (`src/kube/watch-cache.ts`) is all the API access it needs; it never falls behind a Kubernetes release. The image runs one esbuild bundle (`npm run bundle`), no `node_modules`.
 
 ```
 agent/src
-├── main.ts                 bootstrap: /api prefix, CORS, static web UI, metrics port, pairing banner
+├── main.ts                 bootstrap: listen, metrics port, pairing banner, SIGTERM handover
+├── agent.ts                every service wired by hand, start-up, readiness, graceful shutdown
+├── http/                   the route table on node:http: guard, CORS, static web UI, errors, ETags
 ├── cli.ts                  admin commands inside the pod (pair, devices, revoke) over the internal socket
-├── app.controller.ts       the HTTP API
+├── app.controller.ts       the HTTP API (routes in appRoutes)
 ├── config.ts               every environment variable, validated at start
-├── kube/                   fetch wrapper: ServiceAccount token, list/get/patch/create, 404 = "not installed"
-├── inventory/              one read of the cluster per run (nodes, pods, workloads, …, metrics)
+├── kube/                   fetch wrapper: ServiceAccount token, list/get/watch/patch/create, 404 = "not installed"; the watch cache
+├── lease/                  which pod is in charge during a rolling update (coordination.k8s.io Lease)
+├── inventory/              the cluster as the checks see it: watch caches (cluster-cache), field stripping, per-run lists
 ├── discovery/              catalog of ~75 components, matching by image, service and ingress lookup
 ├── checks/                 pure functions: Kubernetes objects in, issues out (nodes, pods, etcd, Longhorn, …)
 ├── modules/
@@ -88,7 +91,7 @@ agent/src
 
 ### One run
 
-`StatusService` runs every `CHECK_INTERVAL_SECONDS` (60) and on `POST /api/status/refresh`. Concurrent triggers share one run.
+`StatusService` runs every `CHECK_INTERVAL_SECONDS` (60), on `POST /api/status/refresh`, and 3 s after a watched change that can open or close an issue (a pod into CrashLoopBackOff or an image pull error, a node condition changing, a workload losing or regaining its replicas, a PVC phase, a failed job), at most every 15 s, so the app sees it within seconds. Concurrent triggers share one run. Notifications keep their own rules (`NOTIFY_AFTER_SECONDS`, each change sent once), so an early run never sends more.
 
 ```mermaid
 sequenceDiagram
@@ -99,8 +102,8 @@ sequenceDiagram
   participant I as Integrations
   participant C as Core checks
   participant N as Notifier
-  L->>K: /apis, /version, nodes, pods (must work)
-  L->>K: workloads, jobs, services, ingresses, PVCs, events, metrics (may fail)
+  L->>K: /apis, /version, metrics, route CRDs (each run)
+  Note over L,K: nodes, pods, workloads, jobs, services,<br/>ingresses, PVCs, events: from the watch caches
   K-->>L: Inventory
   L->>D: discover(inventory)
   D-->>L: Detected components (+ services, ingress URLs, version)
@@ -123,7 +126,11 @@ A module that throws does not stop the run: it is reported with status `error` a
 
 ### Inventory
 
-`gatherInventory()` reads everything the modules and detail views need in one pass, in parallel: nodes and pods are required, the rest is optional (a missing or forbidden list becomes empty). On a homelab cluster a run takes 20 to 60 ms of API time; the response is a few MB at most.
+`gatherInventory()` assembles everything the modules and detail views need. Most of it comes from memory: nodes, pods, namespaces, Deployments, StatefulSets, DaemonSets, Jobs, CronJobs, Services, Ingresses, PVCs, StorageClasses and warning events are kept current by one watch cache per kind (`inventory/cluster-cache.ts`, `kube/watch-cache.ts`): a paged list for a complete copy and its `resourceVersion`, then a watch from there with bookmarks; a broken stream reconnects with backoff (1 to 30 s) from the last version, `410 Gone` relists, and every kind is relisted every 15 minutes anyway. API discovery (`/apis`), the version, `metrics.k8s.io` (which cannot be watched) and the Gateway API and Traefik route CRDs are listed per run; integrations keep listing their own CRDs when they run, so a module switched off starts no request at all. ReplicaSets are not read: the owner of a pod is derived from its name.
+
+Memory follows the number of objects, not their size: before an object is stored it is cut to the fields the checks read (`inventory/strip.ts`: no `managedFields`, only the three annotations anything reads, containers with image, resources, security context and ports, no env, probes or node image lists), and warning events are capped at the newest 2000 and 6 hours. `strip.spec.ts` runs every check and view of the demo on stripped and on full objects and requires the same result.
+
+A cache whose kind cannot be watched (no `watch` verb, three failed watches in a row) or listed falls back to a list per run. Nodes and pods are required: if they cannot be read the run fails and the cluster counts as unreachable. Any other kind whose read fails (timeout, 429, 5xx, 403 after an RBAC change) is **stale**, not empty: its last known objects stay, so no issue resolves and no "resolved" is sent because of a failed read, and every module that reads it (`CheckModule.uses`; components rest on pods, workloads, services and routes) reports `error`, which keeps the light from turning green. A 404 (an API that is not installed) is an empty list, not an error.
 
 Metrics come from `metrics.k8s.io` (metrics-server) when the group exists: per node and per pod CPU and memory. Quantities are parsed once (`parseQuantity`, binary and decimal suffixes).
 
@@ -264,7 +271,7 @@ flowchart LR
   e2e -- "message 2 · frames" --> app
 ```
 
-`E2eService` (`agent/src/e2e/`) decrypts, checks and dispatches; the routes are the same NestJS controllers as ever, reached through the internal socket ([0003](decisions/0003-internal-socket.md)), so validation, audit log and tests are shared. `PrincipalGuard` is the global guard: every route needs a device the channel proved, except the three marked `@Public()` (`/healthz`, `/api/identity`, `/api/e2e`), so on the TCP port every other route answers 401, and a new route is guarded unless someone decides otherwise (`auth/public-routes.spec.ts` enumerates them). With `RELAY_URL` set, `RelayClient` (`agent/src/relay/`) hands the calls arriving over its relay connection to the same `E2eService.handle()` ([RELAY.md](RELAY.md)).
+`E2eService` (`agent/src/e2e/`) decrypts, checks and dispatches; the routes are the same route table as on the TCP port, reached through the internal socket ([0003](decisions/0003-internal-socket.md)), so validation, audit log and tests are shared. The guard (`principalOf`, applied by `http/server.ts`) sits in front of every route: each needs a device the channel proved, except the four marked `public: true` (`/healthz`, `/readyz`, `/api/identity`, `/api/e2e`), so on the TCP port every other route answers 401, and a new route is guarded unless someone decides otherwise (`auth/public-routes.spec.ts` enumerates them). With `RELAY_URL` set, `RelayClient` (`agent/src/relay/`) hands the calls arriving over its relay connection to the same `E2eService.handle()` ([RELAY.md](RELAY.md)).
 
 The log never contains a credential: a code works once and expires after an hour, and the agent key in the link is public. Wrong codes are throttled, but never burn the code, and the right one is compared first, so nobody who knows the agent key can keep the owner from pairing. Each pairing registers the **device's own public key**; the agent lists devices with their last activity and revokes them one by one. A paired device can create a code for the next one (`POST /pair/code`); `kubectl exec … node dist/cli.js pair` does the same from the pod.
 
@@ -275,6 +282,7 @@ How every channel is protected, with a diagram: [COMMUNICATION.md](COMMUNICATION
 | Port | Path | Auth | Purpose |
 |---|---|---|---|
 | 8080 | `/healthz` | none | liveness, no cluster data |
+| 8080 | `/readyz` | none | readiness: 200 once the first run is in memory (or after `READY_TIMEOUT_SECONDS`, 90), 503 from SIGTERM on; no data |
 | 8080 | `/api/identity` | none | the agent's public key (for pairing by hand) |
 | 8080 | `/api/e2e` | Noise IK: device key, every call | every API call, see [PROTOCOL.md](PROTOCOL.md) and [API.md](API.md) |
 | 8080 | other `/api/*` | | 401 `E2E_REQUIRED`: only reachable through the internal socket |
@@ -354,7 +362,8 @@ flowchart LR
 ```mermaid
 flowchart TB
   subgraph ns["namespace kubernanny"]
-    dep["Deployment kubernanny<br/>1 replica, Recreate"]
+    dep["Deployment kubernanny<br/>1 replica, RollingUpdate"]
+    lease[("Lease kubernanny")]
     svc["Service kubernanny<br/>80 → 8080, 9100"]
     sa["ServiceAccount kubernanny"]
     sec[("Secrets kubernanny-identity,<br/>kubernanny-devices<br/>(created by the agent)")]
@@ -369,7 +378,24 @@ flowchart TB
   sm -. scrapes 9100 .-> svc
 ```
 
-- **One replica, `Recreate`.** The agent remembers which issues it notified about and which calls it has seen (replay cache). Two replicas would notify twice; a rolling update would overlap two for a moment.
+- **One replica, rolling updates without downtime.** `RollingUpdate` with `maxSurge: 1, maxUnavailable: 0`: the new pod starts next to the old one and gets traffic once `/readyz` says its first run is in memory, so the page never goes dark. Two pods must not both notify, write or hold the relay (which keeps one connection per agent key and would have them throw each other out), so only the pod holding the Lease `kubernanny` (`lease/leader.ts`; get and patch on that one name, create) does: it sends notifications, the weekly report and pushes, runs write routes and pairing, and holds the relay. The other answers reads and refuses writes with 503 `AGENT_HANDOVER`, which the app retries; it reads devices and switches again before every call, so a device revoked meanwhile gets nothing there.
+
+  ```mermaid
+  sequenceDiagram
+    participant O as old pod (holds the lease)
+    participant N as new pod
+    participant K as Kubernetes
+    K->>N: start; first run (reads only, no notifications)
+    N-->>K: /readyz 200
+    K->>O: SIGTERM (endpoint removed)
+    O->>O: /readyz 503, relay closed (1001), watches and timers stopped
+    O->>K: release the Lease
+    N->>K: take the Lease (within 2 s)
+    N->>N: read devices and switches again (fail closed), connect to the relay
+    O->>O: answer 5 s more, finish requests in flight (≤ 10 s), exit
+  ```
+
+  What was already notified lives in the ConfigMap `kubernanny-settings` (key `notified`), which the new pod reads before its first send, so a rollout sends nothing twice. A pod that dies without releasing loses the lease after 15 s. Readiness does not wait for the lease on purpose: the old pod only gets SIGTERM once the new one is ready, so a new pod that waited for the lease would never start. There is no PodDisruptionBudget: with one replica it could only block node drains. On a drain the pod is evicted and its replacement starts elsewhere at the same time, so the page is away for the replacement's start (usually under 10 s), and notifications resume once it holds the lease (at most 15 s).
 - **Hardened pod**: non-root, read-only root filesystem (plus a 1 MiB in-memory `/tmp` for the internal socket), no capabilities, `RuntimeDefault` seccomp.
 - **Image**: one multi-arch image (amd64, arm64) with the agent, the protocol package and the web build (`Dockerfile` at the repository root).
 - **Install paths**: Helm chart (`deploy/helm/kubernanny`, published as OCI), plain manifests (`deploy/install.yaml`), or an Argo CD Application pointing at the chart. Values: [CONFIGURATION.md](CONFIGURATION.md).
@@ -378,7 +404,9 @@ flowchart TB
 
 ## Design decisions
 
-**No Kubernetes client library.** The agent needs list, get, merge patch, create and a text read. A 120-line `fetch` wrapper covers that, has no version coupling and makes the demo client a simple subclass.
+**No Kubernetes client library.** The agent needs list, watch, get, merge patch, create and a text read. A 120-line `fetch` wrapper and a 400-line watch cache cover that, have no version coupling and make the demo client a simple subclass. `@kubernetes/client-node` would bring informers, but also a large dependency tree (request handling, YAML, OpenID, its own model classes) into a pod whose memory is the point, and the informer is the smaller part of the work: deciding what to keep of each object and what counts as a change worth a run is ours either way.
+
+**No web framework.** The agent used NestJS and Express for about thirty JSON routes, one guard and one error shape; they cost about 30 MB of memory, most of the image's `node_modules` and a decorator-based DI that the tests had to boot. A route table on `node:http` with the same behaviour on the wire (`http/server.spec.ts`) and services wired by hand (`agent.ts`) replaced them. The relay keeps NestJS for now.
 
 **Detection by image.** Labels and release names depend on how something was installed; images do not. The cost is a catalog to maintain, kept honest by a test against [COMPONENTS.md](COMPONENTS.md).
 

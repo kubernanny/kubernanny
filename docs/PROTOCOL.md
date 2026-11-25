@@ -134,7 +134,7 @@ sequenceDiagram
 - **A stolen agent key** lets its holder impersonate the agent to devices that reach them (they would need to sit on the path too). Rotate: delete `kubernanny-identity`, restart, pair every device again.
 - **Traffic analysis**: sizes and timing of calls stay visible to whoever carries them.
 - **Clock**: the windows (5 minutes for reads, 60 seconds for writes) assume clocks within reach of each other; the sealed skew answer corrects the device automatically.
-- **Single replica**: the replay cache lives in memory, so the agent runs with one replica and the `Recreate` strategy (as the chart does). A restart clears the cache; a replay across a restart still has to pass the clock window.
+- **Single replica**: the replay cache lives in memory, so the agent runs with one replica. A restart clears the cache; a replay across a restart still has to pass the clock window. A rolling update is such a restart with a few seconds of overlap: only the pod holding the Lease runs writes (60 s window), the other refuses them with 503 `AGENT_HANDOVER`, so a write replayed to the new pod within the window after the handover is the same case as a replay across a restart.
 
 ## Test vectors
 
