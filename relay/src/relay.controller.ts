@@ -2,6 +2,7 @@ import { Controller, Get, Inject, Logger, Options, Param, Post, Req, Res } from 
 import type { Request, Response } from 'express';
 import { AgentHub } from './agent-hub.service';
 import { RelayErrorCode, corsHeaders, idPrefix, parseRoute, relayError } from './core/http';
+import { clientAddress } from './core/limits';
 import { RELAY_CONFIG, RelayConfig } from './config';
 import { RelayMetrics, outcomeOf } from './metrics';
 
@@ -47,7 +48,9 @@ export class RelayController {
     if (body === null || body.length === 0) {
       return this.refuse(res, 'RELAY_BAD_REQUEST', agentId, 0, started);
     }
-    const result = await this.hub.call(route.agentId, body);
+    // The caller's address for its own share of the agent's buckets (review M1); from the trusted proxy header only with TRUST_PROXY.
+    const caller = clientAddress(req.headers, req.socket.remoteAddress, this.config.limits.trustProxy);
+    const result = await this.hub.call(route.agentId, body, caller);
     if (result.kind === 'error') {
       return this.refuse(res, result.code, agentId, body.length, started);
     }

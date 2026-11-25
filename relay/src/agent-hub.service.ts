@@ -2,13 +2,14 @@ import type { IncomingMessage, Server } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { Inject, Injectable, Logger, BeforeApplicationShutdown, OnApplicationBootstrap } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
-import { FrameType, HEARTBEAT_PING, HEARTBEAT_PONG, REPLY_CHUNK, RegistrationChallenge, RelayClose, RelayFrameError, decodeFrame, encodeFrame } from '@kubernanny/protocol';
+import { FrameType, HEARTBEAT_PING, HEARTBEAT_PONG, REPLY_CHUNK, RelayClose, RelayFrameError, decodeFrame, encodeFrame } from '@kubernanny/protocol';
 import { RawData, WebSocket, WebSocketServer } from 'ws';
-import { AgentLink, CallResult, LinkPush } from './core/agent-link';
-import { idPrefix, parseRoute, pathOf } from './core/http';
-import { ByteBudget, clientAddress, shareBytes } from './core/limits';
-import { pushSender } from './core/push';
-import { checkRegistration } from './core/registration';
+import { Admission } from './core/admission';
+import { AgentLink, CallResult } from './core/agent-link';
+import { idPrefix, parseRoute, pathOf, registrationOrigin, toBytes } from './core/http';
+import { clientAddress } from './core/limits';
+import { PushSender, pushSender } from './core/push';
+import { Session, endSession, openSession, proveSession } from './core/session';
 import { RELAY_CONFIG, RelayConfig } from './config';
 import { RelayMetrics } from './metrics';
 
@@ -17,9 +18,9 @@ interface Connection {
   agentId: string;
   lastSeen: number;
   link: AgentLink | null;
-  /** The client address the pending limit counts this connection under. */
+  /** The client address the per-address limits count this connection under. */
   address: string;
-  pending: boolean;
+  session: Session;
 }
 
 /** The largest message an agent sends: one reply chunk plus the frame header and status. */
@@ -32,7 +33,9 @@ const MAX_AGENT_MESSAGE = REPLY_CHUNK + 64;
  * Plain `ws` on the HTTP server's upgrade event rather than a Nest gateway:
  * a gateway brings an adapter and a message router for a protocol that has
  * four frame types, and every byte of per-connection state counts when ten
- * thousand agents idle here.
+ * thousand agents idle here. The per-address and relay-wide rules live in
+ * `Admission`, the registration states in `core/session.ts` (shared with the
+ * Worker).
  */
 @Injectable()
 export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdown {
@@ -40,33 +43,25 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
   private readonly agents = new Map<string, Connection>();
   /** Unproven connections, oldest first (a Set keeps insertion order). */
   private readonly pendingConnections = new Set<Connection>();
-  private readonly pendingByAddress = new Map<string, number>();
-  private readonly budget: ByteBudget;
-  /** Registered agents per client address, and the share of the answer budget they hold together. */
-  private readonly byAddress = new Map<string, { agents: Set<Connection>; budget: ByteBudget }>();
+  private readonly admission: Admission<Connection>;
   private readonly wss = new WebSocketServer({ noServer: true, maxPayload: MAX_AGENT_MESSAGE, perMessageDeflate: false, clientTracking: false });
   private sweeper: ReturnType<typeof setInterval> | null = null;
   /** One sender for every agent, so the per-token limit spans them all; null without push. */
-  private readonly push: LinkPush | null;
+  private readonly send: PushSender | null;
+  private warnedNoOrigin = false;
 
   constructor(
     @Inject(HttpAdapterHost) private readonly adapterHost: HttpAdapterHost,
     @Inject(RELAY_CONFIG) private readonly config: RelayConfig,
     @Inject(RelayMetrics) private readonly metrics: RelayMetrics,
   ) {
-    this.budget = new ByteBudget(config.limits.maxInflightBytes);
     const send = pushSender(config.push);
-    const { agentBurst, agentPerHour, maxInFlight } = config.push;
-    this.push = send
-      ? {
-          send: async (request) => {
-            const outcome = await send(request);
-            this.metrics.push(outcome);
-            return outcome;
-          },
-          burst: agentBurst,
-          perHour: agentPerHour,
-          maxInFlight,
+    this.admission = new Admission(config.limits, send ? config.push : null, Date.now());
+    this.send = send
+      ? async (request) => {
+          const outcome = await send(request);
+          this.metrics.push(outcome);
+          return outcome;
         }
       : null;
   }
@@ -74,7 +69,8 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
   onApplicationBootstrap(): void {
     const server = this.adapterHost.httpAdapter.getHttpServer() as Server;
     server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => this.upgrade(req, socket, head));
-    this.logger.log(this.push ? `native push on (FCM project ${this.config.push.account!.projectId})` : 'native push off');
+    this.logger.log(this.send ? `native push on (FCM project ${this.config.push.account!.projectId})` : 'native push off');
+    this.logger.log(this.config.publicOrigin ? `agents register for ${this.config.publicOrigin}` : 'RELAY_PUBLIC_URL unset: only agents dialling a loopback address can register');
     const every = Math.max(1000, Math.min(30_000, this.config.limits.idleTimeoutMs / 3));
     this.sweeper = setInterval(() => this.sweep(Date.now()), every);
     this.sweeper.unref();
@@ -97,14 +93,13 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
     }
     this.agents.clear();
     this.pendingConnections.clear();
-    this.pendingByAddress.clear();
-    this.byAddress.clear();
+    this.admission.clear();
   }
 
-  /** Forwards one sealed call to the agent, or says why not. */
-  call(agentId: string, body: Uint8Array): Promise<CallResult> {
+  /** Forwards one sealed call from `caller` (the client address) to the agent, or says why not. */
+  call(agentId: string, body: Uint8Array, caller?: string): Promise<CallResult> {
     const link = this.agents.get(agentId)?.link;
-    return link ? link.call(body) : Promise.resolve({ kind: 'error', code: 'RELAY_AGENT_OFFLINE' });
+    return link ? link.call(body, caller) : Promise.resolve({ kind: 'error', code: 'RELAY_AGENT_OFFLINE' });
   }
 
   /**
@@ -129,11 +124,18 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
       socket.end('HTTP/1.1 404 Not Found\r\nconnection: close\r\ncontent-length: 0\r\n\r\n');
       return;
     }
+    const origin = registrationOrigin(this.config.publicOrigin, req.headers.host);
+    if (!origin) {
+      if (!this.warnedNoOrigin) {
+        this.warnedNoOrigin = true;
+        this.logger.warn('refusing agent connections: set RELAY_PUBLIC_URL to the URL agents dial (docs/RELAY.md)');
+      }
+      socket.end('HTTP/1.1 404 Not Found\r\nconnection: close\r\ncontent-length: 0\r\n\r\n');
+      return;
+    }
     const limits = this.config.limits;
     const address = clientAddress(req.headers, req.socket.remoteAddress, limits.trustProxy);
-    const own = this.byAddress.get(address)?.agents.size ?? 0;
-    const full = this.agents.size >= limits.maxAgents && this.largestAddress()[1] <= own + 1;
-    if (full || own >= limits.maxAgentsPerIp || (this.pendingByAddress.get(address) ?? 0) >= limits.maxPendingPerIp) {
+    if (this.admission.refuseConnect(address, this.agents.size)) {
       this.metrics.registration('full');
       const body = JSON.stringify({ code: 'RELAY_FULL' });
       socket.end(`HTTP/1.1 503 Service Unavailable\r\nconnection: close\r\ncontent-type: application/json\r\ncontent-length: ${body.length}\r\n\r\n${body}`);
@@ -144,37 +146,33 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
     while (this.pendingConnections.size >= limits.maxPendingRegistrations) {
       const oldest = this.pendingConnections.values().next().value!;
       this.metrics.registration('timeout');
-      this.dropPending(oldest);
+      this.endPending(oldest);
       oldest.socket.terminate();
     }
-    this.wss.handleUpgrade(req, socket, head, (ws) => this.accept(ws, route.agentId, address));
+    this.wss.handleUpgrade(req, socket, head, (ws) => this.accept(ws, route.agentId, address, origin));
   }
 
-  private dropPending(connection: Connection): void {
-    if (!connection.pending) {
+  /** A pending connection that may not register any more: out of the pool, its challenge forgotten. */
+  private endPending(connection: Connection): void {
+    if (connection.session.phase !== 'pending') {
       return;
     }
-    connection.pending = false;
+    connection.session = endSession(connection.session);
     this.pendingConnections.delete(connection);
-    const left = (this.pendingByAddress.get(connection.address) ?? 1) - 1;
-    if (left > 0) {
-      this.pendingByAddress.set(connection.address, left);
-    } else {
-      this.pendingByAddress.delete(connection.address);
-    }
+    this.admission.removePending(connection.address);
     this.metrics.pending = this.pendingConnections.size;
   }
 
-  private accept(socket: WebSocket, agentId: string, address: string): void {
-    const connection: Connection = { socket, agentId, lastSeen: Date.now(), link: null, address, pending: true };
-    const challenge = new RegistrationChallenge();
+  private accept(socket: WebSocket, agentId: string, address: string, origin: string): void {
+    const { session, challenge } = openSession(agentId, origin, Date.now());
+    const connection: Connection = { socket, agentId, lastSeen: Date.now(), link: null, address, session };
     this.pendingConnections.add(connection);
-    this.pendingByAddress.set(address, (this.pendingByAddress.get(address) ?? 0) + 1);
+    this.admission.addPending(address);
     this.metrics.pending = this.pendingConnections.size;
     const timer = setTimeout(() => {
       this.metrics.registration('timeout');
       // Out of the pool at once; a peer that does not read could hold a polite close for 30 s.
-      this.dropPending(connection);
+      this.endPending(connection);
       socket.close(RelayClose.RegistrationTimeout, 'no proof');
       setTimeout(() => socket.terminate(), 1000).unref();
     }, this.config.limits.registerTimeoutMs);
@@ -189,14 +187,17 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
       }
       const bytes = toBytes(data);
       if (!connection.link) {
-        if (!connection.pending) {
-          return; // timed out or evicted: no late registration
+        if (connection.session.phase !== 'pending') {
+          return; // timed out, evicted or failed: no late registration
         }
         clearTimeout(timer);
-        const outcome = checkRegistration(challenge, bytes, agentId);
-        if (!outcome.ok) {
+        this.pendingConnections.delete(connection);
+        this.admission.removePending(address);
+        const { session: next, outcome } = proveSession(connection.session, bytes, Date.now());
+        connection.session = next;
+        this.metrics.pending = this.pendingConnections.size;
+        if (outcome && !outcome.ok) {
           this.metrics.registration(outcome.close === RelayClose.ProofFailed ? 'proof_failed' : 'protocol');
-          this.dropPending(connection);
           socket.close(outcome.close, outcome.reason);
           return;
         }
@@ -214,52 +215,64 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
     });
     socket.on('close', () => {
       clearTimeout(timer);
-      this.dropPending(connection);
+      this.endPending(connection);
       connection.link?.shutdown();
-      this.leaveAddress(connection);
+      this.admission.leave(address, connection);
       if (this.agents.get(agentId) === connection) {
         this.agents.delete(agentId);
+        this.admission.pushPolicyLeft(agentId, Date.now());
         this.logger.log(`agent ${idPrefix(agentId)} disconnected`);
       }
       this.metrics.pending = this.pendingConnections.size;
       this.metrics.agents = this.agents.size;
     });
     socket.on('error', () => socket.terminate());
-    socket.send(challenge.frame());
+    socket.send(challenge);
   }
 
   private register(connection: Connection): void {
     const { socket, agentId, address } = connection;
     const limits = this.config.limits;
-    this.dropPending(connection);
     const previous = this.agents.get(agentId);
     if (!previous) {
       // Checked again here: several connections of one address may have passed the upgrade check at once.
-      const own = this.byAddress.get(address)?.agents.size ?? 0;
+      const own = this.admission.agentsOf(address);
       if (own >= limits.maxAgentsPerIp) {
         this.metrics.registration('full');
+        connection.session = endSession(connection.session);
         socket.close(RelayClose.Full, 'too many agents from this address');
         return;
       }
       if (this.agents.size >= limits.maxAgents) {
         // Full: the address holding the most gives one up, unless the newcomer's would then hold as many.
-        const [largest, count] = this.largestAddress();
-        const victim = largest === null || count <= own + 1 ? null : this.byAddress.get(largest)!.agents.values().next().value!;
-        if (!victim) {
+        const [victim, count] = this.admission.largest();
+        if (!victim || count <= own + 1) {
           this.metrics.registration('full');
+          connection.session = endSession(connection.session);
           socket.close(RelayClose.Full, 'relay full');
           return;
         }
         this.evict(victim);
       }
     }
-    const entry = this.addressEntry(address);
-    connection.link = new AgentLink({ send: (bytes) => socket.send(bytes), close: (code, reason) => socket.close(code, reason) }, limits, { parent: entry.budget, push: this.push });
-    entry.agents.add(connection);
+    const budget = this.admission.join(address, connection);
+    const policy = this.admission.pushPolicy(agentId, Date.now());
+    connection.link = new AgentLink(
+      {
+        // ws calls back once the frame is written out, or with an error when the socket closes first.
+        send: (bytes, sent) => socket.send(bytes, sent && (() => sent())),
+        close: (code, reason) => socket.close(code, reason),
+        bufferedAmount: () => socket.bufferedAmount,
+        isOpen: () => socket.readyState === WebSocket.OPEN,
+      },
+      limits,
+      { parent: budget, push: this.send && policy ? { send: this.send, policy, gate: this.admission.pushGate(address), maxInFlight: this.config.push.maxInFlight } : null },
+    );
     this.agents.set(agentId, connection);
     if (previous) {
       // Newest wins: after a restart the old socket may linger half-open until the idle timeout.
-      this.leaveAddress(previous);
+      this.admission.leave(previous.address, previous);
+      previous.session = endSession(previous.session);
       previous.link?.shutdown();
       previous.socket.close(RelayClose.Replaced, 'replaced');
     }
@@ -270,38 +283,13 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
     this.logger.log(`agent ${idPrefix(agentId)} registered${previous ? ', replacing its previous connection' : ''}`);
   }
 
-  private addressEntry(address: string): { agents: Set<Connection>; budget: ByteBudget } {
-    let entry = this.byAddress.get(address);
-    if (!entry) {
-      entry = { agents: new Set(), budget: new ByteBudget(shareBytes(this.config.limits), this.budget) };
-      this.byAddress.set(address, entry);
-    }
-    return entry;
-  }
-
-  private leaveAddress(connection: Connection): void {
-    const entry = this.byAddress.get(connection.address);
-    if (entry?.agents.delete(connection) && entry.agents.size === 0) {
-      this.byAddress.delete(connection.address);
-    }
-  }
-
-  /** The address with the most registered agents, and how many. */
-  private largestAddress(): [string | null, number] {
-    let best: [string | null, number] = [null, 0];
-    for (const [address, entry] of this.byAddress) {
-      if (entry.agents.size > best[1]) {
-        best = [address, entry.agents.size];
-      }
-    }
-    return best;
-  }
-
   private evict(connection: Connection): void {
-    this.leaveAddress(connection);
+    this.admission.leave(connection.address, connection);
     if (this.agents.get(connection.agentId) === connection) {
       this.agents.delete(connection.agentId);
+      this.admission.pushPolicyLeft(connection.agentId, Date.now());
     }
+    connection.session = endSession(connection.session);
     connection.link?.shutdown();
     connection.socket.close(RelayClose.Full, 'relay full, this address holds the most agents');
     this.logger.log(`agent ${idPrefix(connection.agentId)} evicted: relay full`);
@@ -315,12 +303,6 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
         setTimeout(() => connection.socket.terminate(), 5000).unref();
       }
     }
+    this.admission.prune(now);
   }
-}
-
-function toBytes(data: RawData): Uint8Array {
-  if (Array.isArray(data)) {
-    return new Uint8Array(Buffer.concat(data));
-  }
-  return data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
 }

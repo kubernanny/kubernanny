@@ -26,6 +26,13 @@ export interface RelayLimits {
   inflightShare: number;
   /** Calls one agent may have in flight. */
   maxConcurrent: number;
+  /**
+   * Bytes queued on an agent's socket that it has not read yet; past it new
+   * calls get RELAY_BUSY instead of piling up in relay memory (review H1).
+   */
+  maxSocketBufferBytes: number;
+  /** Share of one agent's call and byte buckets that one calling address may use (review M1). */
+  callerShare: number;
   /** Token bucket per agent: burst size and refill per minute. */
   callBurst: number;
   callsPerMinute: number;
@@ -58,6 +65,9 @@ export const DEFAULT_LIMITS: RelayLimits = {
   maxInflightBytes: 64 * 1024 * 1024,
   inflightShare: 0.25,
   maxConcurrent: 4,
+  // A few requests' worth: a reading agent drains it within milliseconds.
+  maxSocketBufferBytes: 1024 * 1024,
+  callerShare: 0.25,
   callBurst: 30,
   callsPerMinute: 120,
   bytesPerHour: 256 * 1024 * 1024,
@@ -82,6 +92,8 @@ const ENV: Record<Exclude<keyof RelayLimits, 'corsOrigins' | 'trustProxy'>, stri
   maxInflightBytes: 'RELAY_MAX_INFLIGHT_BYTES',
   inflightShare: 'RELAY_INFLIGHT_SHARE',
   maxConcurrent: 'RELAY_MAX_CONCURRENT',
+  maxSocketBufferBytes: 'RELAY_MAX_SOCKET_BUFFER_BYTES',
+  callerShare: 'RELAY_CALLER_SHARE',
   callBurst: 'RELAY_CALL_BURST',
   callsPerMinute: 'RELAY_CALLS_PER_MINUTE',
   bytesPerHour: 'RELAY_BYTES_PER_HOUR',
@@ -109,6 +121,9 @@ export function parseLimits(env: Record<string, string | undefined>): RelayLimit
   // A request is one Noise message plus the version byte; more can never be valid.
   limits.maxRequestBytes = Math.min(limits.maxRequestBytes, MAX_SEALED_REQUEST);
   limits.inflightShare = Math.min(1, limits.inflightShare);
+  limits.callerShare = Math.min(1, limits.callerShare);
+  // At least one request must fit, or no call could ever be sent.
+  limits.maxSocketBufferBytes = Math.max(limits.maxSocketBufferBytes, limits.maxRequestBytes + 64);
   // One answer must fit into one agent's share, or it could never succeed.
   limits.maxResponseBytes = Math.min(limits.maxResponseBytes, shareBytes(limits));
   if (env['TRUST_PROXY']) {
@@ -147,7 +162,7 @@ export class TokenBucket {
     this.at = valid ? Math.min(now, saved.at) : now;
   }
 
-  /** Takes `amount` if there is at least one token left; may go negative, so a large answer is paid for by the next calls. */
+  /** Takes `amount` if there is at least one token left; may go negative, so a large answer part is paid for by the next calls. Only for what the agent itself sends. */
   take(amount: number, now: number): boolean {
     this.refill(now);
     if (this.tokens < 1) {
@@ -155,6 +170,27 @@ export class TokenBucket {
     }
     this.tokens -= amount;
     return true;
+  }
+
+  /** Whether `amount` can be taken in full; for checking several buckets before charging any (review L4). */
+  has(amount: number, now: number): boolean {
+    this.refill(now);
+    return this.tokens >= amount;
+  }
+
+  /** Takes `amount` only if all of it is there: what callers send never drives a bucket negative (review M1). */
+  takeExact(amount: number, now: number): boolean {
+    if (!this.has(amount, now)) {
+      return false;
+    }
+    this.tokens -= amount;
+    return true;
+  }
+
+  /** Whether the bucket has refilled completely: forgetting it then changes nothing. */
+  isFull(now: number): boolean {
+    this.refill(now);
+    return this.tokens >= this.capacity;
   }
 
   state(): BucketState {
@@ -166,6 +202,8 @@ export class TokenBucket {
     this.at = now;
   }
 }
+
+const MAX_EVICTIONS = 16;
 
 /** Something holding bytes of a budget that can be made to give them up (an answer in progress). */
 export interface BudgetHolder {
@@ -198,15 +236,52 @@ export class ByteBudget {
     return this.used;
   }
 
+  /**
+   * Two phases (review L4): first every level is asked whether the amount
+   * could fit, evictions included, and only then does anyone get evicted. A
+   * holder is never pushed out for a reservation a parent then refuses.
+   */
   reserve(amount: number, holder?: BudgetHolder): boolean {
+    if (!this.couldFit(amount, holder)) {
+      return false;
+    }
+    return this.reserveNow(amount, holder);
+  }
+
+  private couldFit(amount: number, holder?: BudgetHolder): boolean {
+    let free = this.capacity - this.used;
+    if (free < amount) {
+      if (!holder) {
+        return false;
+      }
+      const threshold = (this.holders.get(holder) ?? 0) + amount;
+      const victims = [...this.holders]
+        .filter(([h, held]) => h !== holder && held > threshold)
+        .map(([, held]) => held)
+        .sort((a, b) => b - a)
+        .slice(0, MAX_EVICTIONS);
+      for (const held of victims) {
+        if (free >= amount) {
+          break;
+        }
+        free += held;
+      }
+      if (free < amount) {
+        return false;
+      }
+    }
+    return !this.parent || this.parent.couldFit(amount, holder);
+  }
+
+  private reserveNow(amount: number, holder?: BudgetHolder): boolean {
     for (let evictions = 0; this.used + amount > this.capacity; evictions++) {
-      const victim = holder && evictions < 16 ? this.largerThan((this.holders.get(holder) ?? 0) + amount, holder) : null;
+      const victim = holder && evictions < MAX_EVICTIONS ? this.largerThan((this.holders.get(holder) ?? 0) + amount, holder) : null;
       if (!victim) {
         return false;
       }
       victim.evict();
     }
-    if (this.parent && !this.parent.reserve(amount, holder)) {
+    if (this.parent && !this.parent.reserveNow(amount, holder)) {
       return false;
     }
     this.used += amount;
@@ -264,4 +339,56 @@ export function clientAddress(headers: Record<string, string | string[] | undefi
     }
   }
   return socketAddress ?? 'unknown';
+}
+
+/**
+ * Per calling address, in front of one agent's own buckets (review M1):
+ * anyone who knows an agent's public key can send it junk, and without this
+ * one address could empty the agent's call and byte buckets for everyone.
+ * Each address gets `callerShare` of them, so emptying the agent's buckets
+ * takes several addresses. Bounded: past `maxCallers` the least recently
+ * seen address is forgotten (it starts full again, which only helps an
+ * attacker who has that many addresses anyway).
+ */
+export class CallerLimiter {
+  private readonly callers = new Map<string, { calls: TokenBucket; bytes: TokenBucket }>();
+
+  constructor(
+    private readonly limits: Pick<RelayLimits, 'callBurst' | 'callsPerMinute' | 'bytesPerHour' | 'callerShare'>,
+    private readonly maxCallers = 256,
+  ) {}
+
+  /** Whether `address` may send a request of `bytes` now; charges nothing (see `charge`). */
+  allows(address: string, bytes: number, now: number): boolean {
+    const entry = this.entry(address, now);
+    return entry.calls.has(1, now) && entry.bytes.has(bytes, now);
+  }
+
+  charge(address: string, bytes: number, now: number): void {
+    const entry = this.entry(address, now);
+    entry.calls.takeExact(1, now);
+    entry.bytes.takeExact(bytes, now);
+  }
+
+  get size(): number {
+    return this.callers.size;
+  }
+
+  private entry(address: string, now: number): { calls: TokenBucket; bytes: TokenBucket } {
+    let entry = this.callers.get(address);
+    if (entry) {
+      this.callers.delete(address); // re-inserted: the Map's order is least recently used first
+    } else {
+      const share = this.limits.callerShare;
+      entry = {
+        calls: new TokenBucket(Math.max(1, Math.floor(this.limits.callBurst * share)), (this.limits.callsPerMinute * share) / 60_000, now),
+        bytes: new TokenBucket(Math.max(1, Math.floor(this.limits.bytesPerHour * share)), (this.limits.bytesPerHour * share) / 3_600_000, now),
+      };
+    }
+    this.callers.set(address, entry);
+    while (this.callers.size > this.maxCallers) {
+      this.callers.delete(this.callers.keys().next().value!);
+    }
+    return entry;
+  }
 }

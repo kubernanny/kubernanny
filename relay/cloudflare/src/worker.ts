@@ -6,9 +6,12 @@
 import { corsHeaders, parseRoute } from '../../src/core/http';
 import { parseLimits } from '../../src/core/limits';
 import { AgentObjectCore, AgentObjectState, HibernatableSocket, refuse, stringVars } from './agent-object';
+import { TokenLimiterCore, TokenLimiterNamespace, durableTokenGate } from './token-limiter';
 
 export interface Env {
   AGENTS: DurableObjectNamespace;
+  /** One object per FCM token digest: the relay-wide per-token push limit (wrangler.toml). */
+  TOKENS?: DurableObjectNamespace;
   [variable: string]: unknown;
 }
 
@@ -52,7 +55,7 @@ export class AgentObject {
       },
       autoResponse: (req, res) => new WebSocketRequestResponsePair(req, res),
       upgradeResponse: (client) => new Response(null, { status: 101, webSocket: client as WebSocket }),
-    });
+    }, undefined, env.TOKENS ? durableTokenGate(env.TOKENS as unknown as TokenLimiterNamespace) : undefined);
   }
 
   fetch(request: Request): Promise<Response> {
@@ -77,6 +80,19 @@ export class AgentObject {
 
   alarm(): Promise<void> {
     return this.core.alarm();
+  }
+}
+
+/** The per-token push limit's object (binding TOKENS in wrangler.toml), named by the token's digest. */
+export class TokenLimiter {
+  private readonly core: TokenLimiterCore;
+
+  constructor(state: DurableObjectState, env: Env) {
+    this.core = new TokenLimiterCore(state.storage, env);
+  }
+
+  fetch(): Promise<Response> {
+    return this.core.fetch();
   }
 }
 

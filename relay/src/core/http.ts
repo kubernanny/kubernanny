@@ -1,4 +1,4 @@
-import { isAgentId } from '@kubernanny/protocol';
+import { isAgentId, relayOrigin } from '@kubernanny/protocol';
 
 /**
  * Refusals by the relay itself, as plain JSON `{ "code": … }` like the
@@ -113,4 +113,41 @@ export function corsHeaders(origin: string | null | undefined, allowed: readonly
 /** The first characters of an id, for logs: enough to tell agents apart, not enough to address one. */
 export function idPrefix(agentId: string): string {
   return agentId.slice(0, 8);
+}
+
+/** A WebSocket or HTTP message as bytes: a view, not a copy, where the input allows it. */
+export function toBytes(data: ArrayBuffer | ArrayBufferView | readonly ArrayBufferView[]): Uint8Array {
+  if (Array.isArray(data)) {
+    const parts = data as readonly ArrayBufferView[];
+    const out = new Uint8Array(parts.reduce((n, p) => n + p.byteLength, 0));
+    let offset = 0;
+    for (const part of parts) {
+      out.set(new Uint8Array(part.buffer, part.byteOffset, part.byteLength), offset);
+      offset += part.byteLength;
+    }
+    return out;
+  }
+  if (data instanceof ArrayBuffer) {
+    return new Uint8Array(data);
+  }
+  const view = data as ArrayBufferView;
+  return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+}
+
+/**
+ * The origin the relay checks registration proofs against (review L3). The
+ * configured public URL (RELAY_PUBLIC_URL) always wins. Without one, the
+ * request's Host header is used only for a loopback host (local runs and
+ * tests): anywhere else the header is chosen by whoever connects, and a
+ * hostile relay forwarding an agent's proof would simply send the Host it
+ * needs. Null: refuse the connection.
+ */
+export function registrationOrigin(configured: string | null, host: string | undefined): string | null {
+  if (configured) {
+    return configured;
+  }
+  if (!host || !/^(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/i.test(host)) {
+    return null;
+  }
+  return relayOrigin(`http://${host}`);
 }

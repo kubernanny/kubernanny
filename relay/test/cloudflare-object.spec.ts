@@ -1,5 +1,6 @@
 import { FrameType, KeyPair, answerChallenge, decodeFrame, decodePushResult, encodePushRequest, encodeReply, generateKeyPair, relayAgentId, toBase64Url } from '@kubernanny/protocol';
-import type { PushSender } from '../src/core/push';
+import type { PushSender, TokenGate } from '../src/core/push';
+import { TokenLimiterCore } from '../cloudflare/src/token-limiter';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentObjectCore, AgentObjectState, HibernatableSocket, MAX_PENDING_PER_OBJECT } from '../cloudflare/src/agent-object';
 
@@ -26,12 +27,14 @@ class FakeSocket implements HibernatableSocket {
 
 class FakeState implements AgentObjectState {
   sockets: FakeSocket[] = [];
-  alarm: number | null = null;
+  stored = new Map<string, unknown>();
+  writes = 0;
   storage = {
-    setAlarm: async (time: number) => {
-      this.alarm = time;
+    get: async <T,>(key: string) => structuredClone(this.stored.get(key)) as T | undefined,
+    put: async <T,>(key: string, value: T) => {
+      this.writes++;
+      this.stored.set(key, structuredClone(value));
     },
-    getAlarm: async () => this.alarm,
   };
   acceptWebSocket(socket: HibernatableSocket): void {
     this.sockets.push(socket as FakeSocket);
@@ -61,7 +64,7 @@ describe('Cloudflare agent object', () => {
   afterEach(() => vi.useRealTimers());
 
   /** A new core on the same state and sockets: what the runtime does when the object wakes from hibernation. */
-  const wake = (env: Record<string, string> = {}, send?: PushSender) =>
+  const wake = (env: Record<string, string> = {}, send?: PushSender, tokens?: TokenGate) =>
     new AgentObjectCore(state, { RELAY_REGISTER_TIMEOUT_MS: '3000', ...env }, {
       newSocketPair: () => {
         last = new FakeSocket(state);
@@ -69,15 +72,15 @@ describe('Cloudflare agent object', () => {
       },
       autoResponse: () => null,
       upgradeResponse: () => new Response(null, { status: 200 }),
-    }, send);
+    }, send, tokens);
 
   const connect = async () => {
     await object.fetch(new Request(`https://relay/v1/agents/${agentId}/ws`), 'connect', agentId);
     return last;
   };
-  const prove = async (socket: FakeSocket, keys = agent) => {
+  const prove = async (socket: FakeSocket, keys = agent, origin = 'wss://relay') => {
     const challenge = decodeFrame(socket.sent[0] as Uint8Array);
-    await object.webSocketMessage(socket, answerChallenge(keys, challenge.payload).slice().buffer);
+    await object.webSocketMessage(socket, answerChallenge(keys, challenge.payload, origin).slice().buffer);
   };
   const call = (body: Uint8Array) => object.fetch(new Request(`https://relay/v1/agents/${agentId}/e2e`, { method: 'POST', body }), 'call', agentId);
 
@@ -115,16 +118,83 @@ describe('Cloudflare agent object', () => {
     expect(await res.json()).toEqual({ code: 'RELAY_BAD_AGENT_RESPONSE' });
   });
 
-  it('never moves the registration alarm later when another socket connects (review H2)', async () => {
+  it('times out unproven sockets with an in-memory timer, never a storage write (review L2)', async () => {
     await connect();
-    expect(state.alarm).toBe(3000);
-    vi.setSystemTime(1000);
+    await vi.advanceTimersByTimeAsync(1000);
     await connect();
-    expect(state.alarm).toBe(3000);
-    vi.setSystemTime(3000);
-    await object.alarm();
+    await vi.advanceTimersByTimeAsync(2100);
     expect(state.sockets).toHaveLength(1); // the first timed out, the second is due at 4000
-    expect(state.alarm).toBe(4000);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(state.sockets).toHaveLength(0);
+    expect(state.writes).toBe(0);
+  });
+
+  it('closes an unproven socket left from a hibernation at the next connect, and refuses its late proof', async () => {
+    const stale = await connect();
+    object = wake(); // the timer is gone with the old instance
+    vi.setSystemTime(5000);
+    await prove(stale);
+    expect(stale.closed).toBe(4002);
+    const other = await connect();
+    expect(state.sockets).toEqual([other]);
+  });
+
+  it('refuses a proof made for another relay (review L3)', async () => {
+    const socket = await connect();
+    await prove(socket, agent, 'wss://hostile.example');
+    expect(socket.closed).toBe(4001);
+  });
+
+  it('marks a replaced socket as no longer registered, and calls go to the newest (review L1)', async () => {
+    const first = await connect();
+    await prove(first);
+    vi.setSystemTime(10);
+    const second = await connect();
+    await prove(second);
+    expect(first.closed).toBe(4003);
+    expect((first.deserializeAttachment() as { session: { phase: string } }).session.phase).toBe('ended');
+    const pending = call(Uint8Array.of(1));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(decodeFrame(second.sent.at(-1) as Uint8Array).type).toBe(FrameType.Call);
+    void pending;
+  });
+
+  it('answers an offline agent without reading the body, and stops reading a chunked body past the limit (review M2)', async () => {
+    let pulled = 0;
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled++;
+        controller.enqueue(new Uint8Array(16 * 1024));
+      },
+    });
+    const offline = await object.fetch(new Request(`https://relay/v1/agents/${agentId}/e2e`, { method: 'POST', body: endless, duplex: 'half' } as RequestInit), 'call', agentId);
+    expect(await offline.json()).toEqual({ code: 'RELAY_AGENT_OFFLINE' });
+    expect(pulled).toBeLessThanOrEqual(1);
+    const socket = await connect();
+    await prove(socket);
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled++;
+        controller.enqueue(new Uint8Array(16 * 1024));
+      },
+    });
+    pulled = 0;
+    const large = await object.fetch(new Request(`https://relay/v1/agents/${agentId}/e2e`, { method: 'POST', body, duplex: 'half' } as RequestInit), 'call', agentId);
+    expect(await large.json()).toEqual({ code: 'RELAY_TOO_LARGE' });
+    expect(pulled).toBeLessThan(10);
+  });
+
+  it('gives each calling address only its share of the agent buckets (review M1)', async () => {
+    object = wake({ RELAY_CALL_BURST: '4', RELAY_CALLS_PER_MINUTE: '4', RELAY_MAX_CONCURRENT: '100' });
+    const socket = await connect();
+    await prove(socket);
+    const from = (ip: string) => object.fetch(new Request(`https://relay/v1/agents/${agentId}/e2e`, { method: 'POST', body: Uint8Array.of(1), headers: { 'cf-connecting-ip': ip } }), 'call', agentId);
+    void from('6.6.6.6');
+    await vi.advanceTimersByTimeAsync(0);
+    expect((await from('6.6.6.6')).status).toBe(429);
+    void from('7.7.7.7');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(socket.sent.map((m) => decodeFrame(m as Uint8Array)).filter((f) => f.type === FrameType.Call)).toHaveLength(2);
   });
 
   it('keeps at most a few unproven sockets per agent id, and a real agent still gets in (review H2)', async () => {
@@ -186,6 +256,38 @@ describe('Cloudflare agent object', () => {
       await object.webSocketMessage(socket, push(1).slice().buffer);
       expect(results(socket)).toEqual(['disabled']);
       expect(send).not.toHaveBeenCalled();
+    });
+
+    it('keeps the push allowance across a reconnect, in storage (review M3)', async () => {
+      const env = { FCM_SERVICE_ACCOUNT: fcm, RELAY_PUSH_BURST: '1', RELAY_PUSHES_PER_HOUR: '1' };
+      const send = vi.fn(async () => 'sent' as const);
+      object = wake(env, send);
+      const first = await connect();
+      await prove(first);
+      await object.webSocketMessage(first, push(1).slice().buffer);
+      await vi.advanceTimersByTimeAsync(0);
+      object = wake(env, send);
+      const second = await connect();
+      await prove(second);
+      await object.webSocketMessage(second, push(2).slice().buffer);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(results(second)).toEqual(['rate_limited']);
+      expect(send).toHaveBeenCalledTimes(1);
+    });
+
+    it('asks the per-token gate (the token limiter object on Cloudflare)', async () => {
+      const limiterState = new FakeState();
+      const limiter = new TokenLimiterCore(limiterState.storage, { RELAY_PUSHES_PER_TOKEN_PER_HOUR: '6' }, () => Date.now());
+      const tokens: TokenGate = { take: async () => (await limiter.fetch()).status === 204 };
+      const send = vi.fn(async () => 'sent' as const);
+      object = wake({ FCM_SERVICE_ACCOUNT: fcm }, undefined, tokens);
+      void send;
+      const socket = await connect();
+      await prove(socket);
+      // The real FCM client would be used; the gate refuses the second push before it gets there.
+      expect(await tokens.take('x')).toBe(true);
+      expect(await tokens.take('x')).toBe(false);
+      expect(limiterState.stored.has('bucket')).toBe(true);
     });
 
     it('delivers with a service account, and keeps the agent push budget across a hibernation', async () => {

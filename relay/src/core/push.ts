@@ -1,5 +1,5 @@
-import { PushOutcome, PushRequest } from '@kubernanny/protocol';
-import { TokenBucket } from './limits';
+import { PushOutcome, PushRequest, pushTokenDigest } from '@kubernanny/protocol';
+import { BucketState, TokenBucket } from './limits';
 
 /** WebCrypto's key type; named through `crypto` because the relay compiles without the DOM library. */
 type CryptoKey = Awaited<ReturnType<typeof crypto.subtle.importKey>>;
@@ -25,8 +25,14 @@ export interface PushConfig {
   /** Per agent: burst and refill per hour. */
   agentBurst: number;
   agentPerHour: number;
-  /** Per FCM token, across every agent of this relay (on a Worker: per agent object). */
+  /** Per FCM token, across every agent of this relay (on a Worker: across all objects, through the token limiter object). */
   tokenPerHour: number;
+  /** Distinct FCM tokens one agent may push to within a day. */
+  tokensPerDay: number;
+  /** Per client address of the agents' connections, all its agents together (Node only). */
+  addressPerHour: number;
+  /** The whole relay (Node only): the bound on what it sends to FCM, however many ids and addresses are used. */
+  relayPerHour: number;
   /** Pushes one agent may have waiting for FCM at once. */
   maxInFlight: number;
 }
@@ -38,7 +44,7 @@ export interface ServiceAccount {
   tokenUri: string;
 }
 
-export const DEFAULT_PUSH = { agentBurst: 20, agentPerHour: 60, tokenPerHour: 30, maxInFlight: 4 } as const;
+export const DEFAULT_PUSH = { agentBurst: 20, agentPerHour: 60, tokenPerHour: 30, tokensPerDay: 32, addressPerHour: 240, relayPerHour: 20_000, maxInFlight: 4 } as const;
 const GOOGLE_TOKEN_URI = 'https://oauth2.googleapis.com/token';
 const FCM_SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
 /** Tokens kept for the per-token limit; past this the least recently used goes. */
@@ -47,7 +53,8 @@ const MAX_TRACKED_TOKENS = 20_000;
 /**
  * RELAY_PUSH (`off` disables), FCM_SERVICE_ACCOUNT (the service account's
  * JSON key, from a Secret), RELAY_PUSHES_PER_HOUR, RELAY_PUSH_BURST,
- * RELAY_PUSHES_PER_TOKEN_PER_HOUR. A service account that does not parse
+ * RELAY_PUSHES_PER_TOKEN_PER_HOUR, RELAY_PUSH_TOKENS_PER_DAY,
+ * RELAY_PUSHES_PER_ADDRESS_PER_HOUR, RELAY_PUSHES_TOTAL_PER_HOUR. A service account that does not parse
  * stops the start: a relay that silently dropped every push would look
  * like a working one.
  */
@@ -72,6 +79,9 @@ export function parsePushConfig(env: Record<string, string | undefined>): PushCo
     agentBurst: num('RELAY_PUSH_BURST', DEFAULT_PUSH.agentBurst),
     agentPerHour: num('RELAY_PUSHES_PER_HOUR', DEFAULT_PUSH.agentPerHour),
     tokenPerHour: num('RELAY_PUSHES_PER_TOKEN_PER_HOUR', DEFAULT_PUSH.tokenPerHour),
+    tokensPerDay: num('RELAY_PUSH_TOKENS_PER_DAY', DEFAULT_PUSH.tokensPerDay),
+    addressPerHour: num('RELAY_PUSHES_PER_ADDRESS_PER_HOUR', DEFAULT_PUSH.addressPerHour),
+    relayPerHour: num('RELAY_PUSHES_TOTAL_PER_HOUR', DEFAULT_PUSH.relayPerHour),
     maxInFlight: DEFAULT_PUSH.maxInFlight,
   };
 }
@@ -128,23 +138,33 @@ export function fcmMessage(push: PushRequest): unknown {
   };
 }
 
-/** What an FCM answer means for the agent. Error codes as documented for FCM HTTP v1 (`UNREGISTERED`, `QUOTA_EXCEEDED`, …). */
+/**
+ * What an FCM answer means for the agent. Error codes as documented for FCM
+ * HTTP v1 (`FcmErrorCode`: UNREGISTERED, INVALID_ARGUMENT, SENDER_ID_MISMATCH,
+ * QUOTA_EXCEEDED, UNAVAILABLE, INTERNAL, THIRD_PARTY_AUTH_ERROR). A dead or
+ * foreign token is `unregistered`, so the agent forgets it: UNREGISTERED,
+ * SENDER_ID_MISMATCH (a token of another Firebase project), and
+ * INVALID_ARGUMENT when its BadRequest details name the field
+ * `message.token`. Any other INVALID_ARGUMENT is a malformed message
+ * (`invalid`), which is the relay's or the agent's fault, not the token's.
+ */
 export function outcomeOf(status: number, body: unknown): PushOutcome {
   if (status >= 200 && status < 300) {
     return 'sent';
   }
-  const details = (body as { error?: { details?: { errorCode?: unknown }[]; status?: unknown } } | null)?.error;
-  const code = details?.details?.find((d) => typeof d?.errorCode === 'string')?.errorCode ?? details?.status;
-  if (status === 404 || code === 'UNREGISTERED') {
+  const error = (body as { error?: { details?: { errorCode?: unknown; fieldViolations?: { field?: unknown }[] }[]; status?: unknown } } | null)?.error;
+  const code = error?.details?.find((d) => typeof d?.errorCode === 'string')?.errorCode ?? error?.status;
+  const tokenField = error?.details?.some((d) => d?.fieldViolations?.some((v) => v?.field === 'message.token')) ?? false;
+  if (status === 404 || code === 'UNREGISTERED' || code === 'SENDER_ID_MISMATCH' || ((code === 'INVALID_ARGUMENT' || status === 400) && tokenField)) {
     return 'unregistered';
   }
   if (status === 429 || code === 'QUOTA_EXCEEDED') {
     return 'rate_limited';
   }
-  if (status >= 500) {
+  if (status >= 500 || code === 'UNAVAILABLE' || code === 'INTERNAL') {
     return 'unavailable';
   }
-  if (status === 400) {
+  if (status === 400 || code === 'INVALID_ARGUMENT') {
     return 'invalid';
   }
   return 'failed';
@@ -154,6 +174,8 @@ type Fetch = (url: string, init: { method: string; headers: Record<string, strin
 
 /** Access tokens per service account, shared by every client in this process or isolate (a Worker's objects come and go). */
 const accessTokens = new Map<string, { token: string; until: number }>();
+/** Token requests in flight per service account: concurrent pushes wait for one request instead of each signing and fetching (review L6). */
+const tokenRequests = new Map<string, Promise<string>>();
 
 /** Sends to FCM HTTP v1 with a service account. */
 export class FcmClient {
@@ -165,35 +187,55 @@ export class FcmClient {
     private readonly now: () => number = Date.now,
   ) {}
 
+  /** One push; a 401 for our own access token (expired early, revoked) gets a fresh token and one more try. */
   async send(push: PushRequest): Promise<PushOutcome> {
-    let token: string;
-    try {
-      token = await this.accessToken();
-    } catch {
-      return 'unavailable';
-    }
-    try {
-      const res = await this.fetchFn(`https://fcm.googleapis.com/v1/projects/${this.account.projectId}/messages:send`, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-        body: JSON.stringify(fcmMessage(push)),
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (res.status === 401) {
-        accessTokens.delete(this.account.clientEmail);
+    for (let attempt = 0; ; attempt++) {
+      let token: string;
+      try {
+        token = await this.accessToken();
+      } catch {
+        return 'unavailable';
       }
-      return outcomeOf(res.status, res.status >= 300 ? await res.json().catch(() => null) : null);
-    } catch {
-      return 'unavailable';
+      try {
+        const res = await this.fetchFn(`https://fcm.googleapis.com/v1/projects/${this.account.projectId}/messages:send`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+          body: JSON.stringify(fcmMessage(push)),
+          signal: AbortSignal.timeout(10_000),
+        });
+        const body = res.status >= 300 ? await res.json().catch(() => null) : null;
+        // THIRD_PARTY_AUTH_ERROR is a 401 too, but about the APNs credentials in Firebase: a new token does not help.
+        if (res.status === 401 && !isThirdPartyAuthError(body)) {
+          if (accessTokens.get(this.account.clientEmail)?.token === token) {
+            accessTokens.delete(this.account.clientEmail);
+          }
+          if (attempt === 0) {
+            continue;
+          }
+          return 'unavailable';
+        }
+        return outcomeOf(res.status, body);
+      } catch {
+        return 'unavailable';
+      }
     }
   }
 
   /** An OAuth access token from a signed JWT assertion (RFC 7523), cached until five minutes before it expires. */
-  private async accessToken(): Promise<string> {
+  private accessToken(): Promise<string> {
     const cached = accessTokens.get(this.account.clientEmail);
     if (cached && cached.until > this.now()) {
-      return cached.token;
+      return Promise.resolve(cached.token);
     }
+    let request = tokenRequests.get(this.account.clientEmail);
+    if (!request) {
+      request = this.fetchAccessToken().finally(() => tokenRequests.delete(this.account.clientEmail));
+      tokenRequests.set(this.account.clientEmail, request);
+    }
+    return request;
+  }
+
+  private async fetchAccessToken(): Promise<string> {
     const assertion = await this.assertion();
     const res = await this.fetchFn(this.account.tokenUri, {
       method: 'POST',
@@ -220,6 +262,11 @@ export class FcmClient {
   }
 }
 
+function isThirdPartyAuthError(body: unknown): boolean {
+  const error = (body as { error?: { details?: { errorCode?: unknown }[] } } | null)?.error;
+  return error?.details?.some((d) => d?.errorCode === 'THIRD_PARTY_AUTH_ERROR') ?? false;
+}
+
 function importPkcs8(pem: string): Promise<CryptoKey> {
   const der = Uint8Array.from(atob(pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')), (c) => c.charCodeAt(0));
   return crypto.subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
@@ -239,6 +286,13 @@ function b64url(input: string | Uint8Array): string {
  * learns someone's FCM token (it is not secret to the relay, and a paired
  * device chooses the token it registers) cannot make that phone buzz more
  * than this, however many agent ids they register on this relay.
+ *
+ * Bounded without being cheap to reset (review M3): when the table is full,
+ * only the least recently used entry goes, and only if its bucket has
+ * refilled completely (forgetting it then changes nothing). If not, the new
+ * token is refused until one has. Filling the table therefore takes
+ * `maxTokens` pushes within a refill period, which the relay-wide push
+ * budget does not allow by default. Keyed by digest: no token is held.
  */
 export class TokenLimiter {
   private readonly buckets = new Map<string, TokenBucket>();
@@ -246,30 +300,54 @@ export class TokenLimiter {
   constructor(
     private readonly perHour: number,
     private readonly now: () => number = Date.now,
+    private readonly maxTokens = MAX_TRACKED_TOKENS,
   ) {}
 
   take(token: string): boolean {
     const now = this.now();
-    let bucket = this.buckets.get(token);
+    const digest = pushTokenDigest(token);
+    let bucket = this.buckets.get(digest);
     if (bucket) {
-      this.buckets.delete(token); // re-inserted below: the Map's order is the least recently used first
+      this.buckets.delete(digest); // re-inserted below: the Map's order is the least recently used first
     } else {
-      bucket = new TokenBucket(Math.max(1, Math.ceil(this.perHour / 6)), this.perHour / 3_600_000, now);
+      if (this.buckets.size >= this.maxTokens) {
+        const [oldest, oldestBucket] = this.buckets.entries().next().value!;
+        if (!oldestBucket.isFull(now)) {
+          return false;
+        }
+        this.buckets.delete(oldest);
+      }
+      bucket = tokenBucket(this.perHour, now);
     }
-    this.buckets.set(token, bucket);
-    while (this.buckets.size > MAX_TRACKED_TOKENS) {
-      this.buckets.delete(this.buckets.keys().next().value!);
-    }
-    return bucket.take(1, now);
+    this.buckets.set(digest, bucket);
+    return bucket.takeExact(1, now);
   }
+}
+
+/** One token's bucket: a sixth of the hour's pushes as burst. */
+export function tokenBucket(perHour: number, now: number, saved?: BucketState): TokenBucket {
+  return new TokenBucket(Math.max(1, Math.ceil(perHour / 6)), perHour / 3_600_000, now, saved);
+}
+
+/** Where the per-token limit lives: in this process (Node), or in a Durable Object per token (Worker). */
+export interface TokenGate {
+  take(token: string): boolean | Promise<boolean>;
 }
 
 /** What an AgentLink calls for a Push frame: per-token limit, then FCM. */
 export type PushSender = (push: PushRequest) => Promise<PushOutcome>;
 
-export function pushSender(config: PushConfig, client: FcmClient | null = config.account ? new FcmClient(config.account) : null, tokens = new TokenLimiter(config.tokenPerHour)): PushSender | null {
+export function pushSender(config: PushConfig, client: FcmClient | null = config.account ? new FcmClient(config.account) : null, tokens: TokenGate = new TokenLimiter(config.tokenPerHour)): PushSender | null {
   if (!config.enabled || !client) {
     return null;
   }
-  return (push) => (tokens.take(push.token) ? client.send(push) : Promise.resolve('rate_limited'));
+  return async (push) => {
+    let allowed: boolean;
+    try {
+      allowed = await tokens.take(push.token);
+    } catch {
+      return 'unavailable'; // the limiter could not be asked: fail closed
+    }
+    return allowed ? client.send(push) : 'rate_limited';
+  };
 }

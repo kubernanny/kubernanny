@@ -43,7 +43,7 @@ describe('fair shares between client addresses', () => {
         }
         const frame = decodeFrame(new Uint8Array(data));
         if (frame.type === FrameType.Challenge) {
-          ws.send(answerChallenge(keys, frame.payload));
+          ws.send(answerChallenge(keys, frame.payload, `ws://127.0.0.1:${relay!.port}`));
         } else if (frame.type === FrameType.Ready) {
           resolve({ result: 'ok', id });
         } else if (frame.type === FrameType.Call) {

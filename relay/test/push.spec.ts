@@ -2,6 +2,7 @@ import { FrameType, PushRequest, decodeFrame, decodePushResult, encodeFrame, enc
 import { describe, expect, it, vi } from 'vitest';
 import { AgentLink, LinkPush, LinkSocket } from '../src/core/agent-link';
 import { DEFAULT_LIMITS } from '../src/core/limits';
+import { AgentPushPolicy, PENALTY } from '../src/core/push-policy';
 import { FcmClient, ServiceAccount, TokenLimiter, fcmMessage, outcomeOf, parsePushConfig, parseServiceAccount, pushSender } from '../src/core/push';
 
 const accountJson = (overrides: Record<string, unknown> = {}) =>
@@ -98,6 +99,8 @@ async function fakeGoogle() {
   const messages: { url: string; auth: string; body: unknown }[] = [];
   let tokenRequests = 0;
   let fcmStatus = 200;
+  /** Statuses for the next FCM answers after the current one, used up in order. */
+  const queued: number[] = [];
   const fetchFn = vi.fn(async (url: string, init: { headers: Record<string, string>; body: string }) => {
     if (url === account.tokenUri) {
       tokenRequests++;
@@ -109,9 +112,13 @@ async function fakeGoogle() {
       return { status: ok ? 200 : 400, json: async () => (ok ? { access_token: 'ya29.test', expires_in: 3599 } : { error: 'invalid_grant' }) };
     }
     messages.push({ url, auth: init.headers['authorization']!, body: JSON.parse(init.body) });
-    return { status: fcmStatus, json: async () => (fcmStatus === 200 ? { name: 'projects/x/messages/1' } : { error: { status: 'NOT_FOUND', details: [{ errorCode: 'UNREGISTERED' }] } }) };
+    const status = fcmStatus;
+    if (queued.length) {
+      fcmStatus = queued.shift()!;
+    }
+    return { status, json: async () => (status === 200 ? { name: 'projects/x/messages/1' } : status === 401 ? { error: { status: 'UNAUTHENTICATED' } } : { error: { status: 'NOT_FOUND', details: [{ errorCode: 'UNREGISTERED' }] } }) };
   });
-  return { account, messages, fetchFn, tokens: () => tokenRequests, answer: (status: number) => (fcmStatus = status) };
+  return { account, messages, fetchFn, tokens: () => tokenRequests, answer: (status: number) => (fcmStatus = status), answerOnce: (status: number) => queued.push(status) };
 }
 
 describe('FcmClient', () => {
@@ -160,7 +167,7 @@ describe('the per-token limit', () => {
 describe('AgentLink and Push frames', () => {
   const socket = () => {
     const sent: Uint8Array[] = [];
-    const s: LinkSocket & { sent: Uint8Array[] } = { sent, send: (b) => sent.push(b.slice()), close: () => undefined };
+    const s: LinkSocket & { sent: Uint8Array[] } = { sent, send: (b, done) => (sent.push(b.slice()), done?.()), close: () => undefined };
     return s;
   };
   const results = (s: { sent: Uint8Array[] }) => s.sent.map(decodeFrame).filter((f) => f.type === FrameType.PushResult).map((f) => [f.callId, decodePushResult(f.payload)]);
@@ -178,7 +185,7 @@ describe('AgentLink and Push frames', () => {
     const s = socket();
     const send = vi.fn(async () => 'sent' as const);
     const done = vi.fn();
-    const link = new AgentLink(s, DEFAULT_LIMITS, { push: { send, burst: 20, perHour: 60, maxInFlight: 4, done } satisfies LinkPush });
+    const link = new AgentLink(s, DEFAULT_LIMITS, { push: { send, policy: policy(20), maxInFlight: 4, done } satisfies LinkPush });
     expect(link.info().push).toBe(true);
     link.onFrame(decodeFrame(encodePushRequest(9, request())));
     link.onFrame(decodeFrame(encodePushRequest(9, request()))); // same id while it waits: ignored
@@ -192,7 +199,7 @@ describe('AgentLink and Push frames', () => {
     const s = socket();
     let release: () => void = () => undefined;
     const send = vi.fn(() => new Promise<'sent'>((resolve) => (release = () => resolve('sent'))));
-    const link = new AgentLink(s, DEFAULT_LIMITS, { push: { send, burst: 3, perHour: 60, maxInFlight: 1 } });
+    const link = new AgentLink(s, DEFAULT_LIMITS, { push: { send, policy: policy(3), maxInFlight: 1 } });
     link.onFrame(decodeFrame(encodeFrame(FrameType.Push, 1, new TextEncoder().encode('{"t":"x"}'))));
     link.onFrame(decodeFrame(encodePushRequest(2, request())));
     link.onFrame(decodeFrame(encodePushRequest(3, request()))); // one in flight already
@@ -216,12 +223,119 @@ describe('AgentLink and Push frames', () => {
     expect(send).toHaveBeenCalledTimes(3);
   });
 
-  it('saves the push bucket with the other rates, so a woken Durable Object does not refill it', () => {
+  it('keeps the allowance in the policy, so a new link (reconnect, woken object) does not refill it', () => {
     const s = socket();
-    const link = new AgentLink(s, DEFAULT_LIMITS, { now: () => 0, push: { send: async () => 'sent', burst: 1, perHour: 1, maxInFlight: 4 } });
+    const shared = policy(1, 1);
+    const link = new AgentLink(s, DEFAULT_LIMITS, { now: () => 0, push: { send: async () => 'sent', policy: shared, maxInFlight: 4 } });
     link.onFrame(decodeFrame(encodePushRequest(1, request())));
-    const again = new AgentLink(s, DEFAULT_LIMITS, { now: () => 0, rates: link.rates(), push: { send: async () => 'sent', burst: 1, perHour: 1, maxInFlight: 4 } });
+    const restored = new AgentPushPolicy({ burst: 1, perHour: 1, tokensPerDay: 32 }, 0, shared.state());
+    const again = new AgentLink(s, DEFAULT_LIMITS, { now: () => 0, push: { send: async () => 'sent', policy: restored, maxInFlight: 4 } });
     again.onFrame(decodeFrame(encodePushRequest(2, request())));
     expect(results(s)).toContainEqual([2, 'rate_limited']);
+  });
+
+  it('sends nothing to FCM once the link is closed (review M3)', () => {
+    const s = socket();
+    const send = vi.fn(async () => 'sent' as const);
+    const link = new AgentLink(s, DEFAULT_LIMITS, { push: { send, policy: policy(20), maxInFlight: 4 } });
+    link.shutdown();
+    link.onFrame(decodeFrame(encodePushRequest(1, request())));
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('asks the gate (address, relay-wide) before charging anything', async () => {
+    const s = socket();
+    const send = vi.fn(async () => 'sent' as const);
+    const p = policy(20);
+    const link = new AgentLink(s, DEFAULT_LIMITS, { now: () => 0, push: { send, policy: p, gate: { allows: () => false, charge: () => undefined }, maxInFlight: 4 } });
+    link.onFrame(decodeFrame(encodePushRequest(1, request())));
+    expect(results(s)).toEqual([[1, 'rate_limited']]);
+    expect(send).not.toHaveBeenCalled();
+    expect(p.state().bucket.tokens).toBe(20);
+  });
+});
+
+const policy = (burst: number, perHour = 60) => new AgentPushPolicy({ burst, perHour, tokensPerDay: 32 }, 0);
+
+describe('push policy per agent (review M3)', () => {
+  it('blocks a token FCM refused for an hour and charges the refusal extra', () => {
+    const p = new AgentPushPolicy({ burst: 20, perHour: 60, tokensPerDay: 32 }, 0);
+    expect(p.allows('a', 0)).toBe(true);
+    p.charge('a', 0);
+    p.settle('a', 'unregistered', 0);
+    expect(p.allows('a', 1000)).toBe(false);
+    expect(p.state().bucket.tokens).toBe(20 - 1 - PENALTY);
+    expect(p.allows('a', 3_600_001)).toBe(true);
+  });
+
+  it('pushes to a bounded number of distinct tokens a day', () => {
+    const p = new AgentPushPolicy({ burst: 100, perHour: 100, tokensPerDay: 3 }, 0);
+    for (const t of ['a', 'b', 'c']) {
+      expect(p.allows(t, 0)).toBe(true);
+      p.charge(t, 0);
+    }
+    expect(p.allows('d', 0)).toBe(false);
+    expect(p.allows('a', 0)).toBe(true);
+    expect(p.allows('d', 86_400_000)).toBe(true);
+  });
+
+  it('survives its own state, and forgets nothing it still needs', () => {
+    const p = new AgentPushPolicy({ burst: 2, perHour: 2, tokensPerDay: 32 }, 0);
+    p.charge('a', 0);
+    p.settle('b', 'invalid', 0);
+    const q = new AgentPushPolicy({ burst: 2, perHour: 2, tokensPerDay: 32 }, 10, JSON.parse(JSON.stringify(p.state())) as ReturnType<typeof p.state>);
+    expect(q.allows('b', 10)).toBe(false);
+    expect(q.isIdle(10)).toBe(false);
+  });
+});
+
+describe('per-token limiter that cannot be emptied by eviction (review M3)', () => {
+  it('only forgets a token whose bucket has refilled; else a new token waits', () => {
+    let now = 0;
+    const tokens = new TokenLimiter(6, () => now, 2); // burst 1
+    expect(tokens.take('token-a-0123456789-abcdef')).toBe(true);
+    expect(tokens.take('token-b-0123456789-abcdef')).toBe(true);
+    expect(tokens.take('token-c-0123456789-abcdef')).toBe(false); // table full of fresh buckets
+    expect(tokens.take('token-a-0123456789-abcdef')).toBe(false); // and a's limit was not reset
+    now = 600_000; // a sixth of an hour: everyone refilled
+    expect(tokens.take('token-c-0123456789-abcdef')).toBe(true);
+  });
+
+  it('fails closed when the limiter cannot be asked', async () => {
+    const send = pushSender(parsePushConfig({ FCM_SERVICE_ACCOUNT: accountJson() }), { send: async () => 'sent' } as unknown as FcmClient, {
+      take: async () => {
+        throw new Error('down');
+      },
+    })!;
+    expect(await send(request())).toBe('unavailable');
+  });
+});
+
+describe('FCM answers and tokens (review L6)', () => {
+  it('maps a dead or foreign token to unregistered and a malformed message to invalid', () => {
+    expect(outcomeOf(403, { error: { status: 'PERMISSION_DENIED', details: [{ errorCode: 'SENDER_ID_MISMATCH' }] } })).toBe('unregistered');
+    expect(outcomeOf(400, { error: { status: 'INVALID_ARGUMENT', details: [{ fieldViolations: [{ field: 'message.token', description: 'Invalid registration token' }] }] } })).toBe('unregistered');
+    expect(outcomeOf(400, { error: { status: 'INVALID_ARGUMENT', details: [{ fieldViolations: [{ field: 'message.apns.headers' }] }] } })).toBe('invalid');
+    expect(outcomeOf(500, { error: { status: 'INTERNAL' } })).toBe('unavailable');
+  });
+
+  it('gets a fresh access token on a 401 and tries once more', async () => {
+    const google = await fakeGoogle();
+    const client = new FcmClient(google.account, google.fetchFn);
+    expect(await client.send(request())).toBe('sent');
+    google.answer(401);
+    google.answerOnce(200);
+    expect(await client.send(request())).toBe('sent');
+    expect(google.tokens()).toBe(2);
+    google.answer(401);
+    expect(await client.send(request())).toBe('unavailable');
+  });
+
+  it('fetches one access token for many pushes at once', async () => {
+    const google = await fakeGoogle();
+    const client = new FcmClient(google.account, google.fetchFn);
+    const outcomes = await Promise.all(Array.from({ length: 5 }, () => client.send(request())));
+    expect(outcomes).toEqual(['sent', 'sent', 'sent', 'sent', 'sent']);
+    expect(google.tokens()).toBe(1);
   });
 });

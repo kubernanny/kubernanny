@@ -69,7 +69,7 @@ describe.skipIf(!base)(`a running relay at ${base}`, () => {
     const code = await new Promise<number>((resolve) => {
       ws.on('message', (data: Buffer, binary: boolean) => {
         if (binary && decodeFrame(new Uint8Array(data)).type === FrameType.Challenge) {
-          ws.send(answerChallenge(squatter, decodeFrame(new Uint8Array(data)).payload));
+          ws.send(answerChallenge(squatter, decodeFrame(new Uint8Array(data)).payload, wsBase));
         }
       });
       ws.on('close', (c) => resolve(c));

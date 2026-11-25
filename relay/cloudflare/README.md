@@ -17,7 +17,9 @@ npx wrangler login
 npx wrangler deploy
 ```
 
-The Worker is then at `https://kubernanny-relay.<your-subdomain>.workers.dev`. For your own domain, uncomment `routes` in `wrangler.toml` and deploy again.
+The Worker is then at `https://kubernanny-relay.<your-subdomain>.workers.dev`. For your own domain, uncomment `routes` in `wrangler.toml` and deploy again. Setting `RELAY_PUBLIC_URL` to the URL agents dial is optional here (without it the proof is checked against the host Cloudflare routed the connect by), but it pins it to one name.
+
+Add a Cloudflare rate limiting rule for the relay's host (Security, WAF, rate limiting rules in the dashboard): for example at most 30 requests per minute per IP on paths matching `/v1/agents/*/ws`, and a looser one on `/v1/agents/*/e2e`. The Worker has no per-address limits of its own, and every connect wakes an object. Check Cloudflare's documentation for what your plan includes.
 
 Point the agents at it:
 
@@ -34,9 +36,11 @@ relay:
 ## Differences to the Node relay
 
 - No periodic idle check: it would wake every object regularly. A connection whose last heartbeat is older than `RELAY_IDLE_TIMEOUT_MS` is closed when a call needs it.
-- The per-agent token buckets (calls per minute, bytes per hour) are saved in the socket's attachment after every call, so they survive the object's hibernation and last exactly as long as the connection, as on the Node relay. No storage write is involved.
-- Registration timeouts use a Durable Object alarm; a new connection never moves an earlier alarm later.
-- Unproven connections are capped per agent id (4, the oldest goes), not per client address: everything aimed at one id lands in one object. `RELAY_MAX_INFLIGHT_BYTES` applies per object, since objects share no memory; Cloudflare's own limits bound the rest.
+- The per-agent token buckets (calls per minute, bytes per hour) are saved in the socket's attachment after every call, so they survive the object's hibernation and last exactly as long as the connection, as on the Node relay. No storage write is involved. The calling address' share of them (`CF-Connecting-IP`) lives in memory and starts over after a hibernation.
+- The push allowance of an agent id is also written to the object's storage after each push (one row), so a reconnect does not start it full. The per-token push limit lives in a second Durable Object class, `TokenLimiter`, one per token digest (binding `TOKENS`): one request and one storage write per push. There is no per-address or relay-wide push budget.
+- Registration timeouts are an in-memory timer, so a connection that never proves a key costs no storage write; an object that hibernated with one closes it at the next connect, and refuses a late proof.
+- Unproven connections are capped per agent id (4, the oldest goes), not per client address: everything aimed at one id lands in one object. `RELAY_MAX_INFLIGHT_BYTES` applies per object, since objects share no memory; Cloudflare's own limits bound the rest. A Workers WebSocket does not report unread bytes, so `RELAY_MAX_SOCKET_BUFFER_BYTES` does not apply.
+- A request body is read through a counting reader that stops past `RELAY_MAX_REQUEST_BYTES`, and only once an agent is connected.
 
 ## Try it locally
 

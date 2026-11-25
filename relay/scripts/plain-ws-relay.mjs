@@ -10,6 +10,7 @@ const require = createRequire(import.meta.url);
 const { AgentLink } = require('../dist/core/agent-link.js');
 const { parseRoute } = require('../dist/core/http.js');
 const { checkRegistration } = require('../dist/core/registration.js');
+const { registrationOrigin } = require('../dist/core/http.js');
 const { parseLimits } = require('../dist/core/limits.js');
 
 const limits = parseLimits(process.env);
@@ -48,10 +49,10 @@ server.on('upgrade', (req, socket, head) => {
       }
       const bytes = new Uint8Array(data);
       if (!link) {
-        if (!checkRegistration(challenge, bytes, route.agentId).ok) {
+        if (!checkRegistration(challenge, bytes, route.agentId, registrationOrigin(process.env.RELAY_PUBLIC_URL ?? null, req.headers.host) ?? '').ok) {
           return ws.close(4001);
         }
-        link = new AgentLink({ send: (b) => ws.send(b), close: (c, r) => ws.close(c, r) }, limits);
+        link = new AgentLink({ send: (b) => ws.send(b), close: (c, r) => ws.close(c, r), bufferedAmount: () => ws.bufferedAmount, isOpen: () => ws.readyState === 1 }, limits);
         agents.set(route.agentId, link);
         return ws.send(encodeFrame(FrameType.Ready, 0, new TextEncoder().encode(JSON.stringify(link.info()))));
       }

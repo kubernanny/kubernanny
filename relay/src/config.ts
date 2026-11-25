@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { relayOrigin } from '@kubernanny/protocol';
 import { RelayLimits, parseLimits } from './core/limits';
 import { PushConfig, parsePushConfig } from './core/push';
 
@@ -9,6 +10,23 @@ export interface RelayConfig {
   limits: RelayLimits;
   /** Native push to FCM: off unless a service account is configured (docs/RELAY.md, "Native push"). */
   push: PushConfig;
+  /**
+   * RELAY_PUBLIC_URL as an origin (`https://relay.example`): what agents'
+   * registration proofs must be made for. Null: only loopback hosts can
+   * register (local runs and tests), see `registrationOrigin`.
+   */
+  publicOrigin: string | null;
+}
+
+function publicOrigin(raw: string | undefined): string | null {
+  if (!raw?.trim()) {
+    return null;
+  }
+  try {
+    return relayOrigin(raw);
+  } catch {
+    throw new Error(`RELAY_PUBLIC_URL must be the relay's public https:// (or wss://) URL, got "${raw}"`);
+  }
 }
 
 function port(name: string, fallback: number): number {
@@ -24,7 +42,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   // The key file mounted from a Secret is the usual way; the variable itself works too (and is what a Worker uses).
   const file = env['FCM_SERVICE_ACCOUNT_FILE'];
   const pushEnv = file && !env['FCM_SERVICE_ACCOUNT'] ? { ...env, FCM_SERVICE_ACCOUNT: readFileSync(file, 'utf8') } : env;
-  return { port: port('PORT', 8080), metricsPort: port('METRICS_PORT', 9100), limits: parseLimits(env), push: parsePushConfig(pushEnv) };
+  return { port: port('PORT', 8080), metricsPort: port('METRICS_PORT', 9100), limits: parseLimits(env), push: parsePushConfig(pushEnv), publicOrigin: publicOrigin(env['RELAY_PUBLIC_URL']) };
 }
 
 export const RELAY_CONFIG = Symbol('RELAY_CONFIG');

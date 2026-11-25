@@ -7,15 +7,29 @@ compatibility_date = "2026-11-01"
 name = "AGENTS"
 class_name = "AgentObject"
 
-# SQLite-backed Durable Objects; the object writes nothing to storage; it holds the agent's WebSocket, and its state lives in the socket's attachment.
+# The per-token push limit across all agents: one tiny object per FCM token digest.
+[[durable_objects.bindings]]
+name = "TOKENS"
+class_name = "TokenLimiter"
+
+# SQLite-backed Durable Objects. AgentObject holds the agent's WebSocket; its session and rate limits live in
+# the socket's attachment, and it writes one storage row, the agent's push allowance, only after a push.
+# Unproven connections cost no storage write (their timeout is an in-memory timer). TokenLimiter stores one
+# bucket per token that was pushed to.
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["AgentObject"]
 
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["TokenLimiter"]
+
 # Limits, the same variables as the Node relay (docs/RELAY.md). Unset ones use the defaults.
 [vars]
-RELAY_MAX_CONCURRENT = "8"
 RELAY_CALL_TIMEOUT_MS = "25000"
+# The URL agents dial (RELAY_URL on the agent): registration proofs are made for it. Unset: the host each
+# connect request was routed to, which on Cloudflare is one of this Worker's own routes.
+# RELAY_PUBLIC_URL = "https://relay.example.com"
 # CORS_ORIGINS = "*"
 # Native push is off unless the secret FCM_SERVICE_ACCOUNT is set (docs/RELAY.md, "Native push"):
 #   npx wrangler secret put FCM_SERVICE_ACCOUNT < service-account.json
@@ -23,3 +37,5 @@ RELAY_CALL_TIMEOUT_MS = "25000"
 
 # Your own domain instead of *.workers.dev:
 # routes = [{ pattern = "relay.example.com", custom_domain = true }]
+# Recommended: a Cloudflare rate limiting rule on /v1/agents/*/ws per IP (docs/RELAY.md, "Cloudflare Worker"),
+# since a Worker has no per-address limit of its own.

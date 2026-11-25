@@ -1,28 +1,39 @@
-import { Frame, FrameType, RelayClose, RelayFrameError, RelayLimitsInfo, decodePushRequest, decodeReplyEnd, encodeFrame, encodePushResult } from '@kubernanny/protocol';
+import { Frame, FrameType, RelayClose, RelayFrameError, RelayLimitsInfo, decodePushRequest, decodeReplyEnd, encodeFrame, encodePushResult, pushTokenDigest } from '@kubernanny/protocol';
 import { RelayErrorCode, checkAgentReply } from './http';
-import { BucketState, BudgetHolder, ByteBudget, RelayLimits, TokenBucket, shareBytes } from './limits';
-import { DEFAULT_PUSH, PushSender } from './push';
+import { BucketState, BudgetHolder, ByteBudget, CallerLimiter, RelayLimits, TokenBucket, shareBytes } from './limits';
+import { PushSender } from './push';
+import { AgentPushPolicy } from './push-policy';
 
-/** What a link needs from a WebSocket; the Node `ws` socket and a Workers WebSocket both fit with a one-line adapter. */
+/** What a link needs from a WebSocket; the Node `ws` socket and a Workers WebSocket both fit with a small adapter. */
 export interface LinkSocket {
-  send(bytes: Uint8Array): void;
+  /** `sent`, when given, is called once the bytes have left the relay's queue (`ws`: the send callback) or could not be sent. */
+  send(bytes: Uint8Array, sent?: () => void): void;
   close(code: number, reason: string): void;
+  /** Bytes queued for the agent and not yet taken by it (`ws`); absent where the platform does not tell (Workers). */
+  bufferedAmount?(): number;
+  /** False once the socket is closing or closed: calls then get RELAY_AGENT_OFFLINE at once (review L5). */
+  isOpen?(): boolean;
 }
 
 /** The state of a link's rate limits, to carry them over a Durable Object's hibernation. */
 export interface LinkRates {
   calls: BucketState;
   bytes: BucketState;
-  pushes?: BucketState;
 }
 
-/** Native push for this agent: where Push frames go, and this agent's share of them. */
+/** A limit above the agent's own, asked before a push is charged anywhere (the Node relay: its address and the relay as a whole). */
+export interface PushGate {
+  allows(now: number): boolean;
+  charge(now: number): void;
+}
+
+/** Native push for this agent: where Push frames go, and this agent's allowance (kept by agent id, across connections). */
 export interface LinkPush {
   send: PushSender;
-  burst: number;
-  perHour: number;
+  policy: AgentPushPolicy;
+  gate?: PushGate;
   maxInFlight: number;
-  /** Called when a push has ended, after its bucket was charged (a Durable Object saves the rates then). */
+  /** Called when a push has ended, after its allowance was charged (a Durable Object saves it then). */
   done?: () => void;
 }
 
@@ -43,7 +54,7 @@ interface Pending {
   timer: ReturnType<typeof setTimeout>;
   parts: Uint8Array[];
   size: number;
-  /** Bytes of this call counted against the relay-wide budget, given back when it ends. */
+  /** Bytes of this call counted against the budgets (its request until answered, then the answer's parts), given back when it ends. */
   reserved: number;
   /** When the first part arrived: from then on the stream and progress timeouts apply. */
   startedAt: number;
@@ -64,10 +75,12 @@ export class AgentLink {
   /** This agent's share; its parent is the address' share or the relay's total. */
   private readonly budget: ByteBudget;
   private readonly now: () => number;
-  private nextId = 1;
   private closed = false;
   private readonly push: LinkPush | null;
-  private readonly pushes: TokenBucket;
+  /** Per calling address, in front of the agent's own buckets (review M1). */
+  private readonly callers: CallerLimiter;
+  /** Call frames still queued on the socket, by a token of their own, with their size: held in the budgets until they leave (review H1). */
+  private readonly queued = new Map<object, number>();
   /** Push ids waiting for FCM: each answered once, and their number is capped. */
   private readonly pushesInFlight = new Set<number>();
 
@@ -78,7 +91,7 @@ export class AgentLink {
   ) {
     this.now = now;
     this.push = push;
-    this.pushes = new TokenBucket(push?.burst ?? DEFAULT_PUSH.agentBurst, (push?.perHour ?? DEFAULT_PUSH.agentPerHour) / 3_600_000, now(), rates?.pushes);
+    this.callers = new CallerLimiter(limits);
     this.budget = new ByteBudget(Math.min(limits.maxConcurrent * limits.maxResponseBytes, shareBytes(limits)), parent);
     this.calls = new TokenBucket(limits.callBurst, limits.callsPerMinute / 60_000, now(), rates?.calls);
     this.bytes = new TokenBucket(limits.bytesPerHour, limits.bytesPerHour / 3_600_000, now(), rates?.bytes);
@@ -86,7 +99,7 @@ export class AgentLink {
 
   /** The rate limit state, for a link that has to be rebuilt later (a Durable Object loses its fields when it hibernates). */
   rates(): LinkRates {
-    return { calls: this.calls.state(), bytes: this.bytes.state(), pushes: this.pushes.state() };
+    return { calls: this.calls.state(), bytes: this.bytes.state() };
   }
 
   get inFlight(): number {
@@ -104,32 +117,54 @@ export class AgentLink {
     };
   }
 
-  /** Forwards one sealed request and resolves with the agent's answer or the relay's refusal; never rejects. */
-  call(body: Uint8Array): Promise<CallResult> {
-    if (this.closed) {
+  /**
+   * Forwards one sealed request and resolves with the agent's answer or the
+   * relay's refusal; never rejects. `caller` is the calling client's address
+   * (its own buckets come first). Every limit is checked before any is
+   * charged (review L4), and the request's bytes count against the answer
+   * budgets until the call ends: an agent that does not read must not make
+   * the relay hold its requests without bound (review H1).
+   */
+  call(body: Uint8Array, caller?: string): Promise<CallResult> {
+    if (this.closed || this.socket.isOpen?.() === false) {
       return Promise.resolve({ kind: 'error', code: 'RELAY_AGENT_OFFLINE' });
     }
     if (body.length > this.limits.maxRequestBytes) {
       return Promise.resolve({ kind: 'error', code: 'RELAY_TOO_LARGE' });
     }
     const now = this.now();
-    if (this.pending.size >= this.limits.maxConcurrent || !this.calls.take(1, now) || !this.bytes.take(body.length, now)) {
+    const callerAllowed = caller === undefined || this.callers.allows(caller, body.length, now);
+    if (this.pending.size >= this.limits.maxConcurrent || !callerAllowed || !this.calls.has(1, now) || !this.bytes.has(body.length, now)) {
       return Promise.resolve({ kind: 'error', code: 'RELAY_RATE_LIMITED' });
     }
+    if ((this.socket.bufferedAmount?.() ?? 0) + body.length > this.limits.maxSocketBufferBytes) {
+      return Promise.resolve({ kind: 'error', code: 'RELAY_BUSY' });
+    }
     const callId = this.allocate();
+    const holder: BudgetHolder = {
+      evict: () => {
+        this.finish(callId, { kind: 'error', code: 'RELAY_BUSY' });
+        this.trySend(encodeFrame(FrameType.Cancel, callId));
+      },
+    };
+    // Twice: the request until the call ends (a holder, may be evicted), and its frame until it has left
+    // the socket's queue (no holder: queued bytes cannot be taken back, so they are never evicted).
+    if (!this.budget.reserve(body.length, holder) || !this.budget.reserve(body.length + FRAME_OVERHEAD)) {
+      this.budget.release(body.length, holder);
+      return Promise.resolve({ kind: 'error', code: 'RELAY_BUSY' });
+    }
+    if (caller !== undefined) {
+      this.callers.charge(caller, body.length, now);
+    }
+    this.calls.takeExact(1, now);
+    this.bytes.takeExact(body.length, now);
     return new Promise<CallResult>((resolve) => {
       const timer = setTimeout(() => {
         this.finish(callId, { kind: 'error', code: 'RELAY_TIMEOUT' });
         this.trySend(encodeFrame(FrameType.Cancel, callId));
       }, this.limits.callTimeoutMs);
-      const holder: BudgetHolder = {
-        evict: () => {
-          this.finish(callId, { kind: 'error', code: 'RELAY_BUSY' });
-          this.trySend(encodeFrame(FrameType.Cancel, callId));
-        },
-      };
-      this.pending.set(callId, { resolve, timer, parts: [], size: 0, reserved: 0, startedAt: 0, holder });
-      this.trySend(encodeFrame(FrameType.Call, callId, body));
+      this.pending.set(callId, { resolve, timer, parts: [], size: 0, reserved: body.length, startedAt: 0, holder });
+      this.sendQueued(encodeFrame(FrameType.Call, callId, body));
     });
   }
 
@@ -162,6 +197,11 @@ export class AgentLink {
         throw err;
       }
     }
+    if (!call.startedAt) {
+      // The answer has begun: the request's bytes go back, the answer's take their place.
+      this.budget.release(call.reserved, call.holder);
+      call.reserved = 0;
+    }
     const refusal = this.refusePart(call, part.length);
     if (refusal) {
       this.finish(frame.callId, { kind: 'error', code: refusal });
@@ -186,8 +226,8 @@ export class AgentLink {
    * Nothing of it is logged: the token is the phone's address.
    */
   private onPush(id: number, payload: Uint8Array): void {
-    if (this.pushesInFlight.has(id)) {
-      return; // an id still waiting: one answer per id is all the agent gets
+    if (this.closed || this.pushesInFlight.has(id)) {
+      return; // a closed link sends nothing to FCM; an id still waiting gets one answer only
     }
     if (!this.push) {
       this.trySend(encodePushResult(id, 'disabled'));
@@ -198,17 +238,22 @@ export class AgentLink {
       this.trySend(encodePushResult(id, 'invalid'));
       return;
     }
-    if (this.pushesInFlight.size >= this.push.maxInFlight || !this.pushes.take(1, this.now())) {
+    const now = this.now();
+    const digest = pushTokenDigest(request.token);
+    const { send, done, policy, gate } = this.push;
+    if (this.pushesInFlight.size >= this.push.maxInFlight || !policy.allows(digest, now) || (gate && !gate.allows(now))) {
       this.trySend(encodePushResult(id, 'rate_limited'));
-      this.push.done?.();
+      done?.();
       return;
     }
+    policy.charge(digest, now);
+    gate?.charge(now);
     this.pushesInFlight.add(id);
-    const { send, done } = this.push;
     void send(request)
       .catch(() => 'failed' as const)
       .then((outcome) => {
         this.pushesInFlight.delete(id);
+        policy.settle(digest, outcome, this.now());
         if (!this.closed) {
           this.trySend(encodePushResult(id, outcome));
         }
@@ -230,9 +275,13 @@ export class AgentLink {
     return null;
   }
 
-  /** The socket is gone: every waiting call learns that the agent is offline. */
+  /** The socket is gone: every waiting call learns that the agent is offline, and queued frames give their bytes back. */
   shutdown(): void {
     this.closed = true;
+    for (const [token, size] of this.queued) {
+      this.queued.delete(token);
+      this.budget.release(size);
+    }
     for (const id of [...this.pending.keys()]) {
       this.finish(id, { kind: 'error', code: 'RELAY_AGENT_OFFLINE' });
     }
@@ -268,7 +317,33 @@ export class AgentLink {
     call.resolve(result);
   }
 
+  /** A Call frame, whose bytes (reserved by the caller) go back to the budgets once the socket has sent it. */
+  private sendQueued(frame: Uint8Array): void {
+    const token = {};
+    this.queued.set(token, frame.length);
+    const sent = () => {
+      if (this.queued.delete(token)) {
+        this.budget.release(frame.length);
+      }
+    };
+    if (this.closed || this.socket.isOpen?.() === false) {
+      sent();
+      this.shutdown();
+      return;
+    }
+    try {
+      this.socket.send(frame, sent);
+    } catch {
+      sent();
+      this.shutdown();
+    }
+  }
+
   private trySend(bytes: Uint8Array): void {
+    if (this.socket.isOpen?.() === false) {
+      this.shutdown();
+      return;
+    }
     try {
       this.socket.send(bytes);
     } catch {
@@ -276,14 +351,23 @@ export class AgentLink {
     }
   }
 
-  /** 1 .. 2^32-1, skipping ids still in flight; 0 belongs to registration. */
+  /**
+   * A random id in 1 .. 2^32-1 not in flight (0 belongs to registration).
+   * Random rather than sequential: an "agent" that never reads its Call
+   * frames must not be able to answer them blindly by guessing the next id
+   * (review H1), which would free its concurrency slots for more unread calls.
+   */
   private allocate(): number {
+    const word = new Uint32Array(1);
     do {
-      this.nextId = this.nextId >= 0xffffffff ? 1 : this.nextId + 1;
-    } while (this.pending.has(this.nextId));
-    return this.nextId;
+      crypto.getRandomValues(word);
+    } while (word[0] === 0 || this.pending.has(word[0]!));
+    return word[0]!;
   }
 }
+
+/** A frame's header: type and call id. */
+const FRAME_OVERHEAD = 5;
 
 function join(parts: Uint8Array[], size: number): Uint8Array {
   if (parts.length === 1) {

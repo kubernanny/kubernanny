@@ -1,24 +1,27 @@
 /**
  * One Durable Object per agent id: it holds the agent's WebSocket and
  * forwards the calls for that id to it. Same frames, same registration
- * proof and same per-agent limits as the Node relay, from the same code
- * (`relay/src/core`, `@kubernanny/protocol`); docs/RELAY.md lists the
- * relay-wide limits a Worker has no equivalent for.
+ * proof, same registration states (`core/session.ts`) and same per-agent
+ * limits as the Node relay, from the same code (`relay/src/core`,
+ * `@kubernanny/protocol`); docs/RELAY.md lists the relay-wide limits a
+ * Worker has no equivalent for.
  *
  * The WebSocket Hibernation API keeps an idle agent free of charge in
  * memory terms: the object is evicted between calls, the socket stays
  * connected at Cloudflare's edge, and the heartbeat ("ping" -> "pong") is
  * answered by the runtime without waking the object. What must survive an
- * eviction (the agent id, the registration challenge, whether the socket is
- * registered, the state of its rate limits) lives in the socket's
- * attachment, not in fields.
+ * eviction (the session, the state of its rate limits) lives in the
+ * socket's attachment, not in fields. The push allowance must outlive the
+ * socket too (a reconnect must not start it full), so it is also written to
+ * the object's storage, one small row per object, after each push.
  */
-import { FrameType, RegistrationChallenge, RelayClose, RelayFrameError, decodeFrame, encodeFrame, fromBase64Url, toBase64Url } from '@kubernanny/protocol';
+import { FrameType, RelayClose, RelayFrameError, decodeFrame, encodeFrame, relayOrigin } from '@kubernanny/protocol';
 import { AgentLink, LinkRates } from '../../src/core/agent-link';
 import { RelayErrorCode, relayError } from '../../src/core/http';
 import { RelayLimits, parseLimits } from '../../src/core/limits';
-import { PushConfig, PushSender, parsePushConfig, pushSender } from '../../src/core/push';
-import { checkRegistration } from '../../src/core/registration';
+import { PushConfig, PushSender, TokenGate, parsePushConfig, pushSender } from '../../src/core/push';
+import { AgentPushPolicy, PushPolicyState } from '../../src/core/push-policy';
+import { Session, endSession, newestRegistered, openSession, proveSession, registrationExpired } from '../../src/core/session';
 
 /** The parts of a Workers WebSocket this object uses. */
 export interface HibernatableSocket {
@@ -34,7 +37,10 @@ export interface AgentObjectState {
   getWebSockets(): HibernatableSocket[];
   setWebSocketAutoResponse(pair: unknown): void;
   getWebSocketAutoResponseTimestamp(socket: HibernatableSocket): Date | null;
-  storage: { setAlarm(time: number): Promise<void>; getAlarm(): Promise<number | null> };
+  storage: {
+    get<T>(key: string): Promise<T | undefined>;
+    put<T>(key: string, value: T): Promise<void>;
+  };
 }
 
 /**
@@ -46,12 +52,7 @@ export interface AgentObjectState {
 export const MAX_PENDING_PER_OBJECT = 4;
 
 interface Attachment {
-  agentId: string;
-  /** Registration challenge, base64url, until the proof arrived. */
-  nonce?: string;
-  secret?: string;
-  registered: boolean;
-  since: number;
+  session: Session;
   /**
    * The link's token buckets after its last call. A woken object builds a
    * new link, which would otherwise start with full buckets and never reach
@@ -60,7 +61,12 @@ interface Attachment {
    * does on the Node relay.
    */
   rates?: LinkRates;
+  /** The push allowance, read from storage at registration and saved after each push. */
+  push?: PushPolicyState;
 }
+
+/** Storage key of the agent's push allowance. */
+const PUSH_KEY = 'push';
 
 /** Created per request by the Worker runtime; tests pass their own. */
 export interface Runtime {
@@ -73,11 +79,11 @@ export class AgentObjectCore {
   private readonly limits: RelayLimits;
   /** Links live only while the object is awake; a call in flight keeps it awake. */
   private readonly links = new Map<HibernatableSocket, AgentLink>();
-  /**
-   * Native push (secret FCM_SERVICE_ACCOUNT, RELAY_PUSH): null when off. The
-   * per-token limit lives in this object, so it is per agent here, not
-   * relay-wide as on the Node relay (docs/RELAY.md).
-   */
+  /** Registration timeouts while awake. In memory, not an alarm: an unauthenticated connect must not cost a storage write (review L2). */
+  private readonly timers = new Map<HibernatableSocket, ReturnType<typeof setTimeout>>();
+  /** RELAY_PUBLIC_URL as an origin; else the origin each connect request was routed to. */
+  private readonly publicOrigin: string | null;
+  /** Native push (secret FCM_SERVICE_ACCOUNT, RELAY_PUSH): null when off. */
   private readonly push: { config: PushConfig; send: PushSender } | null;
 
   constructor(
@@ -86,70 +92,79 @@ export class AgentObjectCore {
     private readonly runtime: Runtime,
     /** Tests pass a fake FCM; the Worker sends to the real one. */
     send?: PushSender,
+    /** The per-token limit; the Worker passes one backed by the token limiter object, so it holds across all agents. */
+    tokens?: TokenGate,
   ) {
-    this.limits = parseLimits(stringVars(env));
-    const config = parsePushConfig(stringVars(env));
-    const sender = config.enabled ? (send ?? pushSender(config)) : null;
+    const vars = stringVars(env);
+    this.limits = parseLimits(vars);
+    this.publicOrigin = vars['RELAY_PUBLIC_URL'] ? relayOrigin(vars['RELAY_PUBLIC_URL']) : null;
+    const config = parsePushConfig(vars);
+    const sender = config.enabled ? (send ?? pushSender(config, undefined, tokens)) : null;
     this.push = sender ? { config, send: sender } : null;
     state.setWebSocketAutoResponse(runtime.autoResponse('ping', 'pong'));
   }
 
   /** `connect` from the agent (an upgrade) or `call` from the app; the Worker already checked the route. */
   async fetch(request: Request, kind: 'connect' | 'call', agentId: string): Promise<Response> {
-    return kind === 'connect' ? this.connect(agentId) : this.call(request);
+    return kind === 'connect' ? this.connect(request, agentId) : this.call(request);
   }
 
-  private async connect(agentId: string): Promise<Response> {
+  private connect(request: Request, agentId: string): Response {
+    this.closeExpired(Date.now());
     this.makeRoomForPending();
     const [client, server] = this.runtime.newSocketPair();
     this.state.acceptWebSocket(server);
-    // The challenge must outlive an eviction: its bytes go into the attachment, and it is rebuilt from them.
-    const nonce = random(32);
-    const secret = random(32);
-    server.serializeAttachment({ agentId, nonce: toBase64Url(nonce), secret: toBase64Url(secret), registered: false, since: Date.now() } satisfies Attachment);
-    server.send(new RegistrationChallenge(nonce, secret).frame());
-    await this.scheduleAlarm(Date.now() + this.limits.registerTimeoutMs);
+    // Cloudflare routes by host, so the request's own origin is a host of this Worker that the agent dialled.
+    const origin = this.publicOrigin ?? relayOrigin(request.url);
+    const { session, challenge } = openSession(agentId, origin, Date.now());
+    server.serializeAttachment({ session } satisfies Attachment);
+    server.send(challenge);
+    this.timers.set(
+      server,
+      setTimeout(() => this.closeExpired(Date.now()), this.limits.registerTimeoutMs + 50),
+    );
     return this.runtime.upgradeResponse(client);
   }
 
   /** Closes the oldest unproven sockets until a new one fits into MAX_PENDING_PER_OBJECT. */
   private makeRoomForPending(): void {
-    const pending = this.state
-      .getWebSockets()
-      .map((socket) => ({ socket, attachment: socket.deserializeAttachment() as Attachment | null }))
-      .filter(({ attachment }) => attachment !== null && !attachment.registered && attachment.nonce !== undefined)
-      .sort((a, b) => a.attachment!.since - b.attachment!.since);
+    const pending = this.sockets()
+      .filter(({ attachment }) => attachment?.session.phase === 'pending')
+      .sort((a, b) => a.attachment!.session.since - b.attachment!.session.since);
     for (const { socket } of pending.slice(0, Math.max(0, pending.length - MAX_PENDING_PER_OBJECT + 1))) {
-      forgetChallenge(socket);
-      socket.close(RelayClose.RegistrationTimeout, 'evicted');
+      this.end(socket, RelayClose.RegistrationTimeout, 'evicted');
     }
   }
 
-  /** One alarm per object: never move an earlier, sooner one later (a stream of connects would otherwise postpone every timeout). */
-  private async scheduleAlarm(at: number): Promise<void> {
-    const current = await this.state.storage.getAlarm();
-    if (current === null || current > at) {
-      await this.state.storage.setAlarm(at);
+  /**
+   * Unproven sockets past the registration timeout. Run by the in-memory
+   * timer while the object is awake, and on every connect: an object that
+   * hibernated with an unproven socket closes it at the next connect (or the
+   * proof is refused as late), and holds at most MAX_PENDING_PER_OBJECT meanwhile.
+   */
+  private closeExpired(now: number): void {
+    for (const { socket, attachment } of this.sockets()) {
+      if (attachment && registrationExpired(attachment.session, now, this.limits.registerTimeoutMs)) {
+        this.end(socket, RelayClose.RegistrationTimeout, 'no proof');
+      }
     }
   }
 
   private async call(request: Request): Promise<Response> {
-    const declared = Number(request.headers.get('content-length'));
-    if (Number.isFinite(declared) && declared > this.limits.maxRequestBytes) {
-      return refuse('RELAY_TOO_LARGE');
+    // Nobody to give it to: answered before a byte of the body is read (review M2).
+    const socket = this.registered();
+    if (!socket) {
+      return refuse('RELAY_AGENT_OFFLINE');
     }
-    const body = new Uint8Array(await request.arrayBuffer());
-    if (body.length > this.limits.maxRequestBytes) {
+    const body = await readLimited(request, this.limits.maxRequestBytes);
+    if (body === 'too large') {
       return refuse('RELAY_TOO_LARGE');
     }
     if (body.length === 0) {
       return refuse('RELAY_BAD_REQUEST');
     }
-    const socket = this.registered();
-    if (!socket) {
-      return refuse('RELAY_AGENT_OFFLINE');
-    }
-    const result = await this.link(socket).call(body);
+    // CF-Connecting-IP is set by Cloudflare itself, so a caller cannot pick a fresh share (review M1).
+    const result = await this.link(socket).call(body, request.headers.get('cf-connecting-ip') ?? 'unknown');
     this.saveRates(socket);
     if (result.kind === 'error') {
       return refuse(result.code);
@@ -164,14 +179,17 @@ export class AgentObjectCore {
     if (typeof message === 'string') {
       return; // "ping" never gets here (auto response); anything else is ignored
     }
-    const attachment = socket.deserializeAttachment() as Attachment;
-    const bytes = new Uint8Array(message);
-    if (!attachment.registered && !attachment.nonce) {
-      return; // timed out, evicted or failed: no late registration
-    }
-    if (!attachment.registered) {
-      this.register(socket, attachment, bytes);
+    const attachment = socket.deserializeAttachment() as Attachment | null;
+    if (!attachment) {
       return;
+    }
+    const bytes = new Uint8Array(message);
+    if (attachment.session.phase === 'pending') {
+      await this.register(socket, attachment, bytes);
+      return;
+    }
+    if (attachment.session.phase !== 'registered') {
+      return; // timed out, evicted, failed or replaced: no late registration, no frames
     }
     try {
       this.link(socket).onFrame(decodeFrame(bytes));
@@ -183,28 +201,38 @@ export class AgentObjectCore {
     }
   }
 
-  /** Checks the proof; the newest registered socket wins, older ones are replaced. */
-  private register(socket: HibernatableSocket, attachment: Attachment, proof: Uint8Array): void {
-    const challenge = new RegistrationChallenge(fromBase64Url(attachment.nonce!), fromBase64Url(attachment.secret!));
-    const outcome = checkRegistration(challenge, proof, attachment.agentId);
-    if (!outcome.ok) {
-      // Clear the challenge first: the socket closes, but a proof must never get a second try.
-      forgetChallenge(socket);
+  /** Checks the proof; the newest registered socket wins, older ones are replaced and marked as no longer registered (review L1). */
+  private async register(socket: HibernatableSocket, attachment: Attachment, proof: Uint8Array): Promise<void> {
+    this.clearTimer(socket);
+    if (registrationExpired(attachment.session, Date.now(), this.limits.registerTimeoutMs)) {
+      this.end(socket, RelayClose.RegistrationTimeout, 'no proof');
+      return;
+    }
+    const { session, outcome } = proveSession(attachment.session, proof, Date.now());
+    // The new state first: the socket closes, but a proof must never get a second try.
+    socket.serializeAttachment({ session } satisfies Attachment);
+    if (outcome && !outcome.ok) {
       socket.close(outcome.close, outcome.reason);
       return;
     }
-    for (const other of this.state.getWebSockets()) {
-      if (other !== socket && (other.deserializeAttachment() as Attachment | null)?.registered) {
+    for (const { socket: other, attachment: theirs } of this.sockets()) {
+      if (other !== socket && theirs?.session.phase === 'registered') {
         this.links.get(other)?.shutdown();
         this.links.delete(other);
-        other.close(RelayClose.Replaced, 'replaced');
+        this.end(other, RelayClose.Replaced, 'replaced');
       }
     }
-    socket.serializeAttachment({ agentId: attachment.agentId, registered: true, since: attachment.since } satisfies Attachment);
+    const push = this.push ? await this.state.storage.get<PushPolicyState>(PUSH_KEY).catch(() => undefined) : undefined;
+    try {
+      socket.serializeAttachment({ session, push } satisfies Attachment);
+    } catch {
+      return; // closed while storage answered
+    }
     socket.send(encodeFrame(FrameType.Ready, 0, new TextEncoder().encode(JSON.stringify(this.link(socket).info()))));
   }
 
   async webSocketClose(socket: HibernatableSocket): Promise<void> {
+    this.clearTimer(socket);
     this.links.get(socket)?.shutdown();
     this.links.delete(socket);
   }
@@ -213,56 +241,44 @@ export class AgentObjectCore {
     await this.webSocketClose(socket);
   }
 
-  /** Registration timeout: closes sockets that never proved their key, and comes back for the younger ones. */
+  /** Objects of an earlier deployment may still have a registration alarm set; it only sweeps. */
   async alarm(): Promise<void> {
-    const now = Date.now();
-    let next: number | null = null;
-    for (const socket of this.state.getWebSockets()) {
-      const attachment = socket.deserializeAttachment() as Attachment | null;
-      if (!attachment || attachment.registered || !attachment.nonce) {
-        continue;
-      }
-      const due = attachment.since + this.limits.registerTimeoutMs;
-      if (due <= now) {
-        forgetChallenge(socket);
-        socket.close(RelayClose.RegistrationTimeout, 'no proof');
-      } else {
-        next = next === null ? due : Math.min(next, due);
-      }
-    }
-    if (next !== null) {
-      await this.state.storage.setAlarm(next);
-    }
+    this.closeExpired(Date.now());
   }
 
   /**
-   * The newest registered socket, if it is alive. No timer watches for idle
-   * agents (it would wake every object every minute); a socket whose last
-   * heartbeat is older than the idle timeout is found out when a call needs it.
+   * The newest registered socket (largest `registeredAt`), if it is alive.
+   * No timer watches for idle agents (it would wake every object every
+   * minute); a socket whose last heartbeat is older than the idle timeout
+   * is found out when a call needs it.
    */
   private registered(): HibernatableSocket | null {
-    const sockets = this.state.getWebSockets().filter((s) => (s.deserializeAttachment() as Attachment | null)?.registered);
-    const socket = sockets.at(-1) ?? null;
-    if (!socket) {
+    const newest = newestRegistered(this.sockets(), ({ attachment }) => attachment?.session ?? null);
+    if (!newest) {
       return null;
     }
-    const heard = this.state.getWebSocketAutoResponseTimestamp(socket)?.getTime() ?? (socket.deserializeAttachment() as Attachment).since;
+    const { socket, attachment } = newest;
+    const heard = this.state.getWebSocketAutoResponseTimestamp(socket)?.getTime() ?? attachment!.session.since;
     if (Date.now() - heard > this.limits.idleTimeoutMs) {
-      socket.close(RelayClose.Idle, 'idle');
+      this.end(socket, RelayClose.Idle, 'idle');
       return null;
     }
     return socket;
   }
 
-  /** The socket's link, rebuilt with the saved rate limits after a hibernation. */
+  /** The socket's link, rebuilt with the saved rate limits and push allowance after a hibernation. */
   private link(socket: HibernatableSocket): AgentLink {
     let link = this.links.get(socket);
     if (!link) {
-      const { rates } = socket.deserializeAttachment() as Attachment;
-      const push = this.push
-        ? { send: this.push.send, burst: this.push.config.agentBurst, perHour: this.push.config.agentPerHour, maxInFlight: this.push.config.maxInFlight, done: () => this.saveRates(socket) }
-        : null;
-      link = new AgentLink({ send: (bytes) => socket.send(bytes), close: (code, reason) => socket.close(code, reason) }, this.limits, { rates, push });
+      const { rates, push: saved } = socket.deserializeAttachment() as Attachment;
+      let push = null;
+      if (this.push) {
+        const config = this.push.config;
+        const policy = new AgentPushPolicy({ burst: config.agentBurst, perHour: config.agentPerHour, tokensPerDay: config.tokensPerDay }, Date.now(), saved);
+        push = { send: this.push.send, policy, maxInFlight: config.maxInFlight, done: () => this.savePush(socket, policy) };
+      }
+      // A Workers WebSocket queues nothing the object can see: a frame counts as sent once handed over.
+      link = new AgentLink({ send: (bytes, sent) => (socket.send(bytes), sent?.()), close: (code, reason) => socket.close(code, reason) }, this.limits, { rates, push });
       this.links.set(socket, link);
     }
     return link;
@@ -276,7 +292,7 @@ export class AgentObjectCore {
   private saveRates(socket: HibernatableSocket): void {
     const link = this.links.get(socket);
     const attachment = socket.deserializeAttachment() as Attachment | null;
-    if (!link || !attachment?.registered) {
+    if (!link || attachment?.session.phase !== 'registered') {
       return;
     }
     try {
@@ -285,12 +301,79 @@ export class AgentObjectCore {
       // The socket closed meanwhile; its limits end with it.
     }
   }
+
+  /** After each push: the allowance into the attachment (for the next wake-up) and into storage (for the next connection). */
+  private savePush(socket: HibernatableSocket, policy: AgentPushPolicy): void {
+    const state = policy.state();
+    void this.state.storage.put(PUSH_KEY, state).catch(() => undefined);
+    const attachment = socket.deserializeAttachment() as Attachment | null;
+    if (attachment?.session.phase === 'registered') {
+      try {
+        socket.serializeAttachment({ ...attachment, push: state } satisfies Attachment);
+      } catch {
+        // closed meanwhile
+      }
+    }
+  }
+
+  private sockets(): { socket: HibernatableSocket; attachment: Attachment | null }[] {
+    return this.state.getWebSockets().map((socket) => ({ socket, attachment: socket.deserializeAttachment() as Attachment | null }));
+  }
+
+  /** Ends the socket's session (so it never registers, or counts as registered, again) and closes it. */
+  private end(socket: HibernatableSocket, code: number, reason: string): void {
+    this.clearTimer(socket);
+    const attachment = socket.deserializeAttachment() as Attachment | null;
+    if (attachment) {
+      try {
+        socket.serializeAttachment({ session: endSession(attachment.session) } satisfies Attachment);
+      } catch {
+        // already closed
+      }
+    }
+    socket.close(code, reason);
+  }
+
+  private clearTimer(socket: HibernatableSocket): void {
+    const timer = this.timers.get(socket);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      this.timers.delete(socket);
+    }
+  }
 }
 
-/** An unproven socket that may not register any more keeps its id and time, not its challenge. */
-function forgetChallenge(socket: HibernatableSocket): void {
-  const attachment = socket.deserializeAttachment() as Attachment;
-  socket.serializeAttachment({ agentId: attachment.agentId, registered: false, since: attachment.since } satisfies Attachment);
+/** The request body, read through a counting reader that stops one byte past `limit` (review M2: a chunked body has no content-length). */
+export async function readLimited(request: Request, limit: number): Promise<Uint8Array | 'too large'> {
+  const declared = Number(request.headers.get('content-length') ?? Number.NaN);
+  if (Number.isFinite(declared) && declared > limit) {
+    return 'too large';
+  }
+  if (!request.body) {
+    return new Uint8Array(0);
+  }
+  const reader = request.body.getReader();
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    size += value.byteLength;
+    if (size > limit) {
+      await reader.cancel().catch(() => undefined);
+      return 'too large';
+    }
+    parts.push(value);
+  }
+  const out = new Uint8Array(size);
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.byteLength;
+  }
+  return out;
 }
 
 /** The `vars` of the Worker's environment; bindings are objects and are left out. */
@@ -302,10 +385,4 @@ export function stringVars(env: Record<string, unknown>): Record<string, string>
 export function refuse(code: RelayErrorCode): Response {
   const { status, body } = relayError(code);
   return new Response(body, { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
-}
-
-function random(length: number): Uint8Array {
-  const out = new Uint8Array(length);
-  crypto.getRandomValues(out);
-  return out;
 }

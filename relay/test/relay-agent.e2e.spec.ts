@@ -97,7 +97,7 @@ describe('relay and agent end to end', () => {
       ws.on('message', (data: Buffer) => {
         const frame = decodeFrame(new Uint8Array(data));
         if (frame.type === FrameType.Challenge) {
-          ws.send(answerChallenge(squatter, frame.payload));
+          ws.send(answerChallenge(squatter, frame.payload, `ws://127.0.0.1:${relay.port}`));
         }
       });
       ws.on('close', (c) => resolve(c));
@@ -126,7 +126,7 @@ describe('relay and agent end to end', () => {
     return Array.from({ length: count }, (_, i) => {
       const socket = connect(relay.port, '127.0.0.1', () =>
         socket.write(
-          `GET /v1/agents/${id}/ws HTTP/1.1\r\nHost: x\r\nX-Forwarded-For: ${forwardedFor(i)}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n`,
+          `GET /v1/agents/${id}/ws HTTP/1.1\r\nHost: 127.0.0.1:${relay.port}\r\nX-Forwarded-For: ${forwardedFor(i)}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n`,
         ),
       );
       socket.on('error', () => undefined);
@@ -144,7 +144,7 @@ describe('relay and agent end to end', () => {
       ws.on('message', (data: Buffer) => {
         const frame = decodeFrame(new Uint8Array(data));
         if (frame.type === FrameType.Challenge) {
-          ws.send(answerChallenge(keys, frame.payload));
+          ws.send(answerChallenge(keys, frame.payload, `ws://127.0.0.1:${relay.port}`));
         } else if (frame.type === FrameType.Ready) {
           resolve('registered');
           ws.close();
@@ -198,7 +198,7 @@ describe('relay and agent end to end', () => {
       ws.on('message', (data: Buffer) => {
         const frame = decodeFrame(new Uint8Array(data));
         if (frame.type === FrameType.Challenge) {
-          ws.send(answerChallenge(keys, frame.payload));
+          ws.send(answerChallenge(keys, frame.payload, `ws://127.0.0.1:${relay.port}`));
         } else if (frame.type === FrameType.Ready) {
           resolve();
         } else if (frame.type === FrameType.Call) {

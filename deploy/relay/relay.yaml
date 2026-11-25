@@ -42,7 +42,9 @@ spec:
           type: RuntimeDefault
       containers:
         - name: relay
-          image: ghcr.io/kubernanny/relay:latest
+          # Pinned to a released version: the release replaces RELAY_VERSION with the version it publishes
+          # (e.g. 0.3.0). Never :latest, which changes under a running relay and cannot be rolled back.
+          image: ghcr.io/kubernanny/relay:RELAY_VERSION
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -54,6 +56,9 @@ spec:
             - name: metrics
               containerPort: 9100
           env:
+            # The URL agents dial (their RELAY_URL); registration proofs are made for it (docs/RELAY.md).
+            - name: RELAY_PUBLIC_URL
+              value: https://relay.example.com
             # Fair-use limits; every RELAY_* variable is listed in docs/RELAY.md.
             - name: RELAY_MAX_AGENTS
               value: "1000"
@@ -68,7 +73,7 @@ spec:
             # Cloudflare use cf-connecting-ip. Avoid x-forwarded-for unless the proxy appends to it.
             - name: TRUST_PROXY
               value: x-real-ip
-            # Memory ≈ 100 MB + agents × 25 KB + 2 × this; fits the 256Mi limit below for 1000 agents.
+            # Memory ≈ 100 MB + agents × 25 KB + 2 × this (requests and answers held); fits the 256Mi limit below for 1000 agents.
             - name: RELAY_MAX_INFLIGHT_BYTES
               value: "67108864"
             # Native push (docs/RELAY.md, "Native push"): off unless a Firebase service account is given.

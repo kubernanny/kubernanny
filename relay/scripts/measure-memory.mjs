@@ -47,7 +47,7 @@ function connectAgent(port) {
       }
       const frame = decodeFrame(new Uint8Array(data));
       if (frame.type === FrameType.Challenge) {
-        ws.send(answerChallenge(keys, frame.payload));
+        ws.send(answerChallenge(keys, frame.payload, `ws://127.0.0.1:${port}`));
       } else if (frame.type === FrameType.Ready) {
         resolve({ ws, id });
       } else if (frame.type === FrameType.Call) {
