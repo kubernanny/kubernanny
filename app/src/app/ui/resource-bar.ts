@@ -285,15 +285,15 @@ export function resourceBarView(r: ResourceInput, label: string, tr: Translator,
       font-size: 0.75rem;
       color: var(--ink-2);
     }
+    /* Compact: items never break inside, but the row wraps between them when
+       the rail is narrow, so nothing is cut off. */
     .legend.one-line {
-      flex-wrap: nowrap;
-      gap: 0.75rem;
-      white-space: nowrap;
-      overflow: hidden;
+      gap: 0.15rem 0.75rem;
       font-size: 0.6875rem;
     }
     .legend.one-line li {
       flex-wrap: nowrap;
+      white-space: nowrap;
     }
     .legend li {
       display: inline-flex;
