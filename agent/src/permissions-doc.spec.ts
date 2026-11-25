@@ -114,7 +114,7 @@ describe('docs/PERMISSIONS.md', () => {
   });
 
   it('describes exactly the Role in the agent\'s own namespace', () => {
-    const documented = NAMESPACE_ROLE.map((r) => ({ apiGroups: [''], resources: r.resources, verbs: r.verbs, resourceNames: r.names }));
+    const documented = NAMESPACE_ROLE.map((r) => ({ apiGroups: [r.group ?? ''], resources: r.resources, verbs: r.verbs, resourceNames: r.names }));
     const key = (rules: RbacRule[]) => rules.map((r) => `${flat([r]).join(',')}|${(r.resourceNames ?? []).join(',')}`).sort();
     expect(key(installRoles().find((r) => r.kind === 'Role')!.rules)).toEqual(key(documented));
     expect(key(chartRules().find((r) => r.kind === 'Role')!.rules)).toEqual(key(documented));

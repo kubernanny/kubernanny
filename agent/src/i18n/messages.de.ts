@@ -44,6 +44,7 @@ export const de = {
 
   // ---------- run loop, workload health ----------
   'module.checkFailed': 'Prüfung fehlgeschlagen',
+  'error.agentHandover': 'Der Agent wird gerade aktualisiert. Gleich noch einmal versuchen.',
   'module.staleRead': (p: { kinds: string }) => `Konnte ${p.kinds} nicht lesen. Gezeigt wird der letzte bekannte Stand.`,
   'workloadHealth.scheduled': 'Läuft nach Zeitplan',
   'workloadHealth.none': 'Keine Pods geplant',

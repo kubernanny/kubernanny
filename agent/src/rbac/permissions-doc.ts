@@ -116,7 +116,7 @@ function inventoryTable(): string {
 }
 
 function roleTable(): string {
-  return ['| Resources | Names | Verbs | What for |', '|---|---|---|---|', ...NAMESPACE_ROLE.map((r) => `| ${r.resources.join(', ')} | ${r.names.map(code).join(', ') || 'any (see why)'} | ${r.verbs.join(', ')} | ${r.holds} |`)].join('\n');
+  return ['| Resources | Names | Verbs | What for |', '|---|---|---|---|', ...NAMESPACE_ROLE.map((r) => `| ${r.resources.map((x) => (r.group ? `${r.group}/${x}` : x)).join(', ')} | ${r.names.map(code).join(', ') || 'any (see why)'} | ${r.verbs.join(', ')} | ${r.holds} |`)].join('\n');
 }
 
 function switchMatrix(valuesPaths: ReadonlySet<string>): string {

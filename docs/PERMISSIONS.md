@@ -118,6 +118,8 @@ These lines are in the ClusterRole whatever is switched off: every check builds 
 | secrets | `kubernanny-devices` | patch | adds a device on pairing, removes it on revocation |
 | configmaps | `kubernanny-settings` | get, patch | the switches set in the app, silenced issues, accepted advisories |
 | secrets, configmaps | any (see why) | create | creates the three objects above on first start. Kubernetes RBAC cannot limit `create` by name (the name is not known before the object exists), so this line cannot carry `resourceNames`; the agent only ever creates those three |
+| coordination.k8s.io/leases | `kubernanny` | get, patch | which pod is in charge during a rolling update (sends notifications, runs actions, holds the relay): renewed every 2 s, released on shutdown |
+| coordination.k8s.io/leases | any (see why) | create | creates that Lease on first start (again, `create` cannot be limited by name) |
 <!-- /generated:role -->
 
 ## What it never has

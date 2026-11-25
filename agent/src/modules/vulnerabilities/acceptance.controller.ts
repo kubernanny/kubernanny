@@ -51,7 +51,7 @@ export class AcceptanceController {
 
 export function acceptanceRoutes(c: AcceptanceController): Route[] {
   return [
-    { method: 'POST', path: '/api/vulnerabilities/accept', handle: (r) => c.accept(r.body as AcceptBody, r.principal) },
-    { method: 'POST', path: '/api/vulnerabilities/unaccept', status: 204, handle: (r) => c.unaccept(r.body as AcceptBody, r.principal) },
+    { method: 'POST', write: true, path: '/api/vulnerabilities/accept', handle: (r) => c.accept(r.body as AcceptBody, r.principal) },
+    { method: 'POST', write: true, path: '/api/vulnerabilities/unaccept', status: 204, handle: (r) => c.unaccept(r.body as AcceptBody, r.principal) },
   ];
 }

@@ -13,5 +13,5 @@ export class RollbackController {
 }
 
 export function rollbackRoutes(c: RollbackController): Route[] {
-  return [{ method: 'POST', path: '/api/argocd/rollback', handle: (r) => c.rollback(r.body as RollbackRequest, r.principal) }];
+  return [{ method: 'POST', write: true, path: '/api/argocd/rollback', handle: (r) => c.rollback(r.body as RollbackRequest, r.principal) }];
 }

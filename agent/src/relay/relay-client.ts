@@ -126,13 +126,41 @@ export class RelayClient implements PushCarrier {
     return { inFlight: this.session?.inFlight.size ?? 0, cancelled: this.session?.cancelled.size ?? 0 };
   }
 
+  /**
+   * Connects, when this pod is in charge (at start, or when it takes over the
+   * lease during a rolling update). One agent key has one relay connection:
+   * the relay keeps the newest and closes the other with "replaced", so two
+   * pods connected at once would take turns throwing each other out.
+   */
   onApplicationBootstrap(): void {
     if (this.config.relayUrl) {
       // With APP_PUSH off the relay is never offered as a push carrier, so no Push frame can leave.
       if (this.config.appPush) {
         this.transport?.attach(this);
       }
-      this.connect();
+      this.stopped = false;
+      if (!this.session) {
+        this.connect();
+      }
+    }
+  }
+
+  /**
+   * Hands the connection over (SIGTERM, or the lease went to another pod):
+   * finishes the session with a normal close, 1001 "going away", and does
+   * not reconnect until onApplicationBootstrap() again. Calls in flight
+   * lose their answer; the app retries them.
+   */
+  handOver(): void {
+    this.stopped = true;
+    this.clearTimers();
+    const session = this.session;
+    if (!session) {
+      return;
+    }
+    this.lost(session, 1001, 'handover');
+    if (session.socket.readyState === WebSocket.OPEN || session.socket.readyState === WebSocket.CONNECTING) {
+      session.socket.close(1001, 'going away');
     }
   }
 
