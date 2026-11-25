@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { IconComponent, type IconName } from '../components/icon.component';
+import { HARD_SWITCHES, REMOVED_LABEL } from './hard-switches';
 
 interface Pillar {
   icon: IconName;
@@ -30,7 +31,7 @@ const PILLARS: Pillar[] = [
   },
   {
     icon: 'radar',
-    title: 'Nothing leaves your network',
+    title: 'Nothing leaves without your yes',
     text: 'No backend of ours, no account, no telemetry. Out of the cluster goes only what you switch on: notifications (reducible to counts), the relay (sealed messages only) and the vulnerability lookup (names and versions only).',
     link: { route: '/docs/communication', label: 'Every connection' },
   },
@@ -60,6 +61,34 @@ const PILLARS: Pillar[] = [
               <a [routerLink]="p.link.route">{{ p.link.label }} <kn-icon name="arrowRight" /></a>
             </article>
           }
+        </div>
+
+        <div class="switches" aria-labelledby="switches-title">
+          <header class="switches-head">
+            <h3 id="switches-title">Off means gone.</h3>
+            <p>
+              Every feature that reads, writes or talks to the outside can be switched off on its own in the Helm values.
+              Off is not hidden: the permission leaves the RBAC, the route refuses, the connection is never opened, and
+              the app cannot switch it back on.
+            </p>
+          </header>
+          <ul class="switch-list">
+            @for (s of switches; track s.goal) {
+              <li>
+                <div class="goal">
+                  <strong>{{ s.goal }}</strong>
+                  <code>{{ s.setting }}</code>
+                </div>
+                <p class="detail">{{ s.detail }}</p>
+                <ul class="removes" aria-label="What disappears">
+                  @for (r of s.removes; track r) {
+                    <li>no {{ removedLabel[r] }}</li>
+                  }
+                </ul>
+              </li>
+            }
+          </ul>
+          <a routerLink="/docs/permissions" class="matrix-link">Every permission, what it is for and how to remove it <kn-icon name="arrowRight" /></a>
         </div>
       </div>
     </section>
@@ -152,8 +181,79 @@ const PILLARS: Pillar[] = [
       text-decoration: underline;
       text-underline-offset: 3px;
     }
+    .switches {
+      margin-top: 56px;
+      padding: 28px;
+      border-radius: var(--radius-l);
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--surface) 70%, transparent);
+    }
+    .switches-head {
+      max-width: 760px;
+    }
+    .switches-head h3 {
+      scroll-margin-top: 96px;
+      margin: 0 0 8px;
+      font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .switch-list {
+      list-style: none;
+      margin: 24px 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+    }
+    @media (min-width: 900px) {
+      .switch-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    .switch-list > li {
+      padding: 18px;
+      border-radius: var(--radius-m, 14px);
+      border: 1px solid var(--line);
+      background: var(--ground-deep);
+    }
+    .goal {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 6px 12px;
+    }
+    .goal code {
+      font-size: 0.8125rem;
+      color: var(--accent, #8ea2ff);
+      overflow-wrap: anywhere;
+    }
+    .detail {
+      margin: 8px 0 10px;
+      font-size: 0.9375rem;
+    }
+    .removes {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .removes li {
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 0.8125rem;
+      color: var(--ok);
+      background: var(--ok-soft);
+    }
+    .matrix-link {
+      margin-top: 0;
+    }
   `,
 })
 export class SecurityComponent {
   protected readonly pillars = PILLARS;
+  protected readonly switches = HARD_SWITCHES;
+  protected readonly removedLabel = REMOVED_LABEL;
 }

@@ -112,12 +112,16 @@ const CHANNELS = ['ntfy', 'Discord', 'Slack', 'Gotify', 'JSON webhook'];
         <article class="card switches">
           <span class="badge"><kn-icon name="toggle" /></span>
           <h3>A switch for every module</h3>
-          <p>Checks, actions and notifications switch off in the app. Switch one off in Helm and its RBAC goes with it.</p>
+          <p>
+            Every check, action and connection switches off on its own. In the app it pauses; in Helm it is gone: no
+            permission, no route, no connection.
+          </p>
           <ul class="toggles" aria-hidden="true">
             @for (s of vm.switches; track s.label) {
               <li><span>{{ s.label }}</span><i [class.on]="s.on"></i></li>
             }
           </ul>
+          <a href="#switches-title" class="more">What off removes <kn-icon name="arrowRight" /></a>
         </article>
 
         <article class="card relay">
@@ -135,7 +139,8 @@ const CHANNELS = ['ntfy', 'Discord', 'Slack', 'Gotify', 'JSON webhook'];
           <h3>Security hints and known vulnerabilities</h3>
           <p>
             Privileged containers, host access, missing limits. And, if you switch it on, the versions you run checked
-            against OSV.dev, with the release that fixes them.
+            against OSV.dev, with the release that fixes them. The built-in lookup covers Kubernetes and well-known
+            components only; every image, your own included, is covered when Trivy Operator runs in the cluster.
           </p>
           <a routerLink="/docs/security-checks" class="more">Security checks <kn-icon name="arrowRight" /></a>
         </article>

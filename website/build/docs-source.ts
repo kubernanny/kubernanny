@@ -23,6 +23,7 @@ export const NAV: { title: string; items: { file: string; label?: string }[] }[]
     items: [
       { file: 'README.md', label: 'Overview' },
       { file: 'IN-CLUSTER.md', label: 'What runs in your cluster' },
+      { file: 'PERMISSIONS.md', label: 'Permissions' },
       { file: 'CONFIGURATION.md' },
       { file: 'COMPONENTS.md', label: 'Components' },
       { file: 'CHECKS.md', label: 'Checks' },
