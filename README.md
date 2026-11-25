@@ -78,7 +78,7 @@ Four, and only on an open problem: **sync** and **hard refresh** an Argo CD app,
 
 ## You decide what it looks at
 
-Every check and every action can be switched off, in Helm (`checks.disabled: [argocd]`, `actions.disabled: [restart]`) or in the app. Switched off in Helm, the permissions go too: the chart's RBAC is generated from what each module declares it reads, so an agent told to leave Argo CD alone cannot read an Argo CD Application. What the agent runs, reads, stores and connects to, and how to verify each with `kubectl auth can-i`: [docs/IN-CLUSTER.md](docs/IN-CLUSTER.md). Every permission, why it is needed, exactly what each of the four write actions changes, and which Helm value removes what: [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
+Every check and every action can be switched off, in Helm (`checks.disabled: [argocd]`, `actions.disabled: [restart]`) or in the app. Switched off in Helm, the permissions go too: the chart's RBAC is generated from what each module declares it reads, so an agent told to leave Argo CD alone cannot read an Argo CD Application. What the agent runs, reads, stores and connects to, and how to verify each with `kubectl auth can-i`: [docs/IN-CLUSTER.md](docs/IN-CLUSTER.md). Every permission, why it is needed, exactly what each write action changes, and which Helm value removes what: [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
 
 ## Notifications
 

@@ -11,6 +11,7 @@
 - Every tool is a subclass of `Integration` (core checks of `CoreCheck`), one file each, declaring what it reads and which actions it may offer.
 - Modules, action types and notifications can be switched off in the app ("What is checked") and in Helm (`checks.disabled`, `actions.disabled`). The chart's RBAC is generated from the modules' declarations and leaves out whatever is switched off in Helm, so a disabled Argo CD integration has no permission to read or patch Argo CD at all.
 - `DISABLED_MODULES` and `DISABLED_ACTIONS`; `DISABLED_CHECKS` still works.
+- Added: Argo CD rollback, **off by default** (`actions.enabled: [argocd-rollback]`, env `ENABLED_ACTIONS`). The Argo CD sheet lists the last deployments of every manual-sync, single-source app and rolls one back to an earlier revision of its own source after a confirmation, also when no issue is open. No new RBAC verb; an extra admission-policy branch rendered only on opt-in. Announced through the notification channels first, in the audit log, at most once per app in 5 minutes. On in the demo, simulated.
 
 ### Security: end to end
 

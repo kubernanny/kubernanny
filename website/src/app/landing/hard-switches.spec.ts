@@ -13,6 +13,9 @@ describe('hard switches on the landing page', () => {
     expect(value, `${s.value} in values.yaml`).not.toBeUndefined();
     if (s.default === null) {
       expect(Array.isArray(value)).toBe(true);
+    } else if (Array.isArray(s.default)) {
+      // An opt-in list: empty unless the person adds to it.
+      expect(value).toEqual(s.default);
     } else {
       expect(value).toBe(s.default);
     }

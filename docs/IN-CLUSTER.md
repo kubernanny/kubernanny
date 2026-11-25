@@ -9,7 +9,7 @@ Everything Kubernanny puts into your cluster, everything it may do there, every 
 | Workloads | **one** Deployment, one replica, one container (`ghcr.io/kubernanny/agent`) |
 | Runs as | uid 1000, non-root, read-only root filesystem, no capabilities, no privilege escalation, `RuntimeDefault` seccomp |
 | Writes to disk | nothing; a 1 MiB in-memory `/tmp` holds one Unix socket |
-| Kubernetes access | read-only across the cluster, plus four optional write actions, each bound to an open issue |
+| Kubernetes access | read-only across the cluster, plus four optional write actions, each bound to an open issue, and one opt-in action (`argocd-rollback`, off unless `actions.enabled` names it) |
 | Secrets it can read | **only its own two**, by name, in its own namespace |
 | Stores | two Secrets and one ConfigMap it creates itself, nothing else |
 | Inbound | port 8080 (web UI and the end-to-end encrypted API), port 9100 (numbers for Prometheus) |
@@ -71,7 +71,7 @@ kubectl -n kubernanny get pod -l app.kubernetes.io/name=kubernanny -o jsonpath='
 
 ## What it may do in the Kubernetes API
 
-**[PERMISSIONS.md](PERMISSIONS.md)** lists every permission, generated from the code: what each module reads and why, the four write actions and exactly what each changes, the Role in its own namespace, what it never has, and which Helm value removes what. Anything you switch off in the Helm values is left out of the ClusterRole, not just unused. CI renders the chart with the switches and fails if a switched-off permission is still granted.
+**[PERMISSIONS.md](PERMISSIONS.md)** lists every permission, generated from the code: what each module reads and why, the write actions and exactly what each changes, the Role in its own namespace, what it never has, and which Helm value removes what. Anything you switch off in the Helm values is left out of the ClusterRole, not just unused. CI renders the chart with the switches and fails if a switched-off permission is still granted.
 
 ```mermaid
 sequenceDiagram
@@ -87,7 +87,7 @@ sequenceDiagram
   Note over A: audit log: who, which action, which object
 ```
 
-An action never names its target in the request: the app says "run `restart` for issue X", and the agent takes namespace, kind and name from its own check result. It can only touch what is broken right now. For an Argo CD Application the restart targets are not taken from the Application's `status` (anyone who can edit an Application writes that), only workloads the agent's own inventory shows not ready, in the Application's destination namespace.
+An action never names its target in the request: the app says "run `restart` for issue X", and the agent takes namespace, kind and name from its own check result. It can only touch what is broken right now. For an Argo CD Application the restart targets are not taken from the Application's `status` (anyone who can edit an Application writes that), only workloads the agent's own inventory shows not ready, in the Application's destination namespace. The one exception is the opt-in Argo CD rollback (`actions.enabled: [argocd-rollback]`, off by default): it names an app and an entry of its history, works without an open issue, and only on apps with manual sync and a single source. The agent re-reads the Application and rolls back only to a revision recorded for the app's own repository and path or chart (a commit SHA or chart version), never to another source, at most once per app in 5 minutes, announced through the notification channels first. It adds no RBAC verb; the admission policy gains a branch that allows exactly that sync and nothing else.
 
 That binding lives in the agent's code. Should the pod itself be compromised, RBAC alone would let it use the cluster-wide `patch` for anything on those objects. On Kubernetes 1.30+ the chart therefore also installs ValidatingAdmissionPolicies that deny the agent's ServiceAccount every change but the restart annotation on workloads, a plain sync or refresh on Applications, and a plain Backup on CNPG ([PERMISSIONS.md](PERMISSIONS.md#admission-policy)). Check them with `kubectl get validatingadmissionpolicies | grep kubernanny`, and try one: `kubectl set image deploy/<any> '*=busybox' --as=system:serviceaccount:kubernanny:kubernanny --dry-run=server` must be refused. Every action and every log read is written to the agent's log with the device that asked (`kubectl -n kubernanny logs deploy/kubernanny | grep audit`).
 
@@ -154,6 +154,7 @@ None of these is created by Helm, so `helm uninstall` leaves them (and your pair
 | no actions at all, read-only | `rbac.allowActions: false` |
 | Kubernanny never to look at a tool (e.g. Argo CD) | `checks.disabled: [argocd]`: not run, no RBAC |
 | one action never to be possible | `actions.disabled: [restart]` |
+| no rollbacks of Argo CD apps (the default) | leave `actions.enabled` empty; `actions.disabled: [argocd-rollback]` or `rbac.allowActions: false` also win over it |
 | no logs readable from the app | `actions.disabled: [logs]` |
 | nothing to leave the cluster | leave notifications, relay, the vulnerability check and image updates unset (the default) |
 | image updates never to contact a registry | `checks.disabled: [image-updates]`: not run, the app cannot switch it on, no NetworkPolicy egress rule for it |

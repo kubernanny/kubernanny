@@ -21,10 +21,11 @@ Chart: `deploy/helm/kubernanny` (OCI: `oci://ghcr.io/kubernanny/charts/kubernann
 | `checks.certWarnDays` / `certCriticalDays` | `14` / `3` | |
 | `checks.backupMaxAgeHours` | `26` | CNPG and Velero; critical at twice |
 | `checks.disabled` | `[]` | Modules switched off for good by id, e.g. `[argocd, loki]` (ids in [CHECKS.md](CHECKS.md) and [COMPONENTS.md](COMPONENTS.md), e.g. `rook-ceph`, `traefik`, `ingress-nginx`, `kyverno`, `gatekeeper`, `trivy`, `node-clocks`, `image-updates`): not run, and no RBAC to read them. `notifications` switches all notifications off. The app cannot switch these on. |
-| `actions.disabled` | `[]` | Action types switched off for good: `restart`, `argocd-sync`, `argocd-refresh`, `cnpg-backup`, `logs`. A permission is dropped once no enabled action of an enabled module needs it (`argocd-sync` and `argocd-refresh` share theirs). |
+| `actions.disabled` | `[]` | Action types switched off for good: `restart`, `argocd-sync`, `argocd-refresh`, `argocd-rollback`, `cnpg-backup`, `logs`. A permission is dropped once no enabled action of an enabled module needs it (`argocd-sync`, `argocd-refresh` and an enabled `argocd-rollback` share theirs). |
+| `actions.enabled` | `[]` | Action types that are off until named here; only `argocd-rollback`: roll a manual-sync, single-source Argo CD app back to an earlier deployment from its history, from the Argo CD sheet, also when no issue is open ([CHECKS.md](CHECKS.md#argo-cd-argocd)). It adds no RBAC verb (the same `patch` as a sync) but renders an extra branch of the admission policy, and every rollback is announced. `actions.disabled` and `rbac.allowActions: false` win; the app can switch it off but never on. Any other id fails the install. Leave it empty unless you need it ([SECURITY.md](SECURITY.md)). |
 | `checks.prometheusUrl` / `alertmanagerUrl` | `""` | Override discovery |
 | `rbac.allowActions` | `true` | `false`: no write verbs at all, actions answer 403 |
-| `rbac.admissionPolicy.enabled` | `true` | ValidatingAdmissionPolicies that limit the agent's write permissions to exactly what its actions change (the restart annotation, a plain Argo CD sync or refresh, a plain CNPG Backup). Needs Kubernetes 1.30+; on older clusters the chart notes say it is missing |
+| `rbac.admissionPolicy.enabled` | `true` | ValidatingAdmissionPolicies that limit the agent's write permissions to exactly what its actions change (the restart annotation, a plain Argo CD sync or refresh, with `actions.enabled: [argocd-rollback]` a sync to a revision from the app's history, a plain CNPG Backup). Needs Kubernetes 1.30+; on older clusters the chart notes say it is missing |
 | `service.type` / `service.port` | `ClusterIP` / `80` | |
 | `ingress.enabled` / `className` / `host` / `annotations` / `tls` | off | Keep it on a VPN or behind SSO; see [SECURITY.md](SECURITY.md) |
 | `serviceMonitor.enabled` / `interval` | off / `60s` | Prometheus Operator scrape of `kubernanny_*` |
@@ -97,7 +98,8 @@ The chart sets these; set them yourself with `deploy/install.yaml` or `docker ru
 | `RELAY_URL` | | `wss://` relay address (`ws://` only for localhost or an in-cluster `*.svc` host). Unset: no outbound connection. The chart sets it from `relay.enabled` / `relay.url`. The relay's own settings (limits, `TRUST_PROXY`) are in [RELAY.md](RELAY.md). |
 | `APP_PUSH` | `on` | `off` disables native push for good (Helm `notifications.appPush.enabled`) |
 | `CUSTOM_COMPONENTS` | | JSON array of your own components (the chart sets it from `customComponents`) |
-| `DISABLED_ACTIONS` | | Comma-separated action types switched off in the deployment. The chart sets it from `actions.disabled`, plus the four write actions without `rbac.allowActions`. |
+| `DISABLED_ACTIONS` | | Comma-separated action types switched off in the deployment. The chart sets it from `actions.disabled`, plus every write action without `rbac.allowActions`. |
+| `ENABLED_ACTIONS` | | Comma-separated opt-in action types (only `argocd-rollback`); the chart sets it from `actions.enabled`. Anything else stops the start. `DISABLED_ACTIONS` wins. In demo mode `argocd-rollback` is on. |
 | `PROMETHEUS_URL`, `ALERTMANAGER_URL` | | Override discovery |
 | `CORS_ORIGINS` | Capacitor, Ionic and localhost dev origins | Comma-separated; the web UI served by the agent needs none |
 | `PAIRING_LOG` | `true` | `false`: no pairing banner in the log |
@@ -105,7 +107,7 @@ The chart sets these; set them yourself with `deploy/install.yaml` or `docker ru
 | `DEMO` | | Built-in demo cluster, every device counts as paired and any pairing code works: `broken`, `warning`, `healthy`, `1` or `true` (= `broken`) turn it on; unset, empty, `0`, `false` or `off` turn it off; any other value stops the agent at start |
 | `K8S_API_URL`, `K8S_TOKEN` | | Development outside a cluster, e.g. `kubectl proxy` on `http://127.0.0.1:8001` |
 
-Invalid values fail the start with a clear message instead of running with a surprise: unknown ids in `DISABLED_MODULES` / `DISABLED_ACTIONS` (the chart also refuses unknown ids in `checks.disabled` / `actions.disabled`), and any unrecognised value of `VULN_ACCEPT`, `NOTIFY_DETAIL`, `WEBHOOK_FORMAT`, `DIGEST`, `PAIRING_LOG`, `METRICS_PORT`, `APP_PUSH` or `DEMO`. `DIGEST_WEEKDAY` takes 0 to 6 and `DIGEST_HOUR` 0 to 23. `checks.disabled: [prometheus]` means no Prometheus request at all, from any module.
+Invalid values fail the start with a clear message instead of running with a surprise: unknown ids in `DISABLED_MODULES` / `DISABLED_ACTIONS`, any id in `ENABLED_ACTIONS` other than `argocd-rollback` (the chart also refuses unknown ids in `checks.disabled` / `actions.disabled` / `actions.enabled`), and any unrecognised value of `VULN_ACCEPT`, `NOTIFY_DETAIL`, `WEBHOOK_FORMAT`, `DIGEST`, `PAIRING_LOG`, `METRICS_PORT`, `APP_PUSH` or `DEMO`. `DIGEST_WEEKDAY` takes 0 to 6 and `DIGEST_HOUR` 0 to 23. `checks.disabled: [prometheus]` means no Prometheus request at all, from any module.
 
 ## The app
 
@@ -115,7 +117,7 @@ Per cluster the app stores a name, the agent address and the agent's public key 
 
 ```mermaid
 flowchart LR
-  helm["Helm values<br/>checks.disabled, actions.disabled,<br/>rbac.allowActions"] -->|"sets env and RBAC"| agent["agent"]
+  helm["Helm values<br/>checks.disabled, actions.disabled,<br/>actions.enabled, rbac.allowActions"] -->|"sets env and RBAC"| agent["agent"]
   app["App: What is checked"] -->|"writes ConfigMap<br/>kubernanny-settings"| agent
   agent -->|"runs a module or action only if<br/>both allow it"| run["checks and actions"]
   helm -. "locked rows" .-> app

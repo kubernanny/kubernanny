@@ -14,8 +14,12 @@ export interface HardSwitch {
   setting: string;
   /** Dotted path into values.yaml, checked by the spec. */
   value: string;
-  /** The default in values.yaml, checked by the spec (`null` when the setting is a list). */
-  default: boolean | null;
+  /**
+   * The default in values.yaml, checked by the spec: a boolean, `null` for a
+   * list whose default does not matter here, `[]` for a list that must be
+   * empty by default (an opt-in).
+   */
+  default: boolean | null | [];
   /** What is gone once it is set. */
   removes: Removed[];
   detail: string;
@@ -44,7 +48,16 @@ export const HARD_SWITCHES: HardSwitch[] = [
     value: 'actions.disabled',
     default: null,
     removes: ['write', 'route'],
-    detail: 'Each action alone: restart, argocd-sync, argocd-refresh, cnpg-backup, logs. Its permission leaves the RBAC once nothing else needs it.',
+    detail: 'Each action alone: restart, argocd-sync, argocd-refresh, argocd-rollback, cnpg-backup, logs. Its permission leaves the RBAC once nothing else needs it.',
+  },
+  {
+    goal: 'Rollbacks only if I allow them',
+    setting: 'actions.enabled: [] (default)',
+    value: 'actions.enabled',
+    default: [],
+    removes: ['write', 'route'],
+    detail:
+      'Rolling a manual-sync Argo CD app back to an earlier deployment is off unless you add argocd-rollback here. Until then the route answers 403 and the admission policy has no branch that would allow it. On, every rollback is announced.',
   },
   {
     goal: 'Do not look into Argo CD',

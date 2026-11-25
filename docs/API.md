@@ -31,14 +31,19 @@ Errors carry the HTTP status and a body with a stable `code` and a `message` in 
 | `ADMIN_ONLY` | 403 | a device asked for a route of the admin CLI |
 | `ISSUE_GONE` | 409 | the issue no longer exists (fixed meanwhile) |
 | `ACTION_NOT_OFFERED` | 404 | the issue does not offer that action |
-| `ACTION_UNKNOWN` | 400 | not one of the four action types |
+| `ACTION_UNKNOWN` | 400 | not one of the four issue action types |
 | `NO_CHANNEL` | 400 | test notification without a configured channel |
 | `NOTIFICATIONS_LOCKED` | 403 | test notification while `checks.disabled: [notifications]` switches every channel off |
 | `NOTIFY_FAILED` | 502 | the test notification did not reach every channel; the message names the failing one |
 | `ACCEPT_LOCKED` | 403 | accepting advisories is switched off in the deployment (`vulnerabilities.allowAccept: false`) |
-| `MODULE_OFF` | 403 | accepting an advisory while neither the `vulnerabilities` module nor the `trivy` integration is running |
+| `MODULE_OFF` | 403 | accepting an advisory while neither the `vulnerabilities` module nor the `trivy` integration is running; a rollback while the `argocd` module is off |
 | `ADVISORY_NOT_FOUND` | 404 | the advisory is not reported for that component right now |
 | `ACCEPT_DAYS`, `ACCEPT_TARGET`, `ACCEPT_REASON`, `ACCEPT_LIMIT` | 400 | duration other than 30, 90 or 365; component or advisory missing or malformed; reason not text; more than 500 accepted |
+| `ROLLBACK_TARGET` | 400 | `POST /argocd/rollback` without a valid namespace, app name or whole-number history id |
+| `APP_NOT_FOUND` | 404 | no such Argo CD Application |
+| `ROLLBACK_AUTOMATED`, `ROLLBACK_MULTI_SOURCE`, `ROLLBACK_NO_SOURCE`, `ROLLBACK_RUNNING` | 409 | the app syncs automatically, has `spec.sources`, has no `spec.source`, or an operation is pending or running |
+| `ROLLBACK_HISTORY_NOT_FOUND`, `ROLLBACK_CURRENT`, `ROLLBACK_REVISION`, `ROLLBACK_OTHER_SOURCE` | 409 | no history entry with that id; it is the revision deployed now; its revision is no 40-character commit SHA (Git) or chart version (Helm); it came from another repository, path or chart than the app's `spec.source` |
+| `ROLLBACK_RATE_LIMITED` | 429 | the same app was rolled back less than 5 minutes ago |
 
 ## On the public port
 
@@ -129,7 +134,7 @@ Texts above are shown in German (`l: "de"`); with `l: "en"` the same snapshot re
 
 When a run cannot read the cluster (API server unreachable, RBAC), the snapshot keeps the last good run, with its `checkedAt` (so the app and `kubernanny_last_run_timestamp_seconds` show how old it is), and adds `error` and `failingSince`. From the third failed run in a row the light is `red` and one critical issue `agent/cluster-unreachable` ("Kubernanny cannot read the cluster", with the error as cause) joins the issues; it is recorded and notified like any issue (silences, the notification switch and maintenance windows apply), and disappears with the first run that reads the cluster again.
 
-Issues are sorted critical first, then by age, then in the order the modules report them (never by title, so the order is the same in every language). `since` is when this agent process first saw the issue. Issues of the `vulnerabilities` module and of the `trivy` integration also carry `advisories`: advisory ids (`["GHSA-423p-g724-fr39"]`, `["CVE-2024-21538"]`), which the app links to `https://osv.dev/vulnerability/<id>`; they never offer actions. The `vulnerabilities` module and the `trivy` integration carry `canAccept` (advisories can be marked as not applicable, see `POST /vulnerabilities/accept`) and `accepted`: `[{ component, name, advisory, until, by, reason? }]`.
+Issues are sorted critical first, then by age, then in the order the modules report them (never by title, so the order is the same in every language). `since` is when this agent process first saw the issue. Issues of the `vulnerabilities` module and of the `trivy` integration also carry `advisories`: advisory ids (`["GHSA-423p-g724-fr39"]`, `["CVE-2024-21538"]`), which the app links to `https://osv.dev/vulnerability/<id>`; they never offer actions. While `argocd-rollback` is on (Helm `actions.enabled: [argocd-rollback]`, not switched off in the app), the `argocd` module carries `rollbacks`: `[{ namespace, app, current?, entries: [{ id, revision, short, deployedAt?, current }] }]`, one per manual-sync, single-source app with an earlier deployment to go back to, its last 10 history entries newest first (only those of its own source with a plausible revision; `current` marks the one deployed now). Off, the field is absent. The `vulnerabilities` module and the `trivy` integration carry `canAccept` (advisories can be marked as not applicable, see `POST /vulnerabilities/accept`) and `accepted`: `[{ component, name, advisory, until, by, reason? }]`.
 
 ### `POST /status/refresh`
 
@@ -225,6 +230,20 @@ Sources and rules, each the same as its check: CNPG clusters with backups config
 ```
 
 The agent looks up the issue in its current snapshot and runs the action stored there; the request cannot name a target. After an action the agent starts a new run.
+
+### `POST /argocd/rollback`
+
+Off unless the deployment opts in (Helm `actions.enabled: [argocd-rollback]`, env `ENABLED_ACTIONS`); `actions.disabled` and `rbac.allowActions: false` win, and the app can switch it off. Rolls a manual-sync Argo CD app back to an earlier deployment from its own `status.history`, whether or not an issue is open.
+
+```json
+{ "namespace": "argocd", "app": "shop-web-app-chart", "id": 7 }
+```
+
+```json
+{ "done": "Rolling shop-web-app-chart back to 3f9c2a1.", "revision": "3f9c2a1d8e7b6a5c4d3e2f1a0b9c8d7e6f5a4b3c" }
+```
+
+The request names only the app and the history id; anything else in the body is ignored. Off, the agent answers 403 `ACTION_DISABLED` (or `MODULE_OFF` with the `argocd` module off) before reading anything. Otherwise it reads the Application and refuses (409, codes above) unless it has no `spec.syncPolicy.automated`, a single `spec.source` and no pending or running operation, and the entry exists, has a commit SHA (Git) or chart version (Helm) as revision, is not the one deployed now and came from the same repository and path or chart as `spec.source`. At most one rollback per app in 5 minutes (429 `ROLLBACK_RATE_LIMITED`). Every rollback is announced through the notification channels first (also while notifications are paused in the app or during maintenance) and written to the audit log with the device, the app and both revisions. The patch sets only `operation`: a hook sync initiated by `kubernanny` with `sync.revision` set to the entry's revision, no source, no prune, no options. Argo CD then syncs the app's `spec.source` at that revision; the app shows `OutOfSync` against Git until the change is reverted there (see [CHECKS.md](CHECKS.md#argo-cd-argocd)).
 
 ### `GET /logs?issue=<issue id>&index=<n>`
 

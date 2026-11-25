@@ -189,6 +189,30 @@ No sync is offered while an operation is running. Stats: apps, synced, healthy, 
 
 Issue ids are `argocd/<namespace>/<app>/{health,operation,sync,comparison}`. A restart is offered only for a workload in the Application's `spec.destination.namespace` that the agent's own inventory shows not ready, never for a target taken from the Application's status alone.
 
+#### Rolling back (`argocd-rollback`, off by default)
+
+A bad deploy is not always something Kubernanny can see. With `actions.enabled: [argocd-rollback]` in the Helm values (env `ENABLED_ACTIONS`), the Argo CD sheet lists every app with **manual** sync and a **single** source, with its last deployments from `status.history` (date, short revision, which one runs now), and a "Roll back" button, whether or not an issue is open. Picking an earlier deployment asks for confirmation (app, from and to revision) and then sets the Application's `operation` to a sync of that revision:
+
+```yaml
+operation:
+  initiatedBy: { username: kubernanny }
+  info: [{ name: Reason, value: Rollback from the Kubernanny app }]
+  sync: { revision: <the history entry's revision>, syncStrategy: { hook: {} } }
+```
+
+No source, no prune, no sync options. Argo CD's controller syncs `spec.source` at `sync.revision` when the operation names no source, the same as `argocd app sync <app> --revision <rev>`. What runs afterwards is that revision of the app's own repository and path or chart. Two consequences:
+
+- **The cluster then differs from Git.** Argo CD compares against `spec.source.targetRevision` again, so the app shows `OutOfSync` (a hint in Kubernanny, since the app syncs manually) until you `git revert` the bad change, or until someone presses Sync, which rolls forward again. A rollback is a stopgap, not a fix.
+- **Only for manual sync.** With automated sync Argo CD would sync straight back to Git; `argocd app rollback` refuses such apps for the same reason, and so does Kubernanny.
+
+How it differs from `argocd app rollback`: Argo CD's own rollback copies the history entry's `source` into the operation (so it can also go back to an older repository or path) and uses the apply strategy with optional prune. Kubernanny never names a source: it refuses any entry whose repository, path or chart differs from the current `spec.source`, because `status` is writable by anyone who can edit the Application and must not steer the agent to another repository. It keeps the hook strategy of a normal sync and never prunes.
+
+Multi-source apps (`spec.sources`) are not offered: their history holds one revision per source, and rolling back one source without the others could combine states that never ran together. Roll those back in Argo CD itself.
+
+The agent re-reads the Application on every request and refuses unless the Argo CD module is on, the app exists, has no `spec.syncPolicy.automated`, has `spec.source` and no `spec.sources`, has no operation pending or running, and the history id exists with a revision that is a 40-character commit SHA (Git) or a chart version (Helm), is not the one deployed now, and came from the same repository and path or chart. At most one rollback per app in 5 minutes. Every rollback is announced through the notification channels first and logged with the device and both revisions. Off (the default), the route answers 403 before reading anything, the sheet lists no history, and the admission policy has no branch that would let the agent set a revision. Routes and errors: [API.md](API.md#post-argocdrollback); permissions: [PERMISSIONS.md](PERMISSIONS.md).
+
+This follows Argo CD's code (the server's rollback handler and the controller's sync of an operation without a source); it has not been tried against a live Argo CD here.
+
 ### CloudNativePG (`cnpg`)
 
 | Issue id | Severity | When | Actions |
