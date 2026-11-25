@@ -3,6 +3,7 @@ import { ArgoApplication, evaluateArgoApps, isAutomated } from '../../checks/arg
 import { rollbackApps } from '../../checks/argocd-rollback';
 import { t } from '../../i18n/text';
 import { argoDetails } from '../details';
+import { isReadyToSync, pendingSync } from '../../checks/argocd-pending';
 import { ModuleContext, ModuleResult } from '../types';
 
 export class ArgoCdIntegration extends Integration {
@@ -12,7 +13,8 @@ export class ArgoCdIntegration extends Integration {
   readonly reads = [{ group: 'argoproj.io', resource: 'applications', why: 'sync and health status of every app' }];
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
     const apps = (await ctx.kube.list<ArgoApplication>('/apis/argoproj.io/v1alpha1/applications')) ?? [];
-    const issues = evaluateArgoApps(apps, ctx.inv);
+    const issues = evaluateArgoApps(apps, ctx.inv, ctx.now);
+    const pendingSyncs = apps.filter((a) => isReadyToSync(a, isAutomated(a))).map((a) => pendingSync(a, ctx.syncOn ?? false));
     const synced = apps.filter((a) => a.status?.sync?.status === 'Synced').length;
     const healthy = apps.filter((a) => a.status?.health?.status === 'Healthy').length;
     const progressing = apps.filter((a) => a.status?.health?.status === 'Progressing').length;
@@ -28,6 +30,7 @@ export class ArgoCdIntegration extends Integration {
         { label: t('argocd.stat.automated'), value: `${auto}/${apps.length}` },
       ],
       details: argoDetails(apps, ctx.now),
+      pendingSyncs,
       // Only while the action is on: a locked install shows no history at all.
       ...(ctx.rollbackOn ? { rollbacks: rollbackApps(apps) } : {}),
       // Hints (a manual app with a change waiting) are no problem: the line says they wait, in the same words as the list.

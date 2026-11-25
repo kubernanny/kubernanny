@@ -116,6 +116,28 @@ const ROLLBACK_HISTORY = [
   { id: 9, revision: 'c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3' },
 ];
 
+/** Manual apps with a change in Git not yet synced, and what the change is, as Argo CD records it in the Application. */
+const PENDING_APPS: Record<string, { namespace: string; hoursAgo: number; image?: { repo: string; from: string; to: string }; resources: object[] }> = {
+  'kubernanny-chart': {
+    namespace: 'kubernanny',
+    hoursAgo: 3,
+    image: { repo: 'ghcr.io/kubernanny/agent', from: '2026-11-25-11', to: '2026-11-25-14' },
+    resources: [
+      { kind: 'Deployment', name: 'kubernanny', namespace: 'kubernanny', status: 'OutOfSync', health: { status: 'Healthy' } },
+      { kind: 'Role', name: 'kubernanny-keys', namespace: 'kubernanny', status: 'OutOfSync', health: { status: 'Missing' } },
+    ],
+  },
+  'weblate-chart': {
+    namespace: 'weblate',
+    hoursAgo: 26,
+    image: { repo: 'weblate/weblate', from: '5.13.0', to: '5.13.2' },
+    resources: [
+      { kind: 'StatefulSet', name: 'weblate', namespace: 'weblate', status: 'OutOfSync', health: { status: 'Healthy' } },
+      { kind: 'ConfigMap', name: 'weblate-legacy-settings', namespace: 'weblate', status: 'OutOfSync', requiresPruning: true },
+    ],
+  },
+};
+
 const ARGO_APPS: [string, string, string, boolean][] = [
   ['argocd-chart', 'Synced', 'Healthy', true],
   ['cert-manager-chart', 'Synced', 'Healthy', false],
@@ -461,18 +483,32 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
   ]);
   list(
     '/apis/argoproj.io/v1alpha1/applications',
-    ARGO_APPS.map(([name, s0, h0, auto]) => [name, broken ? s0 : name === 'weblate-chart' && warn ? 'OutOfSync' : 'Synced', broken ? h0 : 'Healthy', auto] as const).map(([name, sync, health, auto]) => ({
+    // Two manual apps with a change waiting in every scenario: routine ("ready to sync"), never an issue. In the broken one
+    // weblate-chart has waited nine days, past the week after which a hint asks whether the sync was forgotten.
+    ARGO_APPS.map(([name, s0, h0, auto]) => [name, PENDING_APPS[name] ? 'OutOfSync' : broken ? s0 : 'Synced', broken ? h0 : 'Healthy', auto] as const).map(([name, sync, health, auto]) => ({
       metadata: { name, namespace: 'argocd' },
-      spec: { destination: { namespace: 'default' }, syncPolicy: auto ? { automated: { prune: true, selfHeal: true } } : {}, ...(name === ROLLBACK_APP ? { source: ROLLBACK_SOURCE } : {}) },
+      spec: {
+        project: 'default',
+        destination: { namespace: PENDING_APPS[name]?.namespace ?? 'default' },
+        syncPolicy: auto ? { automated: { prune: true, selfHeal: true } } : {},
+        ...(name === ROLLBACK_APP ? { source: ROLLBACK_SOURCE } : {}),
+        ...(PENDING_APPS[name]?.image ? { source: { repoURL: 'https://git.example/homelab/gitops.git', path: `apps/${name}`, helm: { parameters: [{ name: 'image.name', value: PENDING_APPS[name]!.image!.repo }, { name: 'image.tag', value: PENDING_APPS[name]!.image!.to }] } } } : {}),
+      },
       status: {
-        sync: { status: sync, ...(name === ROLLBACK_APP ? { revision: ROLLBACK_HISTORY[2]!.revision } : {}) },
+        sync: { status: sync, ...(name === ROLLBACK_APP ? { revision: ROLLBACK_HISTORY[2]!.revision } : PENDING_APPS[name] ? { revision: '9b1d0c3e5f7a2b4c6d8e0f1a3b5c7d9e1f2a4b6c' } : {}) },
+        ...(PENDING_APPS[name]
+          ? {
+              operationState: { phase: 'Succeeded', finishedAt: iso((broken && name === 'weblate-chart' ? 9 * 24 : PENDING_APPS[name]!.hoursAgo) * H), syncResult: { revision: '4e6a8c0b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2c' } },
+              summary: { images: PENDING_APPS[name]!.image ? [`${PENDING_APPS[name]!.image!.repo}:${PENDING_APPS[name]!.image!.from}`] : [] },
+            }
+          : {}),
         // One manual-sync app with a history, so the rollback (on in the demo) has something to show.
         ...(name === ROLLBACK_APP ? { history: ROLLBACK_HISTORY.map((h, i) => ({ ...h, deployedAt: iso([9 * D, 3 * D, 5 * H][i]!), source: ROLLBACK_SOURCE })) } : {}),
         health: { status: health },
         resources:
           health === 'Degraded'
             ? [{ kind: 'Deployment', name: 'social-importer', namespace: 'default', health: { status: 'Degraded', message: 'Deployment "social-importer" exceeded its progress deadline' } }]
-            : [],
+            : (PENDING_APPS[name]?.resources ?? []),
       },
     })),
   );
