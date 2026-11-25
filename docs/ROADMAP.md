@@ -16,7 +16,6 @@ Rough order. Nothing here is promised; issues and pull requests move things up.
 
 ## App
 
-- Lock-screen widgets; refreshing home-screen widgets from the background.
 - Apple Watch and Wear OS complication.
 - Live Activity during an outage.
 - More languages: adding one is a catalog per side ([DEVELOPMENT.md](DEVELOPMENT.md#texts-and-languages)).

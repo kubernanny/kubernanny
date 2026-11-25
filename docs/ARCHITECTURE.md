@@ -338,22 +338,43 @@ flowchart TB
 
 ### Widgets
 
-Home-screen widgets on iOS (WidgetKit, small and medium) and Android (an `AppWidgetProvider` with plain RemoteViews, no Glance) show each cluster's light as the nanny's eye, its headline ("3 outages and 19 warnings"), "as of HH:MM" for the agent's last check, and a "Demo" mark for the built-in demo clusters. A tap opens that cluster (`kubernanny://cluster?id=…`, handled in `app.ts` with `clusterLinkId`, also as the launch URL of a cold start).
+Two widgets on each platform, navy like the app icon with the nanny's glasses, the lights in the app's tones, and every state also in words:
+
+| | iOS (WidgetKit) | Android (RemoteViews, no Glance) |
+|---|---|---|
+| **All clusters** ("Kubernanny", the original kind and receiver, so placed widgets stay) | small: everything added up ("2 outages and 4 warnings"), a dot per cluster; medium: a row per cluster with light, counts and age; large and extra large (iPad): the sum on top, the rows, the three worst problems with their cluster | resizable from 2 × 1 cells: 2, 3 or 4 rows, then the sum on top, then the worst problems (a layout per size, chosen by the launcher from Android 12, by the reported size before) |
+| **One cluster** ("Cluster") | iOS 17 and later, chosen per widget ("Choose cluster", an App Intent over the clusters in the widget storage; unset: the worst); small: glasses, name, the counts as large type, age; medium: the same with the worst problems beside it; large: count tiles and the problems; Lock Screen and StandBy: circular (symbol and count), rectangular, inline | the cluster in the worst state (no configuration screen); small, wide with the problems beside it, large with count tiles |
+| **Lock Screen** | the accessories above; on iOS 16 the all-clusters widget offers them (added up). Problem titles are `privacySensitive`, hidden while the device is locked | no lock-screen widgets on phones |
+
+A tap opens the cluster (`kubernanny://cluster?id=…`, handled in `app.ts` with `clusterLinkId`, also as the launch URL of a cold start); a problem opens its cluster.
 
 ```mermaid
 flowchart LR
-  SS["StatusStore<br/>new snapshot"] --> WS["WidgetSync<br/>nextWidgetList()"]
+  SS["StatusStore<br/>new snapshot"] --> WS["WidgetSync<br/>nextWidgetList(), keepFresher()"]
   CS["ClusterStore<br/>names, widget switches"] --> WS
   WS -- "whole list, only when it changed" --> WB["WidgetBridge plugin<br/>(app/native/widget-bridge)"]
+  P["sealed push<br/>(status w)"] --> PX["iOS push extension /<br/>Android messaging service"]
   WB --> ST["iOS: App Group UserDefaults group.app.kubernanny<br/>Android: SharedPreferences kubernanny_widget"]
-  ST --> W["Widget"]
-  WB -- "reload timelines / updateAppWidget" --> W
+  PX -- "only an entry that is there, only newer" --> ST
+  ST --> W["Widgets"]
+  WB -- "reload timelines / redraw" --> W
+  PX -- "reload timelines / redraw" --> W
 ```
 
-- **The widget never talks to an agent and holds no key.** The app writes a short list (`WidgetCluster` in `core/widget/widget-summary.ts`: id, name, light, number of outages and warnings counted like the headline, `checkedAt`, demo flag; nothing else, no issue texts) and the OS draws it. The headline sentence is built natively from the counts, in the widget's own localization files (English and German).
-- **Fresh only while the app is open.** `WidgetSync` writes whenever the list differs from the last write: a new snapshot, a renamed, removed or switched-off cluster. A cluster without an answer (app just started, agent out of reach) keeps its last entry. The app polls only in the foreground, so a cluster whose check is over 30 minutes old is drawn grey with a line saying so (iOS adds a timeline entry for that moment; Android redraws from the stored list every 30 minutes, Android's minimum, so it can turn grey up to 30 minutes late). Native push may later write from the background; until then this is the limit.
-- **Switches.** Per cluster in its settings ("Show this cluster on the home-screen widget", `ClusterConfig.widgetOff`) and for all clusters on the cluster list (`widgetsOff` in Preferences). Off removes the entries from the shared storage before the switch's promise resolves, and nothing is written for them afterwards. Both are shown only in the native apps.
-- **Code.** TypeScript: `app/src/app/core/widget/` (pure `widgetCluster` / `nextWidgetList`, unit-tested with a fake bridge; the web implementation of the plugin is a no-op). Plugin: `app/native/widget-bridge/`, a local npm package that `npx cap sync` wires in like any Capacitor plugin (Swift package `KubernannyWidgetBridge`, Android library with the widget provider, its layout, resources and receiver, which the manifest merger adds to the app). iOS widget extension: `app/ios/App/KubernannyWidget/`; its Xcode target is set up by hand once ([RELEASING.md](RELEASING.md#widgets)).
+- **The widget never talks to an agent and holds no key.** It shows a short list (`WidgetCluster` in `core/widget/widget-summary.ts`: id, name, light, number of outages and warnings counted like the headline, `checkedAt`, demo flag, and the titles of the three worst problems with their severity; no causes, addresses or keys). The headline sentence is built natively from the counts, in the widget's own localization files (English and German). Fields added later are optional for the natives, so a list stored by an older version still reads (`problems` came after `kubernanny.widget.clusters.v1`; no new key was needed).
+
+**What refreshes it, and when:**
+
+| Situation | What happens |
+|---|---|
+| App open | `WidgetSync` writes whenever the list differs from the last write: a new snapshot (every poll), a renamed, removed or switched-off cluster; the plugin then reloads the widgets. |
+| A native push arrives (app closed, in the background or open) | The iOS Notification Service Extension / the Android messaging service open it, and when it carries a status (`w`, [PROTOCOL.md](PROTOCOL.md#push-status)) newer than the stored entry, write that cluster's entry and reload the widgets. Only with push on for that cluster, and only on a change the agent notifies (new problem after 5 minutes, escalation, resolution, weekly report). |
+| Nothing happens (no push, app closed) | Nothing new can arrive: the widget cannot reach an agent. It shows its age instead: iOS ticks "2 min ago" from timeline entries made in advance (every minute for an hour, then sparser, for a day), Android shows the time of the check. After 30 minutes without a check a cluster turns grey and says "Not current" (iOS: a timeline entry at that moment; Android: an alarm that does not wake the device, plus `updatePeriodMillis` every 30 minutes). After an app update Android redraws at once (`MY_PACKAGE_REPLACED`). |
+
+No periodic background refresh: it would need the device key and the Noise protocol in Swift and Kotlin, and a heartbeat push would cost a relay request and an FCM message per device and interval while iOS shows every push that reaches the extension as a notification (silent pushes wake the app only at the system's discretion). An entry the app has no answer for keeps its last state; `keepFresher` keeps a state a push stored if it is newer than the app's.
+
+- **Switches.** Per cluster in its settings ("Show this cluster on the home-screen widget", `ClusterConfig.widgetOff`) and for all clusters on the cluster list (`widgetsOff` in Preferences). Off removes the entries from the shared storage before the switch's promise resolves, and nothing is written for them afterwards, by the app or by a push (a push only updates an entry that is there). Both are shown only in the native apps.
+- **Code.** TypeScript: `app/src/app/core/widget/` (pure `widgetCluster` / `nextWidgetList` / `keepFresher`, unit-tested with a fake bridge; the web implementation of the plugin is a no-op). Plugin: `app/native/widget-bridge/`, a local npm package that `npx cap sync` wires in like any Capacitor plugin (Swift package `KubernannyWidgetBridge`, Android library with both widget providers, `WidgetRender`, the refresh receiver, layouts and resources, which the manifest merger adds to the app). From a push: `WidgetPushStatus.swift` in the push extension, `WidgetPushStatus.java` in `app/native/push`. iOS widget extension: `app/ios/App/KubernannyWidget/`; its Xcode target is set up by a script ([RELEASING.md](RELEASING.md#widgets)).
 
 **Design**: [DESIGN.md](DESIGN.md).
 
