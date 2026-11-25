@@ -127,6 +127,20 @@ export class SettingsService {
     this.loaded = true;
   }
 
+  /** Reads the switches again and throws on any failure but 404, keeping nothing old (lease handover, agent.ts). */
+  async reload(): Promise<void> {
+    let raw: string | undefined;
+    try {
+      const cm = await this.kube.get<{ data?: { settings?: string } }>(`${this.path}/${SETTINGS_CONFIGMAP}`);
+      raw = cm.data?.settings;
+    } catch (err) {
+      if (!(err instanceof KubeError && err.status === 404)) {
+        throw err;
+      }
+    }
+    this.stored = parseStored(raw);
+  }
+
   /** Called after every change, e.g. to start a new run. */
   onChange(listener: () => void): void {
     this.listeners.push(listener);

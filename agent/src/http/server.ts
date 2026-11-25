@@ -4,7 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { extname, join, normalize, sep } from 'node:path';
 import { MAX_SEALED_REQUEST } from '@kubernanny/protocol';
 import type { Principal } from '../auth/devices.service';
-import { InternalRequest } from '../auth/principal.guard';
+import { INTERNAL, InternalRequest } from '../auth/principal.guard';
 import { requestLang } from '../i18n/localize';
 import { Lang, localize, t } from '../i18n/text';
 import { Logger } from '../logger';
@@ -75,6 +75,8 @@ export interface HttpOptions {
   webRoot?: string | null;
   /** Whether this pod may run `write` routes now (it holds the lease). Default: always. */
   isLeader?(): boolean;
+  /** Runs before the guard of every non-public route; a thrown HttpException is the answer. */
+  beforeGuard?(): Promise<void>;
 }
 
 type Handler = (req: IncomingMessage, res: ServerResponse) => void;
@@ -427,6 +429,10 @@ export function createHttpHandler(options: HttpOptions): Handler {
     try {
       let principal: Principal | null = null;
       if (!route.public) {
+        // Only for calls that can pass the guard (the internal socket): a stranger on the network must not cause reads.
+        if ((req as InternalRequest)[INTERNAL] === true) {
+          await options.beforeGuard?.();
+        }
         principal = options.principal(req as InternalRequest);
         if (!principal) {
           throw new UnauthorizedException({ code: 'E2E_REQUIRED', message: t('error.e2eRequired') });
