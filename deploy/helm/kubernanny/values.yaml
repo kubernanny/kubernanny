@@ -140,7 +140,8 @@ rbac:
   # Sync and refresh Argo CD apps, restart Deployments/StatefulSets/DaemonSets,
   # start CNPG backups. The agent only runs an action an open issue offers.
   # false: strictly read-only (adds every write action to actions.disabled,
-  # argocd-rollback included).
+  # argocd-rollback included). Pod logs stay readable: that is no write; set
+  # actions.disabled: [logs] to drop pods/log as well.
   allowActions: true
   # A ValidatingAdmissionPolicy that limits the agent's write permissions to
   # what its actions change: on Deployments, StatefulSets and DaemonSets only
