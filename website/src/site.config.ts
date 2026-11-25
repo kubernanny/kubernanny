@@ -11,7 +11,8 @@ export const SITE = {
     'Open-source Kubernetes health for self-hosters. Recognises ~75 components, checks them deeply, and shows only what is broken, with the cause and the fix. End-to-end encrypted.',
   repoUrl: 'https://github.com/kubernanny/kubernanny',
   demoUrl: 'https://demo.kubernanny.app',
-  sponsorsUrl: 'https://github.com/sponsors/kubernanny',
+  sponsorsUrl: 'https://github.com/sponsors/NLueg',
+  kofiUrl: 'https://ko-fi.com/nicolueg',
   /** The maintainer, credited in the footer. */
   author: { name: 'Nico Lueg', url: 'https://nicolueg.com', github: 'https://github.com/NLueg' },
   licence: 'Apache-2.0',

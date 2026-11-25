@@ -99,7 +99,7 @@ const VM = {
 
       <h2>Links to other sites</h2>
       <p>
-        Links to GitHub, GitHub Sponsors or nicolueg.com take you to other services, whose own privacy notices apply
+        Links to GitHub, GitHub Sponsors, Ko-fi or nicolueg.com take you to other services, whose own privacy notices apply
         once you follow them. Nothing is loaded from them before you click.
       </p>
 

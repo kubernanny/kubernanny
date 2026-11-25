@@ -45,6 +45,7 @@ import { SITE } from '../../site.config';
             <ul>
               <li><a [href]="site.repoUrl">GitHub</a></li>
               <li><a [href]="site.sponsorsUrl">Sponsor</a></li>
+              <li><a [href]="site.kofiUrl">Ko-fi</a></li>
               <li><a [href]="site.repoUrl + '/blob/main/CONTRIBUTING.md'">Contributing</a></li>
               <li><a [href]="site.repoUrl + '/blob/main/SECURITY.md'">Report a vulnerability</a></li>
             </ul>
