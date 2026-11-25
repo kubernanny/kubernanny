@@ -17,6 +17,10 @@ export interface Episode {
 }
 
 export const WEEK = 7 * 86_400_000;
+/** Ended episodes kept per issue: a flapping issue opens one every time it comes back (once a minute at worst). */
+export const MAX_EPISODES_PER_ISSUE = 100;
+/** Episodes kept in all; past it the oldest ended ones go first. */
+export const MAX_EPISODES = 5_000;
 
 /**
  * Follows issues from run to run and keeps the episodes of the last week
@@ -69,6 +73,35 @@ export class EpisodeLog {
       if (end !== null && end < now - WEEK) {
         this.episodes.splice(i, 1);
       }
+    }
+    this.cap();
+  }
+
+  /** Bounds the log: the newest MAX_EPISODES_PER_ISSUE ended episodes per issue, MAX_EPISODES in all (oldest ended first, then oldest). */
+  private cap(): void {
+    const ended = new Map<string, number>();
+    // Newest first: the episodes are in the order they started.
+    const kept = [...this.episodes].reverse().filter((e) => {
+      if (e.end === null) {
+        return true;
+      }
+      const n = (ended.get(e.id) ?? 0) + 1;
+      ended.set(e.id, n);
+      return n <= MAX_EPISODES_PER_ISSUE;
+    });
+    kept.reverse();
+    let excess = kept.length - MAX_EPISODES;
+    if (excess > 0) {
+      for (let i = 0; i < kept.length && excess > 0; i++) {
+        if (kept[i]!.end !== null) {
+          kept.splice(i--, 1);
+          excess--;
+        }
+      }
+      kept.splice(0, Math.max(0, excess));
+    }
+    if (kept.length !== this.episodes.length) {
+      this.episodes.splice(0, this.episodes.length, ...kept);
     }
   }
 
