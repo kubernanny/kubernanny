@@ -35,6 +35,7 @@ describe('security notifications (review: a stolen device could blind the owner)
     const kube = new DemoKubeClient();
     const { alerts, notifier } = recorder(kube);
     const settings = new SettingsService(loadConfig(), kube, notifier);
+    await settings.onModuleInit();
     await settings.update({ notifications: false }, who);
     expect(alerts).toEqual([{ by: 'Nicos iPhone', events: [{ kind: 'notificationsOff' }], writesBefore: 0 }]);
     expect(kube.writes.length).toBeGreaterThan(0);
@@ -54,6 +55,7 @@ describe('security notifications (review: a stolen device could blind the owner)
     const kube = new DemoKubeClient();
     const { alerts, notifier } = recorder(kube);
     const silences = new SilenceService(loadConfig(), kube, notifier);
+    await silences.onModuleInit();
     await silences.startMaintenance(24, who);
     expect(alerts).toEqual([{ by: 'Nicos iPhone', events: [{ kind: 'maintenance', hours: 24 }], writesBefore: 0 }]);
   });
@@ -88,8 +90,11 @@ describe('security notifications (review: a stolen device could blind the owner)
     const kube = new DemoKubeClient();
     const notifier = new Notifier(config);
     const settings = new SettingsService(config, kube, notifier);
+    await settings.onModuleInit();
     await settings.update({ notifications: false }, who);
-    await new SilenceService(config, kube as KubeClient, notifier).startMaintenance(4, who);
+    const silences = new SilenceService(config, kube as KubeClient, notifier);
+    await silences.onModuleInit();
+    await silences.startMaintenance(4, who);
     sent.length = 0;
     await notifier.securityAlert('Nicos iPhone', [{ kind: 'rolledBack', app: 'argocd/shop', from: 'c4d5e6f', to: '3f9c2a1' }]);
     expect(sent.map((b) => JSON.parse(b).body)).toEqual([expect.stringContaining('back from c4d5e6f to 3f9c2a1')]);
@@ -121,6 +126,7 @@ describe('concurrent changes do not lose each other (review)', () => {
   it('settings', async () => {
     const kube = new SlowKube();
     const settings = new SettingsService(loadConfig(), kube);
+    await settings.onModuleInit();
     await Promise.all([settings.update({ modules: { argocd: false } }, who), settings.update({ actions: { restart: false } }, who), settings.update({ notifications: false }, who)]);
     expect(settings.moduleState('argocd')).toBe('off');
     expect(settings.actionState('restart')).toBe('off');
@@ -131,6 +137,7 @@ describe('concurrent changes do not lose each other (review)', () => {
   it('silences', async () => {
     const kube = new SlowKube();
     const silences = new SilenceService(loadConfig(), kube);
+    await silences.onModuleInit();
     await Promise.all([silences.silence('a/1', 8, who), silences.silence('b/2', 8, who), silences.startMaintenance(2, who)]);
     expect(silences.silencedUntil('a/1')).not.toBeNull();
     expect(silences.silencedUntil('b/2')).not.toBeNull();
@@ -140,6 +147,7 @@ describe('concurrent changes do not lose each other (review)', () => {
   it('devices', async () => {
     const kube = new SlowKube();
     const devices = new DevicesService(loadConfig(), kube);
+    await devices.onModuleInit();
     await Promise.all([devices.add('A', generateKeyPair().publicKey), devices.add('B', generateKeyPair().publicKey), devices.add('C', generateKeyPair().publicKey)]);
     expect(devices.list().map((d) => d.name).sort()).toEqual(['A', 'B', 'C']);
     await Promise.all(devices.list().map((d) => devices.revoke(d.id)));

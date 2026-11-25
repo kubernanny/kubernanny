@@ -1,7 +1,8 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { KeyPair, fingerprint, fromBase64Url, generateKeyPair, keyPairFromSecret, toBase64Url } from '@kubernanny/protocol';
 import { CONFIG, Config } from '../config';
-import { KubeClient, KubeError } from '../kube/kube-client';
+import { KubeClient } from '../kube/kube-client';
+import { readAtStartup } from '../util/startup-read';
 
 export const IDENTITY_SECRET = 'kubernanny-identity';
 
@@ -43,16 +44,19 @@ export class IdentityService implements OnModuleInit {
     return `/api/v1/namespaces/${encodeURIComponent(this.config.namespace)}/secrets`;
   }
 
+  /**
+   * Reads the stored key, retrying transient errors, and throws when it stays
+   * unreadable: a throwaway key would make every paired phone refuse the
+   * agent as "not the pinned agent". Only a missing Secret creates a new key.
+   */
   async onModuleInit(): Promise<void> {
-    try {
-      const secret = await this.kube.get<{ data?: { secretKey?: string } }>(`${this.path}/${IDENTITY_SECRET}`);
+    const secret = await readAtStartup(`Secret ${IDENTITY_SECRET}`, () => this.kube.get<{ data?: { secretKey?: string } }>(`${this.path}/${IDENTITY_SECRET}`), {
+      onRetry: (err, attempt) => this.logger.warn(`cannot read Secret ${IDENTITY_SECRET} (${err instanceof Error ? err.message : err}), attempt ${attempt}; retrying`),
+    });
+    if (secret) {
       const stored = Buffer.from(secret.data?.secretKey ?? '', 'base64').toString('utf8');
       this.pair = keyPairFromSecret(fromBase64Url(stored));
       return;
-    } catch (err) {
-      if (!(err instanceof KubeError && err.status === 404)) {
-        return this.ephemeral(err);
-      }
     }
     const pair = generateKeyPair();
     try {
@@ -70,7 +74,8 @@ export class IdentityService implements OnModuleInit {
     }
   }
 
-  private ephemeral(err: unknown, pair = generateKeyPair()): void {
+  /** The Secret did not exist and could not be created: no device was paired with a stored key, so a key for this run only is safe. */
+  private ephemeral(err: unknown, pair: KeyPair): void {
     this.pair = pair;
     this.persistent = false;
     this.logger.warn(

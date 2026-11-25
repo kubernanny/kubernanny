@@ -2,12 +2,13 @@ import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, On
 import type { Principal } from '../../auth/devices.service';
 import { CONFIG, Config } from '../../config';
 import { t } from '../../i18n/text';
-import { KubeClient, KubeError } from '../../kube/kube-client';
+import { KubeClient } from '../../kube/kube-client';
 import { Notifier } from '../../notify/notifier';
 import { SETTINGS_CONFIGMAP, SettingsService } from '../../settings/settings.service';
 import { Serial } from '../../util/serial';
 import { logSafe } from '../../util/log-safe';
 import { upsertConfigMapData } from '../../kube/configmap';
+import { NotLoadedError, readAtStartup } from '../../util/startup-read';
 import { ACCEPT_DAYS, ADVISORY, Acceptance, AcceptanceState, COMPONENT, DAY, MAX_ACCEPTED, acceptanceKey, cleanReason, parseAccepted } from './acceptance';
 
 export { ACCEPT_DAYS, acceptanceKey } from './acceptance';
@@ -31,6 +32,8 @@ export type { Acceptance, AcceptanceState } from './acceptance';
 export class AcceptanceService implements OnModuleInit {
   private readonly audit = new Logger('audit');
   private accepted = new Map<string, Acceptance>();
+  /** True once the stored acceptances were read: a write before that would replace them with this empty map. */
+  private loaded = false;
   private readonly writes = new Serial();
 
   constructor(
@@ -45,18 +48,17 @@ export class AcceptanceService implements OnModuleInit {
     return `/api/v1/namespaces/${encodeURIComponent(this.config.namespace)}/configmaps`;
   }
 
+  /** Reads the stored acceptances, retrying transient errors; throws when they stay unreadable, so the process ends and restarts. */
   async onModuleInit(): Promise<void> {
     if (this.config.vulnAcceptLocked) {
       return;
     }
-    try {
-      const cm = await this.kube.get<{ data?: { accepted?: string } }>(`${this.path}/${SETTINGS_CONFIGMAP}`);
-      this.accepted = parseAccepted(cm.data?.accepted);
-    } catch (err) {
-      if (!(err instanceof KubeError && err.status === 404)) {
-        new Logger(AcceptanceService.name).warn(`cannot read accepted advisories (${err instanceof Error ? err.message : err}); acceptances last until restart`);
-      }
-    }
+    const log = new Logger(AcceptanceService.name);
+    const cm = await readAtStartup('accepted advisories', () => this.kube.get<{ data?: { accepted?: string } }>(`${this.path}/${SETTINGS_CONFIGMAP}`), {
+      onRetry: (err, attempt) => log.warn(`cannot read accepted advisories (${err instanceof Error ? err.message : err}), attempt ${attempt}; retrying`),
+    });
+    this.accepted = parseAccepted(cm?.data?.accepted);
+    this.loaded = true;
   }
 
   /** Locked in Helm, or neither the built-in lookup nor the Trivy integration runs: the app hides the button, the routes refuse. */
@@ -130,6 +132,9 @@ export class AcceptanceService implements OnModuleInit {
   }
 
   private async save(next: Map<string, Acceptance>): Promise<void> {
+    if (!this.loaded) {
+      throw new NotLoadedError('accepted advisories');
+    }
     await upsertConfigMapData(this.kube, this.config.namespace, SETTINGS_CONFIGMAP, { accepted: JSON.stringify(Object.fromEntries(next)) });
     this.accepted = next;
   }
