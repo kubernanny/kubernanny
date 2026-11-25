@@ -3,6 +3,7 @@ import { Integration } from '../module';
 import { raw, t } from '../../i18n/text';
 import { ModuleContext, ModuleResult, Stat } from '../types';
 import { str } from '../untrusted';
+import { bytes } from '../format';
 
 export class LokiIntegration extends Integration {
   readonly id = 'loki';
@@ -17,9 +18,20 @@ export class LokiIntegration extends Integration {
     const ok = ready === 'ready';
     const stats: Stat[] = [{ label: t('stat.ready'), value: ok ? t('common.yes') : ready.slice(0, 60), tone: ok ? 'ok' : 'warning' }];
     if (ctx.prom) {
-      const rate = await ctx.prom.scalar('sum(rate(loki_distributor_lines_received_total[5m]))').catch(() => null);
+      const [rate, bytesRate, errors] = await Promise.all([
+        ctx.prom.scalar('sum(rate(loki_distributor_lines_received_total[5m]))').catch(() => null),
+        ctx.prom.scalar('sum(rate(loki_distributor_bytes_received_total[5m]))').catch(() => null),
+        ctx.prom.scalar('sum(rate(loki_request_duration_seconds_count{status_code=~"5.."}[5m]))').catch(() => null),
+      ]);
       if (rate !== null) {
         stats.push({ label: t('loki.stat.linesPerSecond'), value: rate.toFixed(1) });
+      }
+      if (bytesRate !== null) {
+        stats.push({ label: t('loki.stat.ingestion'), value: t('loki.perSecond', { size: bytes(bytesRate) }) });
+      }
+      if (errors !== null) {
+        // Server errors per minute over the last 5 minutes: queries or pushes Loki failed.
+        stats.push({ label: t('loki.stat.errors'), value: (errors * 60).toFixed(1), tone: errors > 0 ? 'warning' : 'ok' });
       }
     }
     return {

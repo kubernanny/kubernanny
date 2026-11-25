@@ -124,7 +124,6 @@ export class WorkloadsCheck extends CoreCheck {
         { label: t('stat.workloads'), value: String(all.length) },
         { label: t('pods.stat.cronJobs'), value: String(ctx.inv.cronjobs.length) },
         { label: t('pods.stat.restarts'), value: String(restarts) },
-        { label: t('stat.namespaces'), value: String(ctx.inv.namespaces.length) },
       ],
       summary: issues.length === 0 ? t('pods.summary.ok', { n: all.length }) : t('pods.summary.problems', { n: issues.length }),
     };

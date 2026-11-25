@@ -1,7 +1,8 @@
 import { t } from '../../i18n/text';
 import { Integration } from '../module';
 import { ModuleContext, ModuleResult } from '../types';
-import { evaluateErrorRates, noPrometheus, routeTraffic, trafficStats } from './ingress-errors';
+import { evaluateErrorRates, failingRoutes, noPrometheus, routeTraffic, trafficStats } from './ingress-errors';
+import { routeDetails } from '../details';
 
 /**
  * Server errors per Traefik router, from Traefik's own Prometheus metrics.
@@ -25,6 +26,6 @@ export class TraefikIntegration extends Integration {
       routes = await routeTraffic(ctx.prom, 'traefik_service_requests_total', ['service'], 'code', 'service!~".*@internal"');
     }
     const issues = evaluateErrorRates(this.id, routes);
-    return { issues, stats: trafficStats(routes, issues), summary: issues[0]?.title ?? t('ingress.summary.ok', { n: routes.length }) };
+    return { issues, stats: trafficStats(routes, issues), details: routeDetails(routes, failingRoutes(this.id, issues)), summary: issues[0]?.title ?? t('ingress.summary.ok', { n: routes.length }) };
   }
 }

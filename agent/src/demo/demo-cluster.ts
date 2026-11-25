@@ -1,6 +1,8 @@
+import { cpuMilli, parseQuantity } from '../inventory/inventory';
 import { KubeClient, KubeError } from '../kube/kube-client';
 import { HINT_DAYS } from '../modules/kubernetes-support/evaluate';
 import { KUBERNETES_EOL } from '../modules/kubernetes-support/releases';
+import { DEMO_SLOW_PEER, standardAlertsAnswer } from './demo-standard-alerts';
 
 /**
  * A made-up homelab cluster (three RKE2 servers, Longhorn, Argo CD, CNPG,
@@ -239,7 +241,14 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
       metadata: { labels },
       spec: {
         ...(loose ? {} : { securityContext: HARDENED }),
-        containers: [{ name: w.name.split('-')[0], image, resources: { requests: { cpu: w.cpu ?? '50m', memory: w.mem ?? '128Mi' }, ...(loose ? {} : { limits: { memory: memLimit } }) } }],
+        // Some workloads also cap CPU (four times the request), as real charts do; the loose ones set no limit at all.
+        containers: [
+          {
+            name: w.name.split('-')[0],
+            image,
+            resources: { requests: { cpu: w.cpu ?? '50m', memory: w.mem ?? '128Mi' }, ...(loose ? {} : { limits: { memory: memLimit, ...(hash(w.name) % 3 === 0 ? { cpu: `${cpuMilli(w.cpu ?? '50m') * 4}m` } : {}) } }) },
+          },
+        ],
         volumes: w.pvc ? [{ name: 'data', persistentVolumeClaim: { claimName: `data-${w.name}-0` } }] : [],
       },
     };
@@ -280,14 +289,20 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
               ready: isReady,
               restartCount: restarts,
               state: crash ? { waiting: { reason: crash.reason, message: crash.message } } : { running: {} },
-              lastState: crash ? { terminated: { reason: 'Error', exitCode: 1 } } : {},
+              // How the previous run ended: the crash, or for a few healthy pods an OOMKill or an error some hours ago.
+              lastState: crash
+                ? { terminated: { reason: 'Error', exitCode: 1, finishedAt: iso(4 * 60_000) } }
+                : restarts > 0
+                  ? { terminated: hash(podName) % 2 === 0 ? { reason: 'OOMKilled', exitCode: 137, finishedAt: iso((2 + (hash(podName) % 30)) * H) } : { reason: 'Error', exitCode: 2, finishedAt: iso((1 + (hash(podName) % 50)) * H) } }
+                  : {},
             },
           ],
         },
       });
       podMetrics.push({
         metadata: { name: podName, namespace: w.ns },
-        containers: [{ usage: { cpu: `${5 + (hash(podName) % 180)}m`, memory: `${40 + (hash(podName) % 600)}Mi` } }],
+        // Below the memory limit, as the kernel would keep it.
+        containers: [{ usage: { cpu: `${5 + (hash(podName) % 180)}m`, memory: `${Math.min(40 + (hash(podName) % 600), loose ? 4096 : Math.floor(parseQuantity(memLimit) / 2 ** 20 * 0.85))}Mi` } }],
       });
     }
 
@@ -318,9 +333,10 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
       });
       longhornVolumes.push({
         metadata: { name: pv },
-        spec: { numberOfReplicas: 3 },
+        spec: { numberOfReplicas: 3, size: String(parseInt(w.pvc.size, 10) * 2 ** 30) },
         status: {
           state: 'attached',
+          currentNodeID: NODES[hash(w.name) % NODES.length].name,
           robustness: w.name === 'weblate' && broken ? 'degraded' : 'healthy',
           kubernetesStatus: { namespace: w.ns, pvcName: `data-${w.name}-0`, workloadsStatus: [{ podName: `${w.name}-0` }] },
         },
@@ -464,8 +480,9 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
     '/apis/postgresql.cnpg.io/v1/clusters',
     cnpg.map((c) => ({
       metadata: { name: c.name, namespace: c.ns },
-      spec: { instances: c.instances, backup: { barmanObjectStore: { destinationPath: `s3://shop-backups/cnpg/${c.name}` } } },
+      spec: { instances: c.instances, storage: { size: c.ns === 'default' ? '50Gi' : '10Gi' }, backup: { barmanObjectStore: { destinationPath: `s3://shop-backups/cnpg/${c.name}` } } },
       status: {
+        pgDataImageInfo: { majorVersion: 17 },
         phase: c.ready === c.instances ? 'Cluster in healthy state' : 'Waiting for the instances to become active',
         instances: c.instances,
         readyInstances: c.ready,
@@ -475,13 +492,46 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
       },
     })),
   );
+  // One daily ScheduledBackup per cluster, like the real ones (status as the operator writes it).
+  list(
+    '/apis/postgresql.cnpg.io/v1/scheduledbackups',
+    cnpg.map((c, i) => ({
+      metadata: { name: `${c.name}-daily`, namespace: c.ns },
+      spec: { schedule: `0 0 ${2 + i} * * *`, cluster: { name: c.name } },
+      status: { lastScheduleTime: iso(c.backupHoursAgo * H), nextScheduleTime: iso(-(24 - c.backupHoursAgo) * H) },
+    })),
+  );
+  // Three replicas per Longhorn volume, one per node; the degraded one has one rebuilding.
+  list(
+    '/apis/longhorn.io/v1beta2/replicas',
+    longhornVolumes.flatMap((obj) => {
+      const v = obj as { metadata: { name: string }; status: { robustness: string } };
+      return NODES.map((n, i) => ({
+        metadata: { name: `${v.metadata.name}-r-${i}`, namespace: 'longhorn-system' },
+        spec: { volumeName: v.metadata.name, nodeID: n.name, failedAt: v.status.robustness === 'degraded' && i === 2 ? iso(41 * 60_000) : '' },
+        status: { currentState: v.status.robustness === 'degraded' && i === 2 ? 'error' : 'running' },
+      }));
+    }),
+  );
   list('/apis/upgrade.cattle.io/v1/plans', [
     { metadata: { name: 'server-plan', namespace: 'system-upgrade' }, spec: { channel: 'https://update.rke2.io/v1-release/channels/stable' }, status: { latestVersion: k8sVersion, applying: [], conditions: [{ type: 'LatestResolved', status: 'True' }] } },
   ]);
-  list('/apis/secrets.infisical.com/v1beta1/infisicalsecrets', []);
+  // The Infisical operator has no Ready condition: InfisicalStaticSecret reports LastReconcileStatus.
+  list('/apis/secrets.infisical.com/v1alpha1/infisicalsecrets', []);
+  list('/apis/secrets.infisical.com/v1alpha1/infisicaldynamicsecrets', []);
+  list('/apis/secrets.infisical.com/v1alpha1/infisicalpushsecrets', []);
   list(
     '/apis/secrets.infisical.com/v1beta1/infisicalstaticsecrets',
-    ['shop-api-secret', 'cloudflare-api-token', 'alertmanager-smtp'].map((name) => ({ metadata: { name, namespace: 'default' }, status: { conditions: [{ type: 'Ready', status: 'True' }] } })),
+    ['shop-api-secret', 'cloudflare-api-token', 'alertmanager-smtp'].map((name) => ({
+      metadata: { name, namespace: 'default' },
+      status: {
+        error: false,
+        conditions: [
+          { type: 'secrets.infisical.com/LastReconcileStatus', status: 'True', reason: 'OK', message: 'Reconciliation successful' },
+          { type: 'secrets.infisical.com/LastReconcileAuthMethod', status: 'True', reason: 'OK', message: 'kubernetes' },
+        ],
+      },
+    })),
   );
 
   // PodDisruptionBudgets: one with a single pod and minAvailable 1 blocks every drain.
@@ -651,6 +701,10 @@ function prometheusAnswer(path: string, now: Date, scenario: DemoScenario): unkn
     status: 'success',
     data: { resultType: 'vector', result: result.map((r) => ({ metric: r.metric, value: [now.getTime() / 1000, String(r.value)] })) },
   });
+  const standard = url.pathname.endsWith('/query') ? standardAlertsAnswer(query, scenario) : null;
+  if (standard) {
+    return vector(standard);
+  }
   if (url.pathname.endsWith('/query_range')) {
     const start = Number(url.searchParams.get('start'));
     const end = Number(url.searchParams.get('end'));
@@ -682,6 +736,38 @@ function prometheusAnswer(path: string, now: Date, scenario: DemoScenario): unkn
     ];
     const hit = table.find(([needle]) => query.includes(needle));
     return matrix(hit ? [{ metric: {}, seed: hit[1], base: hit[2], amp: hit[3] }] : []);
+  }
+  if (url.pathname.endsWith('/targets')) {
+    // Prometheus' own view of its targets; the demo only lists the one that is down, with the error it reports.
+    return {
+      status: 'success',
+      data: {
+        activeTargets: !broken
+          ? []
+          : [{ health: 'down', labels: { job: 'blackbox', instance: 'https://community.shop.example' }, scrapePool: 'blackbox', lastError: 'Get "https://community.shop.example": context deadline exceeded', lastScrape: new Date(now.getTime() - 20_000).toISOString() }],
+      },
+    };
+  }
+  if (query.includes('prometheus_tsdb_storage_blocks_bytes')) {
+    return vector([{ metric: {}, value: 38.6 * 2 ** 30 }]);
+  }
+  if (query.includes('prometheus_tsdb_retention_limit_seconds')) {
+    return vector([{ metric: {}, value: 14 * 86_400 }]);
+  }
+  if (query.includes('prometheus_rule_evaluation_failures_total')) {
+    return vector([{ metric: {}, value: 0 }]);
+  }
+  if ((query.includes('max by (pod)') && query.includes('etcd_')) || (query.includes('le, pod') && query.includes('etcd_disk_wal_fsync'))) {
+    // etcd per member: rke2-node-1 leads; sizes and fsync differ a little.
+    const value = (i: number) =>
+      query.includes('is_leader') ? (i === 0 ? 1 : 0) : query.includes('db_total_size') ? [93, 121, 76][i]! * 2 ** 20 : [0.0042, 0.0061, 0.0038][i]!;
+    return vector(NODES.map((n, i) => ({ metric: { pod: `etcd-${n.name}` }, value: value(i) })));
+  }
+  if (query.includes('loki_distributor_bytes_received_total')) {
+    return vector([{ metric: {}, value: 41_200 }]);
+  }
+  if (query.includes('loki_request_duration_seconds_count')) {
+    return vector([{ metric: {}, value: 0 }]);
   }
   if (query.includes('count by (job) (up)')) {
     return vector(['apiserver', 'kubelet', 'node-exporter', 'kube-state-metrics', 'etcd', 'coredns', 'longhorn', 'shop-api', 'loki', 'traefik', 'blackbox'].map((job, i) => ({ metric: { job }, value: [3, 3, 3, 1, 3, 2, 3, 3, 1, 3, 12][i] })));
@@ -870,11 +956,21 @@ export class DemoKubeClient extends KubeClient {
         return [
           { labels: { alertname: 'BlackboxProbeFailed', severity: 'critical', instance: 'https://community.shop.example' }, annotations: { summary: 'community.shop.example has not answered for 12 minutes.' } },
           { labels: { alertname: 'KubePersistentVolumeFillingUp', severity: 'warning', namespace: 'monitoring' }, annotations: { summary: 'The Prometheus volume will be full in about 4 days.' } },
+          // The same pair the built-in check finds slow: shown once, as the built-in issue (standard-alerts/alertmanager-dedupe.ts).
+          { labels: { alertname: 'etcdMemberCommunicationSlow', severity: 'warning', job: 'kube-etcd', ...DEMO_SLOW_PEER }, annotations: { summary: 'etcd cluster "kube-etcd": member communication with f8e8e46b068fd5b9 is taking 0.212s on etcd instance 10.0.0.1:2381.' } },
           { labels: { alertname: 'Watchdog', severity: 'none' } },
         ] as T;
       }
       if (path.includes(':9093/proxy/api/v2/silences')) {
-        return [{ status: { state: 'active' } }] as T;
+        return [
+          {
+            status: { state: 'active' },
+            matchers: [{ name: 'alertname', value: 'KubeCPUOvercommit', isRegex: false, isEqual: true }],
+            createdBy: 'nico',
+            comment: 'Homelab: overcommit is intended',
+            endsAt: new Date(this.now().getTime() + 6 * 86_400_000).toISOString(),
+          },
+        ] as T;
       }
       if (path.includes(':8080/proxy/api/v1/endpoints/statuses')) {
         return gatusAnswer(this.now(), this.scenario) as T;

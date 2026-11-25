@@ -1,5 +1,6 @@
 import { ageText } from '../../checks/types';
-import { TextError, t } from '../../i18n/text';
+import { MessageKey, TextError, t } from '../../i18n/text';
+import { keyFigures } from '../details';
 import type { Config } from '../../config';
 import { CATALOG } from '../../discovery/catalog';
 import { Detected } from '../../discovery/discovery';
@@ -110,6 +111,7 @@ export class VulnerabilitiesCheck extends CoreCheck {
     const summary = staleSince
       ? t('vulnerabilities.summary.stale', { summary: base, age: ageText(ctx.now.getTime() - staleSince.getTime()), host: ctx.vulnDb.host })
       : base;
-    return { issues, stats, summary, accepted, canAccept: acceptance.allowed };
+    const severities: MessageKey[] = ['vulnerabilities.stat.critical', 'vulnerabilities.stat.high', 'vulnerabilities.stat.medium', 'vulnerabilities.stat.lowOrUnrated'];
+    return { issues, ...keyFigures(stats, severities, t('detail.lookup')), summary, accepted, canAccept: acceptance.allowed };
   }
 }

@@ -1,7 +1,7 @@
 import { Service } from '../inventory/inventory';
 import { KubeClient } from '../kube/kube-client';
 import { servicePort } from '../discovery/discovery';
-import { list, num, record, strings } from './untrusted';
+import { list, num, record, str, strings } from './untrusted';
 import { readCapped } from '../util/read-capped';
 
 /**
@@ -102,6 +102,21 @@ export class Prometheus {
     return result
       .map((r) => ({ metric: strings(record(r).metric), value: num(list(record(r).value, 2)[1]) ?? NaN }))
       .filter((s) => Number.isFinite(s.value));
+  }
+
+  /** Scrape targets that are down, with Prometheus' last error and scrape time (`/api/v1/targets`). */
+  async downTargets(): Promise<{ job: string; instance: string; lastError: string; lastScrape?: string }[]> {
+    const res = record(await this.http.get<unknown>('/api/v1/targets?state=active'));
+    if (res.status !== 'success') {
+      throw new Error('Prometheus targets failed');
+    }
+    return list(record(res.data).activeTargets, MAX_PROM_SERIES)
+      .map((x) => record(x))
+      .filter((x) => x.health === 'down')
+      .map((x) => {
+        const labels = strings(x.labels);
+        return { job: labels.job ?? str(x.scrapePool) ?? '?', instance: labels.instance ?? str(x.scrapeUrl) ?? '?', lastError: str(x.lastError) ?? '', lastScrape: str(x.lastScrape, 64) };
+      });
   }
 
   async scalar(expr: string): Promise<number | null> {

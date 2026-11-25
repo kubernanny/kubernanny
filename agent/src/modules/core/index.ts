@@ -4,6 +4,7 @@ import { SecurityCheck } from '../security/security.check';
 import { VulnerabilitiesCheck } from '../vulnerabilities/vulnerabilities.check';
 import { ImageUpdatesCheck } from '../image-updates/image-updates.check';
 import { NodeClocksCheck } from './node-clocks';
+import { StandardAlertsCheck } from './standard-alerts/standard-alerts.check';
 import { ApiServerCheck } from './api-server';
 import { HpaCheck } from './autoscalers';
 import { PdbCheck } from './disruption-budgets';
@@ -32,6 +33,7 @@ export const CORE_CHECKS: readonly CoreCheck[] = [
   new PdbCheck(),
   new HpaCheck(),
   new VolumesCheck(),
+  new StandardAlertsCheck(),
   new SecurityCheck(),
   new VulnerabilitiesCheck(),
   new ImageUpdatesCheck(),

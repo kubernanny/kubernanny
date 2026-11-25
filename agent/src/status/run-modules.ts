@@ -3,6 +3,7 @@ import { Detected } from '../discovery/discovery';
 import { errorText, raw, t, Text } from '../i18n/text';
 import { CoreCheck, Integration } from '../modules/module';
 import { ModuleContext, ModuleResult, ModuleView } from '../modules/types';
+import { componentDetails, componentStats } from '../modules/component-details';
 import { IssueView } from './snapshot';
 
 /** What one module contributed to a run: its sheet in the app and its issues. */
@@ -44,10 +45,12 @@ function readinessStatus(items: { ready: number; desired: number }[]): CheckStat
 export async function runComponent(ctx: ModuleContext, d: Detected, integration: Integration | undefined, allowed: ActionFilter): Promise<ModuleOutcome> {
   const total = d.workloads.reduce((s, w) => s + w.desired, 0);
   const ready = d.workloads.reduce((s, w) => s + Math.min(w.ready, w.desired), 0);
-  const result = integration ? await safe(() => integration.run(ctx, d, allowed)) : { issues: [], stats: [], summary: workloadSummary(d.workloads, ready, total) };
+  const result = integration ? await safe(() => integration.run(ctx, d, allowed)) : { issues: [], stats: componentStats(ctx.inv, d), summary: workloadSummary(d.workloads, ready, total) };
   const status: CheckStatus = result.error
     ? 'error'
     : worst([...result.issues.map((i) => i.severity), ...([readinessStatus(d.workloads)].filter((s) => s !== 'ok') as Severity[])]);
+  // The integration's own objects first, then what every component has: pods, resources, volumes.
+  const details = [...(result.details ?? []), ...componentDetails(ctx.inv, ctx.data, d, ctx.now)];
   return {
     issues: result.issues,
     view: {
@@ -60,7 +63,11 @@ export async function runComponent(ctx: ModuleContext, d: Detected, integration:
       version: d.version,
       status,
       summary: result.summary,
-      stats: [...(d.version ? [{ label: t('stat.version'), value: d.version }] : []), ...result.stats.filter((s) => s.label.$t !== 'stat.version')],
+      // The version sits in the sheet's header (`version`), not among the key figures.
+      stats: result.stats.filter((s) => s.label.$t !== 'stat.version'),
+      ...(details.length ? { details } : {}),
+      // An integration may list its own copies; otherwise every namespace the component runs in is one (Valkey per app).
+      ...(result.instances?.length ? { instances: result.instances } : (d.instances?.length ?? 0) > 1 ? { instances: d.instances } : {}),
       links: d.links,
       workloads: { ready, total, items: d.workloads },
       issueIds: result.issues.map((i) => i.id),
@@ -85,6 +92,7 @@ export async function runCoreCheck(ctx: ModuleContext, check: CoreCheck, allowed
       status: result.error ? 'error' : worst(result.issues.map((i) => i.severity)),
       summary: result.summary,
       stats: result.stats,
+      ...(result.details?.length ? { details: result.details } : {}),
       links: [],
       workloads: { ready: 0, total: 0, items: [] },
       issueIds: result.issues.map((i) => i.id),

@@ -32,7 +32,7 @@ function calledResources(): Set<string> {
         }
         for (const m of text.matchAll(/['`]\/api\/v1\/(?:namespaces\/[^/'`]+\/)?([a-z]+)[?/'`]/g)) {
           // Prometheus and Alertmanager paths look like core API paths.
-          if (!['query', 'alerts', 'silences'].includes(m[1]) && (m[1] !== 'namespaces' || /\/api\/v1\/namespaces['`?]/.test(m[0]))) {
+          if (!['query', 'alerts', 'silences', 'targets'].includes(m[1]) && (m[1] !== 'namespaces' || /\/api\/v1\/namespaces['`?]/.test(m[0]))) {
             found.add(`/${m[1]}`);
           }
         }

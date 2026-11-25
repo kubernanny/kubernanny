@@ -3,11 +3,16 @@ import { raw, rawOr, t } from '../../i18n/text';
 import { Integration } from '../module';
 import { ApiRead, ModuleContext, ModuleResult, Stat } from '../types';
 import { Conditioned } from './util';
+import { readyDetails } from '../details';
 
 export interface ReadyKind {
   /** "/apis/<group>/<version>/<resource>" */
   path: string;
   kind: string;
+  /** The condition that carries the verdict; default `Ready`. */
+  conditionType?: string;
+  /** True when the condition reports a failure with status True (Infisical's InfisicalPushSecret `Reconcile`). */
+  failureWhenTrue?: boolean;
 }
 
 /**
@@ -26,7 +31,7 @@ export abstract class ReadyConditionIntegration extends Integration {
     super();
     this.reads = kinds.map((k) => {
       const [, , group, , resource] = k.path.split('/');
-      return { group: group!, resource: resource!, why: `the Ready condition of every ${k.kind}` };
+      return { group: group!, resource: resource!, why: `the ${k.conditionType ?? 'Ready'} condition of every ${k.kind}` };
     });
   }
 
@@ -34,28 +39,39 @@ export abstract class ReadyConditionIntegration extends Integration {
     const lists = await Promise.all(this.kinds.map(async (k) => ({ ...k, items: (await ctx.kube.list<Conditioned>(k.path).catch(() => null)) ?? [] })));
     const issues: Issue[] = [];
     const stats: Stat[] = [];
-    for (const { kind, items } of lists) {
+    let total = 0;
+    let readyTotal = 0;
+    for (const { kind, items, conditionType = 'Ready', failureWhenTrue = false } of lists) {
       let ready = 0;
+      const shortType = conditionType.split('/').pop()!;
       for (const item of items) {
-        const c = condition(item.status?.conditions, 'Ready');
-        if (c?.status === 'True') {
+        const c = condition(item.status?.conditions, conditionType);
+        // A resource without the condition yet (just created, controller not there) is neither ready nor failed.
+        const decided = c?.status === 'True' || c?.status === 'False';
+        const ok = decided && (c!.status === 'True') !== failureWhenTrue;
+        if (ok) {
           ready++;
-        } else if (c?.status === 'False') {
+        } else if (decided) {
           const ns = item.metadata.namespace ?? '';
           issues.push({
             id: `${this.id}/${kind}/${ns}/${item.metadata.name}`,
-            check: 'argocd',
+            check: this.id,
             severity: 'warning',
             title: t('ready.notReady.title', { kind, name: `${ns}/${item.metadata.name}` }),
-            cause: rawOr(c.message ?? c.reason, t('ready.notReady.cause', { label: this.label })),
+            cause: rawOr(c?.message ?? c?.reason, t('ready.notReady.cause', { label: this.label, condition: `${shortType}=${c?.status}` })),
             actions: [],
           });
         }
       }
+      total += items.length;
+      readyTotal += ready;
       if (items.length) {
         stats.push({ label: raw(kind), value: t('ready.stat.value', { ready, total: items.length }), tone: ready === items.length ? 'ok' : 'warning' });
       }
     }
-    return { issues, stats, summary: issues.length === 0 ? t('ready.summary.ok') : t('ready.summary.problems', { n: issues.length }) };
+    // The summary and the stats count the same thing: resources without a verdict yet are named, not called ready.
+    const summary =
+      issues.length > 0 ? t('ready.summary.problems', { n: issues.length }) : readyTotal === total ? t('ready.summary.ok') : t('ready.summary.pending', { n: total - readyTotal });
+    return { issues, stats, details: readyDetails(lists, ctx.now), summary };
   }
 }

@@ -2,7 +2,8 @@ import { Detected } from '../../discovery/discovery';
 import { Integration } from '../module';
 import { Issue, ageText } from '../../checks/types';
 import { t } from '../../i18n/text';
-import { ModuleContext, ModuleResult, Stat } from '../types';
+import { DetailRow, ModuleContext, ModuleResult, Stat } from '../types';
+import { listSection, sections } from '../details';
 import { record, str } from '../untrusted';
 
 export class KuredIntegration extends Integration {
@@ -16,7 +17,10 @@ export class KuredIntegration extends Integration {
     try {
       // Anyone who can annotate the DaemonSet writes this: read it like an untrusted answer.
       const parsed = record(lockRaw ? JSON.parse(lockRaw) : null);
-      lock = { nodeID: str(parsed.nodeID, 253), created: str(parsed.created, 64) };
+      // kured with --concurrency > 1 writes {"maxOwners": n, "locks": [{nodeID, created}, …]}; take the oldest holder.
+      const holders = Array.isArray(parsed.locks) ? parsed.locks.map((l) => record(l)) : [parsed];
+      const first = holders.filter((h) => str(h.nodeID, 253)).sort((a, b) => String(a.created).localeCompare(String(b.created)))[0] ?? {};
+      lock = { nodeID: str(first.nodeID, 253), created: str(first.created, 64) };
     } catch {
       lock = null;
     }
@@ -37,11 +41,29 @@ export class KuredIntegration extends Integration {
         });
       }
     }
+    let pendingNodes: string[] = [];
+    // null: Prometheus does not scrape kured (no series at all), so nobody knows; not "0 waiting".
+    let pendingKnown = false;
     if (ctx.prom) {
-      const pending = await ctx.prom.query('kured_reboot_required == 1').catch(() => []);
-      const nodes = pending.map((p) => p.metric.node ?? p.metric.instance).filter(Boolean);
-      stats.push({ label: t('kured.stat.rebootRequired'), value: nodes.length ? nodes.join(', ') : t('common.none'), tone: nodes.length ? 'muted' : 'ok' });
+      const series = await ctx.prom.query('kured_reboot_required').catch(() => []);
+      if (series.length > 0) {
+        pendingKnown = true;
+        pendingNodes = series.filter((p) => p.value === 1).map((p) => p.metric.node ?? p.metric.instance).filter(Boolean);
+        stats.push({ label: t('stat.rebootPending'), value: String(pendingNodes.length), tone: pendingNodes.length ? 'muted' : 'ok' });
+      }
     }
-    return { issues, stats, summary: lock?.nodeID ? t('kured.summary.rebooting', { node: lock.nodeID }) : t('kured.summary.waiting') };
+    const rows: DetailRow[] = [...new Set([...(lock?.nodeID ? [lock.nodeID] : []), ...pendingNodes])].map((node) => ({
+      name: node,
+      value: node === lock?.nodeID ? t('detail.kured.rebooting') : t('detail.kured.required'),
+      tone: 'muted',
+    }));
+    return { issues, stats, details: sections(listSection(t('detail.kured.waiting'), rows)), summary: lock?.nodeID
+        ? t('kured.summary.rebooting', { node: lock.nodeID })
+        : pendingNodes.length
+          ? t('kured.summary.waiting', { n: pendingNodes.length })
+          : pendingKnown
+            ? t('kured.summary.none')
+            : t('kured.summary.idle'),
+    };
   }
 }

@@ -47,6 +47,12 @@ export function evaluateErrorRates(module: string, routes: RouteTraffic[]): Issu
     });
 }
 
+/** The routes `evaluateErrorRates` reported, with their severity, for the sheet's route list. */
+export function failingRoutes(module: string, issues: Issue[]): Map<string, 'critical' | 'warning'> {
+  const prefix = `${module}/errors/`;
+  return new Map(issues.filter((i) => i.id.startsWith(prefix) && i.severity !== 'info').map((i) => [i.id.slice(prefix.length), i.severity as 'critical' | 'warning']));
+}
+
 /** Requests and 5xx per route from two `sum by (label) (increase(...))` queries. */
 export async function routeTraffic(prom: Prometheus, metric: string, by: string[], codeLabel: string, filter = ''): Promise<RouteTraffic[]> {
   const group = by.join(', ');

@@ -24,9 +24,51 @@ export interface Stat {
   tone?: Tone;
 }
 
+/** A small fact under a row's name ("backup 3 h ago", "WAL archiving fails"), tinted when it is the problem. */
+export interface DetailMeta {
+  text: string | Text;
+  tone?: Tone;
+}
+
+/** One object of a module on its sheet: a database cluster, a volume, an app. */
+export interface DetailRow {
+  /** As it is in the cluster ("default/pantrist-api-pg"); a Text only for something without a name of its own. */
+  name: string | Text;
+  /** Second line: the primary pod, the host, the version. */
+  sub?: string | Text;
+  tone: Tone;
+  /** Short value on the right: "3/3", "20 GiB", "41 days". */
+  value?: string | Text;
+  meta?: DetailMeta[];
+}
+
+/**
+ * A structured part of a module's sheet: its objects as a list (one row per
+ * object, problems first) or, for a few short columns, a table. Lists of
+ * things belong here, not in `stats`, which holds two to four key figures.
+ * `more` counts the rows left out above the cap.
+ */
+export type DetailSection =
+  | { title: Text; kind: 'list'; rows: DetailRow[]; more?: number }
+  | { title: Text; kind: 'table'; columns: Text[]; rows: { cells: (string | Text)[]; tone: Tone }[]; more?: number };
+
+/** One running copy of a component that people install several times (Redis/Valkey per app). */
+export interface ComponentInstance {
+  namespace: string;
+  name: string;
+  version?: string;
+  ready: number;
+  desired: number;
+}
+
 export interface ModuleResult {
   issues: Issue[];
+  /** Two to four key figures; a list of objects goes into `details`. */
   stats: Stat[];
+  /** The module's objects, problems first (docs/ARCHITECTURE.md, "Modules"; docs/DESIGN.md, "Module sheets"). */
+  details?: DetailSection[];
+  /** Components installed more than once: one entry per copy. */
+  instances?: ComponentInstance[];
   /** One line under the name: what is going on right now. */
   summary: Text;
   /** Vulnerabilities only: advisories someone marked as not applicable, shown on the module sheet. */
@@ -113,6 +155,8 @@ export interface ModuleView {
   status: CheckStatus;
   summary: Text;
   stats: Stat[];
+  details?: DetailSection[];
+  instances?: ComponentInstance[];
   links: Link[];
   workloads: { ready: number; total: number; items: { kind: string; namespace: string; name: string; ready: number; desired: number }[] };
   issueIds: string[];

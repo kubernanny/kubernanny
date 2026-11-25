@@ -1,10 +1,11 @@
 import { Integration } from '../module';
 import { LonghornVolume, evaluateLonghorn } from '../../checks/longhorn.check';
-import { LonghornBackup, LonghornBackupTarget, evaluateLonghornBackups } from '../../checks/maintenance.check';
+import { LonghornBackup, LonghornBackupTarget, evaluateLonghornBackups, groupLonghornBackups, longhornBackupTime } from '../../checks/maintenance.check';
 import { ageText } from '../../checks/types';
 import { bytes, pct } from '../format';
 import { rawOr, t } from '../../i18n/text';
 import { LonghornNode, ModuleContext, ModuleResult, Stat } from '../types';
+import { LonghornReplica, longhornDetails } from '../details';
 
 export class LonghornIntegration extends Integration {
   readonly id = 'longhorn';
@@ -13,19 +14,21 @@ export class LonghornIntegration extends Integration {
     { group: 'longhorn.io', resource: 'nodes', why: 'disk space and schedulability per storage node' },
     { group: 'longhorn.io', resource: 'backups', why: 'age of the newest backup per volume' },
     { group: 'longhorn.io', resource: 'backuptargets', why: 'whether the backup target is reachable' },
+    { group: 'longhorn.io', resource: 'replicas', why: 'where each volume\'s replicas run and which failed, for the sheet' },
   ];
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
-    const [volumes, nodes, backups, targets] = await Promise.all([
+    const [volumes, nodes, backups, targets, replicas] = await Promise.all([
       ctx.kube.list<LonghornVolume>('/apis/longhorn.io/v1beta2/volumes'),
       ctx.kube.list<LonghornNode>('/apis/longhorn.io/v1beta2/nodes').catch(() => null),
       ctx.kube.list<LonghornBackup>('/apis/longhorn.io/v1beta2/backups').catch(() => null),
       ctx.kube.list<LonghornBackupTarget>('/apis/longhorn.io/v1beta2/backuptargets').catch(() => null),
+      ctx.kube.list<LonghornReplica>('/apis/longhorn.io/v1beta2/replicas').catch(() => null),
     ]);
     ctx.data.longhornVolumes = volumes ?? [];
     ctx.data.longhornNodes = nodes ?? [];
     ctx.data.longhornBackups = backups ?? [];
     ctx.data.longhornBackupTargets = targets ?? [];
-    const issues = [...evaluateLonghorn(volumes ?? []), ...evaluateLonghornBackups(targets ?? [], backups ?? [], ctx.now, ctx.config.backupMaxAgeHours)];
+    const issues = [...evaluateLonghorn(volumes ?? []), ...evaluateLonghornBackups(targets ?? [], backups ?? [], volumes ?? [], ctx.now, ctx.config.backupMaxAgeHours)];
     let available = 0;
     let maximum = 0;
     let scheduled = 0;
@@ -72,10 +75,16 @@ export class LonghornIntegration extends Integration {
     }
     stats.push({ label: t('longhorn.stat.nodes'), value: String(nodes?.length ?? 0) });
     if (backups && backups.length > 0) {
-      const completed = backups.filter((b) => b.status?.state === 'Completed').map((b) => Date.parse(b.status?.backupCreatedAt || b.metadata.creationTimestamp || '')).filter(Number.isFinite);
-      stats.push({ label: t('stat.backups'), value: String(backups.length) });
+      // Backups of deleted volumes stay in the target; they protect nothing, so the stats count only the others.
+      const { byVolume, orphaned } = groupLonghornBackups(all, backups);
+      const current = [...byVolume.values()].flat();
+      const completed = current.filter((b) => b.status?.state === 'Completed').map(longhornBackupTime).filter(Number.isFinite);
+      stats.push({ label: t('stat.backups'), value: String(current.length) });
       if (completed.length) {
         stats.push({ label: t('stat.lastBackup'), value: t('common.ago', { age: ageText(ctx.now.getTime() - Math.max(...completed)) }) });
+      }
+      if (orphaned.backups > 0) {
+        stats.push({ label: t('longhorn.stat.orphaned'), value: t('longhorn.orphaned.value', { backups: orphaned.backups, volumes: orphaned.volumes }) });
       }
     }
     for (const target of targets ?? []) {
@@ -87,6 +96,13 @@ export class LonghornIntegration extends Integration {
         });
       }
     }
-    return { issues, stats, summary: issues.length === 0 ? t('longhorn.summary.ok', { n: attached }) : issues[0].title };
+    // Counts the lists below show anyway (volumes, nodes, scheduled share, backups) stay out of the key figures.
+    const listed = new Set(['longhorn.stat.total', 'longhorn.stat.nodes', 'longhorn.stat.scheduled', 'stat.backups']);
+    return {
+      issues,
+      stats: stats.filter((s) => !listed.has(s.label.$t)),
+      details: longhornDetails(all, nodes ?? [], ctx.now, ctx.config.backupMaxAgeHours, replicas ?? []),
+      summary: issues.length === 0 ? t('longhorn.summary.ok', { n: attached }) : issues[0].title,
+    };
   }
 }

@@ -1,7 +1,8 @@
 import { Integration } from '../module';
-import { ArgoApplication, evaluateArgoApps } from '../../checks/argocd.check';
+import { ArgoApplication, evaluateArgoApps, isAutomated } from '../../checks/argocd.check';
 import { rollbackApps } from '../../checks/argocd-rollback';
 import { t } from '../../i18n/text';
+import { argoDetails } from '../details';
 import { ModuleContext, ModuleResult } from '../types';
 
 export class ArgoCdIntegration extends Integration {
@@ -15,15 +16,18 @@ export class ArgoCdIntegration extends Integration {
     const synced = apps.filter((a) => a.status?.sync?.status === 'Synced').length;
     const healthy = apps.filter((a) => a.status?.health?.status === 'Healthy').length;
     const progressing = apps.filter((a) => a.status?.health?.status === 'Progressing').length;
-    const auto = apps.filter((a) => a.spec?.syncPolicy?.automated !== undefined).length;
+    const auto = apps.filter(isAutomated).length;
+    // An OutOfSync manual app is the normal state of a manual app (a hint), not a warning.
+    const drifting = apps.filter((a) => a.status?.sync?.status === 'OutOfSync' && isAutomated(a)).length;
     return {
       issues,
       stats: [
         { label: t('argocd.stat.apps'), value: String(apps.length) },
-        { label: t('argocd.stat.synced'), value: `${synced}/${apps.length}`, tone: synced === apps.length ? 'ok' : 'warning' },
+        { label: t('argocd.stat.synced'), value: `${synced}/${apps.length}`, tone: synced === apps.length ? 'ok' : drifting > 0 ? 'warning' : 'muted' },
         { label: t('argocd.stat.healthy'), value: `${healthy}/${apps.length}`, tone: healthy === apps.length ? 'ok' : progressing > 0 && healthy + progressing === apps.length ? 'muted' : 'critical' },
         { label: t('argocd.stat.automated'), value: `${auto}/${apps.length}` },
       ],
+      details: argoDetails(apps, ctx.now),
       // Only while the action is on: a locked install shows no history at all.
       ...(ctx.rollbackOn ? { rollbacks: rollbackApps(apps) } : {}),
       summary: issues.length === 0 ? t('argocd.summary.ok', { n: apps.length }) : t('argocd.summary.problems', { outOfSync: apps.length - synced, unhealthy: apps.length - healthy }),
