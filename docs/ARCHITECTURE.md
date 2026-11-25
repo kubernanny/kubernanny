@@ -295,7 +295,7 @@ Angular 22, zoneless, standalone components and signals; Ionic 8 for the native 
 ```
 app/src/app
 ├── core/
-│   ├── agent.model.ts          the agent's API types (mirrors agent/src)
+│   ├── agent.model.ts          the agent's API types (mirrors agent/src; agent/drift/app-model.ts checks the copy)
 │   ├── agent-client.service.ts HTTP client, error texts
 │   ├── cluster-store.service.ts clusters on the device (Capacitor Preferences; private keys through device-key-vault.ts)
 │   ├── device-key-vault.ts      the device key per cluster in the iOS Keychain / Android Keystore (origin storage on the web)
