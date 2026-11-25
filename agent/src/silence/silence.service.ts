@@ -2,13 +2,14 @@ import { BadRequestException, Inject, Injectable, Logger, OnModuleInit } from '@
 import type { Principal } from '../auth/devices.service';
 import { CONFIG, Config } from '../config';
 import { t } from '../i18n/text';
-import { KubeClient, KubeError } from '../kube/kube-client';
+import { KubeClient } from '../kube/kube-client';
 import { IssueSeverity } from '../checks/types';
 import { Notifier, SecurityEvent } from '../notify/notifier';
 import { logSafe } from '../util/log-safe';
 import { SETTINGS_CONFIGMAP } from '../settings/settings.service';
 import { Serial } from '../util/serial';
 import { upsertConfigMapData } from '../kube/configmap';
+import { NotLoadedError, readAtStartup } from '../util/startup-read';
 
 /** The durations the app offers; anything else is refused, so nobody silences an issue for a year by accident. */
 export const SILENCE_HOURS = [1, 8, 24, 168] as const;
@@ -42,6 +43,8 @@ const MAINTENANCE = '*';
 export class SilenceService implements OnModuleInit {
   private readonly audit = new Logger('audit');
   private until = new Map<string, Silence>();
+  /** True once the stored silences were read: a write before that would replace them with this empty map. */
+  private loaded = false;
   /** Every change reads, changes and writes the whole map: one at a time, or two at once lose one. */
   private readonly writes = new Serial();
 
@@ -56,19 +59,14 @@ export class SilenceService implements OnModuleInit {
     return `/api/v1/namespaces/${encodeURIComponent(this.config.namespace)}/configmaps`;
   }
 
+  /** Reads the stored silences, retrying transient errors; throws when they stay unreadable, so the process ends and restarts. */
   async onModuleInit(): Promise<void> {
-    try {
-      const cm = await this.kube.get<{ data?: { silenced?: string } }>(`${this.path}/${SETTINGS_CONFIGMAP}`);
-      const raw = JSON.parse(cm.data?.silenced ?? '{}') as Record<string, unknown>;
-      this.until = new Map(Object.entries(raw).flatMap(([id, v]) => {
-        const silence = parseSilence(v);
-        return silence ? [[id, silence] as const] : [];
-      }));
-    } catch (err) {
-      if (!(err instanceof KubeError && err.status === 404)) {
-        new Logger(SilenceService.name).warn(`cannot read silenced issues (${err instanceof Error ? err.message : err}); silences last until restart`);
-      }
-    }
+    const log = new Logger(SilenceService.name);
+    const cm = await readAtStartup('silenced issues', () => this.kube.get<{ data?: { silenced?: string } }>(`${this.path}/${SETTINGS_CONFIGMAP}`), {
+      onRetry: (err, attempt) => log.warn(`cannot read silenced issues (${err instanceof Error ? err.message : err}), attempt ${attempt}; retrying`),
+    });
+    this.until = parseSilences(cm?.data?.silenced);
+    this.loaded = true;
   }
 
   /**
@@ -175,9 +173,27 @@ export class SilenceService implements OnModuleInit {
   }
 
   private async save(next: Map<string, Silence>): Promise<void> {
+    if (!this.loaded) {
+      throw new NotLoadedError('silenced issues');
+    }
     await upsertConfigMapData(this.kube, this.config.namespace, SETTINGS_CONFIGMAP, { silenced: JSON.stringify(Object.fromEntries(next)) });
     this.until = next;
   }
+}
+
+function parseSilences(text: string | undefined): Map<string, Silence> {
+  let raw: Record<string, unknown>;
+  try {
+    raw = JSON.parse(text ?? '{}') as Record<string, unknown>;
+  } catch {
+    return new Map();
+  }
+  return new Map(
+    Object.entries(raw ?? {}).flatMap(([id, v]) => {
+      const silence = parseSilence(v);
+      return silence ? [[id, silence] as const] : [];
+    }),
+  );
 }
 
 /** A stored silence; plain numbers come from versions that stored no severity and count as covering warnings only. */

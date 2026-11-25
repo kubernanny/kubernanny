@@ -80,6 +80,7 @@ describe('API server unreachable (review: was silent)', () => {
 
   it('respects a maintenance window like any other issue', async () => {
     const { kube, status, pushed } = await start();
+    await moduleRef.get(SilenceService).onModuleInit();
     await moduleRef.get(SilenceService).startMaintenance(2, ADMIN);
     const before = pushed.length;
     kube.down = true;

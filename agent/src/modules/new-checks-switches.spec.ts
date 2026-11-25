@@ -85,6 +85,7 @@ afterEach(() => {
 describe('the new checks, switched off in the deployment', () => {
   it.each(NEW)('%s is locked: the app cannot switch it back on', async (id) => {
     const s = new SettingsService(config({ DISABLED_MODULES: id, ENABLED_MODULES: id }), new DemoKubeClient());
+    await s.onModuleInit();
     expect(s.moduleState(id)).toBe('locked');
     await expect(s.update({ modules: { [id]: true } }, who)).rejects.toMatchObject({ status: 403 });
   });

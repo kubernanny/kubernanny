@@ -55,6 +55,7 @@ describe('accepting an advisory', () => {
   it('is impossible with vulnerabilities.allowAccept: false: refused before reading or writing, stored ones ignored', async () => {
     const kube = new DemoKubeClient();
     const open = setup({}, kube);
+    await open.service.onModuleInit();
     await open.service.accept('cnpg', 'GHSA-1', 30, undefined, who, 0);
     const writes = kube.writes.length;
 

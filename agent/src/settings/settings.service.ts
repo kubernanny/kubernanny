@@ -6,12 +6,13 @@ import { DemoKubeClient } from '../demo/demo-cluster';
 import { CATALOG, CatalogEntry, Category } from '../discovery/catalog';
 import { customEntries } from '../discovery/discovery';
 import { Text, raw, t } from '../i18n/text';
-import { KubeClient, KubeError } from '../kube/kube-client';
+import { KubeClient } from '../kube/kube-client';
 import { CORE_CHECKS } from '../modules/core';
 import { INTEGRATIONS } from '../modules/integrations';
 import { Notifier, SecurityEvent } from '../notify/notifier';
 import { Serial } from '../util/serial';
 import { upsertConfigMapData } from '../kube/configmap';
+import { NotLoadedError, readAtStartup } from '../util/startup-read';
 
 export const SETTINGS_CONFIGMAP = 'kubernanny-settings';
 
@@ -95,8 +96,12 @@ interface Stored {
 export class SettingsService implements OnModuleInit {
   private readonly logger = new Logger('audit');
   private stored: Stored = { disabledModules: [], enabledModules: [], disabledActions: [], notificationsPaused: false };
-  /** False when the ConfigMap cannot be written: changes then last until restart. */
-  persistent = true;
+  /**
+   * True once the ConfigMap was read (or found missing). Until then every
+   * action is off and nothing is written: an owner's "off" must not come
+   * back on because the API server hiccuped at start-up.
+   */
+  private loaded = false;
   private listeners: (() => void)[] = [];
   private readonly writes = new Serial();
 
@@ -111,16 +116,14 @@ export class SettingsService implements OnModuleInit {
     return `/api/v1/namespaces/${encodeURIComponent(this.config.namespace)}/configmaps`;
   }
 
+  /** Reads the stored switches, retrying transient errors; throws when they stay unreadable, so the process ends and restarts. */
   async onModuleInit(): Promise<void> {
-    try {
-      const cm = await this.kube.get<{ data?: { settings?: string } }>(`${this.path}/${SETTINGS_CONFIGMAP}`);
-      this.stored = parseStored(cm.data?.settings);
-    } catch (err) {
-      if (!(err instanceof KubeError && err.status === 404)) {
-        this.persistent = false;
-        new Logger(SettingsService.name).warn(`cannot read ConfigMap ${SETTINGS_CONFIGMAP} (${err instanceof Error ? err.message : err}); app settings last until restart`);
-      }
-    }
+    const log = new Logger(SettingsService.name);
+    const cm = await readAtStartup(`ConfigMap ${SETTINGS_CONFIGMAP}`, () => this.kube.get<{ data?: { settings?: string } }>(`${this.path}/${SETTINGS_CONFIGMAP}`), {
+      onRetry: (err, attempt) => log.warn(`cannot read ConfigMap ${SETTINGS_CONFIGMAP} (${err instanceof Error ? err.message : err}), attempt ${attempt}; retrying`),
+    });
+    this.stored = parseStored(cm?.data?.settings);
+    this.loaded = true;
   }
 
   /** Called after every change, e.g. to start a new run. */
@@ -153,6 +156,10 @@ export class SettingsService implements OnModuleInit {
     // Opt-in types (argocd-rollback) stay locked until the deployment names them; the demo shows them.
     if (OPT_IN_ACTIONS.includes(type) && !(this.config.enabledActions ?? []).includes(type) && !this.config.demo) {
       return 'locked';
+    }
+    // Not read yet: whatever the owner switched off may be among them.
+    if (!this.loaded) {
+      return 'off';
     }
     return this.stored.disabledActions.includes(type) ? 'off' : 'on';
   }
@@ -249,6 +256,9 @@ export class SettingsService implements OnModuleInit {
       }
       next.notificationsPaused = !patch.notifications;
     }
+    if (!this.loaded) {
+      throw new NotLoadedError('settings');
+    }
     // Before the change: once notifications are off, this would be the last message anyway.
     await this.notifier?.securityAlert(who.name, this.switchedOff(next));
     await this.save(next);
@@ -278,9 +288,7 @@ export class SettingsService implements OnModuleInit {
   }
 
   private async save(next: Stored): Promise<void> {
-    if (this.persistent) {
-      await upsertConfigMapData(this.kube, this.config.namespace, SETTINGS_CONFIGMAP, { settings: JSON.stringify(next) });
-    }
+    await upsertConfigMapData(this.kube, this.config.namespace, SETTINGS_CONFIGMAP, { settings: JSON.stringify(next) });
     this.stored = next;
   }
 }

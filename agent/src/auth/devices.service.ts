@@ -4,6 +4,7 @@ import { PushPlatform, parsePublicKey, pushKeyId, toBase64Url } from '@kubernann
 import { CONFIG, Config } from '../config';
 import { KubeClient, KubeError } from '../kube/kube-client';
 import { Serial } from '../util/serial';
+import { NotLoadedError, readAtStartup } from '../util/startup-read';
 
 export const DEVICES_SECRET = 'kubernanny-devices';
 export const MAX_DEVICES = 50;
@@ -67,8 +68,8 @@ export class DevicesService implements OnModuleInit {
   private readonly lastSeen = new Map<string, Date>();
   /** add and revoke rewrite the whole list: one at a time, so neither undoes the other. */
   private readonly writes = new Serial();
-  /** False when the Secret cannot be written: pairing then fails instead of pairing devices that vanish on restart. */
-  persistent = true;
+  /** True once the stored list was read (or found missing). Pairing and every write wait for it: a write would replace the stored list. */
+  private loaded = false;
 
   constructor(
     @Inject(CONFIG) private readonly config: Config,
@@ -79,19 +80,28 @@ export class DevicesService implements OnModuleInit {
     return `/api/v1/namespaces/${encodeURIComponent(this.config.namespace)}/secrets`;
   }
 
+  /** Reads the paired devices, retrying transient errors; throws when they stay unreadable, so the process ends and restarts. */
   async onModuleInit(): Promise<void> {
+    const secret = await readAtStartup(`Secret ${DEVICES_SECRET}`, () => this.kube.get<{ data?: { devices?: string } }>(`${this.path}/${DEVICES_SECRET}`), {
+      onRetry: (err, attempt) => this.logger.warn(`cannot read Secret ${DEVICES_SECRET} (${err instanceof Error ? err.message : err}), attempt ${attempt}; retrying`),
+    });
+    let parsed: Device[] = [];
     try {
-      const secret = await this.kube.get<{ data?: { devices?: string } }>(`${this.path}/${DEVICES_SECRET}`);
-      const parsed = JSON.parse(Buffer.from(secret.data?.devices ?? '', 'base64').toString('utf8') || '[]') as Device[];
-      this.devices = parsed.filter((d) => typeof d.id === 'string' && validKey(d.publicKey)).map((d) => (d.push && !validPush(d.push) ? withoutPush(d) : d));
-    } catch (err) {
-      if (err instanceof KubeError && err.status === 404) {
-        this.devices = [];
-        return;
-      }
-      this.persistent = false;
-      this.logger.warn(`cannot read Secret ${DEVICES_SECRET} (${err instanceof Error ? err.message : err}); pairing is disabled`);
+      parsed = secret ? (JSON.parse(Buffer.from(secret.data?.devices ?? '', 'base64').toString('utf8') || '[]') as Device[]) : [];
+    } catch {
+      // Not overwritten with an empty list: someone may still repair it by hand.
+      throw new Error(`Secret ${DEVICES_SECRET} holds no readable device list; fix or delete its key "devices"`);
     }
+    if (!Array.isArray(parsed)) {
+      throw new Error(`Secret ${DEVICES_SECRET} holds no readable device list; fix or delete its key "devices"`);
+    }
+    this.devices = parsed.filter((d) => typeof d.id === 'string' && validKey(d.publicKey)).map((d) => (d.push && !validPush(d.push) ? withoutPush(d) : d));
+    this.loaded = true;
+  }
+
+  /** False until the stored list was read: pairing then fails instead of pairing devices over a list it never saw. */
+  get persistent(): boolean {
+    return this.loaded;
   }
 
   /** The device holding this key, or null. */
@@ -185,8 +195,8 @@ export class DevicesService implements OnModuleInit {
   }
 
   private async save(next: Device[]): Promise<void> {
-    if (!this.persistent) {
-      throw new Error(`Secret ${DEVICES_SECRET} is not writable`);
+    if (!this.loaded) {
+      throw new NotLoadedError(`Secret ${DEVICES_SECRET}`);
     }
     const stringData = { devices: JSON.stringify(next) };
     try {

@@ -167,6 +167,7 @@ describe('M5: silencing cannot blind the owner', () => {
     const alerts: unknown[][] = [];
     const notifier = { securityAlert: async (...a: unknown[]) => void alerts.push(a) } as unknown as Notifier;
     const silences = new SilenceService(loadConfig(), new DemoKubeClient(), notifier);
+    await silences.onModuleInit();
     await silences.silence('nodes/n1/not-ready', 1, who, 0, 'critical');
     await silences.silence('certificates/a/b', 8, who, 1000, 'warning');
     await silences.silence('security/x/root', 8, who, 2000, 'info');
@@ -178,6 +179,7 @@ describe('M5: silencing cannot blind the owner', () => {
 
   it('a warning silenced early is no longer silenced once it turns critical (pentest finding)', async () => {
     const silences = new SilenceService(loadConfig(), new DemoKubeClient());
+    await silences.onModuleInit();
     await silences.silence('certificates/a/b', 168, who, 0, 'warning');
     expect(silences.silencedUntil('certificates/a/b', 1000, 'warning')).not.toBeNull();
     expect(silences.silencedUntil('certificates/a/b', 1000, 'critical')).toBeNull();
