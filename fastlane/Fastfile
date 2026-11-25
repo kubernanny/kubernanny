@@ -305,8 +305,19 @@ def android_signing
   }
 end
 
+# Listing texts and images are not tied to a release, but supply still looks
+# one up on its track (default production) and stops with "Could not find
+# release for version code ''" while production is empty. Point it at the
+# newest build on the internal track instead.
+def listing_release
+  code = google_play_track_version_codes(track: 'internal', json_key: play_key_path).max
+  UI.user_error!('Nothing on the internal track yet: upload a build first (docs/RELEASING.md)') unless code
+  { track: 'internal', version_code: code }
+end
+
 def android_metadata
   upload_to_play_store(
+    **listing_release,
     json_key: play_key_path,
     metadata_path: File.join(FASTLANE_DIR, 'metadata', 'android'),
     skip_upload_apk: true,
@@ -321,6 +332,7 @@ def android_screenshots
   dir = File.join(SCREENSHOTS_DIR, 'android')
   UI.user_error!("No images in #{dir} (docs/RELEASING.md, Screenshots)") unless non_empty_dir?(dir)
   upload_to_play_store(
+    **listing_release,
     json_key: play_key_path,
     metadata_path: dir,
     skip_upload_apk: true,
