@@ -152,6 +152,8 @@ export interface ModuleView {
   accepted?: AcceptedAdvisory[];
   /** Vulnerabilities only: advisories can be accepted (not locked in Helm). */
   canAccept?: boolean;
+  /** Security posture only: hints accepted in the workloads' `kubernanny.io/accept` annotation. */
+  acceptedFindings?: AcceptedFinding[];
   /** Argo CD only, while the rollback is on: manual-sync apps and the deployments they can go back to. */
   rollbacks?: RollbackApp[];
   /** Argo CD only: manual apps with a change waiting. */
@@ -188,6 +190,20 @@ export interface RollbackApp {
   current?: string;
   /** Newest first. */
   entries: { id: number; revision: string; short: string; deployedAt?: string; current: boolean }[];
+}
+
+/** A security hint a workload accepts in Git (agent/src/modules/security/evaluate.ts): counted nowhere, listed folded. */
+export interface AcceptedFinding {
+  /** The annotation key: root, host-access, no-memory-limit, mutable-image. */
+  key: string;
+  /** What was found, in words. */
+  finding: string;
+  namespace: string;
+  kind: string;
+  name: string;
+  reason: string;
+  /** The workload's own annotation, or its pod template's. */
+  source: 'workload' | 'pod-template';
 }
 
 /** One advisory marked as "does not apply here" on one component, until it expires. */

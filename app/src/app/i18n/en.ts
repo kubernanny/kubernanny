@@ -530,6 +530,9 @@ export const en: Dictionary = {
     podsReady: '{{ready}}/{{total}} pods ready',
     acceptedTitle: 'Marked as not applicable',
     acceptedMeta: '{{name}}, until {{until}}, by {{by}}',
+    acceptedInGit: '{{count}} accepted',
+    acceptedFromWorkload: 'Annotation kubernanny.io/accept on the workload',
+    acceptedFromTemplate: 'Annotation kubernanny.io/accept on the pod template',
     unaccept: 'Count again',
     rollbackTitle: 'Roll back',
     rollbackHint:

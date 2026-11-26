@@ -25,6 +25,7 @@ import { AgentClient, describeError } from '../core/agent-client.service';
 import { externalUrl } from '../core/external-url';
 import { LanguageService } from '../i18n/language.service';
 import { IssueList } from '../ui/issue-list';
+import { AcceptedFindingRow, acceptedFindingRows } from './accepted-findings';
 import { markRolledBack, RollbackRow, rollbackRows } from './argocd-rollback';
 import { IssueCard, moduleRow } from './cluster-view';
 import { DetailSectionView } from './detail-section';
@@ -105,6 +106,40 @@ import { AcceptedRow, acceptedRows } from './vulnerability-acceptance';
         @if (issues().length > 0) {
           <h2>{{ t('module.issues') }}</h2>
           <app-issue-list [cards]="issues()" [cluster]="cluster" (changed)="changed.set(true)" />
+        }
+
+        @if (acceptedFindings().length > 0) {
+          <section class="git-accepted">
+            <button
+              type="button"
+              class="fold"
+              [attr.aria-expanded]="acceptedOpen()"
+              (click)="acceptedOpen.set(!acceptedOpen())"
+            >
+              <ion-icon name="checkmark-done-outline" aria-hidden="true" />
+              <span>{{ t('module.acceptedInGit', { count: acceptedFindings().length }) }}</span>
+              <ion-icon
+                class="chev"
+                [name]="acceptedOpen() ? 'chevron-up' : 'chevron-down'"
+                aria-hidden="true"
+              />
+            </button>
+            @if (acceptedOpen()) {
+              <ul>
+                @for (a of acceptedFindings(); track a.key) {
+                  <li>
+                    <div class="line">
+                      <span class="wname">{{ a.name }}</span>
+                      <code>{{ a.findingKey }}</code>
+                    </div>
+                    <span class="muted">{{ a.where }}: {{ a.finding }}</span>
+                    <q class="reason">{{ a.reason }}</q>
+                    <span class="source">{{ a.source }}</span>
+                  </li>
+                }
+              </ul>
+            }
+          </section>
         }
 
         @for (sec of sheet().sections; track sec.key) {
@@ -381,6 +416,74 @@ import { AcceptedRow, acceptedRows } from './vulnerability-acceptance';
     .accepted button:disabled {
       opacity: 0.55;
     }
+    .git-accepted {
+      margin: 1rem 0 0;
+      border-radius: var(--radius-m);
+      background: var(--raise);
+    }
+    .git-accepted .fold {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      width: 100%;
+      padding: 0.75rem 0.9rem;
+      border: 0;
+      background: none;
+      color: var(--ink-2);
+      font: inherit;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+    }
+    .git-accepted .fold span {
+      flex: 1;
+    }
+    .git-accepted .fold ion-icon {
+      color: var(--mute);
+      font-size: 1.1rem;
+    }
+    .git-accepted ul {
+      list-style: none;
+      margin: 0;
+      padding: 0 0.9rem 0.4rem;
+    }
+    .git-accepted li {
+      display: grid;
+      gap: 0.2rem;
+      padding: 0.7rem 0;
+      border-top: 1px solid var(--line);
+      min-width: 0;
+    }
+    .git-accepted .line {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+    .git-accepted code {
+      flex: none;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.75rem;
+      padding: 0.1rem 0.45rem;
+      border-radius: 999px;
+      background: var(--line);
+      color: var(--ink-2);
+    }
+    .git-accepted .muted,
+    .git-accepted .source {
+      font-size: 0.8125rem;
+      overflow-wrap: anywhere;
+    }
+    .git-accepted .reason {
+      font-size: 0.875rem;
+      color: var(--ink);
+      overflow-wrap: anywhere;
+    }
+    .git-accepted .source {
+      color: var(--mute);
+      font-size: 0.75rem;
+    }
     .workloads .pill {
       grid-row: 1 / span 2;
       grid-column: 2;
@@ -416,6 +519,9 @@ export class ModuleSheet implements OnInit {
   });
   readonly issues = signal<IssueCard[]>([]);
   readonly accepted = signal<AcceptedRow[]>([]);
+  /** Security hints accepted in Git, folded until opened. */
+  readonly acceptedFindings = signal<AcceptedFindingRow[]>([]);
+  readonly acceptedOpen = signal(false);
   readonly busy = signal<string | null>(null);
   readonly changed = signal(false);
   readonly head = signal<{ tone: Tone; statusLabel: string }>({ tone: 'ok', statusLabel: '' });
@@ -433,6 +539,7 @@ export class ModuleSheet implements OnInit {
     );
     this.issues.set(this.issueCards);
     this.accepted.set(acceptedRows(this.module, this.language.translator()));
+    this.acceptedFindings.set(acceptedFindingRows(this.module, this.language.translator()));
     this.view.set(this.module);
   }
 

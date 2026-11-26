@@ -131,6 +131,32 @@ test.describe('web demo (no agent, nothing leaves the browser)', () => {
     await expect(cluster.locator('section.hints', { hasText: 'Stummgeschaltet' })).toHaveCount(0);
   });
 
+  test('lists a security hint accepted in Git folded on the security sheet, not among the hints', async ({ page }) => {
+    await page.goto(`${DEMO}/#/demo`);
+    await page.goto(`${DEMO}/#/c/demo-broken`);
+    await openTab(page, 'Dienste');
+    await visiblePage(page)
+      .locator('app-services-tab button', {
+        has: page.locator('.name strong').getByText('Sicherheit', { exact: true }),
+      })
+      .first()
+      .click();
+    const sheet = page.locator('app-module-sheet');
+    await expect(
+      sheet.locator('app-issue-list .title', { hasText: 'pgadmin: 1 Workload läuft womöglich als root' }),
+    ).toBeVisible();
+    await expect(sheet.locator('app-issue-list')).not.toContainText('discourse');
+    const fold = sheet.getByRole('button', { name: '1 bewusst akzeptiert' });
+    await expect(fold).toHaveAttribute('aria-expanded', 'false');
+    await expect(sheet.getByText('drops privileges itself')).toHaveCount(0);
+    await fold.click();
+    const row = sheet.locator('.git-accepted li');
+    await expect(row).toContainText('discourse');
+    await expect(row).toContainText('Deployment, discourse: läuft womöglich als root');
+    await expect(row).toContainText('the image boots runit as root and drops privileges itself');
+    await expect(row).toContainText('Annotation kubernanny.io/accept am Workload');
+  });
+
   test('switches a component off in the settings', async ({ page }) => {
     await page.goto(`${DEMO}/#/demo`);
     await page.goto(`${DEMO}/#/cluster/demo-broken/modules`);

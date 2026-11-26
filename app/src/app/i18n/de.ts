@@ -531,6 +531,9 @@ export const de = {
     podsReady: '{{ready}}/{{total}} Pods bereit',
     acceptedTitle: 'Als nicht zutreffend markiert',
     acceptedMeta: '{{name}}, bis {{until}}, von {{by}}',
+    acceptedInGit: '{{count}} bewusst akzeptiert',
+    acceptedFromWorkload: 'Annotation kubernanny.io/accept am Workload',
+    acceptedFromTemplate: 'Annotation kubernanny.io/accept am Pod-Template',
     unaccept: 'Wieder zählen',
     rollbackTitle: 'Zurückrollen',
     rollbackHint:
