@@ -27,6 +27,12 @@ import org.json.JSONObject;
  * relay's Firebase credentials can still have the system show an FCM
  * *notification* message without this code; that one has no marker.
  *
+ * A status push (priority 0, sent about hourly to phones with a widget,
+ * as a data message at normal priority) only updates the widget and shows
+ * nothing. It must be fresh too, but does not count as "shown": a delayed
+ * alert sealed before it still shows. Replaying one changes nothing, as the
+ * widget only takes a check newer than the one it holds (WidgetPushStatus).
+ *
  * A tap opens kubernanny://cluster?id=… with the app's own cluster id, kept
  * in the key entry: the agent never knows that id, and the app only follows
  * the link to a cluster in its list (app/src/app/core/push/push-tap.ts).
@@ -50,6 +56,13 @@ public class PushMessagingService extends FirebaseMessagingService {
             byte[] plain = PushCrypto.open(new AndroidPrimitives(), entry.secretKey, entry.publicKey, entry.agentKey, PushKeyStore.unb64(sealed));
             JSONObject content = new JSONObject(new String(plain, StandardCharsets.UTF_8));
             long sealedAt = content.getLong("s");
+            // A status push (p 0, docs/PROTOCOL.md "Status pushes"): only the widget, never a notification.
+            if (PushFreshness.isStatusOnly(content.optInt("p", 3))) {
+                if (PushFreshness.statusFresh(sealedAt, System.currentTimeMillis())) {
+                    updateWidget(this, entry.clusterId, content.optJSONObject("w"));
+                }
+                return;
+            }
             // A replayed or stale message opens fine (the agent made it once) but says something old: not shown.
             if (!PushFreshness.fresh(sealedAt, System.currentTimeMillis(), PushKeyStore.lastShown(this, kid))) {
                 return;

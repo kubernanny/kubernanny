@@ -57,9 +57,13 @@ export class App {
     inject(PushNative).onTap((kid) => this.openCluster(() => clusterIdForPushKey(kid, this.store.clusters())));
     // Starts keeping the home-screen widgets in step with every new snapshot.
     inject(WidgetSync);
-    // A new FCM token (restored phone, rotated token) reaches every agent this device gets push from.
+    // A new FCM token (restored phone, rotated token) reaches every agent this device gets push from,
+    // and so does a widget placed or removed while the app was in the background.
     const push = inject(PushRegistration);
-    void this.store.loaded.then(() => push.refreshTokens()).catch(() => undefined);
+    void this.store.loaded.then(() => push.refreshRegistrations()).catch(() => undefined);
+    void CapApp.addListener('resume', () => {
+      void this.store.loaded.then(() => push.refreshRegistrations()).catch(() => undefined);
+    }).catch(() => undefined);
   }
 
   /** Only once the list is loaded, and only to a cluster in it: the id comes from outside the app. */

@@ -6,8 +6,9 @@ import { AgentClient } from '../agent-client.service';
 import { AgentPushView, ClusterConfig } from '../agent.model';
 import { ClusterStore } from '../cluster-store.service';
 import { translatorFor } from '../../i18n/translator';
-import { MAX_PUSH_AGE_MS, openPushMessage, pushFresh } from './push-content';
+import { MAX_PUSH_AGE_MS, openPushMessage, pushFresh, statusPushFresh } from './push-content';
 import { PushNative } from './push-native';
+import { WidgetBridge } from '../widget/widget-bridge';
 import { PushRegistration } from './push-registration.service';
 import { pushView } from './push-view';
 
@@ -91,11 +92,23 @@ class FakeNative {
   }
 }
 
+/** Stands in for the widget bridge: whether a widget is placed, and which clusters its list holds. */
+class FakeWidgets {
+  count = 0;
+  ids: string[] = ['c1'];
+  async placed() {
+    return this.count > 0;
+  }
+  async read() {
+    return this.ids.map((id) => ({ id }));
+  }
+}
+
 class FakeClient {
-  registered: { token: string; platform: string; key: string }[] = [];
+  registered: { token: string; platform: string; key: string; widget: boolean }[] = [];
   unregistered = 0;
   fail = false;
-  async registerPush(_: ClusterConfig, r: { token: string; platform: string; key: string }) {
+  async registerPush(_: ClusterConfig, r: { token: string; platform: string; key: string; widget: boolean }) {
     if (this.fail) {
       throw new Error('agent says no');
     }
@@ -121,17 +134,20 @@ describe('PushRegistration', () => {
   let native: FakeNative;
   let client: FakeClient;
   let store: FakeStore;
+  let widgets: FakeWidgets;
   let registration: PushRegistration;
 
   beforeEach(() => {
     native = new FakeNative();
     client = new FakeClient();
     store = new FakeStore();
+    widgets = new FakeWidgets();
     TestBed.configureTestingModule({
       providers: [
         { provide: PushNative, useValue: native },
         { provide: AgentClient, useValue: client },
         { provide: ClusterStore, useValue: store },
+        { provide: WidgetBridge, useValue: widgets },
       ],
     });
     registration = TestBed.inject(PushRegistration);
@@ -143,7 +159,7 @@ describe('PushRegistration', () => {
     const [kid, stored] = [...native.keys][0]!;
     expect(stored).toMatchObject({ agentKey: config().agentKey, clusterId: 'c1' });
     expect(stored.secretKey).not.toBe(config().deviceKey);
-    expect(client.registered).toEqual([{ token: 'fcm-token-1:APA91b', platform: 'ios', key: stored.publicKey }]);
+    expect(client.registered).toEqual([{ token: 'fcm-token-1:APA91b', platform: 'ios', key: stored.publicKey, widget: false }]);
     expect(kid).toBe(pushKeyId(parsePublicKey(stored.publicKey)));
     expect(store.clusters()[0]!.push).toEqual({ kid, key: stored.publicKey, token: 'fcm-token-1:APA91b' });
     expect(JSON.stringify(store.clusters())).not.toContain(stored.secretKey);
@@ -181,12 +197,47 @@ describe('PushRegistration', () => {
     await registration.enable(config());
     const before = store.clusters()[0]!.push!;
     native.currentToken = 'fcm-token-2:APA91b';
-    await registration.refreshTokens();
-    expect(client.registered.at(-1)).toEqual({ token: 'fcm-token-2:APA91b', platform: 'ios', key: before.key });
+    await registration.refreshRegistrations();
+    expect(client.registered.at(-1)).toEqual({ token: 'fcm-token-2:APA91b', platform: 'ios', key: before.key, widget: false });
     expect(store.clusters()[0]!.push).toEqual({ ...before, token: 'fcm-token-2:APA91b' });
     const count = client.registered.length;
-    await registration.refreshTokens();
+    await registration.refreshRegistrations();
     expect(client.registered.length).toBe(count);
+  });
+
+  it('tells the agent when a widget shows the cluster, and again when it no longer does', async () => {
+    widgets.count = 1;
+    await registration.enable(config());
+    expect(client.registered.at(-1)!.widget).toBe(true);
+    expect(store.clusters()[0]!.push!.widget).toBe(true);
+    // Unchanged: nothing is sent again on the next resume.
+    const count = client.registered.length;
+    await registration.refreshRegistrations();
+    expect(client.registered.length).toBe(count);
+    // The widget was removed from the home screen.
+    widgets.count = 0;
+    await registration.refreshRegistrations();
+    expect(client.registered.at(-1)).toMatchObject({ key: store.clusters()[0]!.push!.key, widget: false });
+    expect(store.clusters()[0]!.push!.widget).toBeUndefined();
+    // Placed again, but this cluster is switched off for the widget (not in its list).
+    widgets.count = 2;
+    widgets.ids = [];
+    await registration.refreshRegistrations();
+    expect(client.registered.length).toBe(count + 1);
+    widgets.ids = ['c1'];
+    await registration.refreshRegistrations();
+    expect(client.registered.at(-1)!.widget).toBe(true);
+  });
+
+  it('keeps the old flag when the agent cannot be reached, and tries again next time', async () => {
+    await registration.enable(config());
+    widgets.count = 1;
+    client.fail = true;
+    await registration.refreshRegistrations();
+    expect(store.clusters()[0]!.push!.widget).toBeUndefined();
+    client.fail = false;
+    await registration.refreshRegistrations();
+    expect(store.clusters()[0]!.push!.widget).toBe(true);
   });
 });
 
@@ -203,6 +254,13 @@ describe('pushFresh (mirrored by PushFreshness.java and PushKeys.isFresh)', () =
     expect(pushFresh(now - MAX_PUSH_AGE_MS - 1, now, null)).toBe(false);
     expect(pushFresh(now - 60_000, now, now - 60_000)).toBe(false);
     expect(pushFresh(now - 60_000, now, now - 5_000)).toBe(false);
+  });
+
+  it('applies a status push sealed within the hour, whatever was shown before (statusPushFresh)', () => {
+    expect(statusPushFresh(now - 5_000, now)).toBe(true);
+    expect(statusPushFresh(now - MAX_PUSH_AGE_MS, now)).toBe(true);
+    expect(statusPushFresh(now - MAX_PUSH_AGE_MS - 1, now)).toBe(false);
+    expect(statusPushFresh(now + MAX_PUSH_AGE_MS + 1, now)).toBe(false);
   });
 
   it('drops a push dated more than an hour ahead, so it cannot block the ones after it', () => {

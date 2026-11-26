@@ -27,3 +27,15 @@ export function pushFresh(sealedAt: number, now: number, lastShown: number | nul
   }
   return lastShown === null || sealedAt > lastShown;
 }
+
+/**
+ * Whether a status push (`p: 0`, docs/PROTOCOL.md "Status pushes") may update
+ * the widget: sealed within the hour. It is never shown, so it is not
+ * compared with the last push shown and does not move it: a delayed alert
+ * sealed before it still shows. A replayed one changes nothing, because the
+ * widget only takes a check newer than its own. Mirrored by
+ * PushFreshness.statusFresh and PushKeys.isStatusFresh.
+ */
+export function statusPushFresh(sealedAt: number, now: number): boolean {
+  return pushFresh(sealedAt, now, null);
+}

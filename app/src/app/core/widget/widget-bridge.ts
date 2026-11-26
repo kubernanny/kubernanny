@@ -11,6 +11,8 @@ import { WidgetCluster, validWidgetList } from './widget-summary';
 interface WidgetBridgePlugin {
   read(): Promise<{ clusters: WidgetCluster[] }>;
   write(options: { clusters: WidgetCluster[] }): Promise<void>;
+  /** How many widgets of the app are placed on the home screen (and, on iOS, the Lock Screen), of every kind. */
+  placed(): Promise<{ count: number }>;
 }
 
 /** On the web there are no widgets: nothing stored, nothing written. */
@@ -18,6 +20,7 @@ const native = registerPlugin<WidgetBridgePlugin>('WidgetBridge', {
   web: {
     read: async () => ({ clusters: [] }),
     write: async () => undefined,
+    placed: async () => ({ count: 0 }),
   },
 });
 
@@ -34,6 +37,22 @@ export class WidgetBridge {
   async read(): Promise<WidgetCluster[]> {
     const { clusters } = await native.read();
     return validWidgetList(clusters);
+  }
+
+  /**
+   * Whether any widget of the app is placed. Every kind shows every cluster
+   * of the list or the worst of them, so one placed widget counts for all
+   * clusters in the list. False on the web and in builds before the method.
+   */
+  async placed(): Promise<boolean> {
+    if (!this.supported) {
+      return false;
+    }
+    try {
+      return (await native.placed()).count > 0;
+    } catch {
+      return false;
+    }
   }
 
   /** Replaces the whole list: a cluster left out is gone from the device at once. */

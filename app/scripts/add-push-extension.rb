@@ -9,7 +9,13 @@
 # - its entitlements file (App Group group.app.kubernanny.push, whose keychain
 #   access group holds the push keys, and group.app.kubernanny, the widget's,
 #   where it writes the cluster state a push carries);
-# - sources added later (WidgetPushStatus.swift) to an extension made before;
+# - sources added later (WidgetPushStatus.swift, StatusPush.swift) to an
+#   extension made before;
+# - the extension's push code (PushCrypto, PushKeys, WidgetPushStatus,
+#   StatusPush) also into the App target: the app opens the silent hourly
+#   status push for the widget itself (AppDelegate), with the same code;
+# - on the App target the Background Modes capability (remote notifications;
+#   UIBackgroundModes in App/Info.plist carries `remote-notification`);
 # - on the App target: the same App Group and aps-environment (push), merged
 #   into the entitlements file the target already uses, or a new
 #   App/App.entitlements. Other entries (the widget's App Group) stay;
@@ -25,7 +31,9 @@ ROOT = File.expand_path('../ios/App', __dir__)
 PROJECT = File.join(ROOT, ENV.fetch('XCODEPROJ', 'App.xcodeproj'))
 NAME = 'KubernannyPushExtension'
 GROUP = 'group.app.kubernanny.push'
-SOURCES = %w[NotificationService.swift PushCrypto.swift PushKeys.swift WidgetPushStatus.swift].freeze
+SOURCES = %w[NotificationService.swift PushCrypto.swift PushKeys.swift WidgetPushStatus.swift StatusPush.swift].freeze
+# Compiled into the app as well, for the status push it receives in the background.
+APP_SHARED = %w[PushCrypto.swift PushKeys.swift WidgetPushStatus.swift StatusPush.swift].freeze
 WIDGET_GROUP = 'group.app.kubernanny'
 
 project = Xcodeproj::Project.open(PROJECT)
@@ -54,7 +62,8 @@ end
 attributes = project.root_object.attributes['TargetAttributes'] ||= {}
 (attributes[app.uuid] ||= {})['SystemCapabilities'] = ((attributes[app.uuid] || {})['SystemCapabilities'] || {}).merge(
   'com.apple.Push' => { 'enabled' => 1 },
-  'com.apple.ApplicationGroups.iOS' => { 'enabled' => 1 }
+  'com.apple.ApplicationGroups.iOS' => { 'enabled' => 1 },
+  'com.apple.BackgroundModes' => { 'enabled' => 1 }
 )
 
 # GoogleService-Info.plist is not in the repository (docs/RELEASING.md): a
@@ -115,6 +124,12 @@ SOURCES.each do |file|
   next if extension.source_build_phase.files_references.any? { |f| f.path == file }
   ref = ext_group.files.find { |f| f.path == file } || ext_group.new_reference(file)
   extension.add_file_references([ref])
+end
+
+# The same push code in the App target (AppDelegate opens the status push).
+APP_SHARED.each do |file|
+  next if app.source_build_phase.files_references.any? { |f| f.path == file }
+  app.add_file_references([ext_group.files.find { |f| f.path == file }])
 end
 
 # The widget's App Group: the extension writes a push's cluster state there (WidgetPushStatus.swift).

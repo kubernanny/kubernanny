@@ -3,7 +3,7 @@ import Foundation
 // Opens every message of protocol/test/push-vectors.json with the extension's
 // PushCrypto. macOS only (CryptoKit):
 //   cd app/ios/App/KubernannyPushExtension
-//   swiftc -o /tmp/push-vectors PushCrypto.swift PushKeys.swift Tests/main.swift && /tmp/push-vectors ../../../../protocol/test/push-vectors.json
+//   swiftc -o /tmp/push-vectors PushCrypto.swift PushKeys.swift WidgetPushStatus.swift StatusPush.swift Tests/main.swift && /tmp/push-vectors ../../../../protocol/test/push-vectors.json
 
 func hex(_ text: String) -> Data {
     var data = Data()
@@ -26,6 +26,17 @@ for v in vectors {
     tampered[tampered.count - 1] ^= 1
     precondition((try? PushCrypto.open(pushSecret: hex(v["pushSecret"]!), pushPublic: hex(v["pushPublic"]!), agentPublic: hex(v["agentStaticPublic"]!), message: tampered)) == nil, "tampering must fail")
     precondition((try? PushCrypto.open(pushSecret: hex(v["pushSecret"]!), pushPublic: hex(v["pushPublic"]!), agentPublic: hex(v["pushPublic"]!), message: message)) == nil, "another agent must fail")
+    // Status pushes (StatusPush.swift): only priority 0 is one, applied within the hour of its sealing.
+    let json = try JSONSerialization.jsonObject(with: plain) as! [String: Any]
+    let sealedAt = (json["s"] as! NSNumber).doubleValue
+    let statusOnly = v["name"] == "status-only"
+    precondition(StatusPush.isStatusOnly(json) == statusOnly, "status-only flag of \(v["name"]!)")
+    precondition((StatusPush.status(fromOpened: json, now: sealedAt + 60_000) != nil) == statusOnly, "status of \(v["name"]!)")
+    if statusOnly {
+        precondition(StatusPush.status(fromOpened: json, now: sealedAt + 3_600_001) == nil, "a stale status push is dropped")
+        // A status push never moves the replay marker of alerts, so it is fresh whatever was shown since.
+        precondition(PushKeys.isStatusFresh(sealedAt: sealedAt, now: sealedAt + 1) && !PushKeys.isFresh(sealedAt: sealedAt, now: sealedAt + 1, lastShown: sealedAt + 1))
+    }
 }
 print("PushCrypto.swift: \(vectors.count) vectors opened, tampering refused")
 

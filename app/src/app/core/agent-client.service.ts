@@ -233,7 +233,8 @@ export class AgentClient {
   }
 
   /** Registers this device's FCM token and its push public key for this cluster. */
-  registerPush(cluster: ClusterConfig, registration: { token: string; platform: 'ios' | 'android'; key: string }): Promise<void> {
+  /** `widget`: this device has a home-screen widget showing the cluster (agents before it ignore the field). */
+  registerPush(cluster: ClusterConfig, registration: { token: string; platform: 'ios' | 'android'; key: string; widget: boolean }): Promise<void> {
     return this.call(cluster, 'POST', '/push/register', registration);
   }
 

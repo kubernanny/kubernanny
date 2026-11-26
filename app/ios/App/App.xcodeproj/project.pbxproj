@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		0E112BCB8F1A069805A8B418 /* PushKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2315C1B8AB85F8E8A1F0A150 /* PushKeys.swift */; };
+		2981A62BAACE2D86D3DDD29A /* PushKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2315C1B8AB85F8E8A1F0A150 /* PushKeys.swift */; };
+		29D1440EBF17F9F0396FA434 /* PushCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6781E34BC5CB059E92C4B0F /* PushCrypto.swift */; };
 		2AE03481AEAB5541097225CD /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6F9E5849B543326714090B47 /* WidgetKit.framework */; };
 		2B0801D0510B1EDC971C704A /* KubernannyPushExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6DF8BB14BD4BB4949B992B88 /* KubernannyPushExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
@@ -26,13 +28,16 @@
 		5CA73CC1B6A662F0427557B7 /* PushCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6781E34BC5CB059E92C4B0F /* PushCrypto.swift */; };
 		69745779DFD7BDC27FD81408 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 58557FE8854EEAEED4DC6359 /* Foundation.framework */; };
 		69B0298DE7DAE384EF970D71 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 58557FE8854EEAEED4DC6359 /* Foundation.framework */; };
+		7F4EEBAA1FAF2AC1EF661F4E /* StatusPush.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB859A1FE6C479A5BD8F3C31 /* StatusPush.swift */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		A1B2C3D42F00000100C0FFEE /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D42F00000200C0FFEE /* InfoPlist.strings */; };
 		AB4B274AAD951CC080D1651D /* KubernannyWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F31882D1BA597DD30FBC800C /* KubernannyWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AFC2AF93CA98DA00208F75CE /* StatusPush.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB859A1FE6C479A5BD8F3C31 /* StatusPush.swift */; };
 		B388E2F99A0D3838D7DACE12 /* WidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BFA10C54D6461599FFDFB3B /* WidgetData.swift */; };
 		C834F874D0600AAE2B8A2E8B /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B267767B10BEDE3F91CF76 /* NotificationService.swift */; };
 		DB598020DCC7D523E30E87FA /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 218D54F7DCA7CDC49932D901 /* Localizable.strings */; };
 		DC847C81D357F8EFA63B745F /* KubernannyWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 815587D4CAF0E6E959303C30 /* KubernannyWidget.swift */; };
+		F2D0D03EBBAA25BAE97DD025 /* WidgetPushStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A382D4FB71C82280655A2C /* WidgetPushStatus.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -99,6 +104,7 @@
 		A1B2C3D42F00000400C0FFEE /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		A88B2D13D5A4814282389E03 /* KubernannyWidget.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = KubernannyWidget.entitlements; sourceTree = "<group>"; };
 		A8B267767B10BEDE3F91CF76 /* NotificationService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		AB859A1FE6C479A5BD8F3C31 /* StatusPush.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StatusPush.swift; sourceTree = "<group>"; };
 		C6781E34BC5CB059E92C4B0F /* PushCrypto.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PushCrypto.swift; sourceTree = "<group>"; };
 		D1235CE4F3ED1CBD58A5055B /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		F31882D1BA597DD30FBC800C /* KubernannyWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = KubernannyWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -210,6 +216,7 @@
 				77DE9F1439088189E08EE1B0 /* Info.plist */,
 				25DEFDC98BE22F17248A3FB1 /* KubernannyPushExtension.entitlements */,
 				57A382D4FB71C82280655A2C /* WidgetPushStatus.swift */,
+				AB859A1FE6C479A5BD8F3C31 /* StatusPush.swift */,
 			);
 			name = KubernannyPushExtension;
 			path = KubernannyPushExtension;
@@ -313,6 +320,9 @@
 						ProvisioningStyle = Automatic;
 						SystemCapabilities = {
 							com.apple.ApplicationGroups.iOS = {
+								enabled = 1;
+							};
+							com.apple.BackgroundModes = {
 								enabled = 1;
 							};
 							com.apple.Push = {
@@ -419,6 +429,10 @@
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
+				29D1440EBF17F9F0396FA434 /* PushCrypto.swift in Sources */,
+				2981A62BAACE2D86D3DDD29A /* PushKeys.swift in Sources */,
+				F2D0D03EBBAA25BAE97DD025 /* WidgetPushStatus.swift in Sources */,
+				7F4EEBAA1FAF2AC1EF661F4E /* StatusPush.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -430,6 +444,7 @@
 				5CA73CC1B6A662F0427557B7 /* PushCrypto.swift in Sources */,
 				0E112BCB8F1A069805A8B418 /* PushKeys.swift in Sources */,
 				50D90FFFC910975A508EE8D4 /* WidgetPushStatus.swift in Sources */,
+				AFC2AF93CA98DA00208F75CE /* StatusPush.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

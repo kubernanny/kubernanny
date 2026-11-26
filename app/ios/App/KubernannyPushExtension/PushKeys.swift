@@ -55,6 +55,13 @@ enum PushKeys {
         return sealedAt > last
     }
 
+    /// Mirrors `statusPushFresh` in push-content.ts and PushFreshness.statusFresh:
+    /// a status push (never shown) only has to be sealed within the hour. It is
+    /// not compared with, and does not move, the last push shown.
+    static func isStatusFresh(sealedAt: Double, now: Double) -> Bool {
+        isFresh(sealedAt: sealedAt, now: now, lastShown: nil)
+    }
+
     /// Key ids are 16 characters: `seen.<kid>` never names a key or the marker.
     static func seenAccount(_ kid: String) -> String {
         "seen.\(kid)"

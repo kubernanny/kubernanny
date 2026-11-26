@@ -41,6 +41,15 @@ final class NotificationService: UNNotificationServiceExtension {
         else {
             return
         }
+        // A status push reaches the app as a background push (AppDelegate). Should one arrive here
+        // as an alert, the widget still takes its state, and the generic text is what shows.
+        if StatusPush.isStatusOnly(json) {
+            if let status = StatusPush.status(fromOpened: json, now: Date().timeIntervalSince1970 * 1000),
+               WidgetPushStatus.apply(clusterId: entry.clusterId, status: status) {
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+            return
+        }
         // A replayed or stale message opens fine (the agent made it once) but says something old.
         // iOS shows every alert that arrives, so it gets the generic text, without the marker.
         guard PushKeys.isFresh(sealedAt: sealedAt, now: Date().timeIntervalSince1970 * 1000, lastShown: PushKeys.lastShown(kid)) else {

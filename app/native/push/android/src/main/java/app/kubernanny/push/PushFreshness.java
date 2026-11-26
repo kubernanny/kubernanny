@@ -20,4 +20,19 @@ final class PushFreshness {
         }
         return lastShown == null || sealedAt > lastShown;
     }
+
+    /** The priority of a status push: it carries only the widget's state and is never shown (PUSH_STATUS_ONLY in protocol/src/push.ts). */
+    static final int STATUS_ONLY = 0;
+
+    static boolean isStatusOnly(int priority) {
+        return priority == STATUS_ONLY;
+    }
+
+    /**
+     * A status push is applied when sealed within the hour; it is not compared
+     * with, and does not move, the last push shown, so it never hides an alert.
+     */
+    static boolean statusFresh(long sealedAt, long now) {
+        return Math.abs(now - sealedAt) <= MAX_AGE_MS;
+    }
 }

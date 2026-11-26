@@ -430,9 +430,11 @@ export interface ClusterConfig {
    * Native push to this device is registered with the agent (docs/NOTIFICATIONS.md).
    * `kid` names the push key pair whose secret half is kept natively (never
    * here); `key` is its public half; `token` is the FCM token it was
-   * registered with, compared on start to notice a new one.
+   * registered with, compared on start to notice a new one. `widget`: the
+   * agent was told this device has a home-screen widget showing the cluster
+   * (it then sends a silent status push about hourly); absent means no.
    */
-  push?: { kid: string; key: string; token: string };
+  push?: { kid: string; key: string; token: string; widget?: true };
 }
 
 /** GET /push: whether this device can get native push from the agent, and whether it does. */
