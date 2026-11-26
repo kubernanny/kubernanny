@@ -395,28 +395,37 @@ describe('MetricsRecorder', () => {
     expect(copy.view(168, end + 7 * D).series).toEqual([]);
   });
 
-  it('stores the cluster and the busiest MAX_NODES nodes, under the size cap even with the longest names', () => {
-    const r = new MetricsRecorder();
-    const nodes = Array.from({ length: 200 }, (_, i) => ({
-      name: `${String(i).padStart(3, '0')}-${'n'.repeat(240)}`,
-      cpu: i / 200,
-      mem: i / 200,
-    }));
-    for (let b = 0; b < BUCKETS; b++) {
-      r.sample(at + b * BUCKET_MS, inventory(nodes));
-    }
-    const end = at + (BUCKETS - 1) * BUCKET_MS;
-    expect(r.nodeNames()).toHaveLength(MEMORY_NODES);
-    const text = r.serialize(end);
-    expect(text.length).toBeLessThanOrEqual(MAX_METRICS_BYTES);
-    const stored = JSON.parse(text) as { s: { n: string }[] };
-    expect(stored.s).toHaveLength(MAX_NODES + 1);
-    expect(stored.s[0]!.n).toBe('');
-    // The busiest: the highest numbers.
-    expect(stored.s.slice(1).map((s) => s.n.slice(0, 3))).toEqual(
-      Array.from({ length: MAX_NODES }, (_, i) => String(199 - i).padStart(3, '0')),
-    );
-  });
+  // A full week of samples (2016 buckets) is slow under coverage instrumentation: allow for it.
+  it(
+    'stores the cluster and the busiest MAX_NODES nodes, under the size cap even with the longest names',
+    { timeout: 120_000 },
+    () => {
+      const r = new MetricsRecorder();
+      // More nodes than are kept in memory, so the selection is exercised, but no more than needed.
+      const count = MEMORY_NODES + 10;
+      const nodes = Array.from({ length: count }, (_, i) => ({
+        name: `${String(i).padStart(3, '0')}-${'n'.repeat(240)}`,
+        cpu: i / count,
+        mem: i / count,
+      }));
+      // One inventory for every sample: building 200 nodes 2016 times made this test take a minute under coverage.
+      const inv = inventory(nodes);
+      for (let b = 0; b < BUCKETS; b++) {
+        r.sample(at + b * BUCKET_MS, inv);
+      }
+      const end = at + (BUCKETS - 1) * BUCKET_MS;
+      expect(r.nodeNames()).toHaveLength(MEMORY_NODES);
+      const text = r.serialize(end);
+      expect(text.length).toBeLessThanOrEqual(MAX_METRICS_BYTES);
+      const stored = JSON.parse(text) as { s: { n: string }[] };
+      expect(stored.s).toHaveLength(MAX_NODES + 1);
+      expect(stored.s[0]!.n).toBe('');
+      // The busiest: the highest numbers.
+      expect(stored.s.slice(1).map((s) => s.n.slice(0, 3))).toEqual(
+        Array.from({ length: MAX_NODES }, (_, i) => String(count - 1 - i).padStart(3, '0')),
+      );
+    },
+  );
 
   it('keeps buckets it has over stored ones, takes the rest, and a restart within a bucket keeps its average', () => {
     const before = new MetricsRecorder();
