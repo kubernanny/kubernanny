@@ -83,7 +83,7 @@ The owner of a pod is resolved through its ReplicaSet (`<deployment>-<pod-templa
 
 - no known cause: the logs of the crashed run come first, the restart second, with a hint ("helps once you have fixed the cause, e.g. changed a Secret or a dependency is back");
 - the last run ended with `OOMKilled`: no restart, the cause names the limit;
-- a ConfigMap the container reads through `env` (`configMapKeyRef`) or `envFrom` changed after the container's last start: the restart comes first, and the cause says so ("ConfigMap app-config changed after the last start: a restart loads it right away"). The kubelet reads env from ConfigMaps at every container start, so the next attempt after the back-off would pick it up too; the restart does it now. Volume-mounted ConfigMaps update by themselves and are not counted. The agent reads only the metadata of those ConfigMaps (`PartialObjectMetadata`, never their data, at most 20 per run) and takes the newest managedFields time as the change time. That needs `get` on ConfigMaps, which comes with the `restart` action. **Secrets are not checked**: their metadata needs `get` on Secrets cluster-wide, which the chart never grants; the restart's hint names a changed Secret as the typical case instead.
+- a ConfigMap the container reads through `env` (`configMapKeyRef`) or `envFrom` changed after the container's last start: the restart comes first, and the cause says so ("ConfigMap app-config changed after the last start: a restart loads it right away"). The kubelet reads env from ConfigMaps at every container start, so the next attempt after the back-off would pick it up too; the restart does it now. Volume-mounted ConfigMaps update by themselves and are not counted. The agent reads only the metadata of those ConfigMaps (`PartialObjectMetadata`, never their data, at most 20 per run) and takes the newest managedFields time as the change time. That needs `get` on ConfigMaps cluster-wide, and RBAC cannot limit that to metadata, so this part is **opt-in**: `actions.enabled: [config-change-hint]`. Without it the crash loop always gets "logs first, restart second". **Secrets are never checked**: their metadata needs `get` on Secrets cluster-wide, which the chart never grants; the restart's hint names a changed Secret as the typical case instead.
 
 ### Volumes (`volumes`)
 
@@ -256,18 +256,19 @@ Every action belongs to an issue: the app names the issue and the action type, t
 | `argocd-sync`, `argocd-refresh` | yes | `argocd/…` | a plain sync, a hard refresh |
 | `cnpg-backup` | yes | `cnpg/<ns>/<cluster>/backup` | a CloudNativePG `Backup` |
 | `longhorn-backup` | yes | `longhorn/backup/<volume>` (attached volumes) | a Longhorn `Snapshot` and a `Backup` of it |
-| `velero-backup` | yes | `velero/<schedule>` | a Velero `Backup` from the schedule's template |
+| `velero-backup` | yes | `velero/<schedule>` | a Velero `Backup` from the schedule's template; not for a schedule with hooks, a resource policy or an order (the admission policy cannot compare those with the schedule) |
 | `reconcile-now` | yes | Flux Kustomization/HelmRelease, ExternalSecret, InfisicalStaticSecret, cert-manager Certificate issues | the controller's reconcile annotation; for a Certificate `cmctl renew` |
 | `uncordon` | yes | `nodes/<node>/cordoned` | `kubectl uncordon` |
 | `cleanup-pods` | yes | `pods/finished/<ns>` | deletes the finished pods listed (never a running one) |
 | `logs` | yes | crash loops, failed jobs, CNPG, etcd | reads the last 300 lines, changes nothing |
-| `job-rerun` | **opt-in** | `jobs/…` | a Job from the CronJob's template (`kubectl create job --from=cronjob/…`), or a copy of a failed stand-alone Job without its controller-uid labels and selector. Never for a Job another controller owns. |
+| `job-rerun` | **opt-in** | `jobs/…` | a Job from the CronJob's template (`kubectl create job --from=cronjob/…`), or a copy of a failed stand-alone Job without its controller-uid labels and selector. Never for a Job another controller owns, nor for one with host access or extra privileges. |
 | `force-delete-terminating` | **opt-in** | `pods/terminating/…` | deletes the pod with grace period 0. The confirmation warns that a StatefulSet pod could run twice if the node is in fact alive. |
 | `argocd-terminate-op` | **opt-in** | `argocd/<app>/operation-stuck` | ends the running operation |
 | `pvc-expand` | **opt-in** | `volumes/<ns>/<pvc>/full` | raises the storage request by a quarter; cannot be undone |
 | `argocd-rollback` | **opt-in** | the Argo CD sheet, no issue needed | below |
+| `config-change-hint` | **opt-in** | no button: the read behind the crash loop's restart offer | reads the metadata of the ConfigMaps a crash-looping container reads through env (above) |
 
-The opt-in ones need `actions.enabled: [<type>, …]` in the Helm values (env `ENABLED_ACTIONS`): each needs a permission a compromised agent pod could use for more than the action (create any Job, force-delete a terminating pod, end any running operation, grow any claim by half), see [SECURITY.md](SECURITY.md).
+The opt-in ones need `actions.enabled: [<type>, …]` in the Helm values (env `ENABLED_ACTIONS`): each needs a permission a compromised agent pod could use for more than the action (create Jobs, force-delete a terminating pod, end any running operation, grow any claim by half, read ConfigMaps), see [SECURITY.md](SECURITY.md).
 
 ## Integrations (when the component is detected and switched on)
 
@@ -389,7 +390,7 @@ Stats: node rebooting now, nodes waiting for a reboot (`kured_reboot_required`, 
 
 ### Velero (`velero`)
 
-Per schedule, the newest backup: `velero/<schedule>` critical on `Failed`, warning on `PartiallyFailed` or when older than 26 h *(config)*. Both offer **backup now** (`velero-backup`): the agent reads the Schedule and creates a Backup with its template, named `<schedule>-<timestamp>` and labelled `velero.io/schedule-name`, the same as `velero backup create --from-schedule`.
+Per schedule, the newest backup: `velero/<schedule>` critical on `Failed`, warning on `PartiallyFailed` or when older than 26 h *(config)*. Both offer **backup now** (`velero-backup`): the agent reads the Schedule and creates a Backup with its template, named `<schedule>-<timestamp>` and labelled `velero.io/schedule-name`, the same as `velero backup create --from-schedule`. A schedule whose template has `hooks`, a `resourcePolicy` or `orderedResources` is refused with a message (409 `VELERO_HOOKS`): the admission policy cannot compare those with the schedule, and hooks run commands in pods.
 
 ### Flux, External Secrets, Infisical
 

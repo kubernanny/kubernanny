@@ -64,6 +64,7 @@ What the tests guard beyond the logic itself:
 | `app/src/app/icons.spec.ts` | every icon the catalog names is registered |
 | `app/src/app/i18n/i18n.spec.ts` | the app's German and English dictionaries have the same keys and parameters |
 | CI step "RBAC follows the switches" | a module or action switched off in Helm loses its permissions |
+| `scripts/admission-policy-test/run.sh` (by hand; Go, Helm, kubectl, network) | the admission policies compile in a real kube-apiserver with the real CRDs, and allow and deny exactly what `requests.sh` says, as the agent's ServiceAccount |
 
 ## The demo in the app
 

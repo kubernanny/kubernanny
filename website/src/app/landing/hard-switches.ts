@@ -58,7 +58,7 @@ export const HARD_SWITCHES: HardSwitch[] = [
     default: [],
     removes: ['write', 'route'],
     detail:
-      'Five actions are off unless you name them here: argocd-rollback, job-rerun, force-delete-terminating, argocd-terminate-op, pvc-expand. Until then their routes answer 403, the chart grants no permission of their own and the admission policy has no branch that would allow them. On, every rollback is announced.',
+      'Five actions are off unless you name them here: argocd-rollback, job-rerun, force-delete-terminating, argocd-terminate-op, pvc-expand, and so is config-change-hint, the ConfigMap read behind the restart offer. Until then their routes answer 403, the chart grants no permission of their own and the admission policy has no branch that would allow them. On, every rollback is announced.',
   },
   {
     goal: 'Do not look into Argo CD',
