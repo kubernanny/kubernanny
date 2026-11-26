@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/kubernanny/kubernanny/security/advisories/new
+    about: Privately, please, not as an issue (SECURITY.md).
+  - name: Documentation
+    url: https://kubernanny.app/docs
+    about: Installation, every check, configuration, the relay and the security model.
