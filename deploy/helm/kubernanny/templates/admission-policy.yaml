@@ -268,10 +268,12 @@ spec:
       message: the Kubernanny agent may only create Backups
       reason: Forbidden
     # Whether the named cluster exists cannot be checked here (a policy sees
-    # only the request); CNPG fails a Backup of a missing cluster itself.
+    # only the request); CNPG fails a Backup of a missing cluster itself. The
+    # CRD defaults `method` to barmanObjectStore before the policy runs, so that
+    # value counts as "not set".
     - expression: >-
         object.spec.?cluster.?name.orValue('') != '' &&
-        object.spec.?method == optional.none() &&
+        object.spec.?method.orValue('barmanObjectStore') == 'barmanObjectStore' &&
         object.spec.?target == optional.none() &&
         object.spec.?online == optional.none() &&
         object.spec.?onlineConfiguration == optional.none() &&
@@ -406,7 +408,9 @@ spec:
       expression: request.userInfo.username == {{ $agent | quote }}
   variables:
     - name: labels
-      expression: object.metadata.?labels.orValue({})
+      expression: "request.operation == 'CREATE' ? object.metadata.?labels.orValue({}) : {}"
+    - name: containers
+      expression: "request.operation == 'CREATE' ? object.spec.template.spec.containers + object.spec.template.spec.?initContainers.orValue([]) : []"
   validations:
     - expression: request.operation == 'CREATE'
       message: the Kubernanny agent may only create Jobs
@@ -414,11 +418,24 @@ spec:
     # The template cannot be compared with the CronJob's here (a policy sees only the request);
     # that is why job-rerun is opt-in (docs/SECURITY.md).
     - expression: >-
-        variables.labels.?['app.kubernetes.io/created-by'] == optional.of('kubernanny') &&
+        variables.labels[?'app.kubernetes.io/created-by'] == optional.of('kubernanny') &&
         object.spec.?manualSelector.orValue(false) == false &&
-        (object.metadata.?ownerReferences.orValue([]).exists(o, o.kind == 'CronJob' && o.apiVersion == 'batch/v1' && o.?controller.orValue(false) == true) ||
-          'kubernanny.io/rerun-of' in variables.labels)
-      message: the Kubernanny agent may only create a Job run of a CronJob or a rerun of a failed Job
+        ((size(object.metadata.?ownerReferences.orValue([])) == 1 &&
+          object.metadata.ownerReferences.exists(o, o.kind == 'CronJob' && o.apiVersion == 'batch/v1' && o.?controller.orValue(false) == true)) ||
+          ('kubernanny.io/rerun-of' in variables.labels && size(object.metadata.?ownerReferences.orValue([])) == 0))
+      message: the Kubernanny agent may only create a Job run of a CronJob or a rerun of a failed Job without owner
+      reason: Forbidden
+    # No host access and no extra privileges, whatever the template says (the agent refuses such a rerun itself).
+    - expression: >-
+        object.spec.template.spec.?hostNetwork.orValue(false) == false &&
+        object.spec.template.spec.?hostPID.orValue(false) == false &&
+        object.spec.template.spec.?hostIPC.orValue(false) == false &&
+        object.spec.template.spec.?volumes.orValue([]).all(v, !has(v.hostPath)) &&
+        variables.containers.all(c,
+          c.?securityContext.?privileged.orValue(false) == false &&
+          c.?securityContext.?allowPrivilegeEscalation.orValue(false) == false &&
+          size(c.?securityContext.?capabilities.?add.orValue([])) == 0)
+      message: the Kubernanny agent may not create a Job with host access, privileged containers, privilege escalation or added capabilities
       reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1
@@ -572,7 +589,7 @@ spec:
       message: the Kubernanny agent may only create Longhorn snapshots and backups
       reason: Forbidden
     - expression: >-
-        variables.labels.?['app.kubernetes.io/created-by'] == optional.of('kubernanny') &&
+        variables.labels[?'app.kubernetes.io/created-by'] == optional.of('kubernanny') &&
         (request.resource.resource == 'snapshots'
           ? object.spec.?createSnapshot.orValue(false) == true && object.spec.?volume.orValue('') != ''
           : object.spec.?snapshotName.orValue('') != '' && 'backup-volume' in variables.labels && object.spec.?backupMode.orValue('incremental') != 'full')
@@ -614,9 +631,17 @@ spec:
       reason: Forbidden
     # Whether the spec equals the schedule's template cannot be checked here; Velero writes only to configured locations.
     - expression: >-
-        object.metadata.?labels.orValue({}).?['app.kubernetes.io/created-by'] == optional.of('kubernanny') &&
-        object.metadata.?labels.orValue({}).?['velero.io/schedule-name'].orValue('') != ''
+        object.metadata.?labels.orValue({})[?'app.kubernetes.io/created-by'] == optional.of('kubernanny') &&
+        object.metadata.?labels.orValue({})[?'velero.io/schedule-name'].orValue('') != ''
       message: the Kubernanny agent may only create a backup from a schedule
+      reason: Forbidden
+    # Hooks run commands in pods; a resource policy and an order steer what is read. None can be compared with
+    # the schedule here, so none is allowed: the agent does not back up a schedule that uses them.
+    - expression: >-
+        !has(object.spec.hooks) &&
+        !has(object.spec.resourcePolicy) &&
+        !has(object.spec.orderedResources)
+      message: the Kubernanny agent may not create a backup with hooks, a resource policy or an order
       reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1

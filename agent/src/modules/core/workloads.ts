@@ -115,7 +115,7 @@ export class WorkloadsCheck extends CoreCheck {
   readonly icon = 'cube-outline';
   readonly description = t('module.pods.description');
   readonly reads = [];
-  override readonly actions = ['restart', 'logs', 'job-rerun', 'cleanup-pods', 'force-delete-terminating'] as const;
+  override readonly actions = ['restart', 'logs', 'job-rerun', 'cleanup-pods', 'force-delete-terminating', 'config-change-hint'] as const;
 
   protected async check(ctx: ModuleContext): Promise<ModuleResult> {
     const podIssues = evaluatePods(ctx.inv.pods, ctx.now, ctx.restartOn ? await changedConfigMaps(ctx) : undefined);
@@ -151,8 +151,9 @@ const MAX_CONFIGMAP_READS = 20;
  * For each crash-looping pod that reads ConfigMaps through env/envFrom: the
  * first of them changed after the container last started. Reads only their
  * metadata (`PartialObjectMetadata`), never `data`; the change time is the
- * newest managedFields entry. Without the permission (restart off, older
- * chart) or on any error the pod simply gets no such hint.
+ * newest managedFields entry. Only with the opt-in `config-change-hint`
+ * (its `get` on ConfigMaps could read their data, which the agent never
+ * asks for). Without it, or on any error, the pod gets no such hint.
  */
 async function changedConfigMaps(ctx: ModuleContext): Promise<Map<string, string>> {
   const questions = configMapQuestions(ctx.inv.pods, ctx.now);

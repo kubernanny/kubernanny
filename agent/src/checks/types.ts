@@ -59,9 +59,12 @@ export type IssueActionType = IssueAction['type'];
 /**
  * Every action type with a switch: the ones issues offer, plus actions that
  * stand on their own (`argocd-rollback`, offered on the Argo CD sheet for any
- * manual-sync app, whether or not something is wrong with it).
+ * manual-sync app, whether or not something is wrong with it), plus
+ * `config-change-hint`: no button, but the read behind the crash loop's
+ * restart offer (whether a ConfigMap of the environment changed after the
+ * start), which needs `get` on ConfigMaps cluster-wide and is opt-in.
  */
-export type ActionType = IssueActionType | 'argocd-rollback';
+export type ActionType = IssueActionType | 'argocd-rollback' | 'config-change-hint';
 
 /**
  * Action types that stay locked until the deployment opts in (Helm
@@ -70,7 +73,7 @@ export type ActionType = IssueActionType | 'argocd-rollback';
  * than the action itself (create Jobs, force-delete pods, end an Argo CD
  * operation, grow volumes), see docs/SECURITY.md.
  */
-export const OPT_IN_ACTIONS: readonly ActionType[] = ['argocd-rollback', 'job-rerun', 'force-delete-terminating', 'argocd-terminate-op', 'pvc-expand'];
+export const OPT_IN_ACTIONS: readonly ActionType[] = ['argocd-rollback', 'job-rerun', 'force-delete-terminating', 'argocd-terminate-op', 'pvc-expand', 'config-change-hint'];
 
 export interface Issue {
   /** Stable across runs, so the app and the notifier can follow one problem. */

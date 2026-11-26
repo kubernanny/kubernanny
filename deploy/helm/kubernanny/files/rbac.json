@@ -353,6 +353,22 @@
         }
       ]
     },
+    "config-change-hint": {
+      "modules": [
+        "pods"
+      ],
+      "rules": [
+        {
+          "group": "",
+          "resources": [
+            "configmaps"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ]
+    },
     "force-delete-terminating": {
       "modules": [
         "pods"
@@ -506,15 +522,6 @@
           ],
           "verbs": [
             "patch"
-          ]
-        },
-        {
-          "group": "",
-          "resources": [
-            "configmaps"
-          ],
-          "verbs": [
-            "get"
           ]
         }
       ]
@@ -679,6 +686,7 @@
     "argocd-terminate-op",
     "cleanup-pods",
     "cnpg-backup",
+    "config-change-hint",
     "force-delete-terminating",
     "job-rerun",
     "logs",
@@ -692,6 +700,7 @@
   "optInActions": [
     "argocd-rollback",
     "argocd-terminate-op",
+    "config-change-hint",
     "force-delete-terminating",
     "job-rerun",
     "pvc-expand"

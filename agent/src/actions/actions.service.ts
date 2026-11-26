@@ -35,6 +35,42 @@ const JOB_CONTROLLER_LABELS = ['controller-uid', 'batch.kubernetes.io/controller
 
 const CREATED_BY = { 'app.kubernetes.io/created-by': 'kubernanny' };
 
+/** Fields of a Velero backup spec the admission policy denies to the agent; a schedule using them is not backed up from the app. */
+export const VELERO_REFUSED = ['hooks', 'resourcePolicy', 'orderedResources'] as const;
+
+interface PodSpecRisk {
+  hostNetwork?: boolean;
+  hostPID?: boolean;
+  hostIPC?: boolean;
+  volumes?: { hostPath?: unknown }[];
+  containers?: { securityContext?: { privileged?: boolean; allowPrivilegeEscalation?: boolean; capabilities?: { add?: string[] } } }[];
+  initContainers?: PodSpecRisk['containers'];
+}
+
+/**
+ * What the admission policy denies in a Job the agent creates: host namespaces, host paths, privileged
+ * containers, privilege escalation, added capabilities. A rerun of a Job that needs them is refused here
+ * already, with a message, rather than by the API server.
+ */
+export function riskyPodSpec(spec: PodSpecRisk | undefined): string | null {
+  if (!spec) {
+    return null;
+  }
+  if (spec.hostNetwork || spec.hostPID || spec.hostIPC) {
+    return 'hostNetwork/hostPID/hostIPC';
+  }
+  if ((spec.volumes ?? []).some((v) => v.hostPath !== undefined)) {
+    return 'hostPath';
+  }
+  for (const c of [...(spec.containers ?? []), ...(spec.initContainers ?? [])]) {
+    const sc = c.securityContext;
+    if (sc?.privileged || sc?.allowPrivilegeEscalation === true || (sc?.capabilities?.add ?? []).length > 0) {
+      return 'privileged/allowPrivilegeEscalation/capabilities.add';
+    }
+  }
+  return null;
+}
+
 const enc = encodeURIComponent;
 /** The newest part of a pod's log the app shows: Kubernetes cuts it (`limitBytes`), and the client refuses anything larger. */
 export const LOG_LIMIT_BYTES = 256 * 1024;
@@ -161,6 +197,12 @@ export class ActionsService {
         const base = `/apis/velero.io/v1/namespaces/${enc(action.namespace)}`;
         const schedule = await this.kube.get<{ spec?: { template?: Record<string, unknown> & { metadata?: { labels?: Record<string, string> } } } }>(`${base}/schedules/${enc(action.schedule)}`);
         const { metadata: templateMeta, ...spec } = schedule.spec?.template ?? {};
+        // Hooks run commands in pods, a resource policy and an order steer what is read: the admission policy
+        // cannot compare them with the schedule, so it denies them, and a schedule using them is not backed up from here.
+        const refused = VELERO_REFUSED.filter((field) => spec[field] !== undefined);
+        if (refused.length > 0) {
+          throw new ConflictException({ code: 'VELERO_HOOKS', message: t('error.veleroHooks', { schedule: action.schedule, fields: refused.join(', ') }) });
+        }
         // As `velero backup create --from-schedule`: the schedule's template, named <schedule>-<timestamp>, labelled with the schedule.
         const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
         await this.kube.create(`${base}/backups`, {
@@ -208,6 +250,7 @@ export class ActionsService {
     if (action.from === 'CronJob') {
       const cron = await this.kube.get<{ metadata: Meta; spec?: { jobTemplate?: { metadata?: Meta; spec?: Record<string, unknown> } } }>(`${base}/cronjobs/${enc(action.name)}`);
       const template = cron.spec?.jobTemplate;
+      this.refuseRisky(action.name, (template?.spec as { template?: { spec?: PodSpecRisk } } | undefined)?.template?.spec);
       await this.kube.create(`${base}/jobs`, {
         apiVersion: 'batch/v1',
         kind: 'Job',
@@ -228,6 +271,7 @@ export class ActionsService {
     }
     const without = (labels: Record<string, string> | undefined) => Object.fromEntries(Object.entries(labels ?? {}).filter(([k]) => !JOB_CONTROLLER_LABELS.includes(k)));
     const { selector: _selector, manualSelector: _manual, template, ...spec } = job.spec ?? {};
+    this.refuseRisky(action.name, (template as { spec?: PodSpecRisk } | undefined)?.spec);
     await this.kube.create(`${base}/jobs`, {
       apiVersion: 'batch/v1',
       kind: 'Job',
@@ -235,6 +279,13 @@ export class ActionsService {
       spec: { ...spec, template: { ...template, metadata: { ...template?.metadata, labels: without(template?.metadata?.labels) } } },
     });
     return t('action.done.jobRerun', { job: action.name });
+  }
+
+  private refuseRisky(name: string, spec: PodSpecRisk | undefined): void {
+    const risky = riskyPodSpec(spec);
+    if (risky) {
+      throw new ConflictException({ code: 'JOB_PRIVILEGED', message: t('error.jobPrivileged', { job: name, what: risky }) });
+    }
   }
 
   private async reconcile(action: Extract<IssueAction, { type: 'reconcile-now' }>): Promise<Text> {

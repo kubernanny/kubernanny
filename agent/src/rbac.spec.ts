@@ -117,7 +117,13 @@ describe('declared reads of the modules', () => {
     const install = clusterRoleOnly(join(__dirname, '../../deploy/install.yaml'));
     const chart = chartRules();
     expect([...install].filter((r) => !chart.has(r))).toEqual([]);
-    expect([...chart].filter((r) => !install.has(r))).toEqual([]);
+    // install.yaml has the chart's defaults: a resource only an opt-in action touches is not in it.
+    const generated = rbacExport();
+    const optInOnly = new Set(
+      generated.optInActions.flatMap((type) => generated.actions[type]!.rules.flatMap((r) => r.resources.map((x) => `${r.group}/${x}`))).filter((r) => !install.has(r)),
+    );
+    expect([...optInOnly]).toEqual(['/configmaps']);
+    expect([...chart].filter((r) => !install.has(r) && !optInOnly.has(r))).toEqual([]);
   });
 
   it('gives every action type a permission line, and only the declared modules offer it', () => {
@@ -129,6 +135,7 @@ describe('declared reads of the modules', () => {
       'argocd-terminate-op',
       'cleanup-pods',
       'cnpg-backup',
+      'config-change-hint',
       'force-delete-terminating',
       'job-rerun',
       'logs',
@@ -141,7 +148,10 @@ describe('declared reads of the modules', () => {
     ]);
     // The rollback shares the sync's verb; what it adds is an admission branch, and only on opt-in.
     expect(generated.actions['argocd-rollback']!.rules).toEqual(generated.actions['argocd-sync']!.rules);
-    expect(generated.optInActions).toEqual(['argocd-rollback', 'argocd-terminate-op', 'force-delete-terminating', 'job-rerun', 'pvc-expand']);
+    expect(generated.optInActions).toEqual(['argocd-rollback', 'argocd-terminate-op', 'config-change-hint', 'force-delete-terminating', 'job-rerun', 'pvc-expand']);
+    // The restart itself reads nothing beyond the inventory: ConfigMaps only with the opt-in hint.
+    expect(generated.actions['restart']!.rules.flatMap((r) => r.resources)).toEqual(['deployments', 'statefulsets', 'daemonsets']);
+    expect(generated.actions['config-change-hint']).toEqual({ modules: ['pods'], rules: [{ group: '', resources: ['configmaps'], verbs: ['get'] }] });
     expect(generated.actions['argocd-terminate-op']!.rules).toEqual(generated.actions['argocd-sync']!.rules);
     expect(generated.actions['uncordon']!.modules).toEqual(['nodes']);
     expect(generated.actions['reconcile-now']!.modules).toEqual(['cert-manager', 'external-secrets', 'flux', 'infisical']);

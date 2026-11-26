@@ -14,11 +14,10 @@ export interface Rule {
  * while the action is enabled (`actions.disabled`, `rbac.allowActions`).
  */
 export const ACTION_PERMISSIONS: Record<ActionType, Rule[]> = {
-  // `get` on ConfigMaps (metadata only, never listed) tells whether one a crashing pod reads through env changed after its start.
-  restart: [
-    { group: 'apps', resources: ['deployments', 'statefulsets', 'daemonsets'], verbs: ['patch'] },
-    { group: '', resources: ['configmaps'], verbs: ['get'] },
-  ],
+  restart: [{ group: 'apps', resources: ['deployments', 'statefulsets', 'daemonsets'], verbs: ['patch'] }],
+  // Opt-in, a read: whether a ConfigMap a crashing pod reads through env changed after its start. The agent asks
+  // for metadata only, but RBAC cannot limit `get` to metadata: the grant could read every ConfigMap's data.
+  'config-change-hint': [{ group: '', resources: ['configmaps'], verbs: ['get'] }],
   'argocd-sync': [{ group: 'argoproj.io', resources: ['applications'], verbs: ['patch'] }],
   'argocd-refresh': [{ group: 'argoproj.io', resources: ['applications'], verbs: ['patch'] }],
   // The same verb as a sync: what a rollback adds is a branch of the admission policy, not RBAC.

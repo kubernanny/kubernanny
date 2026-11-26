@@ -75,7 +75,7 @@ const CASES: { action: IssueAction; objects?: Record<string, unknown> }[] = [
 describe('the issue actions (target from the issue, never from the request)', () => {
   it.each(CASES.map((c) => [c.action.type, c] as const))('%s refuses when switched off, and when no open issue offers it, without touching the cluster', async (_type, c) => {
     const off = service(c.action, { off: [c.action.type], objects: c.objects });
-    expect(await code(off.actions.run('x/issue', c.action.type, 0, { id: 'd1', name: 'phone' }))).toBe('ACTION_DISABLED');
+    expect(await code(off.actions.run('x/issue', c.action.type, 0, { id: 'd1', name: 'phone' } as never))).toBe('ACTION_DISABLED');
     expect(off.kube.calls).toEqual([]);
     const gone = service(c.action, { noIssue: true, objects: c.objects });
     expect(await code(gone.actions.run('x/issue', c.action.type))).toBe('ISSUE_GONE');
@@ -220,6 +220,35 @@ describe('the issue actions (target from the issue, never from the request)', ()
     expect(write!.body.metadata.name).toMatch(/^daily-apps-\d{14}$/);
     expect(write!.body.metadata.labels).toEqual({ tier: 'apps', 'app.kubernetes.io/created-by': 'kubernanny', 'velero.io/schedule-name': 'daily-apps' });
     expect(write!.body.spec).toEqual({ includedNamespaces: ['default'], ttl: '720h0m0s' });
+  });
+
+  it('velero-backup refuses a schedule with hooks, a resource policy or an order (the admission policy denies them)', async () => {
+    for (const field of ['hooks', 'resourcePolicy', 'orderedResources']) {
+      const { kube, actions } = service(
+        { type: 'velero-backup', namespace: 'velero', schedule: 'db' },
+        { objects: { '/apis/velero.io/v1/namespaces/velero/schedules/db': { spec: { template: { [field]: {} } } } } },
+      );
+      expect(await code(actions.run('x/issue', 'velero-backup'))).toBe('VELERO_HOOKS');
+      expect(kube.writes()).toEqual([]);
+    }
+  });
+
+  it('job-rerun refuses a template with host access or extra privileges (the admission policy denies them)', async () => {
+    const risky = [
+      { hostNetwork: true, containers: [] },
+      { volumes: [{ name: 'h', hostPath: { path: '/' } }], containers: [] },
+      { containers: [{ name: 'c', securityContext: { privileged: true } }] },
+      { containers: [{ name: 'c', securityContext: { allowPrivilegeEscalation: true } }] },
+      { initContainers: [{ name: 'i', securityContext: { capabilities: { add: ['NET_ADMIN'] } } }], containers: [] },
+    ];
+    for (const spec of risky) {
+      const { kube, actions } = service(
+        { type: 'job-rerun', namespace: 'ns', from: 'CronJob', name: 'nightly' },
+        { objects: { '/apis/batch/v1/namespaces/ns/cronjobs/nightly': { metadata: { name: 'nightly', uid: 'u' }, spec: { jobTemplate: { spec: { template: { spec } } } } } } },
+      );
+      expect(await code(actions.run('x/issue', 'job-rerun')), JSON.stringify(spec)).toBe('JOB_PRIVILEGED');
+      expect(kube.writes()).toEqual([]);
+    }
   });
 
   it('argocd-terminate-op sets the running operation to Terminating, and refuses once it no longer runs', async () => {

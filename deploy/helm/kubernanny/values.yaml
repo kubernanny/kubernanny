@@ -149,6 +149,10 @@ actions:
   # - argocd-terminate-op: end an Argo CD sync running for over 30 minutes.
   #   No new RBAC verb, an extra admission branch.
   # - pvc-expand: grow an almost full volume by a quarter. Cannot be undone.
+  # - config-change-hint: no button. Lets a crash loop's restart offer check
+  #   whether a ConfigMap of its environment changed after the start. Needs
+  #   get on ConfigMaps cluster-wide (the agent reads metadata only, but the
+  #   permission reaches their data).
   # actions.disabled and rbac.allowActions: false win over this list.
   # Leave it empty unless you need them.
   enabled: []

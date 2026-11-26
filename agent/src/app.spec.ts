@@ -376,15 +376,12 @@ describe('agent against the demo cluster', () => {
       method: 'POST',
       path: '/apis/longhorn.io/v1beta2/namespaces/longhorn-system/backups',
     });
-    // The crash loop whose ConfigMap changed offers the restart as the fix.
+    // Without the opt-in config-change-hint no ConfigMap is read: the crash loop offers logs first, the restart second.
     const status = (await tablet.get('/status', 200)).body;
-    expect(status.issues.find((i: { id: string }) => i.id === 'pods/default/Deployment/newsletter-worker').actions[0]).toEqual({
-      type: 'restart',
-      kind: 'Deployment',
-      namespace: 'default',
-      name: 'newsletter-worker',
-      changed: { kind: 'ConfigMap', name: 'newsletter-config' },
-    });
+    expect(status.issues.find((i: { id: string }) => i.id === 'pods/default/Deployment/newsletter-worker').actions.map((a: { type: string; secondary?: boolean }) => [a.type, a.secondary ?? false])).toEqual([
+      ['logs', false],
+      ['restart', true],
+    ]);
     // Opt-in actions stay locked outside the demo: no rerun, force delete, terminate or growth is offered.
     const offered = status.issues.flatMap((i: { actions: { type: string }[] }) => i.actions.map((a) => a.type));
     for (const type of ['job-rerun', 'force-delete-terminating', 'argocd-terminate-op', 'pvc-expand']) {
@@ -420,6 +417,7 @@ describe('agent against the demo cluster', () => {
       'force-delete-terminating',
       'argocd-terminate-op',
       'pvc-expand',
+      'config-change-hint',
       'logs',
     ]);
     // Opt-in: locked until the deployment names it, and the app cannot switch it on.

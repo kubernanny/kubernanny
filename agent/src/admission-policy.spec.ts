@@ -78,6 +78,19 @@ describe('admission policy for the agent (security review M4)', () => {
     expect(template).toContain('{{- $terminate := has "argocd-terminate-op" $writes }}');
   });
 
+  it('denies Velero hooks, and host access or privileges in a rerun Job', () => {
+    const velero = JSON.stringify(policies.find((p) => p.metadata.name === 'kubernanny-velero-backups'));
+    for (const field of ['hooks', 'resourcePolicy', 'orderedResources']) {
+      expect(velero).toContain(`!has(object.spec.${field})`);
+    }
+    const template = chart('templates/admission-policy.yaml');
+    for (const check of ['hostNetwork.orValue(false) == false', 'all(v, !has(v.hostPath))', 'privileged.orValue(false) == false', 'allowPrivilegeEscalation.orValue(false) == false', 'capabilities.?add.orValue([])) == 0']) {
+      expect(template).toContain(check);
+    }
+    // CEL's optional map index is m[?'key']; m.?['key'] does not compile in an API server.
+    expect(template).not.toContain(".?['");
+  });
+
   it('holds uncordon to spec.unschedulable and a renew to the Issuing condition', () => {
     const nodes = JSON.stringify(policies.find((p) => p.metadata.name === 'kubernanny-nodes'));
     expect(nodes).toContain("oldObject.spec.?unschedulable.orValue(false) == true");
@@ -136,6 +149,7 @@ describe('chart hardening (security review H3, M1, M2, LOW)', () => {
       'argocd-terminate-op',
       'cleanup-pods',
       'cnpg-backup',
+      'config-change-hint',
       'force-delete-terminating',
       'job-rerun',
       'logs',

@@ -112,11 +112,7 @@ rules:
   - apiGroups: [traefik.io, traefik.containo.us]
     resources: [ingressroutes]
     verbs: [get, list]
-  # The actions that are on by default (docs/PERMISSIONS.md). restart: the
-  # metadata of ConfigMaps a crashing pod reads through env (never listed).
-  - apiGroups: [""]
-    resources: [configmaps]
-    verbs: [get]
+  # The actions that are on by default (docs/PERMISSIONS.md).
   # uncordon (held to spec.unschedulable by the admission policy).
   - apiGroups: [""]
     resources: [nodes]
@@ -465,10 +461,12 @@ spec:
       message: the Kubernanny agent may only create Backups
       reason: Forbidden
     # Whether the named cluster exists cannot be checked here (a policy sees
-    # only the request); CNPG fails a Backup of a missing cluster itself.
+    # only the request); CNPG fails a Backup of a missing cluster itself. The
+    # CRD defaults `method` to barmanObjectStore before the policy runs, so that
+    # value counts as "not set".
     - expression: >-
         object.spec.?cluster.?name.orValue('') != '' &&
-        object.spec.?method == optional.none() &&
+        object.spec.?method.orValue('barmanObjectStore') == 'barmanObjectStore' &&
         object.spec.?target == optional.none() &&
         object.spec.?online == optional.none() &&
         object.spec.?onlineConfiguration == optional.none() &&
@@ -501,7 +499,7 @@ spec:
       message: the Kubernanny agent may only create Longhorn snapshots and backups
       reason: Forbidden
     - expression: >-
-        variables.labels.?['app.kubernetes.io/created-by'] == optional.of('kubernanny') &&
+        variables.labels[?'app.kubernetes.io/created-by'] == optional.of('kubernanny') &&
         (request.resource.resource == 'snapshots'
           ? object.spec.?createSnapshot.orValue(false) == true && object.spec.?volume.orValue('') != ''
           : object.spec.?snapshotName.orValue('') != '' && 'backup-volume' in variables.labels && object.spec.?backupMode.orValue('incremental') != 'full')
@@ -797,9 +795,17 @@ spec:
       reason: Forbidden
     # Whether the spec equals the schedule's template cannot be checked here; Velero writes only to configured locations.
     - expression: >-
-        object.metadata.?labels.orValue({}).?['app.kubernetes.io/created-by'] == optional.of('kubernanny') &&
-        object.metadata.?labels.orValue({}).?['velero.io/schedule-name'].orValue('') != ''
+        object.metadata.?labels.orValue({})[?'app.kubernetes.io/created-by'] == optional.of('kubernanny') &&
+        object.metadata.?labels.orValue({})[?'velero.io/schedule-name'].orValue('') != ''
       message: the Kubernanny agent may only create a backup from a schedule
+      reason: Forbidden
+    # Hooks run commands in pods; a resource policy and an order steer what is read. None can be compared with
+    # the schedule here, so none is allowed: the agent does not back up a schedule that uses them.
+    - expression: >-
+        !has(object.spec.hooks) &&
+        !has(object.spec.resourcePolicy) &&
+        !has(object.spec.orderedResources)
+      message: the Kubernanny agent may not create a backup with hooks, a resource policy or an order
       reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1

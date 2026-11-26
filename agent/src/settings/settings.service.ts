@@ -44,6 +44,7 @@ export const ACTION_TYPES: readonly { type: ActionType; label: Text; description
   action('force-delete-terminating', true),
   action('argocd-terminate-op', true),
   action('pvc-expand', true),
+  action('config-change-hint', false),
   action('logs', false),
 ];
 

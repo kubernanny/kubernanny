@@ -29,7 +29,7 @@ export const INVENTORY_READS: readonly ExplainedRule[] = [
   { group: 'traefik.containo.us', resources: ['ingressroutes'], verbs: ['get', 'list'], why: 'the same, older Traefik API group' },
 ];
 
-export type WriteActionType = Exclude<ActionType, 'logs'>;
+export type WriteActionType = Exclude<ActionType, 'logs' | 'config-change-hint'>;
 
 /** What each write action changes, exactly as `actions/actions.service.ts` (`actions/rollback.service.ts`) sends it (the spec checks the strings are there). */
 /**
@@ -41,7 +41,7 @@ export type WriteActionType = Exclude<ActionType, 'logs'>;
 export const WRITE_EFFECTS: Record<WriteActionType, { changes: string; marker: string; admission: string }> = {
   restart: {
     changes:
-      'merge patch of `spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"]` on the Deployment, StatefulSet or DaemonSet the issue names: the same as `kubectl rollout restart`. Also `get` on ConfigMaps: for a crash-looping pod, the metadata (never the data, `PartialObjectMetadata`) of the ConfigMaps it reads through env/envFrom, to tell whether one changed after its last start',
+      'merge patch of `spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"]` on the Deployment, StatefulSet or DaemonSet the issue names: the same as `kubectl rollout restart`. With the opt-in `config-change-hint` the restart of a crash loop whose env ConfigMap changed after the last start is offered first, as the fix',
     marker: 'kubectl.kubernetes.io/restartedAt',
     admission: 'only an UPDATE that changes nothing but that annotation (spec, template spec and labels, the other annotations, metadata compared); no create, no delete',
   },
@@ -65,7 +65,7 @@ export const WRITE_EFFECTS: Record<WriteActionType, { changes: string; marker: s
   'cnpg-backup': {
     changes: 'creates one `Backup` object (`generateName: <cluster>-kubernanny-`, label `app.kubernetes.io/created-by: kubernanny`) for the database cluster the issue names: the same as `kubectl cnpg backup`',
     marker: "kind: 'Backup'",
-    admission: 'only CREATE of a Backup naming a cluster, without `method`, `target`, `online`, `onlineConfiguration` or `pluginConfiguration`; whether the cluster exists is not checked (CNPG fails such a Backup)',
+    admission: 'only CREATE of a Backup naming a cluster, without `target`, `online`, `onlineConfiguration` or `pluginConfiguration`, and with `method` at most the default the CRD fills in (`barmanObjectStore`); whether the cluster exists is not checked (CNPG fails such a Backup)',
   },  uncordon: {
     changes: 'merge patch of `spec.unschedulable: false` on the node the issue names (Ready, cordoned for 30 minutes, no kured lock, no drain under way): the same as `kubectl uncordon`',
     marker: '{ spec: { unschedulable: false } }',
@@ -76,7 +76,7 @@ export const WRITE_EFFECTS: Record<WriteActionType, { changes: string; marker: s
       'off unless named in `actions.enabled`. Creates one Job: from the jobTemplate of the CronJob the issue names, owned by it and annotated `cronjob.kubernetes.io/instantiate: manual` (like `kubectl create job --from=cronjob/…`), or a copy of a failed Job without owner, without its controller-uid labels and selector, labelled `kubernanny.io/rerun-of`',
     marker: "'cronjob.kubernetes.io/instantiate': 'manual'",
     admission:
-      'only CREATE of a Job labelled `app.kubernetes.io/created-by: kubernanny` that is either owned by a CronJob (`controller: true`) or carries `kubernanny.io/rerun-of`, with no selector of its own. The policy cannot compare the pod template with the CronJob (it sees only the request): a compromised pod could create a Job with any template, which is why the action is opt-in',
+      'only CREATE of a Job labelled `app.kubernetes.io/created-by: kubernanny` that is either owned by exactly one CronJob (`controller: true`) or carries `kubernanny.io/rerun-of` and no owner, without `manualSelector`, and whose pod template has no hostNetwork, hostPID, hostIPC or hostPath volume and no container that is privileged, allows privilege escalation or adds capabilities (the agent refuses to rerun such a Job itself). The policy cannot compare the rest of the template, image and ServiceAccount included, with the CronJob (it sees only the request): a compromised pod could still run any image as any ServiceAccount of any namespace, without host access, which is why the action is opt-in',
   },
   'reconcile-now': {
     changes:
@@ -104,7 +104,7 @@ export const WRITE_EFFECTS: Record<WriteActionType, { changes: string; marker: s
   'velero-backup': {
     changes: 'reads the Velero `Schedule` the issue names and creates one `Backup` with its template, named `<schedule>-<timestamp>` and labelled `velero.io/schedule-name`: the same as `velero backup create --from-schedule`',
     marker: "'velero.io/schedule-name': action.schedule",
-    admission: 'only CREATE of a Backup labelled with a schedule name and `app.kubernetes.io/created-by: kubernanny`. The policy cannot compare it with the schedule; Velero writes it only to the storage locations already configured',
+    admission: 'only CREATE of a Backup labelled with a schedule name and `app.kubernetes.io/created-by: kubernanny`, without `hooks` (commands run in pods), `resourcePolicy` or `orderedResources`; the agent does not back up a schedule that uses them. The rest cannot be compared with the schedule (which namespaces and resources); Velero writes only to the storage locations already configured',
   },
   'argocd-terminate-op': {
     changes:
