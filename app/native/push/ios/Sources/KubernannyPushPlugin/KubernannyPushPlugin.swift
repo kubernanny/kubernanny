@@ -18,8 +18,10 @@ import UserNotifications
 /// extension never sees them (decisions/0007-native-push.md).
 ///
 /// The person's authenticity marker (app/src/app/core/push/push-marker.ts)
-/// is an item of the same group, account `marker`: the extension prefixes
-/// every title it opened with it. It never leaves the phone.
+/// is an item of the same group, account `marker`: while it exists the
+/// extension prefixes every title it opened with it. It is an optional
+/// setting, off by default: off means no item (`removeMarker`). It never
+/// leaves the phone.
 ///
 /// A tap on a push reaches the app as `pushTapped` with the key id the
 /// extension left in `userInfo`; the app resolves it to its own cluster id
@@ -40,7 +42,8 @@ public class KubernannyPushPlugin: CAPPlugin, CAPBridgedPlugin, NotificationHand
         CAPPluginMethod(name: "storeKey", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "removeKey", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getMarker", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "setMarker", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "setMarker", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "removeMarker", returnType: CAPPluginReturnPromise)
     ]
 
     /// Keep in step with `PushKeys.swift` in the extension.
@@ -160,6 +163,16 @@ public class KubernannyPushPlugin: CAPPlugin, CAPBridgedPlugin, NotificationHand
             call.resolve()
         } else {
             call.reject("cannot store the marker (\(status))")
+        }
+    }
+
+    /// The setting turned off: no item, so the extension shows titles as they are.
+    @objc func removeMarker(_ call: CAPPluginCall) {
+        let status = SecItemDelete(query(Self.markerAccount) as CFDictionary)
+        if status == errSecSuccess || status == errSecItemNotFound {
+            call.resolve()
+        } else {
+            call.reject("cannot remove the marker (\(status))")
         }
     }
 

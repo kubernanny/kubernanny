@@ -534,11 +534,21 @@ export const de = {
     markerAnother: 'Neu ziehen',
     markerOn:
       'Dein Zeichen: {{marker}}. Ein Push ohne dieses Zeichen kommt nicht von deinem Cluster.',
-    markerMissing:
-      'Noch kein Zeichen gewählt. Damit erkennst du, ob ein Push von deinem Cluster kommt oder von jemand anderem.',
     markerChange: 'Zeichen ändern',
-    markerChoose: 'Zeichen wählen',
     markerSaved: 'Zeichen auf diesem Gerät gespeichert.',
+    markerRemoved: 'Zeichen entfernt. Pushes erscheinen ab jetzt ohne.',
+    advanced: 'Erweitert',
+    markerToggle: 'Erkennungszeichen vor jedem Push',
+    markerOff: 'Aus. Pushes erscheinen ohne Zeichen.',
+    markerWhy: 'Wozu?',
+    markerWhyForge:
+      'Wer das Firebase-Dienstkonto des Relays hat, kann diesem Telefon eine Mitteilung mit beliebigem Text zeigen, ohne dass Kubernanny sie öffnet. Beim öffentlichen Relay ist das sein Betreiber, oder wer diesen Schlüssel stiehlt.',
+    markerWhySealed:
+      'Die Pushes von Kubernanny selbst sind versiegelt und signiert. Ein gefälschter Push kann darum nie echte Daten deines Clusters enthalten oder etwas auslösen. Er könnte aber ein falsches „alles in Ordnung“ oder einen Phishing-Text im Aussehen von Kubernanny zeigen.',
+    markerWhySign:
+      'Das Zeichen macht echte Pushes erkennbar: Nur dein Telefon kennt es. Beginnt ein Push damit, kommt er von deinem Cluster.',
+    markerWhyNotNeeded:
+      'Nicht nötig ist es, wenn du ein eigenes Relay mit eigenem Firebase-Projekt betreibst. Und Studien zeigen, dass kaum jemand bemerkt, wenn so ein Zeichen fehlt (Schechter u. a., 2007). Darum ist es standardmäßig aus.',
     deadmanTitle: 'Warnen, wenn der Agent schweigt',
     deadmanHint:
       'Antwortet Kubernanny nicht mehr (Cluster oder Agent ausgefallen), schickt das Relay diesem Telefon eine Nachricht, die es versiegelt hinterlegt hat und nicht lesen kann.',

@@ -13,12 +13,21 @@ export interface PushVM {
   action: 'enable' | 'disable' | null;
   actionLabel: string;
   canTest: boolean;
-  /** While push is on: the person's authenticity marker, or a nudge to choose one (push-marker.ts). */
-  markerLine: string;
-  /** "Change sign" / "Choose a sign"; empty when there is nothing to change. */
-  markerActionLabel: string;
+  /** The optional sign before each push, under "Advanced"; only while push is on for this device. */
+  sign: SignVM | null;
   /** "Warn when the agent goes silent"; only while push is on for this device. */
   deadman: DeadmanVM | null;
+}
+
+/**
+ * "Identification sign before each push" (push-marker.ts, docs/NOTIFICATIONS.md,
+ * "Is this push real?"). Off by default; on exactly when this device keeps a
+ * sign, which is also what the iOS extension and the Android service read.
+ */
+export interface SignVM {
+  on: boolean;
+  /** On: "Your sign: 🦉🌵🔑. …"; off: what off means. */
+  line: string;
 }
 
 export interface DeadmanVM {
@@ -39,8 +48,7 @@ const HIDDEN: PushVM = {
   action: null,
   actionLabel: '',
   canTest: false,
-  markerLine: '',
-  markerActionLabel: '',
+  sign: null,
   deadman: null,
 };
 
@@ -102,8 +110,10 @@ export function pushView(
       action: 'disable',
       actionLabel: tr.t('push.disable'),
       canTest: agent.relay,
-      markerLine: marker ? tr.t('push.markerOn', { marker }) : tr.t('push.markerMissing'),
-      markerActionLabel: tr.t(marker ? 'push.markerChange' : 'push.markerChoose'),
+      sign: {
+        on: !!marker,
+        line: marker ? tr.t('push.markerOn', { marker }) : tr.t('push.markerOff'),
+      },
       deadman: deadmanView(agent, tr),
     };
   }

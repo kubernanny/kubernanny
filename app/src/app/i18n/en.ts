@@ -527,11 +527,21 @@ export const en: Dictionary = {
     markerInvalid: 'Three to 12 characters, no line breaks.',
     markerAnother: 'Another draw',
     markerOn: 'Your sign: {{marker}}. A push without it did not come from your cluster.',
-    markerMissing:
-      'No sign chosen yet. With one you can tell a push from your cluster from one someone else sent.',
     markerChange: 'Change sign',
-    markerChoose: 'Choose a sign',
     markerSaved: 'Sign saved on this device.',
+    markerRemoved: 'Sign removed. Pushes show without it from now on.',
+    advanced: 'Advanced',
+    markerToggle: 'Identification sign before each push',
+    markerOff: 'Off. Pushes show without a sign.',
+    markerWhy: 'Why?',
+    markerWhyForge:
+      "Whoever holds the relay's Firebase service account can make this phone show a notification with any text, without Kubernanny opening it. For the public relay that is its operator, or anyone who steals that key.",
+    markerWhySealed:
+      'Kubernanny\'s own pushes are sealed and signed, so a forged one can never carry real data from your cluster or trigger anything. It could still show a fake "all fine" or a phishing text that looks like Kubernanny.',
+    markerWhySign:
+      'The sign tells real pushes apart: only your phone knows it, so a push that starts with it came from your cluster.',
+    markerWhyNotNeeded:
+      'You do not need it if you run your own relay with your own Firebase project. And research shows that people rarely notice when such a sign is missing (Schechter et al., 2007), which is why it is off by default.',
     deadmanTitle: 'Warn when the agent goes silent',
     deadmanHint:
       'If Kubernanny stops answering (the cluster or the agent is down), the relay sends this phone a message it holds sealed, without being able to read it.',

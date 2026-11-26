@@ -56,24 +56,32 @@ describe('the marker in the push section', () => {
   };
   const native = { available: true, platform: 'android' as const };
 
-  it('shows the marker while push is on, and nudges to choose one when there is none', () => {
-    expect(pushView({ demo: false, native, agent, marker: '🦉' }, en)).toMatchObject({
-      markerLine: expect.stringContaining('🦉'),
-      markerActionLabel: 'Change sign',
+  it('offers the sign as a setting while push is on: on with a stored sign, off without one (the default)', () => {
+    expect(pushView({ demo: false, native, agent, marker: '🦉' }, en).sign).toEqual({
+      on: true,
+      line: expect.stringContaining('🦉'),
     });
-    expect(pushView({ demo: false, native, agent, marker: null }, en)).toMatchObject({
-      markerLine: expect.stringContaining('No sign'),
-      markerActionLabel: 'Choose a sign',
+    expect(pushView({ demo: false, native, agent, marker: null }, en).sign).toEqual({
+      on: false,
+      line: 'Off. Pushes show without a sign.',
     });
+  });
+
+  it('turning push on never depends on a sign', () => {
+    expect(
+      pushView({ demo: false, native, agent: { ...agent, registered: false }, marker: null }, en),
+    ).toMatchObject({ action: 'enable', actionLabel: 'Push to this device' });
   });
 
   it('says nothing about it while push is off', () => {
     expect(
-      pushView({ demo: false, native, agent: { ...agent, registered: false }, marker: '🦉' }, en),
-    ).toMatchObject({ markerLine: '', markerActionLabel: '' });
+      pushView({ demo: false, native, agent: { ...agent, registered: false }, marker: '🦉' }, en)
+        .sign,
+    ).toBeNull();
     expect(
-      pushView({ demo: false, native, agent: { ...agent, state: 'locked' }, marker: '🦉' }, en),
-    ).toMatchObject({ markerLine: '', markerActionLabel: '' });
+      pushView({ demo: false, native, agent: { ...agent, state: 'locked' }, marker: '🦉' }, en)
+        .sign,
+    ).toBeNull();
   });
 });
 

@@ -23,7 +23,8 @@ import org.json.JSONObject;
  * last one shown for that key (PushFreshness).
  * Runs without the app's WebView. A message that does not open is dropped:
  * this service shows nothing the agent did not write, and what it shows
- * carries the person's authenticity marker (PushMarker). Someone holding the
+ * carries the person's authenticity marker (PushMarker) when they turned it
+ * on (optional, off by default: no stored marker, no prefix). Someone holding the
  * relay's Firebase credentials can still have the system show an FCM
  * *notification* message without this code; that one has no marker.
  *

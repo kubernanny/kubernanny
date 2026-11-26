@@ -83,7 +83,13 @@ async function closeReadyToSync(page, labels) {
   await page.waitForTimeout(700);
 }
 
-/** Cluster settings, "Push to this device" tapped: the sign picker with its preview. */
+/**
+ * Cluster settings, the push section. Turning push on asks for nothing more
+ * since the sign before each push became optional (docs/NOTIFICATIONS.md, "Is
+ * this push real?"), and a demo agent registers push only for a paired
+ * device, never for the demo visitor this script pairs as: so the section is
+ * shown before the tap, with the sealing explained.
+ */
 async function showPush(page) {
   await openCluster(page, 'homelab');
   // openCluster reloads the page; the native platform is played from here on, for the settings page only.
@@ -92,17 +98,8 @@ async function showPush(page) {
   });
   await page.locator('.ion-page:not(.ion-page-hidden) ion-button:has(ion-icon[name="settings-outline"])').first().click();
   await page.waitForSelector('app-push-section ion-button', { timeout: 15000 });
-  await page.locator('app-push-section ion-button').first().click();
-  await page.waitForSelector('app-push-marker-picker', { timeout: 5000 });
   await page.waitForTimeout(400);
   await scrollToTop(page, 'app-push-section');
-  // On a short screen (Play's 16:9 phone) the preview of a push matters more than the section's intro.
-  await page.locator('app-push-marker-picker').evaluate((el) => {
-    if (el.getBoundingClientRect().bottom > window.innerHeight) {
-      el.scrollIntoView({ block: 'end' });
-    }
-  });
-  await page.waitForTimeout(600);
 }
 
 /**
@@ -118,7 +115,7 @@ function pushPlugin(platform) {
       {
         name: 'KubernannyPush',
         methods: [
-          ...['isAvailable', 'requestPermission', 'getToken', 'storeKey', 'removeKey', 'getMarker', 'setMarker', 'removeListener'].map((name) => ({ name, rtype: 'promise' })),
+          ...['isAvailable', 'requestPermission', 'getToken', 'storeKey', 'removeKey', 'getMarker', 'setMarker', 'removeMarker', 'removeListener'].map((name) => ({ name, rtype: 'promise' })),
           { name: 'addListener', rtype: 'callback' },
         ],
       },

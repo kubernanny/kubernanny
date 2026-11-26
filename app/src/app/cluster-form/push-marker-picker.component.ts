@@ -84,13 +84,11 @@ import {
   `,
   styleUrl: './form-section.css',
   styles: `
+    /* Sits in the sign box of the push section, which draws the surface around it. */
     .picker {
       display: grid;
       gap: 0.75rem;
-      margin: 1rem 0;
-      padding: 1rem;
-      border-radius: var(--radius-m);
-      background: var(--surface);
+      margin: 0.25rem 0 0;
     }
     h3 {
       font-size: 1rem;

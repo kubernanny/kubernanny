@@ -31,6 +31,8 @@ interface KubernannyPushPlugin {
   /** The authenticity marker (push-marker.ts), kept next to the push keys and nowhere else. */
   getMarker(): Promise<{ marker: string | null }>;
   setMarker(options: { marker: string }): Promise<void>;
+  /** Forgets the marker: pushes are shown without it from then on (the setting is off). */
+  removeMarker(): Promise<void>;
   /** iOS: a tap on a push, with the key id it carried (Android opens kubernanny://cluster?id=… instead). */
   addListener(
     event: 'pushTapped',
@@ -92,6 +94,10 @@ export class PushNative {
 
   setMarker(marker: string): Promise<void> {
     return native.setMarker({ marker });
+  }
+
+  removeMarker(): Promise<void> {
+    return native.removeMarker();
   }
 
   /** Quiet where there is nothing to listen to (web, a build without the plugin). */

@@ -24,7 +24,8 @@ import org.json.JSONObject;
  * An entry holds the push secret key (only ever used to open pushes), its
  * public half, the agent key pinned at pairing and the app's cluster id.
  * Next to them, sealed the same way: the person's authenticity marker
- * (PushMarker), which never leaves the phone.
+ * (PushMarker), which never leaves the phone. It is an optional setting,
+ * off by default: off means no stored marker.
  */
 final class PushKeyStore {
     static final class Entry {
@@ -71,6 +72,11 @@ final class PushKeyStore {
     /** One marker per phone, for every cluster. The app checks its shape (push-marker.ts) before it gets here. */
     static void putMarker(Context context, String marker) throws Exception {
         prefs(context).edit().putString("marker", seal(marker)).apply();
+    }
+
+    /** The setting turned off: commit, not apply, so a push arriving right after already shows no marker. */
+    static void removeMarker(Context context) {
+        prefs(context).edit().remove("marker").commit();
     }
 
     static String getMarker(Context context) {

@@ -27,9 +27,12 @@ import { PushMarkerPickerComponent } from './push-marker-picker.component';
  * locked when the deployment switched it off. The notification permission
  * is asked for only on the tap, never at start.
  *
- * Turning push on first asks for the authenticity marker, preselecting the
- * one this device already has (core/push/push-marker.ts): every push the phone opens is shown
- * with it, which is how a forged notification is told apart.
+ * Turning push on asks for nothing more. The authenticity marker
+ * (core/push/push-marker.ts) is an optional setting under "Advanced", off
+ * by default: while on, every push the phone opens starts with it, which is
+ * how a notification someone else showed is told apart. On means this device
+ * keeps a sign; turning it off forgets the sign, so the iOS extension and the
+ * Android service show pushes without one.
  */
 @Component({
   selector: 'app-push-section',
@@ -41,17 +44,6 @@ import { PushMarkerPickerComponent } from './push-marker-picker.component';
         <section>
           <h2>{{ t('push.title') }}</h2>
           <p class="hint" [class.locked]="view().locked">{{ view().note }}</p>
-          @if (view().markerLine) {
-            <p class="hint marker">{{ view().markerLine }}</p>
-          }
-          @if (picking()) {
-            <app-push-marker-picker
-              [current]="marker()"
-              [clusterName]="clusterName()"
-              (chosen)="markerChosen($event)"
-              (cancelled)="pickerClosed()"
-            />
-          }
           @if (view().deadman; as d) {
             <div class="deadman">
               <label class="toggle">
@@ -94,12 +86,50 @@ import { PushMarkerPickerComponent } from './push-marker-picker.component';
                 t('push.test')
               }}</ion-button>
             }
-            @if (view().markerActionLabel && !picking()) {
-              <ion-button fill="clear" [disabled]="busy()" (click)="changeMarker()">{{
-                view().markerActionLabel
-              }}</ion-button>
-            }
           </div>
+          @if (view().sign; as sign) {
+            <details class="advanced" [open]="advancedOpen()" (toggle)="advancedToggled($event)">
+              <summary>{{ t('push.advanced') }}</summary>
+              <div class="sign">
+                <label class="toggle sign-toggle">
+                  <input
+                    type="checkbox"
+                    [checked]="sign.on || picking()"
+                    [disabled]="busy()"
+                    (change)="toggleSign(sign.on)"
+                  />
+                  <span>{{ t('push.markerToggle') }}</span>
+                </label>
+                @if (picking()) {
+                  <app-push-marker-picker
+                    [current]="marker()"
+                    [clusterName]="clusterName()"
+                    (chosen)="markerChosen($event)"
+                    (cancelled)="picking.set(false)"
+                  />
+                } @else {
+                  <p class="hint">{{ sign.line }}</p>
+                }
+                @if (sign.on && !picking()) {
+                  <ion-button
+                    class="change"
+                    fill="clear"
+                    size="small"
+                    [disabled]="busy()"
+                    (click)="picking.set(true)"
+                    >{{ t('push.markerChange') }}</ion-button
+                  >
+                }
+                <details class="why">
+                  <summary>{{ t('push.markerWhy') }}</summary>
+                  <p class="hint">{{ t('push.markerWhyForge') }}</p>
+                  <p class="hint">{{ t('push.markerWhySealed') }}</p>
+                  <p class="hint">{{ t('push.markerWhySign') }}</p>
+                  <p class="hint">{{ t('push.markerWhyNotNeeded') }}</p>
+                </details>
+              </div>
+            </details>
+          }
         </section>
       }
     </ng-container>
@@ -116,6 +146,57 @@ import { PushMarkerPickerComponent } from './push-marker-picker.component';
     }
     .locked::before {
       content: '🔒 ';
+    }
+    .advanced {
+      margin: 1.25rem 0 0;
+      border-top: 1px solid var(--line);
+      padding-top: 0.75rem;
+    }
+    summary {
+      cursor: pointer;
+      color: var(--mute);
+      font-size: 0.875rem;
+      font-weight: 600;
+      padding: 0.35rem 0;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    summary::-webkit-details-marker {
+      display: none;
+    }
+    summary::before {
+      content: '';
+      width: 0.45rem;
+      height: 0.45rem;
+      border-right: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      transform: rotate(-45deg);
+      transition: transform 0.15s ease;
+      margin-right: 0.15rem;
+    }
+    details[open] > summary::before {
+      transform: rotate(45deg);
+    }
+    .sign {
+      display: grid;
+      gap: 0.6rem;
+      margin-top: 0.5rem;
+      padding: 0.8rem 0.9rem;
+      border-radius: var(--radius-m);
+      background: var(--surface);
+    }
+    .sign .change {
+      justify-self: start;
+      margin: -0.25rem 0 0 -0.6rem;
+    }
+    .why summary {
+      color: var(--accent, currentColor);
+    }
+    .why p + p,
+    .why summary + p {
+      margin-top: 0.5rem;
     }
     .deadman {
       display: grid;
@@ -188,9 +269,10 @@ export class PushSectionComponent {
   readonly busy = signal(false);
   /** The device's authenticity marker, read from the native store; never leaves the device. */
   readonly marker = signal<string | null>(null);
+  /** The sign picker is open: turning the sign on, or changing it. */
   readonly picking = signal(false);
-  /** The picker was opened by "Push to this device": push goes on once a marker is chosen. */
-  private enableAfterPick = false;
+  /** "Advanced" starts open where a sign is on (people who chose one before it was optional see it), else closed. */
+  readonly advancedOpen = signal(false);
 
   readonly clusterName = computed(() => this.cluster()?.name ?? '');
   readonly view = computed(() =>
@@ -209,7 +291,9 @@ export class PushSectionComponent {
     void this.native.status().then(async (s) => {
       this.nativeStatus.set(s);
       if (s.available) {
-        this.marker.set(await this.native.marker());
+        const marker = await this.native.marker();
+        this.marker.set(marker);
+        this.advancedOpen.set(marker !== null);
       }
     });
     effect(() => {
@@ -242,40 +326,43 @@ export class PushSectionComponent {
     if (!cluster || !action) {
       return;
     }
-    // Always through the picker: a marker already chosen (another cluster) is preselected, so the person sees it once more.
-    if (action === 'enable') {
-      this.enableAfterPick = true;
-      this.picking.set(true);
-      return;
-    }
     await this.run(action);
   }
 
-  changeMarker(): void {
-    this.enableAfterPick = false;
-    this.picking.set(true);
+  advancedToggled(event: Event): void {
+    this.advancedOpen.set((event.target as HTMLDetailsElement).open);
   }
 
-  pickerClosed(): void {
-    this.enableAfterPick = false;
+  /**
+   * The sign switch. On opens the picker; the sign is kept, and the switch
+   * shows on, only once one is chosen (cancel leaves it off). Off forgets
+   * the sign on this device, so pushes show without it.
+   */
+  async toggleSign(on: boolean): Promise<void> {
+    if (!on) {
+      this.picking.update((open) => !open);
+      return;
+    }
+    const tr = this.language.translator();
     this.picking.set(false);
+    try {
+      await this.native.removeMarker();
+      this.marker.set(null);
+      await this.toast(tr.t('push.markerRemoved'));
+    } catch (err) {
+      await this.toast(describeError(err, tr), 'danger');
+    }
   }
 
   async markerChosen(marker: string): Promise<void> {
     const tr = this.language.translator();
-    const enable = this.enableAfterPick;
-    this.pickerClosed();
+    this.picking.set(false);
     try {
       await this.native.setMarker(marker);
       this.marker.set(marker);
+      await this.toast(tr.t('push.markerSaved'));
     } catch (err) {
       await this.toast(describeError(err, tr), 'danger');
-      return;
-    }
-    if (enable && this.view().action === 'enable') {
-      await this.run('enable');
-    } else {
-      await this.toast(tr.t('push.markerSaved'));
     }
   }
 

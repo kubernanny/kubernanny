@@ -5,8 +5,15 @@
  * notification message on Android, an APNs alert without mutable-content on
  * iOS). They cannot know this marker: it is picked on the device, kept only
  * next to the push keys (shared keychain group / Keystore-encrypted
- * preferences) and never sent anywhere. Every push the phone opens is shown
- * with it, so a push without it did not come from the person's cluster.
+ * preferences) and never sent anywhere. While it is on, every push the phone
+ * opens is shown with it, so a push without it did not come from the
+ * person's cluster.
+ *
+ * An optional setting, off by default: it guards only against whoever holds
+ * the relay's Firebase credentials, and people rarely notice a missing
+ * indicator (docs/NOTIFICATIONS.md, "Is this push real?"). On means a
+ * marker is stored; off removes it. A device that chose one while it was
+ * still asked for on every "turn push on" keeps it, and so keeps it on.
  *
  * `markedTitle` is mirrored by PushMarker.java (Android service) and
  * PushKeys.markedTitle (iOS extension); keep the three identical.

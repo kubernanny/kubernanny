@@ -104,6 +104,13 @@ public class KubernannyPushPlugin extends Plugin {
         }
     }
 
+    /** The setting turned off: no marker, so PushMessagingService shows titles as they are. */
+    @PluginMethod
+    public void removeMarker(PluginCall call) {
+        PushKeyStore.removeMarker(getContext());
+        call.resolve();
+    }
+
     @PluginMethod
     public void removeKey(PluginCall call) {
         String kid = call.getString("kid");

@@ -28,7 +28,7 @@ enum PushKeys {
         return Entry(secretKey: s, publicKey: p, agentKey: a, clusterId: c)
     }
 
-    /// The marker the person picked (app/src/app/core/push/push-marker.ts), nil before they picked one.
+    /// The marker the person picked (app/src/app/core/push/push-marker.ts), nil while the setting is off (the default).
     static func marker() -> String? {
         item(markerAccount).flatMap { String(data: $0, encoding: .utf8) }
     }

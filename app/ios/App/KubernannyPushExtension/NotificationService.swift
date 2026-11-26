@@ -3,7 +3,8 @@ import WidgetKit
 
 /// Replaces the generic alert FCM delivers ("Kubernanny: new status from a
 /// cluster") with the text the agent sealed for this phone, its title
-/// prefixed with the person's authenticity marker. If the message does not
+/// prefixed with the person's authenticity marker when they turned it on
+/// (an optional setting, off by default: no marker item, no prefix). If the message does not
 /// open (no key for its id, not from the pinned agent, damaged), or is stale
 /// or not newer than the last one shown for its key (a replay), the generic
 /// text of this file is shown, whatever alert text arrived, and no marker.
@@ -12,7 +13,8 @@ import WidgetKit
 /// the relay's Firebase credentials can send an alert without it, and iOS
 /// shows that one as sent, without this code: such a notification can say
 /// anything, but it cannot carry the marker, which only the phone knows
-/// (docs/NOTIFICATIONS.md, "Is this push real?").
+/// (docs/NOTIFICATIONS.md, "Is this push real?"). That is what the marker
+/// is for, for those who turn it on.
 final class NotificationService: UNNotificationServiceExtension {
     private var handler: ((UNNotificationContent) -> Void)?
     private var fallback: UNMutableNotificationContent?
