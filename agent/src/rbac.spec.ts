@@ -143,6 +143,8 @@ describe('declared reads of the modules', () => {
       'argocd-refresh',
       'argocd-rollback',
       'argocd-sync',
+      'argocd-sync-prune',
+      'argocd-sync-replace',
       'argocd-terminate-op',
       'cleanup-pods',
       'cnpg-backup',
@@ -159,8 +161,13 @@ describe('declared reads of the modules', () => {
     ]);
     // The rollback shares the sync's verb; what it adds is an admission branch, and only on opt-in.
     expect(generated.actions['argocd-rollback']!.rules).toEqual(generated.actions['argocd-sync']!.rules);
+    // Prune and replace too: options of the sync, with the same verb, each an admission branch of its own.
+    expect(generated.actions['argocd-sync-prune']).toEqual(generated.actions['argocd-sync']);
+    expect(generated.actions['argocd-sync-replace']).toEqual(generated.actions['argocd-sync']);
     expect(generated.optInActions).toEqual([
       'argocd-rollback',
+      'argocd-sync-prune',
+      'argocd-sync-replace',
       'argocd-terminate-op',
       'config-change-hint',
       'force-delete-terminating',

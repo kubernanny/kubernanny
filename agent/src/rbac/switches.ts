@@ -62,7 +62,7 @@ export const SWITCHES: readonly HardSwitch[] = [
     routes:
       '`POST /api/argocd/rollback` answers 403 `ACTION_DISABLED` before reading anything; the Argo CD sheet lists no history',
     other:
-      'the opt-in action types stay locked in the app. `[argocd-rollback]` turns the rollback on: no new RBAC verb (it shares `patch` on Applications with `argocd-sync`), but the admission policy gains the branch that lets the agent sync a manual-sync app to a revision from its own history; without it that branch is not rendered and a sync with a `revision` is denied. `actions.disabled` and `rbac.allowActions: false` win over it. Ids other than the opt-in ones fail the install',
+      'the opt-in action types stay locked in the app. `[argocd-rollback]` turns the rollback on: no new RBAC verb (it shares `patch` on Applications with `argocd-sync`), but the admission policy gains the branch that lets the agent sync a manual-sync app to a revision from its own history; without it that branch is not rendered and a sync with a `revision` is denied. `[argocd-sync-prune]` and `[argocd-sync-replace]` likewise add no verb: the sync branch then also allows `prune: true` (only while the stored status lists a resource to prune) or `Replace=true` in `syncOptions`; without them a sync that prunes or replaces is denied. `actions.disabled` and `rbac.allowActions: false` win over it. Ids other than the opt-in ones fail the install',
   },
   {
     value: 'vulnerabilities.enabled',

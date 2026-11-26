@@ -8,6 +8,8 @@
  */
 import type { ArgoApplication } from './argocd.check';
 import type { ArgoSource } from './argocd-rollback';
+import { syncOffer } from './argocd-sync-offer';
+import type { SyncOffer } from './types';
 
 /** A manual app OutOfSync this long without a sync becomes a hint (only then; before, it is routine). */
 export const PENDING_HINT_DAYS = 7;
@@ -38,6 +40,8 @@ export interface PendingSync {
   images: { from: string; to: string }[];
   /** Whether the agent offers the sync (the opt-in argocd-sync action is on). */
   canSync: boolean;
+  /** What the sync may do beyond a plain one: prune what `resources` marks `prune`, only with `argocd-sync-prune` on. */
+  offer: SyncOffer;
 }
 
 interface ArgoAppFull extends ArgoApplication {
@@ -137,7 +141,11 @@ export function isReadyToSync(app: ArgoApplication, automated: boolean): boolean
   );
 }
 
-export function pendingSync(app: ArgoApplication, canSync: boolean): PendingSync {
+export function pendingSync(
+  app: ArgoApplication,
+  canSync: boolean,
+  switches: { prune: boolean; replace: boolean } = { prune: false, replace: false },
+): PendingSync {
   const a = app as ArgoAppFull;
   const ns = a.metadata.namespace ?? 'argocd';
   const dest = a.spec?.destination;
@@ -165,5 +173,6 @@ export function pendingSync(app: ArgoApplication, canSync: boolean): PendingSync
     resources,
     images: imageChanges(app),
     canSync,
+    offer: syncOffer(app, switches),
   };
 }

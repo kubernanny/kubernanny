@@ -1,7 +1,7 @@
 import { ActionsService } from './actions/actions.service';
 import { DevicesService, DeviceView, Principal } from './auth/devices.service';
 import { IdentityService } from './auth/identity.service';
-import { IssueActionType } from './checks/types';
+import { IssueActionType, SyncOptions } from './checks/types';
 import type { Config } from './config';
 import { BadGatewayError, BadRequestError, ForbiddenError, NotFoundError } from './http/errors';
 import { intQuery, Route, strQuery, uuidParam } from './http/server';
@@ -35,6 +35,32 @@ const RUNNABLE: IssueActionType[] = [
   'force-delete-terminating',
   'pvc-expand',
 ];
+
+/** The sync options of a request body, strictly: anything else in it is refused, not ignored. */
+function syncOptionsOf(body: unknown): SyncOptions | undefined {
+  if (body === undefined || body === null) {
+    return undefined;
+  }
+  const bad = () => new BadRequestError({ code: 'OPTIONS_INVALID', message: t('error.optionsInvalid') });
+  if (typeof body !== 'object' || Array.isArray(body)) {
+    throw bad();
+  }
+  const { prune, serverSideApply, replace, ...rest } = body as Record<string, unknown>;
+  if (
+    Object.keys(rest).length > 0 ||
+    (prune !== undefined &&
+      (!Array.isArray(prune) || !prune.every((p) => typeof p === 'string' && p.length > 0 && p.length <= 400))) ||
+    (serverSideApply !== undefined && typeof serverSideApply !== 'boolean') ||
+    (replace !== undefined && typeof replace !== 'boolean')
+  ) {
+    throw bad();
+  }
+  return {
+    ...(prune !== undefined ? { prune: prune as string[] } : {}),
+    ...(serverSideApply !== undefined ? { serverSideApply } : {}),
+    ...(replace !== undefined ? { replace } : {}),
+  };
+}
 
 export class AppApi {
   private readonly logger = new Logger('audit');
@@ -220,11 +246,11 @@ export class AppApi {
   }
 
   // Issue ids contain slashes, so they travel as a query parameter.
-  run(type: string, issue: string, who: Principal, index?: number): Promise<{ done: Text }> {
+  run(type: string, issue: string, who: Principal, index?: number, body?: unknown): Promise<{ done: Text }> {
     if (!issue || !RUNNABLE.includes(type as IssueActionType)) {
       throw new BadRequestError({ code: 'ACTION_UNKNOWN', message: t('error.actionUnknown', { type }) });
     }
-    return this.actions.run(issue, type as IssueActionType, index ?? 0, who);
+    return this.actions.run(issue, type as IssueActionType, index ?? 0, who, syncOptionsOf(body));
   }
 
   logs(issue: string, who: Principal, index?: number) {
@@ -322,7 +348,7 @@ export function appRoutes(c: AppApi): Route[] {
       method: 'POST',
       write: true,
       path: '/api/actions/:type',
-      handle: (r) => c.run(r.params.type, strQuery(r, 'issue'), r.principal, intQuery(r, 'index', true)),
+      handle: (r) => c.run(r.params.type, strQuery(r, 'issue'), r.principal, intQuery(r, 'index', true), r.body),
     },
     {
       method: 'GET',

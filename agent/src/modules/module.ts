@@ -1,4 +1,5 @@
-import { ActionType, Issue, IssueActionType } from '../checks/types';
+import { withSwitches } from '../checks/argocd-sync-offer';
+import { ActionType, Issue } from '../checks/types';
 import type { Config } from '../config';
 import { Detected } from '../discovery/discovery';
 import type { Text } from '../i18n/text';
@@ -41,11 +42,23 @@ export abstract class CheckModule {
     'pvcs',
   ];
 
-  /** Drops every action this module did not declare or that is switched off. */
-  protected keepActions(issues: Issue[], allowed: (type: IssueActionType) => boolean): Issue[] {
+  /** Drops every action this module did not declare or that is switched off; a sync's options follow their switches. */
+  protected keepActions(issues: Issue[], allowed: (type: ActionType) => boolean): Issue[] {
     return issues.map((i) => ({
       ...i,
-      actions: i.actions.filter((a) => this.actions.includes(a.type) && allowed(a.type)),
+      actions: i.actions
+        .filter((a) => this.actions.includes(a.type) && allowed(a.type))
+        .map((a) =>
+          a.type === 'argocd-sync' && a.offer
+            ? {
+                ...a,
+                offer: withSwitches(a.offer, {
+                  prune: this.actions.includes('argocd-sync-prune') && allowed('argocd-sync-prune'),
+                  replace: this.actions.includes('argocd-sync-replace') && allowed('argocd-sync-replace'),
+                }),
+              }
+            : a,
+        ),
     }));
   }
 }
@@ -69,7 +82,7 @@ export abstract class CoreCheck extends CheckModule {
 
   protected abstract check(ctx: ModuleContext): Promise<ModuleResult>;
 
-  async run(ctx: ModuleContext, allowed: (type: IssueActionType) => boolean): Promise<ModuleResult> {
+  async run(ctx: ModuleContext, allowed: (type: ActionType) => boolean): Promise<ModuleResult> {
     const result = await this.check(ctx);
     return { ...result, issues: this.keepActions(result.issues, allowed) };
   }
@@ -103,7 +116,7 @@ export abstract class Integration extends CheckModule {
 
   protected abstract inspect(ctx: ModuleContext, det: Detected): Promise<ModuleResult>;
 
-  async run(ctx: ModuleContext, det: Detected, allowed: (type: IssueActionType) => boolean): Promise<ModuleResult> {
+  async run(ctx: ModuleContext, det: Detected, allowed: (type: ActionType) => boolean): Promise<ModuleResult> {
     const scoped: ModuleContext = this.untrusted ? ctx : { ...ctx, prom: null };
     const result = await this.inspect(scoped, det);
     const issues = this.keepActions(result.issues, (t) => !this.untrusted && allowed(t));

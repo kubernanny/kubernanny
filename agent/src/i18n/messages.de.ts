@@ -505,7 +505,8 @@ export const de = {
   'action.logs.description': 'Die letzten Zeilen eines abgestürzten Pods anzeigen.',
   'action.restart.effect':
     'Darf am betroffenen Workload die Annotation restartedAt setzen, wie kubectl rollout restart.',
-  'action.argocd-sync.effect': 'Darf einen Sync der betroffenen Argo-CD-App starten (Patch des Felds operation).',
+  'action.argocd-sync.effect':
+    'Darf einen Sync der betroffenen Argo-CD-App starten (Patch des Felds operation), mit den Sync-Optionen der App und, wenn gewählt, Server-Side Apply.',
   'action.argocd-refresh.effect': 'Darf an der betroffenen App die Annotation argocd.argoproj.io/refresh=hard setzen.',
   'action.argocd-rollback.label': 'Argo CD: Zurückrollen',
   'action.argocd-rollback.description':
@@ -550,6 +551,16 @@ export const de = {
   'action.argocd-terminate-op.description': 'Einen Sync beenden, der seit über 30 Minuten läuft.',
   'action.argocd-terminate-op.effect':
     'Darf bei der betroffenen App status.operationState.phase auf Terminating setzen, wie argocd app terminate-op. Nur mit actions.enabled im Helm-Chart.',
+  'action.argocd-sync-prune.label': 'Argo CD: Sync mit Löschen',
+  'action.argocd-sync-prune.description':
+    'Beim Sync anbieten, Ressourcen zu löschen, die nicht mehr im Repo sind. Der Dialog zeigt jede einzeln und fragt noch einmal.',
+  'action.argocd-sync-prune.effect':
+    'Darf einen Sync mit prune starten: Argo CD löscht dann genau die Ressourcen der App, die es als nicht mehr im Repo meldet. Nur mit actions.enabled im Helm-Chart.',
+  'action.argocd-sync-replace.label': 'Argo CD: Sync mit Ersetzen',
+  'action.argocd-sync-replace.description':
+    'Wenn Kubernetes den letzten Sync abgelehnt hat (etwa ein doppelter Port-Name), anbieten, die Objekte zu ersetzen statt zu patchen.',
+  'action.argocd-sync-replace.effect':
+    'Darf einen Sync mit Replace=true starten: Argo CD schreibt jedes Objekt der App mit kubectl replace so, wie es in Git steht. Felder, die andere gesetzt haben, gehen dabei verloren. Nur mit actions.enabled im Helm-Chart.',
   'action.config-change-hint.label': 'Geänderte ConfigMaps erkennen',
   'action.config-change-hint.description':
     'Bei einem abstürzenden Pod prüfen, ob eine ConfigMap aus seiner Umgebung nach dem Start geändert wurde, und dann den Neustart als Lösung anbieten.',
@@ -561,6 +572,7 @@ export const de = {
   'action.pvc-expand.effect':
     'Darf die angeforderte Größe des betroffenen PVC erhöhen (höchstens um die Hälfte). Nur mit actions.enabled im Helm-Chart.',
   'action.done.sync': (p: { app: string }) => `Sync von ${p.app} gestartet.`,
+  'action.done.syncWith': (p: { app: string; options: string }) => `Sync von ${p.app} gestartet (${p.options}).`,
   'action.done.refresh': (p: { app: string }) => `Hard Refresh von ${p.app} angefordert.`,
   'action.done.restart': (p: { kind: string; name: string }) => `${p.kind} ${p.name} wird neu gestartet.`,
   'action.done.backup': (p: { cluster: string }) => `Backup von ${p.cluster} gestartet.`,
@@ -589,6 +601,11 @@ export const de = {
   'error.jobPrivileged': (p: { job: string; what: string }) =>
     `${p.job} braucht ${p.what}. Solche Jobs legt Kubernanny nicht an. Starte ihn mit kubectl create job.`,
   'error.targetChanged': 'Das Objekt hat sich inzwischen geändert. Lade neu und sieh es dir noch einmal an.',
+  'error.pruneChanged':
+    'Argo CD würde inzwischen andere Ressourcen löschen als die bestätigten. Lade neu und sieh dir die Liste noch einmal an.',
+  'error.optionNotOffered': (p: { option: string }) => `Dieser Sync bietet die Option ${p.option} gerade nicht an.`,
+  'error.optionsUnsupported': 'Nur ein Argo-CD-Sync nimmt Optionen an.',
+  'error.optionsInvalid': 'Die Optionen sind ungültig: erlaubt sind prune (Liste), serverSideApply und replace.',
   'error.issueMissing': 'Parameter issue fehlt.',
   'error.deviceNotFound': 'Gerät nicht gefunden.',
   'error.adminOnly': 'Nur über die Admin-CLI im Pod.',

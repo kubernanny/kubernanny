@@ -180,6 +180,8 @@ describe('chart hardening (security review H3, M1, M2, LOW)', () => {
       'argocd-refresh',
       'argocd-rollback',
       'argocd-sync',
+      'argocd-sync-prune',
+      'argocd-sync-replace',
       'argocd-terminate-op',
       'cleanup-pods',
       'cnpg-backup',

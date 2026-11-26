@@ -1,5 +1,13 @@
 import type { Principal } from '../auth/devices.service';
-import { Condition, IssueAction, IssueActionType, ReconcileKind, WorkloadKind } from '../checks/types';
+import {
+  appSyncOptions,
+  pruneResources,
+  REPLACE,
+  resourceKey,
+  SERVER_SIDE_APPLY,
+  SYNC_PRUNE_LIMIT,
+} from '../checks/argocd-sync-offer';
+import { Condition, IssueAction, IssueActionType, ReconcileKind, SyncOptions, WorkloadKind } from '../checks/types';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../http/errors';
 import { t, Text } from '../i18n/text';
 import { KubeClient, KubeError } from '../kube/kube-client';
@@ -60,6 +68,17 @@ const CREATED_BY = { 'app.kubernetes.io/created-by': 'kubernanny' };
 const VELERO_REFUSED = ['hooks', 'resourcePolicy', 'orderedResources'] as const;
 
 const enc = encodeURIComponent;
+
+/** "prune (2), Server-Side Apply, Replace": Argo CD's own names, in the audit log and the confirmation toast. */
+function describeOptions(o: SyncOptions): string {
+  return [
+    o.prune?.length ? `prune (${o.prune.length})` : null,
+    o.serverSideApply ? 'Server-Side Apply' : null,
+    o.replace ? 'Replace' : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
+}
 /** The newest part of a pod's log the app shows: Kubernetes cuts it (`limitBytes`), and the client refuses anything larger. */
 export const LOG_LIMIT_BYTES = 256 * 1024;
 
@@ -94,26 +113,26 @@ export class ActionsService {
     return action;
   }
 
-  async run(issueId: string, type: IssueActionType, index = 0, who?: Principal): Promise<{ done: Text }> {
+  async run(
+    issueId: string,
+    type: IssueActionType,
+    index = 0,
+    who?: Principal,
+    options?: SyncOptions,
+  ): Promise<{ done: Text }> {
     const action = this.find(issueId, type, index);
-    // The audit trail: who ran what on which object.
+    const chosen = this.checkOptions(action, options);
+    // The audit trail: who ran what on which object, and with which sync options.
+    const { offer: _offer, ...target } = action as IssueAction & { offer?: unknown };
     this.logger.log(
-      `action ${type} by "${who?.name ?? 'unknown'}" (${who?.id ?? '-'}) on ${logSafe(issueId)}: ${JSON.stringify(action)}`,
+      `action ${type} by "${who?.name ?? 'unknown'}" (${who?.id ?? '-'}) on ${logSafe(issueId)}: ${JSON.stringify(target)}${
+        chosen ? ` options: ${logSafe(JSON.stringify(chosen), 4000)}` : ''
+      }`,
     );
     let done: Text;
     switch (action.type) {
       case 'argocd-sync':
-        await this.kube.mergePatch(
-          `/apis/argoproj.io/v1alpha1/namespaces/${enc(action.namespace)}/applications/${enc(action.app)}`,
-          {
-            operation: {
-              initiatedBy: { username: 'kubernanny' },
-              info: [{ name: 'Reason', value: 'Sync from the Kubernanny app' }],
-              sync: { syncStrategy: { hook: {} } },
-            },
-          },
-        );
-        done = t('action.done.sync', { app: action.app });
+        done = await this.sync(action, chosen);
         break;
       case 'argocd-refresh':
         await this.kube.mergePatch(
@@ -268,6 +287,100 @@ export class ActionsService {
     }
     void this.status.refresh();
     return { done };
+  }
+
+  /**
+   * Which sync options are wanted, checked against the issue's offer and the
+   * switches; undefined for a plain sync. Prune and Replace each have their
+   * own switch, so a device that may sync cannot delete or replace with it.
+   */
+  private checkOptions(action: IssueAction, options: SyncOptions | undefined): SyncOptions | undefined {
+    const prune = options?.prune ?? [];
+    const wanted = prune.length > 0 || options?.serverSideApply === true || options?.replace === true;
+    if (!wanted) {
+      return undefined;
+    }
+    if (action.type !== 'argocd-sync') {
+      throw new BadRequestError({ code: 'OPTIONS_UNSUPPORTED', message: t('error.optionsUnsupported') });
+    }
+    const offer = action.offer;
+    if (prune.length > 0) {
+      if (!this.settings.actionOn('argocd-sync-prune')) {
+        throw new ForbiddenError({ code: 'ACTION_DISABLED', message: t('error.actionDisabled') });
+      }
+      if (!offer || offer.prune.length === 0 || offer.pruneMore || prune.length > SYNC_PRUNE_LIMIT) {
+        throw new NotFoundError({
+          code: 'OPTION_NOT_OFFERED',
+          message: t('error.optionNotOffered', { option: 'prune' }),
+        });
+      }
+    }
+    if (options?.replace === true) {
+      if (!this.settings.actionOn('argocd-sync-replace')) {
+        throw new ForbiddenError({ code: 'ACTION_DISABLED', message: t('error.actionDisabled') });
+      }
+      if (!offer?.failure || offer.failure.kind === 'immutable') {
+        throw new NotFoundError({
+          code: 'OPTION_NOT_OFFERED',
+          message: t('error.optionNotOffered', { option: 'Replace' }),
+        });
+      }
+    }
+    return {
+      ...(prune.length > 0 ? { prune } : {}),
+      ...(options?.serverSideApply === true ? { serverSideApply: true } : {}),
+      ...(options?.replace === true ? { replace: true } : {}),
+    };
+  }
+
+  /**
+   * A sync as Argo CD's own Sync button starts it: with the app's own sync
+   * options (an operation written with kubectl does not get them by itself,
+   * so without this an app set to Server-Side Apply was synced client-side),
+   * plus the options chosen. With prune the resources Argo CD would delete
+   * must be exactly the ones the person confirmed, read now and bound to this
+   * version of the Application.
+   */
+  private async sync(action: Extract<IssueAction, { type: 'argocd-sync' }>, chosen?: SyncOptions): Promise<Text> {
+    const path = `/apis/argoproj.io/v1alpha1/namespaces/${enc(action.namespace)}/applications/${enc(action.app)}`;
+    const app = await this.kube.get<Parameters<typeof appSyncOptions>[0] & { metadata: { resourceVersion?: string } }>(
+      path,
+    );
+    let own = appSyncOptions(app);
+    if (chosen?.serverSideApply) {
+      own = own.filter((o) => !o.startsWith('ServerSideApply='));
+    }
+    const syncOptions = [
+      ...new Set([
+        ...own,
+        ...(chosen?.serverSideApply ? [SERVER_SIDE_APPLY] : []),
+        ...(chosen?.replace ? [REPLACE] : []),
+      ]),
+    ];
+    const prune = (chosen?.prune ?? []).length > 0;
+    if (prune) {
+      const now = pruneResources(app).map(resourceKey).sort();
+      const confirmed = [...new Set(chosen!.prune)].sort();
+      if (now.length === 0 || now.join('\n') !== confirmed.join('\n')) {
+        throw new ConflictError({ code: 'TARGET_CHANGED', message: t('error.pruneChanged') });
+      }
+    }
+    await this.kube.mergePatch(path, {
+      // With prune: only this version of the Application, whose list of resources to delete was just compared.
+      ...(prune ? { metadata: { resourceVersion: app.metadata.resourceVersion } } : {}),
+      operation: {
+        initiatedBy: { username: 'kubernanny' },
+        info: [{ name: 'Reason', value: 'Sync from the Kubernanny app' }],
+        sync: {
+          syncStrategy: { hook: {} },
+          ...(prune ? { prune: true } : {}),
+          ...(syncOptions.length > 0 ? { syncOptions } : {}),
+        },
+      },
+    });
+    return chosen
+      ? t('action.done.syncWith', { app: action.app, options: describeOptions(chosen) })
+      : t('action.done.sync', { app: action.app });
   }
 
   /** A new Job from a CronJob's template (`kubectl create job --from=cronjob/…`), or a copy of a failed stand-alone Job. */

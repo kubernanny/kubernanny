@@ -69,6 +69,17 @@ describe('apps ready to sync', () => {
       ],
       images: [{ from: 'ghcr.io/kubernanny/agent:2026-11-25-11', to: 'ghcr.io/kubernanny/agent:2026-11-25-14' }],
       canSync: true,
+      // A plain sync leaves the ConfigMap standing; only with argocd-sync-prune on can the app choose to delete it.
+      offer: {
+        prune: [{ kind: 'ConfigMap', name: 'old', namespace: 'kubernanny' }],
+        serverSide: false,
+        canPrune: false,
+        canReplace: false,
+      },
+    });
+    expect(pendingSync(app, true, { prune: true, replace: true }).offer).toMatchObject({
+      canPrune: true,
+      canReplace: false,
     });
   });
 

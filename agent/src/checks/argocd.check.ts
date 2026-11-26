@@ -3,6 +3,7 @@ import { raw, rawOr, t } from '../i18n/text';
 import type { Inventory } from '../inventory/inventory';
 import { lastSyncAt, PENDING_HINT_DAYS } from './argocd-pending';
 import type { ArgoHistoryEntry, ArgoSource } from './argocd-rollback';
+import { syncOffer } from './argocd-sync-offer';
 import { ageText, Issue, IssueAction, ObjectMeta, WorkloadKind } from './types';
 
 interface AppResource {
@@ -28,7 +29,7 @@ export function isAutomated(app: Pick<ArgoApplication, 'spec'>): boolean {
 export interface ArgoApplication {
   metadata: ObjectMeta;
   spec?: {
-    syncPolicy?: { automated?: unknown };
+    syncPolicy?: { automated?: unknown; syncOptions?: unknown };
     destination?: { namespace?: string };
     source?: ArgoSource;
     sources?: ArgoSource[];
@@ -47,6 +48,7 @@ export interface ArgoApplication {
       startedAt?: string;
       finishedAt?: string;
       syncResult?: { revision?: string };
+      operation?: { sync?: { syncOptions?: unknown } };
     };
     resources?: AppResource[];
     conditions?: { type: string; message?: string }[];
@@ -141,7 +143,8 @@ export function evaluateArgoApps(apps: ArgoApplication[], inv?: Inventory, now: 
     const syncActions: IssueAction[] = syncing
       ? []
       : [
-          { type: 'argocd-sync', namespace: ns, app: name },
+          // The switches are applied by the module run (keepActions), like every other action's.
+          { type: 'argocd-sync', namespace: ns, app: name, offer: syncOffer(app, { prune: false, replace: false }) },
           { type: 'argocd-refresh', namespace: ns, app: name },
         ];
 

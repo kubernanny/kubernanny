@@ -88,10 +88,24 @@ export const WRITE_EFFECTS: Record<WriteActionType, { changes: string; marker: s
   },
   'argocd-sync': {
     changes:
-      'merge patch of `operation` (a sync with `initiatedBy.username: kubernanny`) on the Application the issue names: the same as pressing Sync in Argo CD',
+      "merge patch of `operation` (a sync with `initiatedBy.username: kubernanny`) on the Application the issue names: the same as pressing Sync in Argo CD. The operation carries the app's own `spec.syncPolicy.syncOptions` (Argo CD's Sync button does that, an operation written with kubectl does not) and, when chosen in the confirmation, `ServerSideApply=true`",
     marker: "initiatedBy: { username: 'kubernanny' }",
     admission:
-      'only `operation` (a sync initiated by `kubernanny`, without `revision(s)`, `source(s)`, `manifests` or `resources`) and the refresh annotation; spec, status, labels, other annotations unchanged; no create, no delete',
+      "only `operation` (a sync initiated by `kubernanny`, without `revision(s)`, `source(s)`, `manifests` or `resources`, `syncOptions` only from the app's own `spec.syncPolicy.syncOptions` plus `ServerSideApply=true`, no prune) and the refresh annotation; spec, status, labels, other annotations unchanged; no create, no delete",
+  },
+  'argocd-sync-prune': {
+    changes:
+      'off unless named in `actions.enabled`. The same sync with `sync.prune: true`, chosen in the confirmation after it listed every resource the Application marks `requiresPruning` (at most 50) and asked a second time: Argo CD deletes those resources. The agent reads the Application before the patch and refuses when that list is no longer exactly the confirmed one; the patch carries its `resourceVersion`. Adds no RBAC verb (the same `patch` as `argocd-sync`), only a branch of the admission policy',
+    marker: '...(prune ? { prune: true } : {})',
+    admission:
+      'rendered only with `actions.enabled: [argocd-sync-prune]`: the plain sync may also carry `prune: true`, and only while the stored `status.resources` has a resource with `requiresPruning`',
+  },
+  'argocd-sync-replace': {
+    changes:
+      "off unless named in `actions.enabled`. The same sync with `Replace=true` in `syncOptions`, offered when the app's last sync failed because Kubernetes refused the change (`Duplicate value`, `is invalid`; not for `field is immutable`, which a replace cannot change either): Argo CD writes every object of the app with `kubectl replace`, so fields other managers set are lost. Adds no RBAC verb, only a branch of the admission policy",
+    marker: '...(chosen?.replace ? [REPLACE] : [])',
+    admission:
+      "rendered only with `actions.enabled: [argocd-sync-replace]`: `Replace=true` is allowed in the plain sync's `syncOptions` too; `Force=true` never (unless the app itself names it)",
   },
   'argocd-rollback': {
     changes:

@@ -305,6 +305,38 @@
         }
       ]
     },
+    "argocd-sync-prune": {
+      "modules": [
+        "argocd"
+      ],
+      "rules": [
+        {
+          "group": "argoproj.io",
+          "resources": [
+            "applications"
+          ],
+          "verbs": [
+            "patch"
+          ]
+        }
+      ]
+    },
+    "argocd-sync-replace": {
+      "modules": [
+        "argocd"
+      ],
+      "rules": [
+        {
+          "group": "argoproj.io",
+          "resources": [
+            "applications"
+          ],
+          "verbs": [
+            "patch"
+          ]
+        }
+      ]
+    },
     "argocd-terminate-op": {
       "modules": [
         "argocd"
@@ -571,6 +603,8 @@
   "writeActions": [
     "restart",
     "argocd-sync",
+    "argocd-sync-prune",
+    "argocd-sync-replace",
     "argocd-refresh",
     "argocd-rollback",
     "argocd-terminate-op",
@@ -683,6 +717,8 @@
     "argocd-refresh",
     "argocd-rollback",
     "argocd-sync",
+    "argocd-sync-prune",
+    "argocd-sync-replace",
     "argocd-terminate-op",
     "cleanup-pods",
     "cnpg-backup",
@@ -699,6 +735,8 @@
   ],
   "optInActions": [
     "argocd-rollback",
+    "argocd-sync-prune",
+    "argocd-sync-replace",
     "argocd-terminate-op",
     "config-change-hint",
     "force-delete-terminating",

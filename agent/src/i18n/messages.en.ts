@@ -445,7 +445,8 @@ export const en = {
   'action.logs.label': 'Read logs',
   'action.logs.description': 'Show the last lines of a crashed pod.',
   'action.restart.effect': 'May set the restartedAt annotation on the affected workload, like kubectl rollout restart.',
-  'action.argocd-sync.effect': 'May start a sync of the affected Argo CD app (a patch of its operation field).',
+  'action.argocd-sync.effect':
+    "May start a sync of the affected Argo CD app (a patch of its operation field), with the app's own sync options and, when chosen, Server-Side Apply.",
   'action.argocd-refresh.effect': 'May set the annotation argocd.argoproj.io/refresh=hard on the affected app.',
   'action.argocd-rollback.label': 'Argo CD: roll back',
   'action.argocd-rollback.description':
@@ -488,6 +489,16 @@ export const en = {
   'action.argocd-terminate-op.description': 'End a sync that has been running for more than 30 minutes.',
   'action.argocd-terminate-op.effect':
     'May set status.operationState.phase to Terminating on the app concerned, like argocd app terminate-op. Only with actions.enabled in the Helm chart.',
+  'action.argocd-sync-prune.label': 'Argo CD: sync with deletion',
+  'action.argocd-sync-prune.description':
+    'Offer, when syncing, to delete resources that are no longer in the repo. The dialog lists each one and asks again.',
+  'action.argocd-sync-prune.effect':
+    'May start a sync with prune: Argo CD then deletes exactly the resources of the app it reports as no longer in the repo. Only with actions.enabled in the Helm chart.',
+  'action.argocd-sync-replace.label': 'Argo CD: sync with replace',
+  'action.argocd-sync-replace.description':
+    'When Kubernetes refused the last sync (a duplicate port name, say), offer to replace the objects instead of patching them.',
+  'action.argocd-sync-replace.effect':
+    'May start a sync with Replace=true: Argo CD writes every object of the app with kubectl replace, exactly as Git has it. Fields others have set are lost. Only with actions.enabled in the Helm chart.',
   'action.config-change-hint.label': 'Spot changed ConfigMaps',
   'action.config-change-hint.description':
     'For a crashing pod, check whether a ConfigMap of its environment changed after its start, and then offer the restart as the fix.',
@@ -498,6 +509,7 @@ export const en = {
   'action.pvc-expand.effect':
     'May raise the requested size of the PVC concerned (by half at most). Only with actions.enabled in the Helm chart.',
   'action.done.sync': (p) => `Sync of ${p.app} started.`,
+  'action.done.syncWith': (p) => `Sync of ${p.app} started (${p.options}).`,
   'action.done.refresh': (p) => `Hard refresh of ${p.app} requested.`,
   'action.done.restart': (p) => `Restarting ${p.kind} ${p.name}.`,
   'action.done.backup': (p) => `Backup of ${p.cluster} started.`,
@@ -524,6 +536,11 @@ export const en = {
   'error.jobPrivileged': (p) =>
     `${p.job} needs ${p.what}. Kubernanny does not create such jobs. Start it with kubectl create job.`,
   'error.targetChanged': 'The object has changed in the meantime. Reload and take another look.',
+  'error.pruneChanged':
+    'Argo CD would now delete other resources than the ones confirmed. Reload and look at the list again.',
+  'error.optionNotOffered': (p) => `This sync does not offer the option ${p.option} right now.`,
+  'error.optionsUnsupported': 'Only an Argo CD sync takes options.',
+  'error.optionsInvalid': 'The options are invalid: allowed are prune (a list), serverSideApply and replace.',
   'error.issueMissing': 'The parameter issue is missing.',
   'error.deviceNotFound': 'Device not found.',
   'error.adminOnly': 'Only through the admin CLI in the pod.',

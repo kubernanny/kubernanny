@@ -151,6 +151,9 @@ export interface ModuleContext {
   rollbackOn?: boolean;
   /** `argocd-sync` is on: apps ready to sync can be synced from the app. */
   syncOn?: boolean;
+  /** `argocd-sync-prune` / `argocd-sync-replace` are on: a sync may delete what is no longer in Git, or replace instead of patching. */
+  syncPruneOn?: boolean;
+  syncReplaceOn?: boolean;
   /** `restart` and the opt-in `config-change-hint` are on: the workloads check may read ConfigMap metadata to tell a restart that fixes from one that does not. */
   restartOn?: boolean;
 }

@@ -507,6 +507,26 @@ describe('agent against the demo cluster', () => {
     expect(kube.writes).toHaveLength(before);
   });
 
+  it('takes sync options in the body, strictly, and prune only with its opt-in switch', async () => {
+    const path = `/actions/argocd-sync?${new URLSearchParams({ issue: 'argocd/argocd/weblate-chart/sync' })}`;
+    const before = kube.writes.length;
+    await phone.post(path, { prune: 'all' }, 400);
+    await phone.post(path, { serverSideApply: true, force: true }, 400);
+    // argocd-sync-prune is opt-in (actions.enabled): locked outside the demo.
+    await phone.post(
+      path,
+      { prune: ['ConfigMap/weblate/weblate-legacy-settings', 'CronJob/weblate/weblate-cleanup'] },
+      403,
+    );
+    expect(kube.writes).toHaveLength(before);
+    await phone.post(path, { serverSideApply: true }, 200);
+    expect(kube.writes.at(-1)).toMatchObject({
+      method: 'PATCH',
+      path: '/apis/argoproj.io/v1alpha1/namespaces/argocd/applications/weblate-chart',
+      body: { operation: { sync: { syncStrategy: { hook: {} }, syncOptions: ['ServerSideApply=true'] } } },
+    });
+  });
+
   it('switches modules, actions and notifications from the app, stored in a ConfigMap', async () => {
     const before = (await phone.get('/settings', 200)).body;
     expect(before.modules.find((m: { id: string }) => m.id === 'argocd')).toMatchObject({
@@ -521,6 +541,8 @@ describe('agent against the demo cluster', () => {
     expect(before.actions.map((a: { type: string }) => a.type)).toEqual([
       'restart',
       'argocd-sync',
+      'argocd-sync-prune',
+      'argocd-sync-replace',
       'argocd-refresh',
       'argocd-rollback',
       'cnpg-backup',

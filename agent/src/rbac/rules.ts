@@ -20,6 +20,9 @@ export const ACTION_PERMISSIONS: Record<ActionType, Rule[]> = {
   'config-change-hint': [{ group: '', resources: ['configmaps'], verbs: ['get'] }],
   'argocd-sync': [{ group: 'argoproj.io', resources: ['applications'], verbs: ['patch'] }],
   'argocd-refresh': [{ group: 'argoproj.io', resources: ['applications'], verbs: ['patch'] }],
+  // Sync options with their own switch: the same patch of `operation`; what they add is allowed by the admission policy only.
+  'argocd-sync-prune': [{ group: 'argoproj.io', resources: ['applications'], verbs: ['patch'] }],
+  'argocd-sync-replace': [{ group: 'argoproj.io', resources: ['applications'], verbs: ['patch'] }],
   // The same verb as a sync: what a rollback adds is a branch of the admission policy, not RBAC.
   'argocd-rollback': [{ group: 'argoproj.io', resources: ['applications'], verbs: ['patch'] }],
   // Likewise: ending an operation is a patch of status.operationState.phase, allowed by its own admission branch.
@@ -57,6 +60,8 @@ export function knownModuleIds(): string[] {
 export const WRITE_ACTIONS: ActionType[] = [
   'restart',
   'argocd-sync',
+  'argocd-sync-prune',
+  'argocd-sync-replace',
   'argocd-refresh',
   'argocd-rollback',
   'argocd-terminate-op',

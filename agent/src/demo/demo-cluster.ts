@@ -421,9 +421,27 @@ const PENDING_APPS: Record<
         status: 'OutOfSync',
         requiresPruning: true,
       },
+      // Removed from the chart: a plain sync leaves it running, only a sync with prune deletes it.
+      {
+        kind: 'CronJob',
+        name: 'weblate-cleanup',
+        namespace: 'weblate',
+        status: 'OutOfSync',
+        requiresPruning: true,
+      },
     ],
   },
 };
+
+/**
+ * Broken: a manual app whose last sync Kubernetes refused. The chart moved the
+ * gateway's port from 80 to 8080 under the same name; with Server-Side Apply
+ * (on for this app) the old entry, still owned by an earlier field manager,
+ * stays next to the new one. A replace is the fix the sync dialog offers.
+ */
+const FAILED_PATCH_APP = 'loki-chart';
+const FAILED_PATCH_MESSAGE =
+  'one or more objects failed to apply, reason: Deployment.apps "loki-gateway" is invalid: spec.template.spec.containers[0].ports[1].name: Duplicate value: "http"';
 
 const ARGO_APPS: [string, string, string, boolean][] = [
   ['argocd-chart', 'Synced', 'Healthy', true],
@@ -1193,13 +1211,22 @@ function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): Map<str
     // weblate-chart has waited nine days, past the week after which a hint asks whether the sync was forgotten.
     ARGO_APPS.map(
       ([name, s0, h0, auto]) =>
-        [name, PENDING_APPS[name] ? 'OutOfSync' : broken ? s0 : 'Synced', broken ? h0 : 'Healthy', auto] as const,
+        [
+          name,
+          PENDING_APPS[name] || (broken && name === FAILED_PATCH_APP) ? 'OutOfSync' : broken ? s0 : 'Synced',
+          broken ? h0 : 'Healthy',
+          auto,
+        ] as const,
     ).map(([name, sync, health, auto]) => ({
       metadata: { name, namespace: 'argocd' },
       spec: {
         project: 'default',
         destination: { namespace: PENDING_APPS[name]?.namespace ?? 'default' },
-        syncPolicy: auto ? { automated: { prune: true, selfHeal: true } } : {},
+        syncPolicy: auto
+          ? { automated: { prune: true, selfHeal: true } }
+          : name === FAILED_PATCH_APP
+            ? { syncOptions: ['CreateNamespace=true', 'ServerSideApply=true'] }
+            : {},
         ...(name === ROLLBACK_APP ? { source: ROLLBACK_SOURCE } : {}),
         ...(PENDING_APPS[name]?.image
           ? {
@@ -1225,6 +1252,18 @@ function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): Map<str
               ? { revision: '9b1d0c3e5f7a2b4c6d8e0f1a3b5c7d9e1f2a4b6c' }
               : {}),
         },
+        ...(broken && name === FAILED_PATCH_APP
+          ? {
+              operationState: {
+                phase: 'Failed',
+                startedAt: iso(42 * 60_000),
+                finishedAt: iso(41 * 60_000),
+                message: FAILED_PATCH_MESSAGE,
+                operation: { sync: { syncOptions: ['CreateNamespace=true', 'ServerSideApply=true'] } },
+                syncResult: { revision: '4e6a8c0b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2c' },
+              },
+            }
+          : {}),
         // Broken: discourse-new's sync waits for a migration hook Job that never finishes.
         ...(broken && name === 'discourse-new'
           ? {

@@ -38,6 +38,8 @@ export const ACTION_TYPES: readonly {
 }[] = [
   action('restart', true),
   action('argocd-sync', true),
+  action('argocd-sync-prune', true),
+  action('argocd-sync-replace', true),
   action('argocd-refresh', true),
   action('argocd-rollback', true),
   action('cnpg-backup', true),

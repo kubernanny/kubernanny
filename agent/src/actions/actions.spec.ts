@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Issue, IssueAction, IssueActionType } from '../checks/types';
+import type { ActionType, Issue, IssueAction, SyncOffer } from '../checks/types';
 import { HttpError } from '../http/errors';
 import { KubeClient, KubeError } from '../kube/kube-client';
 import type { SettingsService } from '../settings/settings.service';
@@ -40,7 +40,7 @@ class FakeKube extends KubeClient {
 
 function service(
   action: IssueAction,
-  opts: { off?: IssueActionType[]; objects?: Record<string, unknown>; noIssue?: boolean } = {},
+  opts: { off?: ActionType[]; objects?: Record<string, unknown>; noIssue?: boolean } = {},
 ) {
   const kube = new FakeKube(opts.objects);
   const issue: Issue = {
@@ -56,7 +56,7 @@ function service(
     refresh: async () => undefined,
   } as unknown as StatusService;
   const settings = {
-    actionOn: (type: IssueActionType) => !(opts.off ?? []).includes(type),
+    actionOn: (type: ActionType) => !(opts.off ?? []).includes(type),
   } as unknown as SettingsService;
   return { kube, actions: new ActionsService(kube, status, settings) };
 }
@@ -73,8 +73,11 @@ async function code(p: Promise<unknown>): Promise<string> {
   return 'OK';
 }
 
+const APP = '/apis/argoproj.io/v1alpha1/namespaces/argocd/applications/loki';
+
 const CASES: { action: IssueAction; objects?: Record<string, unknown> }[] = [
   { action: { type: 'uncordon', node: 'n4' } },
+  { action: { type: 'argocd-sync', namespace: 'argocd', app: 'loki' }, objects: { [APP]: { metadata: {} } } },
   {
     action: { type: 'job-rerun', namespace: 'ns', from: 'CronJob', name: 'nightly' },
     objects: {
@@ -451,5 +454,114 @@ describe('the issue actions (target from the issue, never from the request)', ()
     });
     expect(await code(grown.actions.run('x/issue', 'pvc-expand'))).toBe('TARGET_CHANGED');
     expect(grown.kube.writes()).toEqual([]);
+  });
+});
+
+describe('argocd-sync and its options (prune, Server-Side Apply, Replace)', () => {
+  const DUPLICATE =
+    'Deployment.apps "loki-gateway" is invalid: spec.template.spec.containers[0].ports[1].name: Duplicate value: "http"';
+  const offer = (o: Partial<SyncOffer> = {}): SyncOffer => ({
+    prune: [],
+    serverSide: false,
+    canPrune: false,
+    canReplace: false,
+    ...o,
+  });
+  const live = (o: { syncOptions?: string[]; prune?: string[] } = {}) => ({
+    [APP]: {
+      metadata: { name: 'loki', resourceVersion: '41' },
+      spec: o.syncOptions ? { syncPolicy: { syncOptions: o.syncOptions } } : {},
+      status: {
+        resources: (o.prune ?? []).map((name) => ({ kind: 'CronJob', name, namespace: 'loki', requiresPruning: true })),
+      },
+    },
+  });
+  const sync = (o: SyncOffer, objects: Record<string, unknown>, off: ActionType[] = []) =>
+    service({ type: 'argocd-sync', namespace: 'argocd', app: 'loki', offer: o }, { objects, off });
+  const operation = (kube: { writes(): { body?: unknown }[] }) =>
+    (kube.writes()[0]!.body as { operation: { sync: unknown } }).operation.sync;
+
+  it("starts a plain sync with the app's own sync options, which an operation from kubectl does not get by itself", async () => {
+    const { kube, actions } = sync(offer(), live({ syncOptions: ['CreateNamespace=true', 'ServerSideApply=true'] }));
+    expect(de(await actions.run('x/issue', 'argocd-sync'))).toEqual({ done: 'Sync von loki gestartet.' });
+    expect(kube.writes()).toEqual([
+      {
+        method: 'PATCH',
+        path: APP,
+        body: {
+          operation: {
+            initiatedBy: { username: 'kubernanny' },
+            info: [{ name: 'Reason', value: 'Sync from the Kubernanny app' }],
+            sync: { syncStrategy: { hook: {} }, syncOptions: ['CreateNamespace=true', 'ServerSideApply=true'] },
+          },
+        },
+      },
+    ]);
+  });
+
+  it('adds Server-Side Apply when chosen, in place of an app option that turns it off', async () => {
+    const { kube, actions } = sync(offer(), live({ syncOptions: ['ServerSideApply=false', 'CreateNamespace=true'] }));
+    expect(de(await actions.run('x/issue', 'argocd-sync', 0, undefined, { serverSideApply: true }))).toEqual({
+      done: 'Sync von loki gestartet (Server-Side Apply).',
+    });
+    expect(operation(kube)).toEqual({
+      syncStrategy: { hook: {} },
+      syncOptions: ['CreateNamespace=true', 'ServerSideApply=true'],
+    });
+  });
+
+  it('prunes exactly the confirmed resources, bound to the version it compared, and only with its switch', async () => {
+    const o = offer({ prune: [{ kind: 'CronJob', name: 'cleanup', namespace: 'loki' }], canPrune: true });
+    const ok = sync(o, live({ prune: ['cleanup'] }));
+    await ok.actions.run('x/issue', 'argocd-sync', 0, undefined, { prune: ['CronJob/loki/cleanup'] });
+    expect(ok.kube.writes()[0]!.body).toMatchObject({ metadata: { resourceVersion: '41' } });
+    expect(operation(ok.kube)).toEqual({ syncStrategy: { hook: {} }, prune: true });
+
+    // Switched off: refused before anything is read.
+    const off = sync(o, live({ prune: ['cleanup'] }), ['argocd-sync-prune']);
+    expect(
+      await code(off.actions.run('x/issue', 'argocd-sync', 0, undefined, { prune: ['CronJob/loki/cleanup'] })),
+    ).toBe('ACTION_DISABLED');
+    expect(off.kube.calls).toEqual([]);
+    // Nothing to prune in the issue's offer.
+    const none = sync(offer(), live({ prune: ['cleanup'] }));
+    expect(
+      await code(none.actions.run('x/issue', 'argocd-sync', 0, undefined, { prune: ['CronJob/loki/cleanup'] })),
+    ).toBe('OPTION_NOT_OFFERED');
+    // Argo CD would now delete more than was confirmed: no write.
+    const more = sync(o, live({ prune: ['cleanup', 'backup'] }));
+    expect(
+      await code(more.actions.run('x/issue', 'argocd-sync', 0, undefined, { prune: ['CronJob/loki/cleanup'] })),
+    ).toBe('TARGET_CHANGED');
+    expect(more.kube.writes()).toEqual([]);
+  });
+
+  it('replaces only after a refused patch a replace can fix, and only with its switch', async () => {
+    const failed = offer({ failure: { kind: 'duplicate', message: DUPLICATE }, serverSide: true, canReplace: true });
+    const ok = sync(failed, live({ syncOptions: ['ServerSideApply=true'] }));
+    expect(de(await ok.actions.run('x/issue', 'argocd-sync', 0, undefined, { replace: true }))).toEqual({
+      done: 'Sync von loki gestartet (Replace).',
+    });
+    expect(operation(ok.kube)).toEqual({
+      syncStrategy: { hook: {} },
+      syncOptions: ['ServerSideApply=true', 'Replace=true'],
+    });
+    const off = sync(failed, live(), ['argocd-sync-replace']);
+    expect(await code(off.actions.run('x/issue', 'argocd-sync', 0, undefined, { replace: true }))).toBe(
+      'ACTION_DISABLED',
+    );
+    for (const o of [offer(), offer({ failure: { kind: 'immutable', message: 'field is immutable' } })]) {
+      const not = sync(o, live());
+      expect(await code(not.actions.run('x/issue', 'argocd-sync', 0, undefined, { replace: true }))).toBe(
+        'OPTION_NOT_OFFERED',
+      );
+      expect(not.kube.calls).toEqual([]);
+    }
+  });
+
+  it('refuses options for any other action', async () => {
+    const { kube, actions } = service({ type: 'uncordon', node: 'n4' });
+    expect(await code(actions.run('x/issue', 'uncordon', 0, undefined, { replace: true }))).toBe('OPTIONS_UNSUPPORTED');
+    expect(kube.calls).toEqual([]);
   });
 });

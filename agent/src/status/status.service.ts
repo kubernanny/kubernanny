@@ -191,7 +191,7 @@ export class StatusService {
           severity: 'info',
           title: raw(pending.app),
           cause: raw(''),
-          actions: [{ type: 'argocd-sync', namespace: pending.namespace, app: pending.app }],
+          actions: [{ type: 'argocd-sync', namespace: pending.namespace, app: pending.app, offer: pending.offer }],
         }
       : undefined;
   }
@@ -247,6 +247,8 @@ export class StatusService {
       vulnAcceptance: this.acceptance?.state(now.getTime()),
       rollbackOn: this.settings.actionOn('argocd-rollback'),
       syncOn: this.settings.actionOn('argocd-sync'),
+      syncPruneOn: this.settings.actionOn('argocd-sync-prune'),
+      syncReplaceOn: this.settings.actionOn('argocd-sync-replace'),
       restartOn: this.settings.actionOn('restart') && this.settings.actionOn('config-change-hint'),
     };
     const allowed = this.settings.actionOn;

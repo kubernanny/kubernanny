@@ -21,7 +21,8 @@ export type WorkloadKind = 'Deployment' | 'StatefulSet' | 'DaemonSet';
  * issue it currently sees. So the app can only ever do what an open issue offers.
  */
 export type IssueAction =
-  | { type: 'argocd-sync'; namespace: string; app: string }
+  /** `offer`: what this sync may do beyond a plain one (sync options), from the Application as this run read it. */
+  | { type: 'argocd-sync'; namespace: string; app: string; offer?: SyncOffer }
   | { type: 'argocd-refresh'; namespace: string; app: string }
   /**
    * `secondary`: offered after the logs, with a hint that it only helps once the
@@ -50,6 +51,50 @@ export type IssueAction =
   /** `from` and `to` are quantities ("8Gi" -> "10Gi"); `template`: the StatefulSet whose volumeClaimTemplates made the claim. */
   | { type: 'pvc-expand'; namespace: string; name: string; from: string; to: string; template?: string };
 
+/** A resource of an Argo CD app: kind, name and, for namespaced ones, namespace. */
+export interface SyncResource {
+  kind: string;
+  name: string;
+  namespace?: string;
+}
+
+/**
+ * Why the last sync failed, when Kubernetes refused the change itself:
+ * `duplicate` a list entry would be there twice ("Duplicate value", e.g. a
+ * port renamed under the same name), `immutable` a field that cannot change
+ * after creation, `invalid` any other refused object ("is invalid").
+ */
+export type SyncFailureKind = 'duplicate' | 'immutable' | 'invalid';
+
+/**
+ * The options a sync of one app can be run with (docs/CHECKS.md, "Sync
+ * options"), from the Application itself. The app chooses among them; the
+ * agent checks the choice against this offer and against the Application as
+ * it is when the sync starts.
+ */
+export interface SyncOffer {
+  /** In the cluster, no longer in Git (`status.resources[].requiresPruning`): what a sync with prune deletes. At most SYNC_PRUNE_LIMIT. */
+  prune: SyncResource[];
+  /** More resources require pruning than listed: prune is not offered then, the list would not say everything it deletes. */
+  pruneMore?: boolean;
+  /** Server-Side Apply is in effect already: the app's own sync options or the last sync's name it. */
+  serverSide: boolean;
+  /** The last sync failed because Kubernetes refused a change; `message` is Argo CD's, cut to 600 characters. */
+  failure?: { kind: SyncFailureKind; message: string };
+  /** Prune can be chosen: resources require pruning and `argocd-sync-prune` is on. */
+  canPrune: boolean;
+  /** Replace can be chosen: the last sync failed with a refused patch that a replace can fix, and `argocd-sync-replace` is on. */
+  canReplace: boolean;
+}
+
+/** The options the app may send with `argocd-sync` (body of `POST /api/actions/argocd-sync`). */
+export interface SyncOptions {
+  /** Delete what is no longer in Git: exactly the resources the person confirmed, as `Kind/namespace/name`. */
+  prune?: string[];
+  serverSideApply?: boolean;
+  replace?: boolean;
+}
+
 /** The objects `reconcile-now` can ask their controller to reconcile at once. */
 export type ReconcileKind =
   'Kustomization' | 'HelmRelease' | 'ExternalSecret' | 'InfisicalStaticSecret' | 'Certificate';
@@ -62,16 +107,22 @@ export type IssueActionType = IssueAction['type'];
  * manual-sync app, whether or not something is wrong with it), plus
  * `config-change-hint`: no button, but the read behind the crash loop's
  * restart offer (whether a ConfigMap of the environment changed after the
- * start), which needs `get` on ConfigMaps cluster-wide and is opt-in.
+ * start), which needs `get` on ConfigMaps cluster-wide and is opt-in, plus
+ * the two sync options that write more than a plain sync (`argocd-sync-prune`
+ * deletes what is no longer in Git, `argocd-sync-replace` replaces objects
+ * instead of patching them): no button of their own, a choice in the sync's
+ * confirmation.
  */
-export type ActionType = IssueActionType | 'argocd-rollback' | 'config-change-hint';
+export type ActionType =
+  IssueActionType | 'argocd-rollback' | 'config-change-hint' | 'argocd-sync-prune' | 'argocd-sync-replace';
 
 /**
  * Action types that stay locked until the deployment opts in (Helm
  * `actions.enabled`, env `ENABLED_ACTIONS`). The app cannot switch them on.
  * Each needs a permission whose misuse by a compromised pod reaches further
  * than the action itself (create Jobs, force-delete pods, end an Argo CD
- * operation, grow volumes), see docs/SECURITY.md.
+ * operation, grow volumes, delete or replace what an Argo CD app manages),
+ * see docs/SECURITY.md.
  */
 export const OPT_IN_ACTIONS: readonly ActionType[] = [
   'argocd-rollback',
@@ -80,6 +131,8 @@ export const OPT_IN_ACTIONS: readonly ActionType[] = [
   'argocd-terminate-op',
   'pvc-expand',
   'config-change-hint',
+  'argocd-sync-prune',
+  'argocd-sync-replace',
 ];
 
 export interface Issue {

@@ -11,6 +11,8 @@ export class ArgoCdIntegration extends Integration {
   // argocd-rollback is no issue action: it is offered on the sheet (`rollbacks`), for apps without a problem too.
   override readonly actions = [
     'argocd-sync',
+    'argocd-sync-prune',
+    'argocd-sync-replace',
     'argocd-refresh',
     'argocd-rollback',
     'argocd-terminate-op',
@@ -22,7 +24,9 @@ export class ArgoCdIntegration extends Integration {
     const issues = evaluateArgoApps(apps, ctx.inv, ctx.now);
     const pendingSyncs = apps
       .filter((a) => isReadyToSync(a, isAutomated(a)))
-      .map((a) => pendingSync(a, ctx.syncOn ?? false));
+      .map((a) =>
+        pendingSync(a, ctx.syncOn ?? false, { prune: ctx.syncPruneOn ?? false, replace: ctx.syncReplaceOn ?? false }),
+      );
     const synced = apps.filter((a) => a.status?.sync?.status === 'Synced').length;
     const healthy = apps.filter((a) => a.status?.health?.status === 'Healthy').length;
     const progressing = apps.filter((a) => a.status?.health?.status === 'Progressing').length;
