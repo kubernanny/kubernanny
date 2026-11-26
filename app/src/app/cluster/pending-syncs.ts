@@ -1,4 +1,4 @@
-import { PendingSync } from '../core/agent.model';
+import { PendingSync, SyncOffer } from '../core/agent.model';
 import { relativeTime } from '../core/format';
 import { Translator } from '../i18n/translator';
 
@@ -16,6 +16,10 @@ export interface PendingSyncRow {
   resources: { key: string; text: string; change: 'update' | 'new' | 'prune'; label: string }[];
   canSync: boolean;
   syncConfirm: string;
+  /** What the sync may do beyond a plain one (sync options). */
+  offer?: SyncOffer;
+  /** Under the resources when some are no longer in Git: whether a sync from here can delete them. */
+  pruneNote: string | null;
 }
 
 const CHANGE: Record<
@@ -67,5 +71,15 @@ export function pendingSyncRows(list: PendingSync[], now: Date, tr: Translator):
       })),
       canSync: p.canSync,
       syncConfirm: tr.t('actions.syncConfirm', { app: p.app }),
+      ...(p.offer ? { offer: p.offer } : {}),
+      pruneNote: pruneNote(p, tr),
     }));
+}
+
+function pruneNote(p: PendingSync, tr: Translator): string | null {
+  const n = p.resources.filter((r) => r.change === 'prune').length;
+  if (n === 0 || !p.canSync) {
+    return null;
+  }
+  return tr.n(p.offer?.canPrune ? 'pendingSync.pruneNote' : 'pendingSync.pruneNoteOff', n);
 }

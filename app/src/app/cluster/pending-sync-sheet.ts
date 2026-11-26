@@ -17,6 +17,7 @@ import { ClusterConfig, PendingSync } from '../core/agent.model';
 import { AgentClient, describeError } from '../core/agent-client.service';
 import { LanguageService } from '../i18n/language.service';
 import { PendingSyncRow, pendingSyncRows } from './pending-syncs';
+import { confirmSync } from './sync-options-sheet';
 
 /** "Bereit zum Sync": manual Argo CD apps with a change waiting, what the change is, and the sync where the agent offers it. */
 @Component({
@@ -98,6 +99,9 @@ import { PendingSyncRow, pendingSyncRows } from './pending-syncs';
                         <span>{{ x.text }}</span>
                         <span [class]="'change ' + x.change">{{ x.label }}</span>
                       </dd>
+                    }
+                    @if (r.pruneNote) {
+                      <dd class="prune-note">{{ r.pruneNote }}</dd>
                     }
                   </div>
                 }
@@ -229,6 +233,12 @@ import { PendingSyncRow, pendingSyncRows } from './pending-syncs';
       font-size: 0.875rem;
       margin-top: 1rem;
     }
+    .prune-note {
+      margin-top: 0.4rem;
+      font-size: 0.8125rem;
+      line-height: 1.4;
+      color: var(--mute);
+    }
   `,
 })
 export class PendingSyncSheet implements OnInit {
@@ -256,20 +266,24 @@ export class PendingSyncSheet implements OnInit {
 
   async sync(row: PendingSyncRow): Promise<void> {
     const tr = this.language.translator();
-    const alert = await this.alerts.create({
-      message: row.syncConfirm,
-      buttons: [
-        { text: tr.t('common.cancel'), role: 'cancel' },
-        { text: tr.t('pendingSync.sync'), role: 'confirm' },
-      ],
-    });
-    await alert.present();
-    if ((await alert.onDidDismiss()).role !== 'confirm') {
+    const chosen = await confirmSync(
+      { modals: this.modals, alerts: this.alerts, tr },
+      row.app,
+      row.offer,
+      tr.t('pendingSync.sync'),
+    );
+    if (!chosen) {
       return;
     }
     this.busy.set(row.id);
     try {
-      const { done } = await this.client.runAction(this.cluster, row.id, 'argocd-sync', 0);
+      const { done } = await this.client.runAction(
+        this.cluster,
+        row.id,
+        'argocd-sync',
+        0,
+        Object.keys(chosen).length > 0 ? chosen : undefined,
+      );
       this.synced.update((s) => new Set([...s, row.id]));
       this.changed = true;
       await this.toast(done, 'success');

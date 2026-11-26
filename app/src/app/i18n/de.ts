@@ -246,10 +246,59 @@ export const de = {
     resources: 'Ändert',
     update: 'geändert',
     new: 'neu',
-    prune: 'wird entfernt',
+    prune: 'nicht im Repo',
+    pruneNote: {
+      one: 'Nicht mehr im Repo. Ein Sync löscht sie nur, wenn du beim Sync „Löschen, was nicht mehr im Repo ist“ wählst.',
+      other:
+        'Nicht mehr im Repo. Ein Sync löscht sie nur, wenn du beim Sync „Löschen, was nicht mehr im Repo ist“ wählst.',
+    },
+    pruneNoteOff: {
+      one: 'Nicht mehr im Repo. Ein Sync aus der App lässt sie stehen: Löschen beim Sync ist ausgeschaltet.',
+      other:
+        'Nicht mehr im Repo. Ein Sync aus der App lässt sie stehen: Löschen beim Sync ist ausgeschaltet.',
+    },
     sync: 'Synchronisieren',
     noSync:
       'Sync aus der App ist ausgeschaltet. Synchronisiere in Argo CD (UI oder argocd app sync) oder schalte die Aktion in den Einstellungen ein.',
+  },
+  syncOptions: {
+    title: '{{app}} synchronisieren',
+    intro: 'Argo CD rollt aus, was im Repo steht.',
+    failed: 'Letzter Sync gescheitert',
+    failure: {
+      duplicate:
+        'Kubernetes hat die Änderung abgelehnt: ein Listeneintrag, etwa ein Port-Name, käme doppelt vor. Meist gehört der alte Eintrag noch einem anderen Field Manager und bleibt beim Patchen stehen, auch mit Server-Side Apply. Ersetzen schreibt das Objekt so, wie es in Git steht.',
+      invalid:
+        'Kubernetes hat die Änderung abgelehnt. Bleibt beim Patchen ein alter Wert stehen, helfen Server-Side Apply oder Ersetzen.',
+      immutable:
+        'Ein Feld, das Kubernetes nach dem Anlegen nicht mehr ändert, soll sich ändern. Da hilft weder ein Sync noch Ersetzen: das Objekt muss gelöscht und neu angelegt werden, in Argo CD etwa mit Replace=true,Force=true an dieser Ressource.',
+    },
+    choose: 'Optionen',
+    prune: 'Löschen, was nicht mehr im Repo ist',
+    pruneText: {
+      one: 'Argo CD löscht diese Ressource aus dem Cluster:',
+      other: 'Argo CD löscht diese {{count}} Ressourcen aus dem Cluster:',
+    },
+    pruneOff: 'Ausgeschaltet (argocd-sync-prune). Ohne Löschen bleiben sie stehen.',
+    pruneMore: 'Mehr als {{n}} Ressourcen: das Löschen geht nur in Argo CD.',
+    ssa: 'Server-Side Apply',
+    ssaText:
+      'Der API-Server führt die Änderung zusammen, statt einen Patch von kubectl zu bekommen. Löscht nichts.',
+    ssaOn: 'Server-Side Apply ist für diese App schon an.',
+    replace: 'Ersetzen',
+    replaceText:
+      'Jedes Objekt der App wird mit kubectl replace so geschrieben, wie es in Git steht, statt gepatcht zu werden. Was andere daran gesetzt haben, etwa die Replicas eines Autoscalers, geht verloren.',
+    replaceOff: 'Ausgeschaltet (argocd-sync-replace).',
+    recommended: 'Empfohlen',
+    sync: 'Synchronisieren',
+    syncAndDelete: {
+      one: 'Sync und 1 löschen',
+      other: 'Sync und {{count}} löschen',
+    },
+    confirmDeleteHeader: { one: '1 Ressource löschen?', other: '{{count}} Ressourcen löschen?' },
+    confirmDelete:
+      'Argo CD löscht beim Sync von {{app}}: {{list}}. Das lässt sich nicht rückgängig machen.',
+    confirmDeleteButton: 'Löschen und synchronisieren',
   },
   countdown: {
     seconds: '{{n}} s',

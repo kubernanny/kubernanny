@@ -9,6 +9,7 @@ import {
   Overview,
   PendingSync,
   Snapshot,
+  SyncOffer,
   Tone,
 } from '../core/agent.model';
 import {
@@ -42,6 +43,8 @@ export interface ActionButton {
   emphasis: 'primary' | 'normal' | 'secondary';
   /** One sentence on when this action helps, shown under the buttons (the crash loop's restart). */
   hint: string | null;
+  /** An Argo CD sync: the app and what it may do beyond a plain sync; its confirmation is the sync sheet. */
+  sync?: { app: string; offer?: SyncOffer };
 }
 
 export interface IssueCard {
@@ -202,6 +205,7 @@ function buttonBase(action: IssueAction, index: number, tr: Translator): ButtonB
         label: tr.t('actions.sync'),
         icon: 'sync-outline',
         confirm: tr.t('actions.syncConfirm', { app: action.app }),
+        sync: { app: action.app, ...(action.offer ? { offer: action.offer } : {}) },
       };
     case 'argocd-refresh':
       return {

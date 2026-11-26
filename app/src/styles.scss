@@ -183,6 +183,11 @@ ion-modal.sheet {
   --background: var(--surface);
 }
 
+/* A sheet as tall as its content (Ionic's auto-height sheet): the component scrolls inside itself. */
+ion-modal.sheet.fit {
+  --height: auto;
+}
+
 ion-alert {
   --background: var(--surface);
 }

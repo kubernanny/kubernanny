@@ -10,8 +10,9 @@ import {
 import { TranslocoDirective } from '@jsverse/transloco';
 
 import { ActionButton, IssueCard } from '../cluster/cluster-view';
+import { confirmSync } from '../cluster/sync-options-sheet';
 import { ACCEPT_CHOICES } from '../cluster/vulnerability-acceptance';
-import { ClusterConfig } from '../core/agent.model';
+import { ClusterConfig, SyncOptions } from '../core/agent.model';
 import { AgentClient, describeError } from '../core/agent-client.service';
 import { TranslationKey } from '../i18n/dictionary';
 import { LanguageService } from '../i18n/language.service';
@@ -331,7 +332,19 @@ export class IssueList {
       await modal.present();
       return;
     }
-    if (button.confirm && !(await this.confirm(button))) {
+    let options: SyncOptions | undefined;
+    if (button.sync) {
+      const chosen = await confirmSync(
+        { modals: this.modals, alerts: this.alerts, tr: this.language.translator() },
+        button.sync.app,
+        button.sync.offer,
+        button.label,
+      );
+      if (!chosen) {
+        return;
+      }
+      options = Object.keys(chosen).length > 0 ? chosen : undefined;
+    } else if (button.confirm && !(await this.confirm(button))) {
       return;
     }
     this.busy.set(item.issue.id + button.type + button.index);
@@ -341,6 +354,7 @@ export class IssueList {
         item.issue.id,
         button.type,
         button.index,
+        options,
       );
       await this.toast(done, 'success');
     } catch (err) {

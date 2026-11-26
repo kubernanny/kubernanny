@@ -30,6 +30,7 @@ import {
   SettingsView,
   Snapshot,
   StorageView,
+  SyncOptions,
   WorkloadView,
 } from './agent.model';
 import { AgentError, InsecureTransportError } from './agent-error';
@@ -194,11 +195,13 @@ export class AgentClient {
     issueId: string,
     type: IssueActionType,
     index: number,
+    options?: SyncOptions,
   ): Promise<{ done: string }> {
     return this.call(
       cluster,
       'POST',
       `/actions/${type}?${new URLSearchParams({ issue: issueId, index: String(index) })}`,
+      options,
     );
   }
 

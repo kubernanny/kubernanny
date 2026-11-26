@@ -242,11 +242,57 @@ export const en: Dictionary = {
     resources: 'Changes',
     update: 'changed',
     new: 'new',
-    prune: 'to be removed',
+    prune: 'not in Git',
+    pruneNote: {
+      one: 'No longer in Git. A sync deletes it only if you choose “Delete what is no longer in Git” when syncing.',
+      other:
+        'No longer in Git. A sync deletes them only if you choose “Delete what is no longer in Git” when syncing.',
+    },
+    pruneNoteOff: {
+      one: 'No longer in Git. A sync from the app leaves it in place: deleting on sync is switched off.',
+      other:
+        'No longer in Git. A sync from the app leaves them in place: deleting on sync is switched off.',
+    },
     sync: 'Sync',
     noSync:
       'Syncing from the app is switched off. Sync in Argo CD (UI or argocd app sync), or switch the action on in the settings.',
   },
+  syncOptions: {
+    title: 'Sync {{app}}',
+    intro: 'Argo CD rolls out what is in Git.',
+    failed: 'Last sync failed',
+    failure: {
+      duplicate:
+        'Kubernetes refused the change: an entry of a list, a port name say, would be there twice. Usually the old entry still belongs to another field manager and stays when patching, with Server-Side Apply too. Replace writes the object exactly as Git has it.',
+      invalid:
+        'Kubernetes refused the change. If an old value stays when patching, Server-Side Apply or Replace helps.',
+      immutable:
+        'A field that Kubernetes does not change after creation is meant to change. Neither a sync nor Replace helps: the object has to be deleted and created again, in Argo CD with Replace=true,Force=true on that resource, say.',
+    },
+    choose: 'Options',
+    prune: 'Delete what is no longer in Git',
+    pruneText: {
+      one: 'Argo CD deletes this resource from the cluster:',
+      other: 'Argo CD deletes these {{count}} resources from the cluster:',
+    },
+    pruneOff: 'Switched off (argocd-sync-prune). Without deleting they stay.',
+    pruneMore: 'More than {{n}} resources: deleting only works in Argo CD.',
+    ssa: 'Server-Side Apply',
+    ssaText:
+      'The API server merges the change instead of getting a patch from kubectl. Deletes nothing.',
+    ssaOn: 'Server-Side Apply is on for this app already.',
+    replace: 'Replace',
+    replaceText:
+      'Every object of the app is written with kubectl replace exactly as Git has it, instead of being patched. Whatever others set on it, the replicas of an autoscaler say, is lost.',
+    replaceOff: 'Switched off (argocd-sync-replace).',
+    recommended: 'Suggested',
+    sync: 'Sync',
+    syncAndDelete: { one: 'Sync and delete 1', other: 'Sync and delete {{count}}' },
+    confirmDeleteHeader: { one: 'Delete 1 resource?', other: 'Delete {{count}} resources?' },
+    confirmDelete: 'Syncing {{app}}, Argo CD deletes: {{list}}. This cannot be undone.',
+    confirmDeleteButton: 'Delete and sync',
+  },
+
   countdown: {
     seconds: '{{n}} s',
     minutes: '{{n}} min',

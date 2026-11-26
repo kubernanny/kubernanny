@@ -7,8 +7,37 @@ export type CheckStatus = 'ok' | Severity | 'skipped' | 'error';
 export type Tone = 'ok' | 'warning' | 'critical' | 'muted';
 export type Health = 'ok' | 'warning' | 'critical';
 
+/** A resource of an Argo CD app. */
+export interface SyncResource {
+  kind: string;
+  name: string;
+  namespace?: string;
+}
+
+/** What a sync of one app may do beyond a plain one (agent/src/checks/argocd-sync-offer.ts). */
+export interface SyncOffer {
+  /** What a sync with prune deletes: in the cluster, no longer in Git. */
+  prune: SyncResource[];
+  /** More to prune than listed: prune is not offered. */
+  pruneMore?: boolean;
+  /** Server-Side Apply is in effect already. */
+  serverSide: boolean;
+  /** The last sync failed because Kubernetes refused a change. */
+  failure?: { kind: 'duplicate' | 'immutable' | 'invalid'; message: string };
+  canPrune: boolean;
+  canReplace: boolean;
+}
+
+/** What the app sends with a sync (`POST /actions/argocd-sync`). */
+export interface SyncOptions {
+  /** The confirmed resources to delete, as `Kind/namespace/name`. */
+  prune?: string[];
+  serverSideApply?: boolean;
+  replace?: boolean;
+}
+
 export type IssueAction =
-  | { type: 'argocd-sync'; namespace: string; app: string }
+  | { type: 'argocd-sync'; namespace: string; app: string; offer?: SyncOffer }
   | { type: 'argocd-refresh'; namespace: string; app: string }
   /** `secondary`: after the logs, with a hint (a crash loop). `changed`: a ConfigMap of the environment changed since the start, so the restart is the fix. */
   | {
@@ -46,7 +75,12 @@ export type IssueAction =
 
 export type IssueActionType = IssueAction['type'];
 /** Every action type with a switch; `argocd-rollback` stands on its own (the Argo CD sheet), off unless the Helm chart opts in. */
-export type ActionType = IssueActionType | 'argocd-rollback' | 'config-change-hint';
+export type ActionType =
+  | IssueActionType
+  | 'argocd-rollback'
+  | 'config-change-hint'
+  | 'argocd-sync-prune'
+  | 'argocd-sync-replace';
 
 export interface Issue {
   id: string;
@@ -180,6 +214,8 @@ export interface PendingSync {
   images: { from: string; to: string }[];
   /** The agent offers the sync (argocd-sync is on). */
   canSync: boolean;
+  /** Sync options (agents before sync options send none). */
+  offer?: SyncOffer;
 }
 
 /** One manual-sync Argo CD app with its last deployments (agent/src/checks/argocd-rollback.ts). */
