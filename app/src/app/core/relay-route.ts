@@ -54,13 +54,9 @@ export const RELAY_INFO_EVERY_MS = 60 * 60_000;
 
 /**
  * The relay URL a cluster should store after the agent's sealed /info, or
- * null when nothing changes. Agents before the relay send no `relay` field
- * and change nothing; an agent with the relay switched off clears it.
+ * null when nothing changes; an agent with the relay switched off clears it.
  */
 export function adoptedRelay(cluster: Pick<ClusterConfig, 'relayUrl'>, info: Pick<AgentInfo, 'relay'>): { relayUrl: string | undefined } | null {
-  if (info.relay === undefined) {
-    return null;
-  }
   const url = info.relay && relayUrlAllowed(info.relay.url) ? info.relay.url : undefined;
   return url === cluster.relayUrl ? null : { relayUrl: url };
 }

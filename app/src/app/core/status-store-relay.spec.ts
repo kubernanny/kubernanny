@@ -11,7 +11,6 @@ describe('adoptedRelay', () => {
     expect(adoptedRelay({}, { relay: { url: 'https://relay.kubernanny.app', connected: true } })).toEqual({ relayUrl: 'https://relay.kubernanny.app' });
     expect(adoptedRelay({ relayUrl: 'https://relay.kubernanny.app' }, { relay: { url: 'https://relay.kubernanny.app', connected: false } })).toBeNull();
     expect(adoptedRelay({ relayUrl: 'https://r.example' }, { relay: null })).toEqual({ relayUrl: undefined });
-    expect(adoptedRelay({ relayUrl: 'https://r.example' }, {})).toBeNull();
     expect(adoptedRelay({}, { relay: { url: 'http://evil.example', connected: true } })).toBeNull();
   });
 });

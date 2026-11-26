@@ -25,7 +25,7 @@ export interface AppPushView {
    * The dead man's switch (docs/NOTIFICATIONS.md, "When the agent goes
    * silent"). `state` on: available; locked: DEADMAN=off in the deployment;
    * relay: the connected relay does not hold deposits. `grace`: this
-   * device's choice in minutes, null when off. Absent from older agents.
+   * device's choice in minutes, null when off.
    */
   deadman: { state: 'on' | 'locked' | 'relay'; grace: number | null };
 }

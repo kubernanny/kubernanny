@@ -30,7 +30,6 @@ describe('agent against the demo cluster', () => {
   }
 
   beforeAll(async () => {
-    delete process.env.PULSE_TOKEN;
     delete process.env.DEMO;
     // The assertions below read the reviewed German copy; English has its own tests at the end.
     process.env.LANGUAGE = 'de';

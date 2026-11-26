@@ -85,8 +85,8 @@ function listSection(key: string, title: string, rows: DetailRow[], more: number
 }
 
 /**
- * The module sheet as it is shown: a row of key figures (at most four; what an
- * older agent sends beyond that becomes a list), then the module's objects,
+ * The module sheet as it is shown: a row of key figures (at most four; any
+ * beyond that become a list), then the module's objects,
  * problems first and healthy rows folded after five.
  */
 export function buildSheetView(m: ModuleView, expanded: ReadonlySet<string>, tr: Translator): SheetView {

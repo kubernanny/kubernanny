@@ -283,9 +283,6 @@ export function checkStatusPageSlug(raw: string | undefined): string | undefined
 }
 
 export function loadConfig(): Config {
-  if (process.env.PULSE_TOKEN) {
-    throw new Error('PULSE_TOKEN is gone since 0.3: devices pair with their own keys now (docs/PROTOCOL.md). Remove the variable.');
-  }
   const demo = parseDemo(process.env.DEMO);
   return {
     port: num('PORT', 8080),
@@ -310,8 +307,7 @@ export function loadConfig(): Config {
     certWarnDays: num('CERT_WARN_DAYS', 14),
     certCriticalDays: num('CERT_CRITICAL_DAYS', 3),
     backupMaxAgeHours: num('BACKUP_MAX_AGE_HOURS', 26),
-    // DISABLED_CHECKS is the name before 0.3; both count.
-    disabledModules: [...list('DISABLED_MODULES', []), ...list('DISABLED_CHECKS', [])],
+    disabledModules: list('DISABLED_MODULES', []),
     disabledActions: list('DISABLED_ACTIONS', []),
     enabledActions: list('ENABLED_ACTIONS', []),
     enabledModules: list('ENABLED_MODULES', []),

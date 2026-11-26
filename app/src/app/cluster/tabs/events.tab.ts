@@ -25,7 +25,7 @@ export interface EventRow {
 /** One line per object and reason; how often, and since Kubernetes first saw it. */
 export function eventRows(events: EventView[], now: Date, tr: Translator): EventRow[] {
   return events.map((e, index) => {
-    const since = e.firstSeen ? duration(e.firstSeen, now, tr.lang) : null;
+    const since = duration(e.firstSeen, now, tr.lang);
     return {
       key: `${index}:${e.time}`,
       time: e.time,

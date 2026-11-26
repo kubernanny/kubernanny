@@ -37,9 +37,6 @@ const HIDDEN: PushVM = { visible: false, locked: false, note: '', action: null, 
 export function deadmanView(agent: AgentPushView, tr: Translator, fallbackGrace = 15): DeadmanVM {
   const graces = DEADMAN_GRACE_MINUTES.map((minutes) => ({ minutes, label: tr.t('push.deadmanMinutes', { n: minutes }) }));
   const d = agent.deadman;
-  if (!d) {
-    return { editable: false, on: false, grace: fallbackGrace, graces, note: tr.t('push.deadmanOldAgent') };
-  }
   if (d.state === 'locked') {
     return { editable: false, on: false, grace: fallbackGrace, graces, note: tr.t('push.deadmanLocked') };
   }

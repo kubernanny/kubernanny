@@ -124,8 +124,7 @@ export interface PushContent {
   s: number;
   /**
    * The cluster's state at sealing, for the phone's home-screen widget
-   * (docs/PROTOCOL.md, "Push status"). Optional: agents before it send
-   * none, and phones before it ignore it. Left out when it would not fit.
+   * (docs/PROTOCOL.md, "Push status"). Left out when it would not fit.
    */
   w?: PushStatus;
   /**

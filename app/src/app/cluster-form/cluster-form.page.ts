@@ -241,8 +241,7 @@ export class ClusterFormPage implements OnInit {
 
   /**
    * The agent says which relay it uses, in an authenticated answer: a relay
-   * switched on after pairing reaches the app this way. Agents before the
-   * relay send no `relay` field and change nothing.
+   * switched on after pairing reaches the app this way.
    */
   private async adoptRelay(info: AgentInfo): Promise<void> {
     const cluster = this.saved();

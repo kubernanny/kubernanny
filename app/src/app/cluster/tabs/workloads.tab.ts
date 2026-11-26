@@ -19,7 +19,7 @@ export interface WorkloadRow {
   detail: string;
   /** "last 2 h ago: OOMKilled at the limit of 512 MiB", when it restarted; `oom` tints it. */
   restart: { text: string; oom: boolean } | null;
-  /** CPU and RAM: use against requests and limits (agents from 0.4 on). */
+  /** CPU and RAM: use against requests and limits. */
   resources: { label: string; bar: ResourceInput }[];
   pods: { name: string; tone: Tone; text: string; containers: { name: string; text: string; oom: boolean }[] }[];
 }
@@ -52,9 +52,6 @@ export function terminationText(term: Termination, now: Date, tr: Translator): s
  */
 function resourceRows(w: WorkloadView, tr: Translator): WorkloadRow['resources'] {
   const r = w.resources;
-  if (!r) {
-    return [];
-  }
   const row = (kind: 'cpu' | 'memory', used: number | null, request: number, limit: number | null, unlimited: number) => ({
     label: tr.t(kind === 'cpu' ? 'nodes.cpu' : 'nodes.ram'),
     bar: {

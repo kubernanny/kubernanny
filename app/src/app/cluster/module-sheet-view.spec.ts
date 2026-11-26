@@ -10,7 +10,7 @@ const module = (over: Partial<ModuleView>): ModuleView =>
   ({ id: 'cnpg', name: 'CloudNativePG', category: 'database', icon: 'server', description: '', status: 'ok', summary: '', stats: [], links: [], workloads: { ready: 0, total: 0, items: [] }, issueIds: [], ...over }) as ModuleView;
 
 describe('module sheet', () => {
-  it('keeps at most four key figures and lists what an older agent sent beyond that', () => {
+  it('keeps at most four key figures and lists any beyond that', () => {
     const stats = ['a', 'b', 'c', 'd', 'e', 'f'].map((label) => ({ label, value: '1' }));
     const v = buildSheetView(module({ stats, version: '1.27', namespace: 'cnpg-system' }), new Set(), de);
     expect(v.figures.map((s) => s.label)).toEqual(['a', 'b', 'c', 'd']);

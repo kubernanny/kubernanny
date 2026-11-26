@@ -5,7 +5,6 @@ import { StatusService } from '../status/status.service';
 import { DemoKubeClient, DemoScenario } from './demo-cluster';
 
 async function run(scenario: DemoScenario) {
-  delete process.env.PULSE_TOKEN;
   process.env.CHECK_INTERVAL_SECONDS = '3600';
   const moduleRef = new Agent({ kube: new DemoKubeClient(undefined, scenario) });
   const status = moduleRef.get(StatusService);

@@ -448,7 +448,7 @@ export class OverviewTab {
   readonly cluster = input.required<ClusterConfig>();
   readonly history = input.required<Loadable<HistoryView>>();
   readonly hours = input(6);
-  /** The last seven days; null until the agent answered (agents before 0.4 never do). */
+  /** The last seven days; null until the agent answered. */
   readonly incidents = input<HistoryVM | null>(null);
   readonly changed = output<void>();
   readonly openModule = output<string>();

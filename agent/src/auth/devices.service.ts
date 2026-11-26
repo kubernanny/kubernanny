@@ -31,8 +31,8 @@ export interface DevicePush {
   /**
    * The device has a home-screen widget showing this cluster (the app says so
    * at registration and again when it changes): it then gets a silent status
-   * push when nothing else reached it for WIDGET_REFRESH_MINUTES. Absent from
-   * older apps, which never get one.
+   * push when nothing else reached it for WIDGET_REFRESH_MINUTES. Absent: no
+   * widget, no such push.
    */
   widget?: boolean;
   /**

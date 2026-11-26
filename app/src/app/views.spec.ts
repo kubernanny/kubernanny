@@ -38,6 +38,7 @@ const snapshot: Snapshot = {
   score: 78,
   checkedAt: '2026-11-24T11:58:00Z',
   durationMs: 31,
+  agentVersion: '0.3.0',
   kubernetes: { version: 'v1.33.4+rke2r1', distribution: 'RKE2' },
   overview: {
     nodes: { ready: 3, total: 3 },
@@ -76,7 +77,7 @@ describe('buildClusterView', () => {
   it('says what is wrong in one sentence and how the cluster is built', () => {
     const v = buildClusterView(snapshot, null, NOW, de);
     expect(v.headline).toBe('1 Ausfall und 1 Warnung');
-    expect(v.subline).toBe('RKE2 1.33.4, 3 Nodes, 27 Komponenten erkannt');
+    expect(v.subline).toBe('RKE2 1.33.4, 3 Nodes, 27 Komponenten erkannt · Kubernanny 0.3.0');
     expect(v.checked).toBe('Geprüft vor 2 min in 31 ms');
     expect(v.tone).toBe('critical');
   });
@@ -121,7 +122,7 @@ describe('buildClusterView', () => {
   it('reads the same in English, with English plurals and number formats', () => {
     const v = buildClusterView(snapshot, null, NOW, en);
     expect(v.headline).toBe('1 outage and 1 warning');
-    expect(v.subline).toBe('RKE2 1.33.4, 3 nodes, 27 components detected');
+    expect(v.subline).toBe('RKE2 1.33.4, 3 nodes, 27 components detected · Kubernanny 0.3.0');
     expect(v.checked).toBe('Checked 2 min ago in 31 ms');
     expect(v.issues[0].sinceText).toBe('for 1 h');
     expect(v.issues[0].buttons.map((b) => b.label)).toEqual(['Restart a', 'Restart b', 'Sync']);
@@ -160,8 +161,9 @@ describe('tabs', () => {
       ready: true,
       cordoned: false,
       rebooting: true,
-      cpu: { allocatableMilli: 4000, requestedMilli: 1000, usedMilli: 2000 },
-      memory: { allocatable: 16 * 2 ** 30, requested: 4 * 2 ** 30, used: 15 * 2 ** 30 },
+      cpu: { allocatableMilli: 4000, requestedMilli: 1000, limitMilli: 0, usedMilli: 2000 },
+      memory: { allocatable: 16 * 2 ** 30, requested: 4 * 2 ** 30, limit: 0, used: 15 * 2 ** 30 },
+      podsWithoutLimit: { cpu: 0, memory: 0 },
       disk: 0.5,
       pods: { count: 20, capacity: 110 },
       conditions: [{ type: 'DiskPressure', status: 'True', message: 'low' }],
@@ -186,6 +188,7 @@ describe('tabs', () => {
       restarts,
       cpuMilli: 10,
       memBytes: 2 ** 20,
+      resources: { cpuRequestMilli: 0, cpuLimitMilli: null, memRequest: 0, memLimit: null, cpuUnlimited: 0, memUnlimited: 0 },
       pods: [],
     });
     const list = [w('a', 'web', 'ok'), w('b', 'api', 'critical'), w('b', 'worker', 'ok', 3)];
@@ -215,9 +218,9 @@ describe('tabs', () => {
     const view: NetworkView = {
       loadBalancers: [],
       ingresses: [
-        { namespace: 'a', name: 'x', hosts: ['b.example'], tls: true, backends: [], certificate: { name: 'c', daysLeft: 60, ready: true } },
-        { namespace: 'a', name: 'y', hosts: ['a.example'], tls: true, backends: [], certificate: { name: 'd', daysLeft: 9, ready: true } },
-        { namespace: 'a', name: 'z', hosts: ['c.example'], tls: true, backends: [], certificate: { name: 'e', daysLeft: 1, ready: true } },
+        { namespace: 'a', name: 'x', hosts: ['b.example'], tls: true, backends: [], workloads: [], certificate: { name: 'c', daysLeft: 60, ready: true } },
+        { namespace: 'a', name: 'y', hosts: ['a.example'], tls: true, backends: [], workloads: [], certificate: { name: 'd', daysLeft: 9, ready: true } },
+        { namespace: 'a', name: 'z', hosts: ['c.example'], tls: true, backends: [], workloads: [], certificate: { name: 'e', daysLeft: 1, ready: true } },
       ],
     };
     expect(hostRows(view, de).map((r) => [r.host, r.cert])).toEqual([
@@ -294,8 +297,6 @@ describe('events', () => {
     expect(row).toMatchObject({ object: 'Pod discourse/discourse', when: 'vor 5 min', repeat: '35× seit 3 h', merged: '2 Kubernetes-Events zusammengefasst' });
     expect(eventRows([base], NOW, en)[0]).toMatchObject({ repeat: '35× in 3 h', merged: '2 Kubernetes events merged' });
     expect(eventRows([{ ...base, count: 1, events: 1 }], NOW, de)[0]).toMatchObject({ repeat: null, merged: null });
-    // Agents before 0.4 send neither field.
-    expect(eventRows([{ ...base, firstSeen: undefined, events: undefined }], NOW, de)[0]).toMatchObject({ repeat: '35×', merged: null });
   });
 });
 

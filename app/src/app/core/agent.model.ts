@@ -71,7 +71,7 @@ export interface DetailRow {
   children?: DetailRow[];
 }
 
-/** A structured part of a module sheet: its objects as a list or a short table (agents from 0.4 on). */
+/** A structured part of a module sheet: its objects as a list or a short table. */
 export type DetailSection =
   | { title: string; kind: 'list'; rows: DetailRow[]; more?: number; role?: 'runtime' }
   | { title: string; kind: 'table'; columns: string[]; rows: { cells: string[]; tone: Tone }[]; more?: number };
@@ -109,9 +109,9 @@ export interface ModuleView {
   version?: string;
   status: CheckStatus;
   summary: string;
-  /** Two to four key figures (older agents may send more). */
+  /** Two to four key figures. */
   stats: Stat[];
-  /** The module's objects, problems first (agents from 0.4 on). */
+  /** The module's objects, problems first; absent for modules without a list. */
   details?: DetailSection[];
   instances?: ComponentInstance[];
   links: Link[];
@@ -124,7 +124,7 @@ export interface ModuleView {
   canAccept?: boolean;
   /** Argo CD only, while the rollback is on: manual-sync apps and the deployments they can go back to. */
   rollbacks?: RollbackApp[];
-  /** Argo CD only: manual apps with a change waiting (agents from 0.5 on). */
+  /** Argo CD only: manual apps with a change waiting. */
   pendingSyncs?: PendingSync[];
 }
 
@@ -168,7 +168,7 @@ export interface AcceptedAdvisory {
 export interface Overview {
   nodes: { ready: number; total: number };
   pods: { running: number; total: number };
-  /** Requests and limits from agents 0.4 on. */
+  /** Requests and limits where the pods set them. */
   cpu: { usedMilli: number; allocatableMilli: number; requestedMilli?: number; limitMilli?: number } | null;
   memory: { used: number; allocatable: number; requested?: number; limit?: number } | null;
   volumes: { bound: number; total: number };
@@ -178,7 +178,7 @@ export interface Overview {
   components: number;
   prometheus: boolean;
   metricsServer: boolean;
-  /** Per node: use, requests and limits of its pods against allocatable (agents from 0.4 on). */
+  /** Per node: use, requests and limits of its pods against allocatable. */
   perNode?: {
     name: string;
     cpu: { usedMilli: number | null; allocatableMilli: number; requestedMilli: number; limitMilli: number };
@@ -189,17 +189,16 @@ export interface Overview {
 
 export interface Snapshot {
   cluster: string;
-  /** Missing on agents before 0.3. */
-  agentVersion?: string;
-  /** The image tag and git commit of the agent (agents from 0.5 on, CI builds only). */
+  agentVersion: string;
+  /** The image tag and git commit of the agent (CI builds only). */
   agentBuild?: string;
   agentCommit?: string;
-  /** Set while a maintenance window holds back notifications (agents from 0.4 on). */
+  /** Set while a maintenance window holds back notifications. */
   maintenanceUntil?: string;
   light: Light;
   score: number;
   checkedAt: string | null;
-  /** When the agent runs its next scheduled check (agents from 0.5 on); without it the app shows no countdown. */
+  /** When the agent runs its next scheduled check; without it (before the first run) the app shows no countdown. */
   nextCheckAt?: string;
   durationMs: number | null;
   kubernetes: { version?: string; distribution: string } | null;
@@ -207,7 +206,7 @@ export interface Snapshot {
   modules: ModuleView[];
   issues: Issue[];
   error?: string;
-  /** Since when the agent's runs fail to read the cluster (agents from 0.3 on); `checkedAt` is then the last good run. */
+  /** Since when the agent's runs fail to read the cluster; `checkedAt` is then the last good run. */
   failingSince?: string;
 }
 
@@ -224,13 +223,13 @@ export interface NodeView {
   arch?: string;
   internalIp?: string;
   createdAt?: string;
-  /** `limit` from agents 0.4 on. */
-  cpu: { allocatableMilli: number; requestedMilli: number; limitMilli?: number; usedMilli: number | null };
-  memory: { allocatable: number; requested: number; limit?: number; used: number | null };
+  /** Requests and limits summed over the pods on the node (limits only where set). */
+  cpu: { allocatableMilli: number; requestedMilli: number; limitMilli: number; usedMilli: number | null };
+  memory: { allocatable: number; requested: number; limit: number; used: number | null };
   disk: number | null;
   pods: { count: number; capacity: number };
-  /** Pods with a container that sets no CPU / memory limit (agents from 0.4 on). */
-  podsWithoutLimit?: { cpu: number; memory: number };
+  /** Pods with a container that sets no CPU / memory limit. */
+  podsWithoutLimit: { cpu: number; memory: number };
   conditions: { type: string; status: string; message?: string; since?: string }[];
   taints: string[];
 }
@@ -248,9 +247,9 @@ export interface WorkloadView {
   createdAt?: string;
   cpuMilli: number | null;
   memBytes: number | null;
-  /** Agents from 0.4 on: requests and limits of its pods (a limit is null when no container sets one). */
-  resources?: { cpuRequestMilli: number; cpuLimitMilli: number | null; memRequest: number; memLimit: number | null; cpuUnlimited: number; memUnlimited: number };
-  /** Agents from 0.4 on: the most recent restart of any of its containers. */
+  /** Requests and limits of its pods (a limit is null when no container sets one). */
+  resources: { cpuRequestMilli: number; cpuLimitMilli: number | null; memRequest: number; memLimit: number | null; cpuUnlimited: number; memUnlimited: number };
+  /** The most recent restart of any of its containers; absent when none restarted. */
   lastRestart?: Termination & { pod: string; container: string };
   pods: { name: string; node?: string; phase?: string; ready: boolean; restarts: number; containers?: ContainerView[] }[];
 }
@@ -296,8 +295,8 @@ export interface NetworkView {
     tls: boolean;
     certificate?: { name: string; notAfter?: string; daysLeft: number | null; ready: boolean };
     backends: string[];
-    /** "Kind/name" of the workloads behind the backends (agents from 0.4 on). */
-    workloads?: string[];
+    /** "Kind/name" of the workloads behind the backends. */
+    workloads: string[];
     component?: string;
   }[];
   loadBalancers: { namespace: string; name: string; addresses: string[]; ports: string[] }[];
@@ -312,11 +311,11 @@ export interface EventView {
   message?: string;
   /** How often it happened, summed over the grouped events. */
   count: number;
-  /** When the oldest of the grouped events was first seen (agents from 0.4 on). */
-  firstSeen?: string;
+  /** When the oldest of the grouped events was first seen. */
+  firstSeen: string;
   /** How many Event objects the agent merged into this row (1: none). */
   events?: number;
-  /** The workload behind the object (agents from 0.4 on). */
+  /** The workload behind the object, when there is one. */
   workload?: { kind: string; name: string };
 }
 
@@ -375,7 +374,7 @@ export interface BackupsView {
   targets: BackupTargetView[];
   /** Databases and volumes without any backup; not judged. */
   unprotected: { kind: 'cnpg' | 'longhorn'; name: string; namespace?: string }[];
-  /** Backups of volumes deleted since; they protect nothing and are only counted (agents from 0.4 on). */
+  /** Backups of volumes deleted since; they protect nothing and are only counted. */
   orphaned?: { kind: 'longhorn'; volumes: number; backups: number };
 }
 
@@ -406,8 +405,8 @@ export interface AgentInfo {
   agentFingerprint: string;
   prometheus: boolean;
   components: string[];
-  /** The relay the agent dials out to, and whether it is connected; null or missing without one. */
-  relay?: { url: string; connected: boolean } | null;
+  /** The relay the agent dials out to, and whether it is connected; null without one. */
+  relay: { url: string; connected: boolean } | null;
 }
 
 export interface Logs {
@@ -469,9 +468,9 @@ export interface AgentPushView {
   /**
    * The dead man's switch. state on: available; locked: DEADMAN=off in the
    * deployment; relay: the connected relay does not hold deposits. grace:
-   * this device's choice, null when off. Absent from agents before it.
+   * this device's choice, null when off.
    */
-  deadman?: { state: 'on' | 'locked' | 'relay'; grace: number | null };
+  deadman: { state: 'on' | 'locked' | 'relay'; grace: number | null };
 }
 
 /** on: runs. off: switched off in the app. locked: switched off in the deployment (Helm), only changeable there. */
@@ -495,8 +494,8 @@ export interface ModuleSetting {
 
 export interface SettingsView {
   modules: ModuleSetting[];
-  /** `effect`: what the action may change in the cluster, one line from the agent (missing in agents before 0.4). */
-  actions: { type: ActionType; label: string; description: string; effect?: string; state: ToggleState }[];
+  /** `effect`: what the action may change in the cluster, one line from the agent. */
+  actions: { type: ActionType; label: string; description: string; effect: string; state: ToggleState }[];
   notifications: ToggleState;
 }
 

@@ -44,7 +44,7 @@ describe('openPushMessage (the reference the iOS extension and the Android servi
 });
 
 describe('pushView', () => {
-  const agent = (extra: Partial<AgentPushView> = {}): AgentPushView => ({ state: 'on', relay: true, registered: false, ...extra });
+  const agent = (extra: Partial<AgentPushView> = {}): AgentPushView => ({ state: 'on', relay: true, registered: false, deadman: { state: 'on', grace: 15 }, ...extra });
   const ios = { available: true, platform: 'ios' as const };
 
   it('is hidden in a build without push, for the demo, and while the agent has not answered', () => {
@@ -293,7 +293,7 @@ describe('pushFresh (mirrored by PushFreshness.java and PushKeys.isFresh)', () =
 });
 
 describe('deadmanView (the switch in the push section)', () => {
-  const on = { state: 'on' as const, relay: true, registered: true };
+  const on = { state: 'on' as const, relay: true, registered: true, deadman: { state: 'on' as const, grace: 15 } };
   it('offers the switch and the graces, with the device\'s choice', () => {
     const vm = deadmanView({ ...on, deadman: { state: 'on', grace: 30 } }, en);
     expect(vm).toMatchObject({ editable: true, on: true, grace: 30, note: expect.stringContaining('relay sends this phone') });
@@ -301,10 +301,9 @@ describe('deadmanView (the switch in the push section)', () => {
     expect(deadmanView({ ...on, deadman: { state: 'on', grace: null } }, en)).toMatchObject({ editable: true, on: false, grace: 15 });
   });
 
-  it('explains a deployment that switched it off, a relay without it and an agent before it', () => {
+  it('explains a deployment that switched it off and a relay without it', () => {
     expect(deadmanView({ ...on, deadman: { state: 'locked', grace: null } }, en)).toMatchObject({ editable: false, note: expect.stringContaining('deadman.enabled') });
     expect(deadmanView({ ...on, deadman: { state: 'relay', grace: 15 } }, en)).toMatchObject({ editable: true, on: true, note: expect.stringContaining('relay does not support') });
-    expect(deadmanView(on, en)).toMatchObject({ editable: false, note: expect.stringContaining('newer agent') });
     expect(pushView({ demo: false, native: { available: true, platform: 'ios' }, agent: { ...on, deadman: { state: 'on', grace: 15 } } }, en).deadman).toMatchObject({ on: true });
     expect(pushView({ demo: false, native: { available: true, platform: 'ios' }, agent: { ...on, registered: false } }, en).deadman).toBeNull();
   });

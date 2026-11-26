@@ -5,7 +5,7 @@ import { Translator } from '../i18n/translator';
 export interface CountdownView {
   /** "Geprüft vor 12 s · nächste in 48 s"; without a schedule from the agent only the first half. */
   text: string;
-  /** 0..1 of the way from the last check to the next; null without a schedule (older agents). */
+  /** 0..1 of the way from the last check to the next; null without a schedule (before the agent's first run). */
   progress: number | null;
   /** For screen readers: what tapping does and when the next check is, as a clock time, so it does not change every second. */
   label: string;

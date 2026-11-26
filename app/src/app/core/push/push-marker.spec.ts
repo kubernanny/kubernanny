@@ -47,7 +47,7 @@ describe('the push authenticity marker', () => {
 
 describe('the marker in the push section', () => {
   const en = translatorFor('en');
-  const agent: AgentPushView = { state: 'on', relay: true, registered: true };
+  const agent: AgentPushView = { state: 'on', relay: true, registered: true, deadman: { state: 'on', grace: 15 } };
   const native = { available: true, platform: 'android' as const };
 
   it('shows the marker while push is on, and nudges to choose one when there is none', () => {

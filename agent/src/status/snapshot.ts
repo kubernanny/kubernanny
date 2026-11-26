@@ -21,7 +21,7 @@ export interface IssueView extends Issue {
 export interface Overview {
   nodes: { ready: number; total: number };
   pods: { running: number; total: number };
-  /** Use from metrics-server; requests and limits (where set) summed over the scheduled pods (agents from 0.4 on). */
+  /** Use from metrics-server; requests and limits (where set) summed over the scheduled pods. */
   cpu: { usedMilli: number; allocatableMilli: number; requestedMilli?: number; limitMilli?: number } | null;
   memory: { used: number; allocatable: number; requested?: number; limit?: number } | null;
   volumes: { bound: number; total: number };
@@ -31,7 +31,7 @@ export interface Overview {
   components: number;
   prometheus: boolean;
   metricsServer: boolean;
-  /** Per node: use, and the requests and limits of the pods scheduled there, against allocatable (agents from 0.4 on). */
+  /** Per node: use, and the requests and limits of the pods scheduled there, against allocatable. */
   perNode?: NodeResources[];
 }
 
@@ -67,7 +67,7 @@ export interface Snapshot {
   /**
    * ISO time of the next scheduled run: the next interval tick, or sooner
    * when a watch event has an early run waiting. Absent until the schedule
-   * runs (and from agents before 0.5); the app then shows no countdown.
+   * runs; the app then shows no countdown.
    */
   nextCheckAt?: string;
 }

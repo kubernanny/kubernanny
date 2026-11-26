@@ -42,10 +42,6 @@ describe('settings', () => {
     expect((await service({})).actionState('argocd-sync')).toBe('on');
   });
 
-  it('reads DISABLED_CHECKS, the name before 0.3, as well', async () => {
-    expect((await service({ DISABLED_CHECKS: 'loki' })).moduleState('loki')).toBe('locked');
-  });
-
   it('keeps app switches across a restart through the ConfigMap', async () => {
     const kube = new DemoKubeClient();
     const config = loadConfig();

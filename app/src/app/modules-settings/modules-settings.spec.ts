@@ -12,7 +12,7 @@ const view: SettingsView = {
     { id: 'weblate', name: 'Weblate', icon: 'language-outline', category: 'apps', description: 'Übersetzungen.', deep: false, detected: true, state: 'on' },
     { id: 'velero', name: 'Velero', icon: 'archive-outline', category: 'storage', description: 'Backups.', deep: true, detected: false, state: 'locked' },
   ],
-  actions: [{ type: 'restart', label: 'Workloads neu starten', description: 'x', state: 'locked' }],
+  actions: [{ type: 'restart', label: 'Workloads neu starten', description: 'x', effect: 'y', state: 'locked' }],
   notifications: 'off',
 };
 
@@ -55,8 +55,6 @@ describe('settings sections', () => {
     const effect = 'Darf am betroffenen Workload die Annotation restartedAt setzen, wie kubectl rollout restart.';
     const s = settingsSections({ ...view, actions: [{ type: 'restart', label: 'Workloads neu starten', description: 'x', effect, state: 'on' }] }, de);
     expect(s[2]!.rows[0]).toMatchObject({ effect, on: true });
-    // An agent before 0.4 sends no effect: the row simply has none.
-    expect(settingsSections(view, de)[2]!.rows[0]!.effect).toBeUndefined();
   });
 
   it('leaves out the "not found" section when everything is in the cluster', () => {

@@ -423,7 +423,6 @@ export const en: Dictionary = {
     deadmanMinutes: '{{n}} min',
     deadmanLocked: 'Switched off in the deployment (notifications.appPush.deadman.enabled).',
     deadmanRelay: 'The relay does not support this yet. Once it does, it works without anything to do here.',
-    deadmanOldAgent: 'Needs a newer agent. Update Kubernanny in the cluster to use it.',
     deadmanOn: 'On: a message after {{n}} minutes of silence.',
     deadmanOff: 'Off for this device.',
   },

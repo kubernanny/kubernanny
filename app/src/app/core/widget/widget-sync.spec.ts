@@ -64,6 +64,7 @@ const snapshot = (light: Snapshot['light'], issues: Issue[], checkedAt = '2026-1
   score: 50,
   checkedAt,
   durationMs: 100,
+  agentVersion: '0.3.0',
   kubernetes: { version: 'v1.31', distribution: 'k3s' },
   overview: null,
   modules: [],

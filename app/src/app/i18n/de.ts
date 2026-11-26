@@ -427,7 +427,6 @@ export const de = {
     deadmanMinutes: '{{n}} Min.',
     deadmanLocked: 'In der Installation abgeschaltet (notifications.appPush.deadman.enabled).',
     deadmanRelay: 'Das Relay unterstützt das noch nicht. Sobald es das tut, geht es ohne weiteres Zutun.',
-    deadmanOldAgent: 'Braucht einen neueren Agenten. Aktualisiere Kubernanny im Cluster, um es zu nutzen.',
     deadmanOn: 'Ein: eine Nachricht nach {{n}} Minuten Stille.',
     deadmanOff: 'Für dieses Gerät aus.',
   },

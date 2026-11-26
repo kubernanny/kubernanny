@@ -187,12 +187,6 @@ describe('notifications and pairing', () => {
     expect(lines[imageLine - 1]).toMatch(/[█▀▄]/);
   });
 
-  it('refuses the removed PULSE_TOKEN instead of ignoring it', () => {
-    process.env.PULSE_TOKEN = 'x'.repeat(32);
-    expect(() => loadConfig()).toThrow(/PULSE_TOKEN is gone/);
-    delete process.env.PULSE_TOKEN;
-  });
-
   it('scores 100 without issues and keeps telling many issues apart', () => {
     expect(scoreFor([])).toBe(100);
     expect(scoreFor([{ severity: 'warning' }])).toBe(95);

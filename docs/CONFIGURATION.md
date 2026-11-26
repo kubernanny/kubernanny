@@ -77,7 +77,6 @@ The chart sets these; set them yourself with `deploy/install.yaml` or `docker ru
 | `CLUSTER_NAME` | `cluster` | |
 | `POD_NAMESPACE` | `kubernanny` | Namespace of the agent's own Secrets `kubernanny-identity` and `kubernanny-devices` (from the downward API) |
 | `INTERNAL_SOCKET` | `/tmp/kubernanny.sock` | Unix socket of the internal API (end-to-end calls, admin CLI). At most 100 bytes. |
-| `PULSE_TOKEN` | | Removed in 0.3: the agent refuses to start while it is set. Devices pair with their own keys. |
 | `PUBLIC_URL` | | For pairing links and ntfy's click action |
 | `PORT` | `8080` | API and web UI |
 | `METRICS_PORT` | `9100` | `0` disables `/metrics` |
@@ -89,7 +88,7 @@ The chart sets these; set them yourself with `deploy/install.yaml` or `docker ru
 | `NOTIFY_DETAIL` | `full` | `minimal`: no names, hosts or messages in notifications |
 | `CERT_WARN_DAYS`, `CERT_CRITICAL_DAYS` | `14`, `3` | |
 | `BACKUP_MAX_AGE_HOURS` | `26` | |
-| `DISABLED_MODULES` | | Comma-separated module ids switched off in the deployment (`DISABLED_CHECKS`, the name before 0.3, still works). The chart sets it from `checks.disabled`. |
+| `DISABLED_MODULES` | | Comma-separated module ids switched off in the deployment. The chart sets it from `checks.disabled`. |
 | `DIGEST`, `DIGEST_WEEKDAY`, `DIGEST_HOUR` | off, 1, 9 | `DIGEST=weekly` turns the weekly report on |
 | `TZ` | UTC | Time zone of the agent |
 | `ENABLED_MODULES` | | Comma-separated modules that are off by default (`vulnerabilities`), switched on for this install. The chart sets it from `vulnerabilities.enabled`. |

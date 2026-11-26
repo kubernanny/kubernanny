@@ -227,7 +227,7 @@ export class ClusterPage {
     }
     const tr = this.language.translator();
     const text = statusReport(
-      { name: cluster.name, view: this.view(), checkedAt: state.snapshot.checkedAt ?? null, agentVersion: state.snapshot.agentVersion ?? null, error: state.error },
+      { name: cluster.name, view: this.view(), checkedAt: state.snapshot.checkedAt ?? null, agentVersion: state.snapshot.agentVersion, error: state.error },
       tr,
     );
     const outcome = await shareText(text, tr.t('cluster.shareTitle', { cluster: cluster.name }));
