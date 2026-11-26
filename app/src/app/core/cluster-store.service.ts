@@ -1,5 +1,6 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { inject, Injectable, signal } from '@angular/core';
 import { Preferences } from '@capacitor/preferences';
+
 import { ClusterConfig } from './agent.model';
 import { DEMO_LABELS, DEMO_SCENARIOS } from './demo/demo-data';
 import { DeviceKeyVault } from './device-key-vault';
@@ -33,14 +34,22 @@ export class ClusterStore {
    * which only the pairing page passes after the person confirmed: no other
    * path may swap the agent a cluster talks to.
    */
-  async save(cluster: Omit<ClusterConfig, 'id'> & { id?: string }, options: { replaceKeys?: boolean } = {}): Promise<ClusterConfig> {
+  async save(
+    cluster: Omit<ClusterConfig, 'id'> & { id?: string },
+    options: { replaceKeys?: boolean } = {},
+  ): Promise<ClusterConfig> {
     const saved: ClusterConfig = {
       ...cluster,
       id: cluster.id ?? crypto.randomUUID(),
       url: cluster.url.trim().replace(/\/+$/, ''),
     };
     const before = this.state().find((c) => c.id === saved.id);
-    if (before && !options.replaceKeys && (before.agentKey !== saved.agentKey || (before.deviceKey && saved.deviceKey && before.deviceKey !== saved.deviceKey))) {
+    if (
+      before &&
+      !options.replaceKeys &&
+      (before.agentKey !== saved.agentKey ||
+        (before.deviceKey && saved.deviceKey && before.deviceKey !== saved.deviceKey))
+    ) {
       throw new Error(`refusing to change the keys of cluster ${saved.id} without confirmation`);
     }
     if (saved.deviceKey) {
@@ -48,7 +57,9 @@ export class ClusterStore {
     }
     const list = this.state();
     const index = list.findIndex((c) => c.id === saved.id);
-    this.state.set(index === -1 ? [...list, saved] : list.map((c) => (c.id === saved.id ? saved : c)));
+    this.state.set(
+      index === -1 ? [...list, saved] : list.map((c) => (c.id === saved.id ? saved : c)),
+    );
     await this.persist();
     return saved;
   }
@@ -100,7 +111,9 @@ export class ClusterStore {
           moved = true;
           return c;
         }
-        return c.demo ? c : { ...c, deviceKey: (await this.vault.get(c.id).catch(() => null)) ?? '' };
+        return c.demo
+          ? c
+          : { ...c, deviceKey: (await this.vault.get(c.id).catch(() => null)) ?? '' };
       }),
     );
     this.state.set(clusters);
@@ -111,6 +124,9 @@ export class ClusterStore {
 
   /** The list without private keys: those live in the vault only. */
   private persist(): Promise<void> {
-    return Preferences.set({ key: KEY, value: JSON.stringify(this.state().map((c) => ({ ...c, deviceKey: '' }))) });
+    return Preferences.set({
+      key: KEY,
+      value: JSON.stringify(this.state().map((c) => ({ ...c, deviceKey: '' }))),
+    });
   }
 }

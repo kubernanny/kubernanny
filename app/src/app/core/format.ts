@@ -1,5 +1,5 @@
+import { Lang, LOCALE } from '../i18n/lang';
 import { CheckStatus, Light, Tone, Unit } from './agent.model';
-import { LOCALE, Lang } from '../i18n/lang';
 
 /*
  * Numbers, sizes and times for display. Pure functions with the language as
@@ -12,7 +12,11 @@ export const NO_VALUE = '–';
 
 /** A number with exactly `digits` decimals, without thousands separators ("1,5" / "1.5"). */
 export function decimal(v: number, lang: Lang, digits: number): string {
-  return new Intl.NumberFormat(LOCALE[lang], { minimumFractionDigits: digits, maximumFractionDigits: digits, useGrouping: false }).format(v);
+  return new Intl.NumberFormat(LOCALE[lang], {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+    useGrouping: false,
+  }).format(v);
 }
 
 export function bytes(n: number | null | undefined, lang: Lang, digits = 1): string {
@@ -49,7 +53,10 @@ export function percent(ratio: number | null | undefined, lang: Lang): string {
   return lang === 'de' ? `${n} %` : `${n}%`;
 }
 
-export function ratio(part: number | null | undefined, whole: number | null | undefined): number | null {
+export function ratio(
+  part: number | null | undefined,
+  whole: number | null | undefined,
+): number | null {
   return part === null || part === undefined || !whole ? null : part / whole;
 }
 
@@ -90,8 +97,13 @@ export function relativeTime(iso: string | null | undefined, now: Date, lang: La
 export function endTime(iso: string, now: Date, lang: Lang): string {
   const end = new Date(iso);
   const locale = LOCALE[lang];
-  const time = end.toLocaleTimeString(locale, { hour: lang === 'de' ? '2-digit' : 'numeric', minute: '2-digit' });
-  return end.toDateString() === now.toDateString() ? time : `${end.toLocaleDateString(locale, { weekday: 'short' })}, ${time}`;
+  const time = end.toLocaleTimeString(locale, {
+    hour: lang === 'de' ? '2-digit' : 'numeric',
+    minute: '2-digit',
+  });
+  return end.toDateString() === now.toDateString()
+    ? time
+    : `${end.toLocaleDateString(locale, { weekday: 'short' })}, ${time}`;
 }
 
 /** "stumm bis 18:30", "stumm bis Fr., 08:00" / "silenced until 6:30 PM", "silenced until Fri, 8:00 AM": when a silence ends. */
@@ -111,7 +123,10 @@ export function sinceText(iso: string, now: Date, lang: Lang): string {
 
 /** Hours of the day in the active locale: "14:05" / "2:05 PM". */
 export function clockTime(ms: number, lang: Lang): string {
-  return new Date(ms).toLocaleTimeString(LOCALE[lang], { hour: lang === 'de' ? '2-digit' : 'numeric', minute: '2-digit' });
+  return new Date(ms).toLocaleTimeString(LOCALE[lang], {
+    hour: lang === 'de' ? '2-digit' : 'numeric',
+    minute: '2-digit',
+  });
 }
 
 /** "seit 3 Tagen", "seit 8 Monaten" / "for 3 days", "for 8 months": how long a node or workload has existed. */
@@ -125,7 +140,9 @@ export function age(iso: string | undefined, now: Date, lang: Lang): string {
     return de ? 'seit heute' : 'since today';
   }
   if (days < 60) {
-    return de ? `seit ${days} ${days === 1 ? 'Tag' : 'Tagen'}` : `for ${days} ${days === 1 ? 'day' : 'days'}`;
+    return de
+      ? `seit ${days} ${days === 1 ? 'Tag' : 'Tagen'}`
+      : `for ${days} ${days === 1 ? 'day' : 'days'}`;
   }
   const months = Math.round(days / 30);
   if (months < 24) {
@@ -183,7 +200,9 @@ export function formatValue(v: number, unit: Unit, lang: Lang): string {
       return v < 1 ? `${decimal(v * 1000, lang, v < 0.01 ? 1 : 0)} ms` : `${decimal(v, lang, 2)} s`;
     case 'count':
       // Restarts and the like are whole numbers; a rate below one keeps one decimal, "0" stays "0".
-      return Number.isInteger(v) || v >= 10 || v === 0 ? String(Math.round(v)) : decimal(v, lang, 1);
+      return Number.isInteger(v) || v >= 10 || v === 0
+        ? String(Math.round(v))
+        : decimal(v, lang, 1);
   }
 }
 
@@ -195,4 +214,9 @@ export const STATUS_TONE: Record<CheckStatus, Tone> = {
   skipped: 'muted',
 };
 
-export const LIGHT_TONE: Record<Light, Tone> = { green: 'ok', yellow: 'warning', red: 'critical', unknown: 'muted' };
+export const LIGHT_TONE: Record<Light, Tone> = {
+  green: 'ok',
+  yellow: 'warning',
+  red: 'critical',
+  unknown: 'muted',
+};

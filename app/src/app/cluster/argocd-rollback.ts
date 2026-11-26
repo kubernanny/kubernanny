@@ -38,7 +38,15 @@ export function rollbackRows(m: ModuleView, tr: Translator): RollbackRow[] {
   }
   const date = (iso: string | undefined) => {
     const ms = iso ? Date.parse(iso) : NaN;
-    return Number.isNaN(ms) ? '?' : new Date(ms).toLocaleString(LOCALE[tr.lang], { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return Number.isNaN(ms)
+      ? '?'
+      : new Date(ms).toLocaleString(LOCALE[tr.lang], {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
   };
   return (m.rollbacks ?? []).flatMap((a) => {
     const from = a.current && SHORT.test(a.current) ? a.current : '?';
@@ -59,7 +67,10 @@ export function rollbackRows(m: ModuleView, tr: Translator): RollbackRow[] {
         key: `${a.namespace}/${a.app}`,
         namespace: a.namespace,
         app: a.app,
-        now: a.current && SHORT.test(a.current) ? tr.t('module.rollbackNow', { revision: a.current }) : '',
+        now:
+          a.current && SHORT.test(a.current)
+            ? tr.t('module.rollbackNow', { revision: a.current })
+            : '',
         sheetTitle: tr.t('module.rollbackSheet', { app: a.app }),
         confirmTitle: tr.t('module.rollbackConfirmTitle', { app: a.app }),
         choices,
@@ -69,12 +80,25 @@ export function rollbackRows(m: ModuleView, tr: Translator): RollbackRow[] {
 }
 
 /** The module with `id` as the deployment of that app now, until the status reloads. */
-export function markRolledBack(m: ModuleView, row: Pick<RollbackRow, 'namespace' | 'app'>, id: number): ModuleView {
+export function markRolledBack(
+  m: ModuleView,
+  row: Pick<RollbackRow, 'namespace' | 'app'>,
+  id: number,
+): ModuleView {
   return {
     ...m,
     rollbacks: (m.rollbacks ?? []).map((a) => {
-      const target = a.namespace === row.namespace && a.app === row.app ? a.entries.find((e) => e.id === id) : undefined;
-      return target ? { ...a, current: target.short, entries: a.entries.map((e) => ({ ...e, current: e.id === id })) } : a;
+      const target =
+        a.namespace === row.namespace && a.app === row.app
+          ? a.entries.find((e) => e.id === id)
+          : undefined;
+      return target
+        ? {
+            ...a,
+            current: target.short,
+            entries: a.entries.map((e) => ({ ...e, current: e.id === id })),
+          }
+        : a;
     }),
   };
 }

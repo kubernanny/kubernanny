@@ -1,8 +1,8 @@
 import { allWorkloads, readiness } from '../discovery/discovery';
 import { raw, rawOr, t } from '../i18n/text';
 import type { Inventory } from '../inventory/inventory';
-import type { ArgoHistoryEntry, ArgoSource } from './argocd-rollback';
 import { lastSyncAt, PENDING_HINT_DAYS } from './argocd-pending';
+import type { ArgoHistoryEntry, ArgoSource } from './argocd-rollback';
 import { ageText, Issue, IssueAction, ObjectMeta, WorkloadKind } from './types';
 
 interface AppResource {
@@ -27,7 +27,12 @@ export function isAutomated(app: Pick<ArgoApplication, 'spec'>): boolean {
 
 export interface ArgoApplication {
   metadata: ObjectMeta;
-  spec?: { syncPolicy?: { automated?: unknown }; destination?: { namespace?: string }; source?: ArgoSource; sources?: ArgoSource[] };
+  spec?: {
+    syncPolicy?: { automated?: unknown };
+    destination?: { namespace?: string };
+    source?: ArgoSource;
+    sources?: ArgoSource[];
+  };
   /** Set while an operation (a sync) is requested and not yet picked up. */
   operation?: unknown;
   status?: {
@@ -35,7 +40,13 @@ export interface ArgoApplication {
     history?: ArgoHistoryEntry[];
     sync?: { status?: string; revision?: string };
     health?: { status?: string; message?: string };
-    operationState?: { phase?: string; message?: string; startedAt?: string; finishedAt?: string; syncResult?: { revision?: string } };
+    operationState?: {
+      phase?: string;
+      message?: string;
+      startedAt?: string;
+      finishedAt?: string;
+      syncResult?: { revision?: string };
+    };
     resources?: AppResource[];
     conditions?: { type: string; message?: string }[];
   };
@@ -72,7 +83,13 @@ function restartTargets(app: ArgoApplication, broken: AppResource[], inv: Invent
   for (const r of broken) {
     const target: string = r.namespace ?? destination;
     const key = `${r.kind}/${target}/${r.name}`;
-    if (!RESTARTABLE.has(r.kind) || r.health?.status !== 'Degraded' || target !== destination || !notReady.has(key) || seen.has(key)) {
+    if (
+      !RESTARTABLE.has(r.kind) ||
+      r.health?.status !== 'Degraded' ||
+      target !== destination ||
+      !notReady.has(key) ||
+      seen.has(key)
+    ) {
       continue;
     }
     seen.add(key);
@@ -152,8 +169,20 @@ export function evaluateArgoApps(apps: ArgoApplication[], inv?: Inventory, now: 
       const last = Date.parse(lastSyncAt(app) ?? '');
       const waited = Number.isFinite(last) ? now.getTime() - last : null;
       if (automated) {
-        issues.push({ id: `${id}/sync`, check: 'argocd', severity: 'warning', title: t('argocd.drift.title', { app: name }), cause: t('argocd.drift.cause'), actions: syncActions });
-      } else if (health !== 'Degraded' && health !== 'Missing' && waited !== null && waited > PENDING_HINT_DAYS * 86_400_000) {
+        issues.push({
+          id: `${id}/sync`,
+          check: 'argocd',
+          severity: 'warning',
+          title: t('argocd.drift.title', { app: name }),
+          cause: t('argocd.drift.cause'),
+          actions: syncActions,
+        });
+      } else if (
+        health !== 'Degraded' &&
+        health !== 'Missing' &&
+        waited !== null &&
+        waited > PENDING_HINT_DAYS * 86_400_000
+      ) {
         issues.push({
           id: `${id}/sync`,
           check: 'argocd',

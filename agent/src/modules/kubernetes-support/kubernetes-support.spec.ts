@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { maintainedMinor } from '../../demo/demo-cluster';
 import { de, en } from '../../testing/i18n';
 import { deprecatedApisFrom, evaluateDeprecatedApis } from './deprecated-apis';
@@ -15,7 +16,12 @@ describe('kubernetes-support', () => {
     expect(state).toMatchObject({ minor: '1.30', eol: '2025-07-15', ended: true, next: '1.32' });
     expect(state.issues).toHaveLength(1);
     const issue = de(state.issues[0]!);
-    expect(issue).toMatchObject({ id: 'kubernetes-support/1.30', severity: 'warning', actions: [], title: 'Kubernetes 1.30 bekommt keine Updates mehr' });
+    expect(issue).toMatchObject({
+      id: 'kubernetes-support/1.30',
+      severity: 'warning',
+      actions: [],
+      title: 'Kubernetes 1.30 bekommt keine Updates mehr',
+    });
     expect(issue.cause).toBe(
       'Das Kubernetes-Projekt pflegt 1.30 seit dem 15.07.2025 nicht mehr, auch Sicherheitslücken werden nicht mehr geschlossen. Aktualisiere auf 1.32 oder neuer, eine Minor-Version nach der anderen. Anleitung: https://docs.rke2.io/upgrades/manual_upgrade',
     );
@@ -24,15 +30,27 @@ describe('kubernetes-support', () => {
 
   it('warns from 60 days before the end, hints from 120, and is quiet before', () => {
     const before = (days: number) => new Date(Date.parse('2026-06-28T23:59:59Z') - days * day);
-    expect(evaluateKubernetesSupport('v1.33.1', before(59), 'k3s', table).issues[0]).toMatchObject({ severity: 'warning' });
-    expect(en(evaluateKubernetesSupport('v1.33.1', before(59), 'k3s', table).issues[0]!).title).toBe('Kubernetes 1.33: support ends in 59 days');
-    expect(en(evaluateKubernetesSupport('v1.33.1', before(59), 'k3s', table).issues[0]!).cause).toContain('https://docs.k3s.io/upgrades');
-    expect(evaluateKubernetesSupport('v1.33.1', before(100), 'k3s', table).issues[0]).toMatchObject({ severity: 'info' });
+    expect(evaluateKubernetesSupport('v1.33.1', before(59), 'k3s', table).issues[0]).toMatchObject({
+      severity: 'warning',
+    });
+    expect(en(evaluateKubernetesSupport('v1.33.1', before(59), 'k3s', table).issues[0]!).title).toBe(
+      'Kubernetes 1.33: support ends in 59 days',
+    );
+    expect(en(evaluateKubernetesSupport('v1.33.1', before(59), 'k3s', table).issues[0]!).cause).toContain(
+      'https://docs.k3s.io/upgrades',
+    );
+    expect(evaluateKubernetesSupport('v1.33.1', before(100), 'k3s', table).issues[0]).toMatchObject({
+      severity: 'info',
+    });
     expect(evaluateKubernetesSupport('v1.33.1', before(130), 'k3s', table).issues).toEqual([]);
   });
 
   it('says nothing about a minor newer than the table, and calls one older than the table ended', () => {
-    expect(evaluateKubernetesSupport('v1.34.0', at('2026-01-10'), 'kubeadm', table)).toMatchObject({ minor: '1.34', eol: null, issues: [] });
+    expect(evaluateKubernetesSupport('v1.34.0', at('2026-01-10'), 'kubeadm', table)).toMatchObject({
+      minor: '1.34',
+      eol: null,
+      issues: [],
+    });
     const old = evaluateKubernetesSupport('v1.18.20', at('2026-01-10'), 'kubeadm', table);
     expect(old.issues[0]).toMatchObject({ severity: 'warning' });
     expect(de(old.issues[0]!).cause).toContain('schon lange nicht mehr');
@@ -40,8 +58,12 @@ describe('kubernetes-support', () => {
   });
 
   it('is only a hint when the table knows nothing newer that is still maintained (the table is out of date)', () => {
-    expect(evaluateKubernetesSupport('v1.33.0', at('2027-01-10'), 'RKE2', table).issues[0]).toMatchObject({ severity: 'info' });
-    expect(en(evaluateKubernetesSupport('v1.33.0', at('2027-01-10'), 'RKE2', table).issues[0]!).cause).toContain('Upgrade to a newer minor version');
+    expect(evaluateKubernetesSupport('v1.33.0', at('2027-01-10'), 'RKE2', table).issues[0]).toMatchObject({
+      severity: 'info',
+    });
+    expect(en(evaluateKubernetesSupport('v1.33.0', at('2027-01-10'), 'RKE2', table).issues[0]!).cause).toContain(
+      'Upgrade to a newer minor version',
+    );
   });
 
   it('cannot judge an unreadable version', () => {
@@ -70,7 +92,9 @@ describe('kubernetes-support', () => {
 });
 
 describe('deprecated APIs in use', () => {
-  const sample = (group: string, version: string, resource: string, removed_release: string) => ({ metric: { group, version, resource, removed_release } });
+  const sample = (group: string, version: string, resource: string, removed_release: string) => ({
+    metric: { group, version, resource, removed_release },
+  });
   const apis = deprecatedApisFrom([
     sample('flowcontrol.apiserver.k8s.io', 'v1beta3', 'flowschemas', '1.34'),
     sample('flowcontrol.apiserver.k8s.io', 'v1beta3', 'prioritylevelconfigurations', '1.34'),
@@ -86,7 +110,9 @@ describe('deprecated APIs in use', () => {
       ['kubernetes-support/deprecated-apis/1.37', 'info'],
     ]);
     expect(en(issues[0]!).title).toBe('2 APIs in use are gone in Kubernetes 1.34');
-    expect(en(issues[0]!).cause).toContain('flowcontrol.apiserver.k8s.io/v1beta3 flowschemas, flowcontrol.apiserver.k8s.io/v1beta3 prioritylevelconfigurations');
+    expect(en(issues[0]!).cause).toContain(
+      'flowcontrol.apiserver.k8s.io/v1beta3 flowschemas, flowcontrol.apiserver.k8s.io/v1beta3 prioritylevelconfigurations',
+    );
     expect(de(issues[1]!).title).toBe('Eine genutzte API fehlt ab Kubernetes 1.37');
     expect(issues.every((i) => i.actions.length === 0)).toBe(true);
   });

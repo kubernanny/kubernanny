@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { age, bytes, clockTime, cores, dateTime, decimal, duration, formatValue, percent, relativeTime, sinceText, span, startOfDay, untilText } from './format';
+
+import {
+  age,
+  bytes,
+  clockTime,
+  cores,
+  dateTime,
+  decimal,
+  duration,
+  formatValue,
+  percent,
+  relativeTime,
+  sinceText,
+  span,
+  startOfDay,
+  untilText,
+} from './format';
 
 const NOW = new Date('2026-11-24T12:00:00');
 const ago = (ms: number) => new Date(NOW.getTime() - ms).toISOString();
@@ -41,9 +57,13 @@ describe('format, German', () => {
   });
 
   it('says when a silence ends, with the weekday once it is another day', () => {
-    expect(untilText(new Date('2026-11-24T18:30:00').toISOString(), NOW, 'de')).toBe('stumm bis 18:30');
+    expect(untilText(new Date('2026-11-24T18:30:00').toISOString(), NOW, 'de')).toBe(
+      'stumm bis 18:30',
+    );
     // ICU versions differ on the abbreviation's dot ("Fr." or "Fr").
-    expect(untilText(new Date('2026-11-27T08:00:00').toISOString(), NOW, 'de')).toMatch(/^stumm bis Fr\.?, 08:00$/);
+    expect(untilText(new Date('2026-11-27T08:00:00').toISOString(), NOW, 'de')).toMatch(
+      /^stumm bis Fr\.?, 08:00$/,
+    );
     expect(clockTime(new Date('2026-11-24T14:05:00').getTime(), 'de')).toBe('14:05');
   });
 });
@@ -60,9 +80,15 @@ describe('spans and moments', () => {
   });
 
   it('writes a recent moment with the weekday', () => {
-    expect(plain(dateTime(new Date('2026-11-23T14:05:00').toISOString(), 'de'))).toMatch(/^Mo\.?, 23\.11\.?, 14:05$/);
-    expect(plain(dateTime(new Date('2026-11-23T14:05:00').toISOString(), 'en'))).toBe('Mon, 11/23, 2:05 PM');
-    expect(startOfDay(new Date('2026-11-23T14:05:00').getTime())).toBe(new Date('2026-11-23T00:00:00').getTime());
+    expect(plain(dateTime(new Date('2026-11-23T14:05:00').toISOString(), 'de'))).toMatch(
+      /^Mo\.?, 23\.11\.?, 14:05$/,
+    );
+    expect(plain(dateTime(new Date('2026-11-23T14:05:00').toISOString(), 'en'))).toBe(
+      'Mon, 11/23, 2:05 PM',
+    );
+    expect(startOfDay(new Date('2026-11-23T14:05:00').getTime())).toBe(
+      new Date('2026-11-23T00:00:00').getTime(),
+    );
   });
 });
 
@@ -93,8 +119,12 @@ describe('format, English', () => {
   });
 
   it('says when a silence ends in 12-hour time', () => {
-    expect(plain(untilText(new Date('2026-11-24T18:30:00').toISOString(), NOW, 'en'))).toBe('silenced until 6:30 PM');
-    expect(plain(untilText(new Date('2026-11-27T08:00:00').toISOString(), NOW, 'en'))).toBe('silenced until Fri, 8:00 AM');
+    expect(plain(untilText(new Date('2026-11-24T18:30:00').toISOString(), NOW, 'en'))).toBe(
+      'silenced until 6:30 PM',
+    );
+    expect(plain(untilText(new Date('2026-11-27T08:00:00').toISOString(), NOW, 'en'))).toBe(
+      'silenced until Fri, 8:00 AM',
+    );
     expect(plain(clockTime(new Date('2026-11-24T14:05:00').getTime(), 'en'))).toBe('2:05 PM');
   });
 });

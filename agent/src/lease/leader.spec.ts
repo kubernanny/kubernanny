@@ -1,14 +1,16 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import request from 'supertest';
 import { createServer } from 'node:http';
+
+import { generateKeyPair } from '@kubernanny/protocol';
+import request from 'supertest';
+import { afterEach, describe, expect, it } from 'vitest';
+
 import { Agent } from '../agent';
 import { INTERNAL, PRINCIPAL_HEADER } from '../auth/principal';
+import { DemoKubeClient } from '../demo/demo-cluster';
 import { KubeError } from '../kube/kube-client';
 import { Notifier } from '../notify/notifier';
 import { Snapshot } from '../status/status.service';
 import { DemoAgent, startDemoAgent } from '../testing/demo-agent';
-import { DemoKubeClient } from '../demo/demo-cluster';
-import { generateKeyPair } from '@kubernanny/protocol';
 import { LeaderElection, LeaseApi } from './leader';
 
 /** One Lease object with the API server's optimistic concurrency: a write naming an old resourceVersion gets 409. */
@@ -36,7 +38,10 @@ class FakeLeases implements LeaseApi {
     this.lease = { metadata: { resourceVersion: String(++this.version) }, spec: body.spec };
   }
 
-  async mergePatch(_path: string, body: { metadata: { resourceVersion: string }; spec: Record<string, unknown> }): Promise<void> {
+  async mergePatch(
+    _path: string,
+    body: { metadata: { resourceVersion: string }; spec: Record<string, unknown> },
+  ): Promise<void> {
     if (this.down) {
       throw new KubeError(503, 'unavailable');
     }
@@ -57,7 +62,13 @@ class FakeLeases implements LeaseApi {
 }
 
 function pod(api: FakeLeases, identity: string, clock: { now: number }) {
-  return new LeaderElection(api, { namespace: 'kubernanny', name: 'kubernanny', identity, durationSeconds: 15, now: () => clock.now });
+  return new LeaderElection(api, {
+    namespace: 'kubernanny',
+    name: 'kubernanny',
+    identity,
+    durationSeconds: 15,
+    now: () => clock.now,
+  });
 }
 
 describe('the lease (which pod is in charge)', () => {
@@ -112,7 +123,9 @@ describe('the lease (which pod is in charge)', () => {
     const api = new FakeLeases();
     const clock = { now: 1_000_000 };
     await pod(api, 'old', clock).tryNow();
-    await pod(api, 'old', clock).release().catch(() => undefined);
+    await pod(api, 'old', clock)
+      .release()
+      .catch(() => undefined);
     api.lease!.spec.holderIdentity = '';
     const results = await Promise.all([pod(api, 'pod-a', clock).tryNow(), pod(api, 'pod-b', clock).tryNow()]);
     expect(results.filter(Boolean)).toHaveLength(1);
@@ -150,9 +163,18 @@ describe('two pods during a rolling update', () => {
 
   async function start(name: string, api: FakeLeases, clock: { now: number }) {
     const pushed: Snapshot[] = [];
-    const notifier = { channels: ['ntfy'], update: async (s: Snapshot) => void pushed.push(s), securityAlert: async () => undefined, test: async () => ['ntfy'], locked: false };
+    const notifier = {
+      channels: ['ntfy'],
+      update: async (s: Snapshot) => void pushed.push(s),
+      securityAlert: async () => undefined,
+      test: async () => ['ntfy'],
+      locked: false,
+    };
     const leader = pod(api, name, clock);
-    const agent = await startDemoAgent({ DEMO: 'broken', CHECK_INTERVAL_SECONDS: '3600' }, { notifier: notifier as unknown as Notifier, leader });
+    const agent = await startDemoAgent(
+      { DEMO: 'broken', CHECK_INTERVAL_SECONDS: '3600' },
+      { notifier: notifier as unknown as Notifier, leader },
+    );
     agents.push(agent);
     return { agent: agent.app, leader, pushed };
   }
@@ -168,7 +190,10 @@ describe('two pods during a rolling update', () => {
     expect(neu.pushed).toEqual([]);
 
     await request(internal(neu.agent)).get('/api/status').set(PRINCIPAL_HEADER, 'demo').expect(200);
-    const refused = await request(internal(neu.agent)).post('/api/notify/test').set(PRINCIPAL_HEADER, 'demo').expect(503);
+    const refused = await request(internal(neu.agent))
+      .post('/api/notify/test')
+      .set(PRINCIPAL_HEADER, 'demo')
+      .expect(503);
     expect(refused.body.code).toBe('AGENT_HANDOVER');
     await request(internal(old.agent)).post('/api/notify/test').set(PRINCIPAL_HEADER, 'demo').expect(200);
 
@@ -263,9 +288,18 @@ describe('devices and switches during a handover (fail closed)', () => {
     });
 
   async function pair(kube: SharedKube, api: FakeLeases, clock: { now: number }) {
-    const notifier = { channels: [], update: async () => undefined, securityAlert: async () => undefined, test: async () => [], locked: false } as unknown as Notifier;
+    const notifier = {
+      channels: [],
+      update: async () => undefined,
+      securityAlert: async () => undefined,
+      test: async () => [],
+      locked: false,
+    } as unknown as Notifier;
     const start = async (name: string) => {
-      const a = await startDemoAgent({ DEMO: '', CHECK_INTERVAL_SECONDS: '3600', POD_NAMESPACE: 'kubernanny' }, { kube, notifier, leader: pod(api, name, clock) });
+      const a = await startDemoAgent(
+        { DEMO: '', CHECK_INTERVAL_SECONDS: '3600', POD_NAMESPACE: 'kubernanny' },
+        { kube, notifier, leader: pod(api, name, clock) },
+      );
       agents.push(a);
       return a.app;
     };

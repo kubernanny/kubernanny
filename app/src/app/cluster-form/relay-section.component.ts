@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { TranslocoDirective } from '@jsverse/transloco';
+
 import { AgentInfo, ClusterConfig } from '../core/agent.model';
 import { ClusterStore } from '../core/cluster-store.service';
 import { LanguageService } from '../i18n/language.service';
@@ -15,8 +16,16 @@ import { LanguageService } from '../i18n/language.service';
         <h2>{{ t('form.relay') }}</h2>
         @if (relay(); as r) {
           <dl>
-            <div><dt>{{ t('form.relayAddress') }}</dt><dd><code>{{ r.url }}</code></dd></div>
-            <div><dt>{{ t('form.relayConnected') }}</dt><dd>{{ r.connected }}</dd></div>
+            <div>
+              <dt>{{ t('form.relayAddress') }}</dt>
+              <dd>
+                <code>{{ r.url }}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>{{ t('form.relayConnected') }}</dt>
+              <dd>{{ r.connected }}</dd>
+            </div>
           </dl>
           <label class="toggle">
             <input type="checkbox" [checked]="r.on" (change)="toggleRelay()" />
@@ -62,7 +71,11 @@ export class RelaySectionComponent {
     }
     const status = this.info()?.relay;
     const tr = this.language.translator();
-    return { url: c.relayUrl, on: !c.relayOff, connected: tr.t(status ? (status.connected ? 'form.yes' : 'form.notNow') : 'form.unknown') };
+    return {
+      url: c.relayUrl,
+      on: !c.relayOff,
+      connected: tr.t(status ? (status.connected ? 'form.yes' : 'form.notNow') : 'form.unknown'),
+    };
   });
 
   async toggleRelay(): Promise<void> {

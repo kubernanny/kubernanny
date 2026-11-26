@@ -6,16 +6,15 @@
  * issue, a stat or a log line, and every list is cut to a size.
  */
 import { Issue, IssueSeverity } from '../checks/types';
+import type { Text } from '../i18n/text';
 import { isText, t } from '../i18n/text';
 import { CONTROL_CHARS } from '../util/log-safe';
 import type { DetailSection, Stat } from './types';
-import type { Text } from '../i18n/text';
 
 /** Longest string kept from an untrusted answer (names, states, messages). */
 const MAX_FIELD = 300;
 /** Issues one untrusted integration may report; the rest become one summary issue. */
 export const MAX_ISSUES_PER_MODULE = 50;
-
 
 /** A string (or a finite number as one), without control characters, cut to `max`; anything else is undefined. */
 export function str(value: unknown, max = MAX_FIELD): string | undefined {
@@ -87,7 +86,15 @@ export function capIssues(issues: Issue[], moduleId: string, max = MAX_ISSUES_PE
 
 /** A stat value that is neither a string nor a Text (an object from a forged answer) becomes "?". */
 export function boundStats(stats: Stat[]): Stat[] {
-  return stats.slice(0, 20).map((s) => (typeof s.value === 'string' ? { ...s, value: str(s.value, 80) ?? '?' } : isText(s.value) ? s : { ...s, value: '?' }));
+  return stats
+    .slice(0, 20)
+    .map((s) =>
+      typeof s.value === 'string'
+        ? { ...s, value: str(s.value, 80) ?? '?' }
+        : isText(s.value)
+          ? s
+          : { ...s, value: '?' },
+    );
 }
 
 /** Rows one section of an untrusted integration may show. */
@@ -106,7 +113,13 @@ export function boundDetails(details: DetailSection[] | undefined): DetailSectio
     const more = (d.more ?? 0) + Math.max(0, d.rows.length - MAX_DETAIL_ROWS);
     const extra = more > 0 ? { more } : {};
     if (d.kind === 'table') {
-      return { ...d, ...extra, rows: d.rows.slice(0, MAX_DETAIL_ROWS).map((r) => ({ tone: r.tone, cells: r.cells.slice(0, d.columns.length).map((c) => cell(c)) })) };
+      return {
+        ...d,
+        ...extra,
+        rows: d.rows
+          .slice(0, MAX_DETAIL_ROWS)
+          .map((r) => ({ tone: r.tone, cells: r.cells.slice(0, d.columns.length).map((c) => cell(c)) })),
+      };
     }
     return {
       ...d,
@@ -116,7 +129,9 @@ export function boundDetails(details: DetailSection[] | undefined): DetailSectio
         tone: r.tone,
         ...(r.sub !== undefined ? { sub: cell(r.sub) } : {}),
         ...(r.value !== undefined ? { value: cell(r.value, 60) } : {}),
-        ...(r.meta ? { meta: r.meta.slice(0, 6).map((m) => ({ text: cell(m.text, 80), ...(m.tone ? { tone: m.tone } : {}) })) } : {}),
+        ...(r.meta
+          ? { meta: r.meta.slice(0, 6).map((m) => ({ text: cell(m.text, 80), ...(m.tone ? { tone: m.tone } : {}) })) }
+          : {}),
       })),
     };
   });

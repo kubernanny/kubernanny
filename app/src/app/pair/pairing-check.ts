@@ -10,9 +10,15 @@ import { ClusterConfig } from '../core/agent.model';
  *   cluster (their relay, their fake agent). Only an explicit "replace"
  *   goes on.
  */
-export type PairingCheck = { kind: 'new' } | { kind: 'again' | 'keyChanged'; existing: ClusterConfig };
+export type PairingCheck =
+  { kind: 'new' } | { kind: 'again' | 'keyChanged'; existing: ClusterConfig };
 
-export function checkPairing(clusters: readonly ClusterConfig[], address: string, name: string | undefined, agentKey: string): PairingCheck {
+export function checkPairing(
+  clusters: readonly ClusterConfig[],
+  address: string,
+  name: string | undefined,
+  agentKey: string,
+): PairingCheck {
   const url = address.trim().replace(/\/+$/, '');
   const matches = clusters.filter((c) => !c.demo && (c.url === url || (!!name && c.name === name)));
   const changed = matches.find((c) => c.agentKey !== agentKey);

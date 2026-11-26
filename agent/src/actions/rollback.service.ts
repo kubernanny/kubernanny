@@ -1,10 +1,10 @@
-import { BadRequestError, ConflictError, ForbiddenError, HttpError, HttpStatus, NotFoundError } from '../http/errors';
-import { Logger } from '../logger';
 import type { Principal } from '../auth/devices.service';
 import { ArgoApplication } from '../checks/argocd.check';
 import { rollbackTarget, shortRevision } from '../checks/argocd-rollback';
-import { Text, t } from '../i18n/text';
+import { BadRequestError, ConflictError, ForbiddenError, HttpError, HttpStatus, NotFoundError } from '../http/errors';
+import { t, Text } from '../i18n/text';
 import { KubeClient, KubeError } from '../kube/kube-client';
+import { Logger } from '../logger';
 import { Notifier } from '../notify/notifier';
 import { SettingsService } from '../settings/settings.service';
 import { StatusService } from '../status/status.service';
@@ -57,7 +57,10 @@ export class RollbackService {
     const key = `${namespace}/${app}`;
     const previous = this.last.get(key);
     if (previous !== undefined && now - previous < ROLLBACK_INTERVAL_MS) {
-      throw new HttpError({ code: 'ROLLBACK_RATE_LIMITED', message: t('error.rollbackRateLimited') }, HttpStatus.TOO_MANY_REQUESTS);
+      throw new HttpError(
+        { code: 'ROLLBACK_RATE_LIMITED', message: t('error.rollbackRateLimited') },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
     const path = `/apis/argoproj.io/v1alpha1/namespaces/${encodeURIComponent(namespace)}/applications/${encodeURIComponent(app)}`;
     let application: ArgoApplication;
@@ -80,7 +83,9 @@ export class RollbackService {
     this.last.set(key, now);
     // Before it takes effect, like every security-relevant change; never blocks it (securityAlert does not throw).
     await this.notifier?.securityAlert(who.name, [{ kind: 'rolledBack', app: key, from: fromShort, to: toShort }]);
-    this.audit.log(`argocd-rollback by "${who.name}" (${who.id}) on ${key}: ${logSafe(from ?? '-', 64)} -> ${decided.revision} (history id ${id})`);
+    this.audit.log(
+      `argocd-rollback by "${who.name}" (${who.id}) on ${key}: ${logSafe(from ?? '-', 64)} -> ${decided.revision} (history id ${id})`,
+    );
     await this.kube.mergePatch(path, {
       operation: {
         initiatedBy: { username: 'kubernanny' },

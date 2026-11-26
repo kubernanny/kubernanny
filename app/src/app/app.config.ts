@@ -1,7 +1,8 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideHttpClient, withFetch } from '@angular/common/http';
+import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideRouter, withComponentInputBinding, withHashLocation } from '@angular/router';
 import { provideIonicAngular } from '@ionic/angular/standalone';
+
 import { routes } from './app.routes';
 import { provideI18n } from './i18n/provide-i18n';
 

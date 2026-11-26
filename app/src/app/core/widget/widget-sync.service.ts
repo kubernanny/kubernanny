@@ -1,10 +1,11 @@
-import { Injectable, effect, inject, signal } from '@angular/core';
+import { effect, inject, Injectable, signal } from '@angular/core';
 import { Preferences } from '@capacitor/preferences';
+
 import { ClusterConfig } from '../agent.model';
 import { ClusterStore } from '../cluster-store.service';
 import { StatusStore } from '../status-store.service';
 import { WidgetBridge } from './widget-bridge';
-import { WidgetCluster, keepFresher, nextWidgetList } from './widget-summary';
+import { keepFresher, nextWidgetList, WidgetCluster } from './widget-summary';
 
 const OFF_KEY = 'widgetsOff';
 
@@ -62,7 +63,12 @@ export class WidgetSync {
     if (!this.ready()) {
       return this.queue;
     }
-    const next = nextWidgetList(this.written, this.clusters.clusters(), this.status.states(), this.off());
+    const next = nextWidgetList(
+      this.written,
+      this.clusters.clusters(),
+      this.status.states(),
+      this.off(),
+    );
     const json = JSON.stringify(next);
     if (json === this.writtenJson) {
       return this.queue;

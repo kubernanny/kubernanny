@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
+
 import { AgentHub } from './agent-hub.service';
-import { RELAY_CONFIG, loadConfig } from './config';
+import { loadConfig, RELAY_CONFIG } from './config';
 import { RelayMetrics } from './metrics';
 import { RelayController } from './relay.controller';
 

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { de } from '../testing/i18n';
+
 import { Agent } from '../agent';
 import { StatusService } from '../status/status.service';
+import { de } from '../testing/i18n';
 import { DemoKubeClient, DemoScenario } from './demo-cluster';
 
 async function run(scenario: DemoScenario) {
@@ -32,12 +33,19 @@ describe('demo scenarios', () => {
     expect(removal?.severity).toBe('info');
     const argo = s.modules.find((m) => m.id === 'argocd');
     expect(argo?.pendingSyncs?.map((p) => p.app)).toEqual(['weblate-chart', 'kubernanny-chart']);
-    expect(s.issues.map((i) => i.id).filter((id) => id !== removal?.id).sort()).toEqual([
+    expect(
+      s.issues
+        .map((i) => i.id)
+        .filter((id) => id !== removal?.id)
+        .sort(),
+    ).toEqual([
       'certificates/weblate/weblate-tls',
       'cnpg/default/shop-api-pg/backup',
       'standard-alerts/etcd-peer-rtt/rke2-node-1/rke2-node-5',
     ]);
-    expect(s.issues.find((i) => i.id.startsWith('standard-alerts/'))?.title).toBe('etcd rke2-node-1 → rke2-node-5: Netzwerk-Laufzeit 243 ms');
+    expect(s.issues.find((i) => i.id.startsWith('standard-alerts/'))?.title).toBe(
+      'etcd rke2-node-1 → rke2-node-5: Netzwerk-Laufzeit 243 ms',
+    );
   });
 
   it('broken shows the slow etcd link once: the built-in issue, saying Alertmanager fires it too', async () => {
@@ -46,7 +54,10 @@ describe('demo scenarios', () => {
     expect(rtt?.severity).toBe('warning');
     expect(rtt?.cause).toMatch(/Alertmanager meldet das ebenfalls \(etcdMemberCommunicationSlow\)\.$/);
     expect(s.issues.map((i) => i.id)).not.toContain('alertmanager/etcdMemberCommunicationSlow');
-    expect(s.modules.find((m) => m.id === 'alertmanager')?.issueIds).toEqual(['alertmanager/BlackboxProbeFailed', 'alertmanager/KubePersistentVolumeFillingUp']);
+    expect(s.modules.find((m) => m.id === 'alertmanager')?.issueIds).toEqual([
+      'alertmanager/BlackboxProbeFailed',
+      'alertmanager/KubePersistentVolumeFillingUp',
+    ]);
     expect(s.issues.find((i) => i.id === 'standard-alerts/dns-errors/coredns')?.severity).toBe('critical');
   });
 
@@ -57,7 +68,11 @@ describe('demo scenarios', () => {
   it('broken runs a CloudNativePG operator with a known advisory and a loosely configured pgadmin, without calling the internet', async () => {
     const s = await run('broken');
     const vuln = s.issues.find((i) => i.id === 'vulnerabilities/cnpg');
-    expect(vuln).toMatchObject({ severity: 'warning', title: 'CloudNativePG 1.26.1: 1 bekannte Schwachstelle', advisories: ['GHSA-423p-g724-fr39'] });
+    expect(vuln).toMatchObject({
+      severity: 'warning',
+      title: 'CloudNativePG 1.26.1: 1 bekannte Schwachstelle',
+      advisories: ['GHSA-423p-g724-fr39'],
+    });
     expect(s.modules.find((m) => m.id === 'cnpg')?.issueIds).toContain('vulnerabilities/cnpg');
     expect(s.issues.filter((i) => i.module === 'security').map((i) => [i.id, i.severity])).toEqual([
       ['security/pgadmin/root', 'info'],
@@ -68,13 +83,27 @@ describe('demo scenarios', () => {
   it('broken runs Trivy Operator: a fixable high in the own-image app, an unfixed medium as a hint on Valkey', async () => {
     const s = await run('broken');
     expect(s.issues.filter((i) => i.module === 'trivy').map((i) => [i.id, i.severity, i.title, i.advisories])).toEqual([
-      ['trivy/default/Deployment/social-importer', 'warning', 'social-importer (default): 1 bekannte Schwachstelle', ['CVE-2024-21538']],
-      ['trivy/default/StatefulSet/shop-api-valkey', 'info', 'shop-api-valkey (default): 1 bekannte Schwachstelle', ['CVE-2023-42363']],
+      [
+        'trivy/default/Deployment/social-importer',
+        'warning',
+        'social-importer (default): 1 bekannte Schwachstelle',
+        ['CVE-2024-21538'],
+      ],
+      [
+        'trivy/default/StatefulSet/shop-api-valkey',
+        'info',
+        'shop-api-valkey (default): 1 bekannte Schwachstelle',
+        ['CVE-2023-42363'],
+      ],
     ]);
     expect(s.modules.find((m) => m.id === 'redis')?.issueIds).toContain('trivy/default/StatefulSet/shop-api-valkey');
     const trivy = s.modules.find((m) => m.id === 'trivy')!;
     // Beyond the four severities, the facts sit in a list on the sheet.
-    const fact = (id: string, label: string) => s.modules.find((m) => m.id === id)?.details?.flatMap((d) => (d.kind === 'list' ? d.rows : [])).find((r) => r.name === label)?.value;
+    const fact = (id: string, label: string) =>
+      s.modules
+        .find((m) => m.id === id)
+        ?.details?.flatMap((d) => (d.kind === 'list' ? d.rows : []))
+        .find((r) => r.name === label)?.value;
     expect(trivy.stats.map((st) => st.label)).toEqual(['Kritisch', 'Hoch', 'Mittel', 'Niedrig oder ohne Einstufung']);
     expect(fact('trivy', 'Alte Berichte übergangen')).toBe('1');
     expect(fact('vulnerabilities', 'Jedes Image')).toBe('Trivy Operator gefunden: jedes Image wird geprüft');
@@ -83,7 +112,9 @@ describe('demo scenarios', () => {
   it('healthy and warning check vulnerabilities and security too, and find nothing', async () => {
     for (const scenario of ['healthy', 'warning'] as const) {
       const s = await run(scenario);
-      expect(s.modules.filter((m) => m.id === 'vulnerabilities' || m.id === 'security').map((m) => [m.id, m.status])).toEqual([
+      expect(
+        s.modules.filter((m) => m.id === 'vulnerabilities' || m.id === 'security').map((m) => [m.id, m.status]),
+      ).toEqual([
         ['security', 'ok'],
         ['vulnerabilities', 'ok'],
       ]);

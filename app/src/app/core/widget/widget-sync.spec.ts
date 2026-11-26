@@ -1,12 +1,20 @@
-import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { Preferences } from '@capacitor/preferences';
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import { ClusterConfig, Issue, Snapshot } from '../agent.model';
 import { ClusterStore } from '../cluster-store.service';
 import { ClusterState, StatusStore } from '../status-store.service';
 import { WidgetBridge } from './widget-bridge';
-import { WidgetCluster, isUnreachable, keepFresher, nextWidgetList, validWidgetList, widgetCluster } from './widget-summary';
+import {
+  isUnreachable,
+  keepFresher,
+  nextWidgetList,
+  validWidgetList,
+  WidgetCluster,
+  widgetCluster,
+} from './widget-summary';
 import { WidgetSync } from './widget-sync.service';
 
 /** Stands in for the native plugin: what it holds is what the device's shared storage would hold. */
@@ -58,7 +66,11 @@ const issue = (severity: Issue['severity'], extra: Partial<Issue> = {}): Issue =
   ...extra,
 });
 
-const snapshot = (light: Snapshot['light'], issues: Issue[], checkedAt = '2026-11-25T10:00:00Z'): Snapshot => ({
+const snapshot = (
+  light: Snapshot['light'],
+  issues: Issue[],
+  checkedAt = '2026-11-25T10:00:00Z',
+): Snapshot => ({
   cluster: 'prod-cluster',
   light,
   score: 50,
@@ -98,33 +110,67 @@ describe('widgetCluster', () => {
       ],
     });
     const json = JSON.stringify(w);
-    for (const secret of ['secret-host', 'AGENTKEY', 'PRIVATE-DEVICE-KEY', 'OOMKilled', 'secret-ns', 'k3s', 'prod-cluster', 'dev-1', 'a hint', 'silenced one']) {
+    for (const secret of [
+      'secret-host',
+      'AGENTKEY',
+      'PRIVATE-DEVICE-KEY',
+      'OOMKilled',
+      'secret-ns',
+      'k3s',
+      'prod-cluster',
+      'dev-1',
+      'a hint',
+      'silenced one',
+    ]) {
       expect(json).not.toContain(secret);
     }
   });
 
   it('keeps at most three problems and shortens long titles', () => {
-    const w = widgetCluster(config('a'), snapshot('red', [1, 2, 3, 4].map(() => issue('critical', { title: 'x'.repeat(200) }))));
+    const w = widgetCluster(
+      config('a'),
+      snapshot(
+        'red',
+        [1, 2, 3, 4].map(() => issue('critical', { title: 'x'.repeat(200) })),
+      ),
+    );
     expect(w.problems).toHaveLength(3);
     expect(Array.from(w.problems[0]!.title)).toHaveLength(120);
     expect(widgetCluster(config('a'), snapshot('green', [])).problems).toEqual([]);
   });
 
   it('marks demo clusters', () => {
-    expect(widgetCluster(config('demo-broken', { demo: 'broken' }), snapshot('red', [])).demo).toBe(true);
+    expect(widgetCluster(config('demo-broken', { demo: 'broken' }), snapshot('red', [])).demo).toBe(
+      true,
+    );
   });
 });
 
 describe('nextWidgetList', () => {
-  const before: WidgetCluster = { id: 'a', name: 'old name', light: 'yellow', critical: 0, warning: 2, checkedAt: '2026-11-25T09:00:00Z', demo: false, problems: [] };
+  const before: WidgetCluster = {
+    id: 'a',
+    name: 'old name',
+    light: 'yellow',
+    critical: 0,
+    warning: 2,
+    checkedAt: '2026-11-25T09:00:00Z',
+    demo: false,
+    problems: [],
+  };
 
   it('keeps the last entry of a cluster without an answer, renamed', () => {
-    expect(nextWidgetList([before], [config('a', { name: 'new name' })], {}, false)).toEqual([{ ...before, name: 'new name' }]);
+    expect(nextWidgetList([before], [config('a', { name: 'new name' })], {}, false)).toEqual([
+      { ...before, name: 'new name' },
+    ]);
   });
 
   it('leaves out switched-off and removed clusters, and everything when off', () => {
     const states = { a: state(snapshot('green', [])), b: state(snapshot('green', [])) };
-    expect(nextWidgetList([before], [config('a', { widgetOff: true }), config('b')], states, false).map((c) => c.id)).toEqual(['b']);
+    expect(
+      nextWidgetList([before], [config('a', { widgetOff: true }), config('b')], states, false).map(
+        (c) => c.id,
+      ),
+    ).toEqual(['b']);
     expect(nextWidgetList([before], [], states, false)).toEqual([]);
     expect(nextWidgetList([before], [config('a')], states, true)).toEqual([]);
   });
@@ -132,27 +178,69 @@ describe('nextWidgetList', () => {
 
 describe('validWidgetList', () => {
   it('drops malformed entries and unknown fields', () => {
-    const good = { id: 'a', name: 'x', light: 'green', critical: 0, warning: 0, checkedAt: null, demo: false, problems: [{ title: 't', severity: 'warning' }] };
-    expect(validWidgetList([{ ...good, extra: 'nope' }, { ...good, light: 'purple' }, { ...good, problems: [{ title: 1, severity: 'warning' }] }, null, 'x'])).toEqual([good]);
+    const good = {
+      id: 'a',
+      name: 'x',
+      light: 'green',
+      critical: 0,
+      warning: 0,
+      checkedAt: null,
+      demo: false,
+      problems: [{ title: 't', severity: 'warning' }],
+    };
+    expect(
+      validWidgetList([
+        { ...good, extra: 'nope' },
+        { ...good, light: 'purple' },
+        { ...good, problems: [{ title: 1, severity: 'warning' }] },
+        null,
+        'x',
+      ]),
+    ).toEqual([good]);
     expect(validWidgetList('nope')).toEqual([]);
   });
 
   it('reads a list stored before problems existed', () => {
-    const old = { id: 'a', name: 'x', light: 'green', critical: 0, warning: 0, checkedAt: null, demo: false };
+    const old = {
+      id: 'a',
+      name: 'x',
+      light: 'green',
+      critical: 0,
+      warning: 0,
+      checkedAt: null,
+      demo: false,
+    };
     expect(validWidgetList([old])).toEqual([{ ...old, problems: [] }]);
   });
 });
 
 describe('keepFresher', () => {
-  const app: WidgetCluster = { id: 'a', name: 'homelab', light: 'red', critical: 1, warning: 0, checkedAt: '2026-11-25T10:00:00Z', demo: false, problems: [] };
-  const pushed: WidgetCluster = { ...app, name: 'old', light: 'green', critical: 0, checkedAt: '2026-11-25T10:05:00Z' };
+  const app: WidgetCluster = {
+    id: 'a',
+    name: 'homelab',
+    light: 'red',
+    critical: 1,
+    warning: 0,
+    checkedAt: '2026-11-25T10:00:00Z',
+    demo: false,
+    problems: [],
+  };
+  const pushed: WidgetCluster = {
+    ...app,
+    name: 'old',
+    light: 'green',
+    critical: 0,
+    checkedAt: '2026-11-25T10:05:00Z',
+  };
 
-  it('keeps a newer state a push stored, with the app\'s name', () => {
+  it("keeps a newer state a push stored, with the app's name", () => {
     expect(keepFresher([app], [pushed])).toEqual([{ ...pushed, name: 'homelab' }]);
   });
 
-  it('takes the app\'s entry when it is as new or newer, or the stored one has no time', () => {
-    expect(keepFresher([{ ...app, checkedAt: '2026-11-25T10:05:00Z' }], [pushed])[0]!.light).toBe('red');
+  it("takes the app's entry when it is as new or newer, or the stored one has no time", () => {
+    expect(keepFresher([{ ...app, checkedAt: '2026-11-25T10:05:00Z' }], [pushed])[0]!.light).toBe(
+      'red',
+    );
     expect(keepFresher([app], [{ ...pushed, checkedAt: null }])).toEqual([app]);
     expect(keepFresher([app], [])).toEqual([app]);
   });
@@ -163,8 +251,12 @@ describe('keepFresher', () => {
 
   it('keeps the silence warning a push wrote until the app has a check newer than it', () => {
     const silent: WidgetCluster = { ...app, unreachableSince: '2026-11-25T10:30:00Z' };
-    expect(keepFresher([app], [silent])).toEqual([{ ...app, unreachableSince: '2026-11-25T10:30:00Z' }]);
-    expect(keepFresher([{ ...app, checkedAt: '2026-11-25T10:31:00Z' }], [silent])[0]!.unreachableSince).toBeUndefined();
+    expect(keepFresher([app], [silent])).toEqual([
+      { ...app, unreachableSince: '2026-11-25T10:30:00Z' },
+    ]);
+    expect(
+      keepFresher([{ ...app, checkedAt: '2026-11-25T10:31:00Z' }], [silent])[0]!.unreachableSince,
+    ).toBeUndefined();
   });
 });
 
@@ -173,10 +265,41 @@ describe('isUnreachable (the widgets\' "Agent not answering")', () => {
   it('holds while the silence warning is newer than the last check, and ends with any newer check', () => {
     expect(isUnreachable(base)).toBe(false);
     expect(isUnreachable({ ...base, unreachableSince: '2026-11-25T10:20:00Z' })).toBe(true);
-    expect(isUnreachable({ checkedAt: '2026-11-25T10:21:00Z', unreachableSince: '2026-11-25T10:20:00Z' })).toBe(false);
+    expect(
+      isUnreachable({
+        checkedAt: '2026-11-25T10:21:00Z',
+        unreachableSince: '2026-11-25T10:20:00Z',
+      }),
+    ).toBe(false);
     expect(isUnreachable({ checkedAt: null, unreachableSince: '2026-11-25T10:20:00Z' })).toBe(true);
-    expect(validWidgetList([{ id: 'a', name: 'x', light: 'green', critical: 0, warning: 0, checkedAt: null, demo: false, unreachableSince: '2026-11-25T10:20:00Z' }])[0]!.unreachableSince).toBe('2026-11-25T10:20:00Z');
-    expect(validWidgetList([{ id: 'a', name: 'x', light: 'green', critical: 0, warning: 0, checkedAt: null, demo: false, unreachableSince: 'soon' }])[0]!.unreachableSince).toBeUndefined();
+    expect(
+      validWidgetList([
+        {
+          id: 'a',
+          name: 'x',
+          light: 'green',
+          critical: 0,
+          warning: 0,
+          checkedAt: null,
+          demo: false,
+          unreachableSince: '2026-11-25T10:20:00Z',
+        },
+      ])[0]!.unreachableSince,
+    ).toBe('2026-11-25T10:20:00Z');
+    expect(
+      validWidgetList([
+        {
+          id: 'a',
+          name: 'x',
+          light: 'green',
+          critical: 0,
+          warning: 0,
+          checkedAt: null,
+          demo: false,
+          unreachableSince: 'soon',
+        },
+      ])[0]!.unreachableSince,
+    ).toBeUndefined();
   });
 });
 
@@ -212,7 +335,10 @@ describe('WidgetSync', () => {
   });
 
   it('writes a summary when a new snapshot arrives, and only when something changed', async () => {
-    clusters.clusters.set([config('a', { name: 'homelab' }), config('demo-healthy', { name: 'Demo', demo: 'healthy' })]);
+    clusters.clusters.set([
+      config('a', { name: 'homelab' }),
+      config('demo-healthy', { name: 'Demo', demo: 'healthy' }),
+    ]);
     const sync = await open();
     expect(bridge.writes).toEqual([]);
 
@@ -248,7 +374,18 @@ describe('WidgetSync', () => {
   });
 
   it('keeps what the widget showed while the app has no answer yet after a start', async () => {
-    bridge.stored = [{ id: 'a', name: 'homelab', light: 'yellow', critical: 0, warning: 3, checkedAt: '2026-11-25T09:00:00Z', demo: false, problems: [] }];
+    bridge.stored = [
+      {
+        id: 'a',
+        name: 'homelab',
+        light: 'yellow',
+        critical: 0,
+        warning: 3,
+        checkedAt: '2026-11-25T09:00:00Z',
+        demo: false,
+        problems: [],
+      },
+    ];
     clusters.clusters.set([config('a', { name: 'homelab' })]);
     const sync = await open();
     await settle(sync);
@@ -261,7 +398,13 @@ describe('WidgetSync', () => {
     status.states.set({ a: state(snapshot('red', [issue('critical')], '2026-11-25T10:00:00Z')) });
     await settle(sync);
     // The push extension writes a newer, green state while the app is in the background.
-    const pushed: WidgetCluster = { ...bridge.stored[0]!, light: 'green', critical: 0, problems: [], checkedAt: '2026-11-25T10:20:00Z' };
+    const pushed: WidgetCluster = {
+      ...bridge.stored[0]!,
+      light: 'green',
+      critical: 0,
+      problems: [],
+      checkedAt: '2026-11-25T10:20:00Z',
+    };
     bridge.stored = [pushed];
     // Another cluster answers: the list is written again, with the push's state for `a`.
     status.states.set({ ...status.states(), b: state(snapshot('green', [])) });
@@ -274,14 +417,20 @@ describe('WidgetSync', () => {
 
   it('deletes a cluster switched off at once and writes nothing more for it', async () => {
     clusters.clusters.set([config('a'), config('b')]);
-    status.states.set({ a: state(snapshot('red', [issue('critical')])), b: state(snapshot('green', [])) });
+    status.states.set({
+      a: state(snapshot('red', [issue('critical')])),
+      b: state(snapshot('green', [])),
+    });
     const sync = await open();
     expect(bridge.stored.map((c) => c.id)).toEqual(['a', 'b']);
 
     await sync.setShown(clusters.clusters()[0], false);
     expect(bridge.stored.map((c) => c.id)).toEqual(['b']);
 
-    status.states.set({ ...status.states(), a: state(snapshot('yellow', [issue('warning')], '2026-11-25T10:05:00Z')) });
+    status.states.set({
+      ...status.states(),
+      a: state(snapshot('yellow', [issue('warning')], '2026-11-25T10:05:00Z')),
+    });
     await settle(sync);
     expect(bridge.writes.flat().filter((c) => c.id === 'a' && c.light === 'yellow')).toEqual([]);
     expect(bridge.stored.map((c) => c.id)).toEqual(['b']);
@@ -315,7 +464,18 @@ describe('WidgetSync', () => {
 
   it('removes a widget entry left from before when the app starts switched off', async () => {
     await Preferences.set({ key: 'widgetsOff', value: '1' });
-    bridge.stored = [{ id: 'a', name: 'homelab', light: 'red', critical: 1, warning: 0, checkedAt: null, demo: false, problems: [] }];
+    bridge.stored = [
+      {
+        id: 'a',
+        name: 'homelab',
+        light: 'red',
+        critical: 1,
+        warning: 0,
+        checkedAt: null,
+        demo: false,
+        problems: [],
+      },
+    ];
     clusters.clusters.set([config('a')]);
     await open();
     expect(bridge.stored).toEqual([]);

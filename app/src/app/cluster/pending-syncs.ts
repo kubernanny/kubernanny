@@ -18,7 +18,10 @@ export interface PendingSyncRow {
   syncConfirm: string;
 }
 
-const CHANGE: Record<'update' | 'new' | 'prune', 'pendingSync.update' | 'pendingSync.new' | 'pendingSync.prune'> = {
+const CHANGE: Record<
+  'update' | 'new' | 'prune',
+  'pendingSync.update' | 'pendingSync.new' | 'pendingSync.prune'
+> = {
   update: 'pendingSync.update',
   new: 'pendingSync.new',
   prune: 'pendingSync.prune',
@@ -34,16 +37,34 @@ function imageChange(from: string, to: string): string {
 /** The apps ready to sync, the longest waiting first. */
 export function pendingSyncRows(list: PendingSync[], now: Date, tr: Translator): PendingSyncRow[] {
   return [...list]
-    .sort((a, b) => (a.lastSyncAt ?? '').localeCompare(b.lastSyncAt ?? '') || a.app.localeCompare(b.app))
+    .sort(
+      (a, b) =>
+        (a.lastSyncAt ?? '').localeCompare(b.lastSyncAt ?? '') || a.app.localeCompare(b.app),
+    )
     .map((p) => ({
       key: `${p.namespace}/${p.app}`,
       id: p.id,
       app: p.app,
-      where: [p.destination ? tr.t('pendingSync.into', { namespace: p.destination }) : null, p.project ? tr.t('pendingSync.project', { project: p.project }) : null].filter(Boolean).join(', '),
-      since: p.lastSyncAt ? tr.t('pendingSync.since', { when: relativeTime(p.lastSyncAt, now, tr.lang) }) : tr.t('pendingSync.sinceUnknown'),
-      revisions: p.syncedRevision && p.targetRevision ? `${p.syncedRevision} → ${p.targetRevision}` : (p.targetRevision ?? ''),
+      where: [
+        p.destination ? tr.t('pendingSync.into', { namespace: p.destination }) : null,
+        p.project ? tr.t('pendingSync.project', { project: p.project }) : null,
+      ]
+        .filter(Boolean)
+        .join(', '),
+      since: p.lastSyncAt
+        ? tr.t('pendingSync.since', { when: relativeTime(p.lastSyncAt, now, tr.lang) })
+        : tr.t('pendingSync.sinceUnknown'),
+      revisions:
+        p.syncedRevision && p.targetRevision
+          ? `${p.syncedRevision} → ${p.targetRevision}`
+          : (p.targetRevision ?? ''),
       images: p.images.map((i) => imageChange(i.from, i.to)),
-      resources: p.resources.map((r) => ({ key: `${r.kind}/${r.namespace ?? ''}/${r.name}`, text: `${r.kind} ${r.name}`, change: r.change, label: tr.t(CHANGE[r.change]) })),
+      resources: p.resources.map((r) => ({
+        key: `${r.kind}/${r.namespace ?? ''}/${r.name}`,
+        text: `${r.kind} ${r.name}`,
+        change: r.change,
+        label: tr.t(CHANGE[r.change]),
+      })),
       canSync: p.canSync,
       syncConfirm: tr.t('actions.syncConfirm', { app: p.app }),
     }));

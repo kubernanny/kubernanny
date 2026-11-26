@@ -11,18 +11,38 @@ export type IssueAction =
   | { type: 'argocd-sync'; namespace: string; app: string }
   | { type: 'argocd-refresh'; namespace: string; app: string }
   /** `secondary`: after the logs, with a hint (a crash loop). `changed`: a ConfigMap of the environment changed since the start, so the restart is the fix. */
-  | { type: 'restart'; kind: string; namespace: string; name: string; secondary?: boolean; changed?: { kind: string; name: string } }
+  | {
+      type: 'restart';
+      kind: string;
+      namespace: string;
+      name: string;
+      secondary?: boolean;
+      changed?: { kind: string; name: string };
+    }
   | { type: 'logs'; namespace: string; pod: string; container?: string; previous?: boolean }
   | { type: 'cnpg-backup'; namespace: string; cluster: string }
   | { type: 'uncordon'; node: string }
   | { type: 'job-rerun'; namespace: string; from: 'CronJob' | 'Job'; name: string }
   | { type: 'reconcile-now'; kind: string; namespace: string; name: string }
   | { type: 'cleanup-pods'; namespace: string; pods: string[] }
-  | { type: 'force-delete-terminating'; namespace: string; pod: string; node: string; statefulSet?: string }
+  | {
+      type: 'force-delete-terminating';
+      namespace: string;
+      pod: string;
+      node: string;
+      statefulSet?: string;
+    }
   | { type: 'longhorn-backup'; namespace: string; volume: string; label: string }
   | { type: 'velero-backup'; namespace: string; schedule: string }
   | { type: 'argocd-terminate-op'; namespace: string; app: string }
-  | { type: 'pvc-expand'; namespace: string; name: string; from: string; to: string; template?: string };
+  | {
+      type: 'pvc-expand';
+      namespace: string;
+      name: string;
+      from: string;
+      to: string;
+      template?: string;
+    };
 
 export type IssueActionType = IssueAction['type'];
 /** Every action type with a switch; `argocd-rollback` stands on its own (the Argo CD sheet), off unless the Helm chart opts in. */
@@ -74,7 +94,13 @@ export interface DetailRow {
 /** A structured part of a module sheet: its objects as a list or a short table. */
 export type DetailSection =
   | { title: string; kind: 'list'; rows: DetailRow[]; more?: number; role?: 'runtime' }
-  | { title: string; kind: 'table'; columns: string[]; rows: { cells: string[]; tone: Tone }[]; more?: number };
+  | {
+      title: string;
+      kind: 'table';
+      columns: string[];
+      rows: { cells: string[]; tone: Tone }[];
+      more?: number;
+    };
 
 /** One copy of a component installed several times (Redis/Valkey per app). */
 export interface ComponentInstance {
@@ -115,7 +141,11 @@ export interface ModuleView {
   details?: DetailSection[];
   instances?: ComponentInstance[];
   links: Link[];
-  workloads: { ready: number; total: number; items: { kind: string; namespace: string; name: string; ready: number; desired: number }[] };
+  workloads: {
+    ready: number;
+    total: number;
+    items: { kind: string; namespace: string; name: string; ready: number; desired: number }[];
+  };
   issueIds: string[];
   error?: string;
   /** Vulnerabilities only: advisories someone marked as not applicable. */
@@ -139,7 +169,12 @@ export interface PendingSync {
   lastSyncAt?: string;
   syncedRevision?: string;
   targetRevision?: string;
-  resources: { kind: string; name: string; namespace?: string; change: 'update' | 'new' | 'prune' }[];
+  resources: {
+    kind: string;
+    name: string;
+    namespace?: string;
+    change: 'update' | 'new' | 'prune';
+  }[];
   images: { from: string; to: string }[];
   /** The agent offers the sync (argocd-sync is on). */
   canSync: boolean;
@@ -169,7 +204,12 @@ export interface Overview {
   nodes: { ready: number; total: number };
   pods: { running: number; total: number };
   /** Requests and limits where the pods set them. */
-  cpu: { usedMilli: number; allocatableMilli: number; requestedMilli?: number; limitMilli?: number } | null;
+  cpu: {
+    usedMilli: number;
+    allocatableMilli: number;
+    requestedMilli?: number;
+    limitMilli?: number;
+  } | null;
   memory: { used: number; allocatable: number; requested?: number; limit?: number } | null;
   volumes: { bound: number; total: number };
   ingresses: number;
@@ -181,7 +221,12 @@ export interface Overview {
   /** Per node: use, requests and limits of its pods against allocatable. */
   perNode?: {
     name: string;
-    cpu: { usedMilli: number | null; allocatableMilli: number; requestedMilli: number; limitMilli: number };
+    cpu: {
+      usedMilli: number | null;
+      allocatableMilli: number;
+      requestedMilli: number;
+      limitMilli: number;
+    };
     memory: { used: number | null; allocatable: number; requested: number; limit: number };
     podsWithoutLimit: { cpu: number; memory: number };
   }[];
@@ -224,7 +269,12 @@ export interface NodeView {
   internalIp?: string;
   createdAt?: string;
   /** Requests and limits summed over the pods on the node (limits only where set). */
-  cpu: { allocatableMilli: number; requestedMilli: number; limitMilli: number; usedMilli: number | null };
+  cpu: {
+    allocatableMilli: number;
+    requestedMilli: number;
+    limitMilli: number;
+    usedMilli: number | null;
+  };
   memory: { allocatable: number; requested: number; limit: number; used: number | null };
   disk: number | null;
   pods: { count: number; capacity: number };
@@ -248,10 +298,24 @@ export interface WorkloadView {
   cpuMilli: number | null;
   memBytes: number | null;
   /** Requests and limits of its pods (a limit is null when no container sets one). */
-  resources: { cpuRequestMilli: number; cpuLimitMilli: number | null; memRequest: number; memLimit: number | null; cpuUnlimited: number; memUnlimited: number };
+  resources: {
+    cpuRequestMilli: number;
+    cpuLimitMilli: number | null;
+    memRequest: number;
+    memLimit: number | null;
+    cpuUnlimited: number;
+    memUnlimited: number;
+  };
   /** The most recent restart of any of its containers; absent when none restarted. */
   lastRestart?: Termination & { pod: string; container: string };
-  pods: { name: string; node?: string; phase?: string; ready: boolean; restarts: number; containers?: ContainerView[] }[];
+  pods: {
+    name: string;
+    node?: string;
+    phase?: string;
+    ready: boolean;
+    restarts: number;
+    containers?: ContainerView[];
+  }[];
 }
 
 /** How a container's previous run ended (`lastState.terminated`); `memLimit` only for an OOMKill. */
@@ -272,7 +336,14 @@ export interface ContainerView {
 }
 
 export interface StorageView {
-  classes: { name: string; provisioner?: string; isDefault: boolean; reclaimPolicy?: string; expansion: boolean; volumes: number }[];
+  classes: {
+    name: string;
+    provisioner?: string;
+    isDefault: boolean;
+    reclaimPolicy?: string;
+    expansion: boolean;
+    volumes: number;
+  }[];
   volumes: {
     namespace: string;
     name: string;
@@ -495,7 +566,13 @@ export interface ModuleSetting {
 export interface SettingsView {
   modules: ModuleSetting[];
   /** `effect`: what the action may change in the cluster, one line from the agent. */
-  actions: { type: ActionType; label: string; description: string; effect: string; state: ToggleState }[];
+  actions: {
+    type: ActionType;
+    label: string;
+    description: string;
+    effect: string;
+    state: ToggleState;
+  }[];
   notifications: ToggleState;
 }
 

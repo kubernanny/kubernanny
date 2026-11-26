@@ -1,28 +1,29 @@
-import { Logger } from '../logger';
 import {
-  FrameType,
-  HEARTBEAT_PING,
-  MAX_SEALED_REQUEST,
-  RelayClose,
-  DeadmanDeposit,
-  DepositOutcome,
-  PushOutcome,
-  PushRequest,
-  RelayFrameError,
   answerChallenge,
-  decodeFrame,
+  DeadmanDeposit,
   decodeDepositResult,
+  decodeFrame,
   decodePushResult,
+  DepositOutcome,
   encodeDeposit,
   encodePushRequest,
   encodeReply,
+  FrameType,
+  HEARTBEAT_PING,
+  MAX_SEALED_REQUEST,
+  PushOutcome,
+  PushRequest,
   relayAgentId,
+  RelayClose,
+  RelayFrameError,
   relayOrigin,
 } from '@kubernanny/protocol';
 import { RawData, WebSocket } from 'ws';
+
 import { IdentityService } from '../auth/identity.service';
 import type { Config } from '../config';
 import { E2eService } from '../e2e/e2e.service';
+import { Logger } from '../logger';
 import { PushCarrier, PushTransport, RelayReady } from '../push/push-transport';
 import { relayHttpUrl, relaySocketUrl } from './relay-url';
 
@@ -285,8 +286,23 @@ export class RelayClient implements PushCarrier {
       return;
     }
     const agentId = relayAgentId(this.identity.keyPair.publicKey);
-    const socket = new WebSocket(relaySocketUrl(this.config.relayUrl!, agentId), { maxPayload: MAX_RELAY_MESSAGE, perMessageDeflate: false, handshakeTimeout: 10_000 });
-    const session: Session = { socket, answered: false, readyAt: 0, inFlight: new Set(), cancelled: new Set(), push: false, statusPush: false, pushes: new Map(), deadman: false, deposits: new Map() };
+    const socket = new WebSocket(relaySocketUrl(this.config.relayUrl!, agentId), {
+      maxPayload: MAX_RELAY_MESSAGE,
+      perMessageDeflate: false,
+      handshakeTimeout: 10_000,
+    });
+    const session: Session = {
+      socket,
+      answered: false,
+      readyAt: 0,
+      inFlight: new Set(),
+      cancelled: new Set(),
+      push: false,
+      statusPush: false,
+      pushes: new Map(),
+      deadman: false,
+      deposits: new Map(),
+    };
     this.session = session;
     this.lastHeard = Date.now();
     // Every handler checks that it still belongs to the current session (isCurrent): a dead one may report late.
@@ -341,7 +357,11 @@ export class RelayClient implements PushCarrier {
           session.deadman = session.push && readyFlag(frame.payload, 'deadman');
           this.connected = true;
           this.logger.log(`connected to the relay ${relayHttpUrl(this.config.relayUrl!)}`);
-          const event: RelayReady = { connection: ++this.connections, deadman: session.deadman, fired: session.deadman ? readyFired(frame.payload) : null };
+          const event: RelayReady = {
+            connection: ++this.connections,
+            deadman: session.deadman,
+            fired: session.deadman ? readyFired(frame.payload) : null,
+          };
           for (const listener of this.readyListeners) {
             try {
               listener(event);
@@ -394,7 +414,8 @@ export class RelayClient implements PushCarrier {
     } else {
       try {
         const result = await this.e2e.handle(body, Date.now(), 'relay');
-        [status, payload] = result.kind === 'sealed' ? [200, result.body] : [result.status, json({ code: result.code })];
+        [status, payload] =
+          result.kind === 'sealed' ? [200, result.body] : [result.status, json({ code: result.code })];
       } catch {
         [status, payload] = [503, json({ code: 'E2E_BUSY' })];
       }
@@ -489,7 +510,9 @@ function toBytes(data: RawData): Uint8Array {
   if (Array.isArray(data)) {
     return new Uint8Array(Buffer.concat(data));
   }
-  return data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  return data instanceof ArrayBuffer
+    ? new Uint8Array(data)
+    : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
 }
 
 /** The Ready payload's `push` flag (RelayLimitsInfo); a relay that does not say so offers none. */
@@ -513,9 +536,14 @@ function readyFlag(payload: Uint8Array, name: 'push' | 'statusPush' | 'deadman')
  */
 function readyFired(payload: Uint8Array): { kids: string[]; awayMs: number } | null {
   try {
-    const fired = (JSON.parse(new TextDecoder().decode(payload)) as { deadmanFired?: { k?: unknown; m?: unknown } } | null)?.deadmanFired;
-    const kids = Array.isArray(fired?.k) ? fired.k.filter((k): k is string => typeof k === 'string' && /^[A-Za-z0-9_-]{16}$/.test(k)).slice(0, 64) : [];
-    const awayMs = typeof fired?.m === 'number' && Number.isFinite(fired.m) && fired.m >= 0 ? Math.min(fired.m, 30 * 86_400_000) : 0;
+    const fired = (
+      JSON.parse(new TextDecoder().decode(payload)) as { deadmanFired?: { k?: unknown; m?: unknown } } | null
+    )?.deadmanFired;
+    const kids = Array.isArray(fired?.k)
+      ? fired.k.filter((k): k is string => typeof k === 'string' && /^[A-Za-z0-9_-]{16}$/.test(k)).slice(0, 64)
+      : [];
+    const awayMs =
+      typeof fired?.m === 'number' && Number.isFinite(fired.m) && fired.m >= 0 ? Math.min(fired.m, 30 * 86_400_000) : 0;
     return kids.length > 0 ? { kids, awayMs } : null;
   } catch {
     return null;

@@ -43,7 +43,10 @@ function copyWithSelection(text: string): void {
 }
 
 /** Copies text to the clipboard, also on an insecure origin; false when the browser refused. */
-export async function copyText(text: string, api: Pick<ShareApi, 'copy'> = SYSTEM): Promise<boolean> {
+export async function copyText(
+  text: string,
+  api: Pick<ShareApi, 'copy'> = SYSTEM,
+): Promise<boolean> {
   try {
     await api.copy(text);
     return true;
@@ -62,7 +65,11 @@ function cancelled(err: unknown): boolean {
  * without the Web Share API, and insecure origins (an agent's web UI over
  * plain http) end up on the clipboard.
  */
-export async function shareText(text: string, title: string, api: ShareApi = SYSTEM): Promise<ShareOutcome> {
+export async function shareText(
+  text: string,
+  title: string,
+  api: ShareApi = SYSTEM,
+): Promise<ShareOutcome> {
   try {
     if (await api.canShare()) {
       await api.share(text, title);

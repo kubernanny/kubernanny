@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+
 import { SITE } from '../../site.config';
 import { GALLERY, SCREENSHOTS } from './screenshots';
 
@@ -88,7 +89,9 @@ import { GALLERY, SCREENSHOTS } from './screenshots';
       border-radius: 18px;
       border: 1px solid var(--line-strong);
       background: #0b111e;
-      box-shadow: 0 50px 100px -40px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+      box-shadow:
+        0 50px 100px -40px rgba(0, 0, 0, 0.7),
+        0 0 0 1px rgba(255, 255, 255, 0.03) inset;
       overflow: hidden;
     }
     .chrome {

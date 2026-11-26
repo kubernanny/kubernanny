@@ -1,8 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
+
 import { parseLanguage } from '../config';
-import { CATALOGS, LANGS, Lang, TextError, errorText, localize, raw, render, resolveLang, t } from './text';
+import { CATALOGS, errorText, Lang, LANGS, localize, raw, render, resolveLang, t, TextError } from './text';
 
 type Entry = string | ((p: Record<string, unknown>) => string);
 const catalog = (lang: Lang) => CATALOGS[lang] as unknown as Record<string, Entry>;
@@ -73,8 +75,12 @@ describe('message catalogs', () => {
 describe('rendering', () => {
   it('renders nested texts and lists of texts in the same language', () => {
     const age = t('age.days', { n: 3 });
-    expect(render(t('cnpg.oldBackup.title', { cluster: 'db/pg', age }), 'de')).toBe('Letztes Backup von db/pg vor 3 Tagen');
-    expect(render(t('cnpg.oldBackup.title', { cluster: 'db/pg', age }), 'en')).toBe('Last backup of db/pg was 3 days ago');
+    expect(render(t('cnpg.oldBackup.title', { cluster: 'db/pg', age }), 'de')).toBe(
+      'Letztes Backup von db/pg vor 3 Tagen',
+    );
+    expect(render(t('cnpg.oldBackup.title', { cluster: 'db/pg', age }), 'en')).toBe(
+      'Last backup of db/pg was 3 days ago',
+    );
     const parts = [t('vulnerabilities.noFix'), raw('x.')];
     expect(render(t('common.sentences', { parts }), 'en')).toBe('No update that fixes them is known yet. x.');
   });
@@ -82,7 +88,13 @@ describe('rendering', () => {
   it('localizes every text inside a response and leaves everything else alone', () => {
     const at = new Date(0);
     const body = { id: 'a/b', count: 2, at, nested: [{ title: t('ready.summary.ok'), list: [raw('n1')] }], none: null };
-    expect(localize(body, 'en')).toEqual({ id: 'a/b', count: 2, at, nested: [{ title: 'All ready', list: ['n1'] }], none: null });
+    expect(localize(body, 'en')).toEqual({
+      id: 'a/b',
+      count: 2,
+      at,
+      nested: [{ title: 'All ready', list: ['n1'] }],
+      none: null,
+    });
     expect(localize(body, 'de').nested[0]!.title).toBe('Alles bereit');
     expect(localize('plain', 'de')).toBe('plain');
   });

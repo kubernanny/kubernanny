@@ -27,7 +27,14 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
       </defs>
       <rect width="1024" height="1024" rx="230" fill="url(#kn-logo-bg)" />
       <circle cx="512" cy="262" r="92" fill="#6f84ea" />
-      <path d="M452 236 Q512 196 572 236" fill="none" stroke="#b3c0ff" stroke-width="14" stroke-linecap="round" opacity=".7" />
+      <path
+        d="M452 236 Q512 196 572 236"
+        fill="none"
+        stroke="#b3c0ff"
+        stroke-width="14"
+        stroke-linecap="round"
+        opacity=".7"
+      />
       <polygon
         points="512.0,322.0 721.5,422.9 773.3,649.6 628.3,831.5 395.7,831.5 250.7,649.6 302.5,422.9"
         fill="url(#kn-logo-peri)"
@@ -59,26 +66,65 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
     }
     /* Mostly ok, a short warning, a shorter critical, back to ok: what a calm week looks like. */
     @keyframes light {
-      0%, 58% { fill: #36d6a8; }
-      64%, 74% { fill: #f5b83d; }
-      79%, 86% { fill: #ff5d73; }
-      92%, 100% { fill: #36d6a8; }
+      0%,
+      58% {
+        fill: #36d6a8;
+      }
+      64%,
+      74% {
+        fill: #f5b83d;
+      }
+      79%,
+      86% {
+        fill: #ff5d73;
+      }
+      92%,
+      100% {
+        fill: #36d6a8;
+      }
     }
     @keyframes glow {
-      0%, 58% { stop-color: #36d6a8; }
-      64%, 74% { stop-color: #f5b83d; }
-      79%, 86% { stop-color: #ff5d73; }
-      92%, 100% { stop-color: #36d6a8; }
+      0%,
+      58% {
+        stop-color: #36d6a8;
+      }
+      64%,
+      74% {
+        stop-color: #f5b83d;
+      }
+      79%,
+      86% {
+        stop-color: #ff5d73;
+      }
+      92%,
+      100% {
+        stop-color: #36d6a8;
+      }
     }
     @keyframes look {
-      0%, 60% { transform: translate(0, 0); }
-      66%, 86% { transform: translate(10px, -4px); }
-      92%, 100% { transform: translate(0, 0); }
+      0%,
+      60% {
+        transform: translate(0, 0);
+      }
+      66%,
+      86% {
+        transform: translate(10px, -4px);
+      }
+      92%,
+      100% {
+        transform: translate(0, 0);
+      }
     }
     @media (prefers-reduced-motion: no-preference) {
-      :host(.animated) .light { animation: light 14s ease-in-out infinite; }
-      :host(.animated) .glow-stop { animation: glow 14s ease-in-out infinite; }
-      :host(.animated) .pupil { animation: look 14s ease-in-out infinite; }
+      :host(.animated) .light {
+        animation: light 14s ease-in-out infinite;
+      }
+      :host(.animated) .glow-stop {
+        animation: glow 14s ease-in-out infinite;
+      }
+      :host(.animated) .pupil {
+        animation: look 14s ease-in-out infinite;
+      }
     }
   `,
 })

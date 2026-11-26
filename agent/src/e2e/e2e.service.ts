@@ -1,13 +1,21 @@
-import { Logger } from '../logger';
-import { MAX_SEALED_REQUEST, OpenedRequest, ProtocolError, openRequest, peekEphemeral, toBase64Url } from '@kubernanny/protocol';
+import {
+  MAX_SEALED_REQUEST,
+  OpenedRequest,
+  openRequest,
+  peekEphemeral,
+  ProtocolError,
+  toBase64Url,
+} from '@kubernanny/protocol';
+
 import { DEMO_DEVICE, DevicesService, MAX_DEVICES, Principal } from '../auth/devices.service';
 import { IdentityService } from '../auth/identity.service';
 import type { Config } from '../config';
-import { Lang, Text, raw, render, t } from '../i18n/text';
+import { Lang, raw, render, t, Text } from '../i18n/text';
+import { Logger } from '../logger';
 import { Notifier } from '../notify/notifier';
 import { PairingService } from '../pairing/pairing';
 import { DispatchBusyError, InternalServer } from './internal-server';
-import { KeyedBuckets, RecentKeys, TokenBucket, sourceKey } from './rate-limit';
+import { KeyedBuckets, RecentKeys, sourceKey, TokenBucket } from './rate-limit';
 
 /** A GET whose clock is further off than this is refused (the app corrects its clock from the answer and retries). */
 export const CLOCK_WINDOW_MS = 5 * 60_000;
@@ -139,7 +147,12 @@ export class E2eService {
    * `via`: 'relay' for calls the relay forwarded (RelayClient); they have a
    * ceiling of their own. `source`: the caller's address, for direct calls.
    */
-  async handle(body: Uint8Array, now = Date.now(), via: 'direct' | 'relay' = 'direct', source?: string): Promise<E2eResult> {
+  async handle(
+    body: Uint8Array,
+    now = Date.now(),
+    via: 'direct' | 'relay' = 'direct',
+    source?: string,
+  ): Promise<E2eResult> {
     if (body.length > MAX_SEALED_REQUEST) {
       return plain(413, 'E2E_TOO_LARGE');
     }
@@ -165,7 +178,10 @@ export class E2eService {
     } catch (err) {
       return plain(400, err instanceof ProtocolError ? err.code : 'E2E_HANDSHAKE');
     }
-    const seal = (status: number, payload: Uint8Array): E2eResult => ({ kind: 'sealed', body: opened.respond(status, payload, Date.now()) });
+    const seal = (status: number, payload: Uint8Array): E2eResult => ({
+      kind: 'sealed',
+      body: opened.respond(status, payload, Date.now()),
+    });
     // The app's language for every text in the answer; the agent's default when the request names none.
     const lang = opened.request.language ?? this.config.language;
     const device = this.devices.byKey(opened.devicePublicKey);
@@ -174,7 +190,9 @@ export class E2eService {
     const pairing = opened.request.method === 'POST' && opened.request.path === '/pair';
 
     // A paired device spends its own budget; strangers share one.
-    const allowed = device ? this.perDevice.take(device.id, now) : (demoPrincipal ? this.demo : this.strangers).take(now);
+    const allowed = device
+      ? this.perDevice.take(device.id, now)
+      : (demoPrincipal ? this.demo : this.strangers).take(now);
     if (!allowed) {
       return plain(429, 'E2E_RATE_LIMITED');
     }
@@ -213,7 +231,13 @@ export class E2eService {
       return seal(404, error('NOT_FOUND', t('error.unknownPath'), lang));
     }
     try {
-      const response = await this.internal.dispatch(principal!.kind === 'demo' ? 'demo' : principal!.id, opened.request.method, opened.request.path, opened.request.body, lang);
+      const response = await this.internal.dispatch(
+        principal!.kind === 'demo' ? 'demo' : principal!.id,
+        opened.request.method,
+        opened.request.path,
+        opened.request.body,
+        lang,
+      );
       return seal(response.status, response.body);
     } catch (err) {
       if (err instanceof DispatchBusyError) {
@@ -241,7 +265,10 @@ export class E2eService {
     if (opened.request.time >= this.startedAt - START_MARGIN_MS) {
       return null;
     }
-    return { kind: 'sealed', body: opened.respond(401, error('E2E_CLOCK_SKEW', t('error.clockSkew'), lang), Date.now()) };
+    return {
+      kind: 'sealed',
+      body: opened.respond(401, error('E2E_CLOCK_SKEW', t('error.clockSkew'), lang), Date.now()),
+    };
   }
 
   /** Answered sealed, so the app learns the agent's time authentically and can retry. */
@@ -250,7 +277,10 @@ export class E2eService {
       return null;
     }
     const lang = opened.request.language ?? this.config.language;
-    return { kind: 'sealed', body: opened.respond(401, error('E2E_CLOCK_SKEW', t('error.clockSkew'), lang), Date.now()) };
+    return {
+      kind: 'sealed',
+      body: opened.respond(401, error('E2E_CLOCK_SKEW', t('error.clockSkew'), lang), Date.now()),
+    };
   }
 
   /** False when the cache is full, or `owner` already holds its share of the future map. */
@@ -294,11 +324,16 @@ export class E2eService {
     }
     try {
       const device = await this.devices.add(name, opened.devicePublicKey);
-      this.audit.log(`pairing code redeemed by "${device.name}" (${device.id})${via === 'relay' ? ' through the relay' : ''}`);
+      this.audit.log(
+        `pairing code redeemed by "${device.name}" (${device.id})${via === 'relay' ? ' through the relay' : ''}`,
+      );
       await this.notifier.securityAlert(device.name, [{ kind: 'devicePaired' }]);
       return seal(200, json({ deviceId: device.id, cluster: this.config.clusterName }));
     } catch (err) {
-      return seal(503, error('PAIRING_UNAVAILABLE', err instanceof Error ? raw(err.message) : t('error.deviceNotSaved'), lang));
+      return seal(
+        503,
+        error('PAIRING_UNAVAILABLE', err instanceof Error ? raw(err.message) : t('error.deviceNotSaved'), lang),
+      );
     }
   }
 

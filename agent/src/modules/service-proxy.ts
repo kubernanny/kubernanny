@@ -1,8 +1,8 @@
+import { servicePort } from '../discovery/discovery';
 import { Service } from '../inventory/inventory';
 import { KubeClient } from '../kube/kube-client';
-import { servicePort } from '../discovery/discovery';
-import { list, num, record, str, strings } from './untrusted';
 import { readCapped } from '../util/read-capped';
+import { list, num, record, str, strings } from './untrusted';
 
 /**
  * Reaches an in-cluster HTTP service. Inside the cluster directly over its DNS
@@ -25,7 +25,10 @@ export class ServiceHttp {
     if (kube.inCluster) {
       return new DirectHttp(kube, `http://${svc.metadata.name}.${namespace}.svc:${port}`);
     }
-    return new ServiceHttp(kube, `/api/v1/namespaces/${encodeURIComponent(namespace)}/services/${encodeURIComponent(svc.metadata.name)}:${port}/proxy`);
+    return new ServiceHttp(
+      kube,
+      `/api/v1/namespaces/${encodeURIComponent(namespace)}/services/${encodeURIComponent(svc.metadata.name)}:${port}/proxy`,
+    );
   }
 
   /** A direct URL (e.g. PROMETHEUS_URL) instead of the proxy. */
@@ -62,7 +65,11 @@ class DirectHttp extends ServiceHttp {
   }
 
   override async text(path: string): Promise<string> {
-    const res = await fetch(`${this.url}${path}`, { method: 'GET', redirect: 'error', signal: AbortSignal.timeout(10_000) });
+    const res = await fetch(`${this.url}${path}`, {
+      method: 'GET',
+      redirect: 'error',
+      signal: AbortSignal.timeout(10_000),
+    });
     if (!res.ok) {
       throw new Error(`${res.status} from ${this.url}${path}`);
     }
@@ -126,7 +133,9 @@ export class Prometheus {
 
   async query(expr: string): Promise<PromSample[]> {
     const started = Date.now();
-    const answer = await this.slot(() => this.http.get<unknown>(`/api/v1/query?query=${encodeURIComponent(expr)}`)).finally(() => {
+    const answer = await this.slot(() =>
+      this.http.get<unknown>(`/api/v1/query?query=${encodeURIComponent(expr)}`),
+    ).finally(() => {
       // The client outlives its run (the history views use it until the next one): keep the list bounded.
       if (this.timings.length < 500) {
         this.timings.push({ expr, ms: Date.now() - started });
@@ -149,7 +158,12 @@ export class Prometheus {
       .filter((x) => x.health === 'down')
       .map((x) => {
         const labels = strings(x.labels);
-        return { job: labels.job ?? str(x.scrapePool) ?? '?', instance: labels.instance ?? str(x.scrapeUrl) ?? '?', lastError: str(x.lastError) ?? '', lastScrape: str(x.lastScrape, 64) };
+        return {
+          job: labels.job ?? str(x.scrapePool) ?? '?',
+          instance: labels.instance ?? str(x.scrapeUrl) ?? '?',
+          lastError: str(x.lastError) ?? '',
+          lastScrape: str(x.lastScrape, 64),
+        };
       });
   }
 

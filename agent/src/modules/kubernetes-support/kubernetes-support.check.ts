@@ -25,7 +25,11 @@ export class KubernetesSupportCheck extends CoreCheck {
     const newest = Math.max(...Object.keys(KUBERNETES_EOL).map(Number));
     const stats: Stat[] = [{ label: t('stat.version'), value: state.minor ?? '?' }];
     if (state.eol) {
-      stats.push({ label: t('kubernetesSupport.stat.eol'), value: t('kubernetesSupport.date', { date: state.eol }), tone: state.issues.length === 0 ? 'ok' : state.ended ? 'warning' : 'muted' });
+      stats.push({
+        label: t('kubernetesSupport.stat.eol'),
+        value: t('kubernetesSupport.date', { date: state.eol }),
+        tone: state.issues.length === 0 ? 'ok' : state.ended ? 'warning' : 'muted',
+      });
     }
     stats.push({ label: t('kubernetesSupport.stat.newest'), value: `1.${newest}` });
     // Without Prometheus, or if it fails, the deprecation part is left out rather than failing the module.
@@ -33,8 +37,13 @@ export class KubernetesSupportCheck extends CoreCheck {
     const apis = samples ? deprecatedApisFrom(samples) : [];
     const deprecated = evaluateDeprecatedApis(apis, state.minor);
     if (samples) {
-      const inUse = new Set(pendingRemovals(apis, state.minor).map((a) => `${a.group}/${a.version}/${a.resource}`)).size;
-      stats.push({ label: t('kubernetesSupport.stat.deprecated'), value: String(inUse), tone: deprecated.some((i) => i.severity === 'warning') ? 'warning' : 'ok' });
+      const inUse = new Set(pendingRemovals(apis, state.minor).map((a) => `${a.group}/${a.version}/${a.resource}`))
+        .size;
+      stats.push({
+        label: t('kubernetesSupport.stat.deprecated'),
+        value: String(inUse),
+        tone: deprecated.some((i) => i.severity === 'warning') ? 'warning' : 'ok',
+      });
     }
     const issues = [...state.issues, ...deprecated];
     const summary =

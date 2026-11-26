@@ -104,7 +104,12 @@ export function podFindings(pod: SecurityPod): { type: FindingType; detail?: str
   if (containers.some((c) => c.securityContext?.privileged === true)) {
     out.push({ type: 'privileged' });
   }
-  const host = [spec.hostNetwork && 'hostNetwork', spec.hostPID && 'hostPID', spec.hostIPC && 'hostIPC', (spec.volumes ?? []).some((v) => v.hostPath) && 'hostPath'].filter((x): x is string => Boolean(x));
+  const host = [
+    spec.hostNetwork && 'hostNetwork',
+    spec.hostPID && 'hostPID',
+    spec.hostIPC && 'hostIPC',
+    (spec.volumes ?? []).some((v) => v.hostPath) && 'hostPath',
+  ].filter((x): x is string => Boolean(x));
   if (host.length > 0) {
     out.push({ type: 'host-access', detail: host.join(', ') });
   }
@@ -120,7 +125,9 @@ export function podFindings(pod: SecurityPod): { type: FindingType; detail?: str
   if ((spec.containers ?? []).some((c) => !c.resources?.limits?.memory)) {
     out.push({ type: 'no-memory-limit' });
   }
-  const mutable = containers.map((c) => c.image).find((image) => !image.includes('@') && (imageVersion(image) === undefined || imageVersion(image) === 'latest'));
+  const mutable = containers
+    .map((c) => c.image)
+    .find((image) => !image.includes('@') && (imageVersion(image) === undefined || imageVersion(image) === 'latest'));
   if (mutable) {
     out.push({ type: 'mutable-image', detail: mutable.split('/').pop() });
   }
@@ -134,11 +141,20 @@ export function podFindings(pod: SecurityPod): { type: FindingType; detail?: str
  * seventy CronJobs from one template showed as one). Suspended CronJobs
  * start no pods and are left out.
  */
-export function cronJobTemplatePods(cronjobs: readonly { metadata: ObjectMeta; spec?: { suspend?: boolean; jobTemplate?: { spec?: { template?: { spec?: unknown } } } } }[]): SecurityPod[] {
+export function cronJobTemplatePods(
+  cronjobs: readonly {
+    metadata: ObjectMeta;
+    spec?: { suspend?: boolean; jobTemplate?: { spec?: { template?: { spec?: unknown } } } };
+  }[],
+): SecurityPod[] {
   return cronjobs
     .filter((c) => c.spec?.suspend !== true && c.spec?.jobTemplate?.spec?.template?.spec)
     .map((c) => ({
-      metadata: { name: c.metadata.name, namespace: c.metadata.namespace, ownerReferences: [{ kind: 'CronJob', name: c.metadata.name }] },
+      metadata: {
+        name: c.metadata.name,
+        namespace: c.metadata.namespace,
+        ownerReferences: [{ kind: 'CronJob', name: c.metadata.name }],
+      },
       spec: c.spec!.jobTemplate!.spec!.template!.spec as SecurityPod['spec'],
       status: { phase: 'Pending' },
     }));
@@ -184,8 +200,13 @@ export function evaluateSecurity(input: SecurityInput): Issue[] {
   return [...byGroup.values()]
     .sort((a, b) => a.ns.localeCompare(b.ns) || ORDER.indexOf(a.type) - ORDER.indexOf(b.type))
     .map(({ ns, type, workloads }) => {
-      const names = [...workloads].sort(([a], [b]) => a.localeCompare(b)).map(([name, detail]) => (detail ? `${name} (${detail})` : name));
-      const affected = names.length > 5 ? t('security.affectedMore', { names: names.slice(0, 5).join(', '), more: names.length - 5 }) : raw(names.join(', '));
+      const names = [...workloads]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, detail]) => (detail ? `${name} (${detail})` : name));
+      const affected =
+        names.length > 5
+          ? t('security.affectedMore', { names: names.slice(0, 5).join(', '), more: names.length - 5 })
+          : raw(names.join(', '));
       const severity: IssueSeverity = type === 'privileged' ? 'warning' : 'info';
       return {
         id: `security/${ns}/${type}`,

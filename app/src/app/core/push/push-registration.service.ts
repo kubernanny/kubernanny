@@ -1,7 +1,8 @@
-import { Injectable, inject } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { generateKeyPair, pushKeyId, toBase64Url } from '@kubernanny/protocol';
-import { AgentClient } from '../agent-client.service';
+
 import { ClusterConfig } from '../agent.model';
+import { AgentClient } from '../agent-client.service';
 import { ClusterStore } from '../cluster-store.service';
 import { WidgetBridge } from '../widget/widget-bridge';
 import { PushNative } from './push-native';
@@ -48,9 +49,21 @@ export class PushRegistration {
     const key = toBase64Url(keys.publicKey);
     const widget = (await this.widgetClusters()).has(cluster.id);
     const deadman = deadmanChoice(cluster);
-    await this.native.storeKey({ kid, secretKey: toBase64Url(keys.secretKey), publicKey: key, agentKey: cluster.agentKey, clusterId: cluster.id });
+    await this.native.storeKey({
+      kid,
+      secretKey: toBase64Url(keys.secretKey),
+      publicKey: key,
+      agentKey: cluster.agentKey,
+      clusterId: cluster.id,
+    });
     try {
-      await this.client.registerPush(cluster, { token, platform: status.platform, key, widget, deadman });
+      await this.client.registerPush(cluster, {
+        token,
+        platform: status.platform,
+        key,
+        widget,
+        deadman,
+      });
     } catch (err) {
       await this.native.removeKey(kid);
       throw err;
@@ -58,7 +71,10 @@ export class PushRegistration {
     if (cluster.push && cluster.push.kid !== kid) {
       await this.native.removeKey(cluster.push.kid);
     }
-    const saved = await this.store.save({ ...cluster, push: { kid, key, token, ...(widget ? { widget: true as const } : {}), deadman } });
+    const saved = await this.store.save({
+      ...cluster,
+      push: { kid, key, token, ...(widget ? { widget: true as const } : {}), deadman },
+    });
     void this.client.testPush(saved).catch(() => undefined);
     return 'enabled';
   }
@@ -74,7 +90,13 @@ export class PushRegistration {
     if (!push || !status.platform) {
       return cluster;
     }
-    await this.client.registerPush(cluster, { token: push.token, platform: status.platform, key: push.key, widget: push.widget === true, deadman });
+    await this.client.registerPush(cluster, {
+      token: push.token,
+      platform: status.platform,
+      key: push.key,
+      widget: push.widget === true,
+      deadman,
+    });
     return this.store.save({ ...cluster, push: { ...push, deadman } });
   }
 
@@ -127,11 +149,24 @@ export class PushRegistration {
       const widget = shown.has(cluster.id);
       const deadman = deadmanChoice(cluster);
       // A registration from before the dead man's switch (`deadman` absent) is made again once, with the default.
-      if (cluster.push!.token !== token || (cluster.push!.widget === true) !== widget || cluster.push!.deadman === undefined) {
+      if (
+        cluster.push!.token !== token ||
+        (cluster.push!.widget === true) !== widget ||
+        cluster.push!.deadman === undefined
+      ) {
         try {
-          await this.client.registerPush(cluster, { token, platform: status.platform, key: cluster.push!.key, widget, deadman });
+          await this.client.registerPush(cluster, {
+            token,
+            platform: status.platform,
+            key: cluster.push!.key,
+            widget,
+            deadman,
+          });
           const { widget: _before, ...push } = cluster.push!;
-          await this.store.save({ ...cluster, push: { ...push, token, ...(widget ? { widget: true as const } : {}), deadman } });
+          await this.store.save({
+            ...cluster,
+            push: { ...push, token, ...(widget ? { widget: true as const } : {}), deadman },
+          });
         } catch {
           // Unreachable now, or push switched off at the agent: tried again next start.
         }

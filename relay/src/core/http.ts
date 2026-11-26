@@ -60,7 +60,9 @@ export function checkAgentReply(status: number, body: Uint8Array): { status: num
   }
   let code: unknown;
   try {
-    code = (JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(body)) as { code?: unknown } | null)?.code;
+    code = (
+      JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(body)) as { code?: unknown } | null
+    )?.code;
   } catch {
     return null;
   }

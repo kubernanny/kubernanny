@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { parseQrFragment, qrSvgPath } from './pair-qr';
 
 const KEY = 'Xq3v9mJb2LkPzR7tYc0wNfHs5dGa8EuQi1oVnBx4ZeW';

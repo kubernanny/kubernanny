@@ -1,4 +1,4 @@
-import { Text, t } from '../i18n/text';
+import { t, Text } from '../i18n/text';
 
 export type Severity = 'warning' | 'critical';
 
@@ -11,15 +11,7 @@ export type IssueSeverity = Severity | 'info';
 /** What a check reports as a whole. `skipped`: the component is not installed in this cluster. */
 export type CheckStatus = 'ok' | Severity | 'skipped' | 'error';
 
-export type CheckId =
-  | 'nodes'
-  | 'etcd'
-  | 'pods'
-  | 'longhorn'
-  | 'certificates'
-  | 'argocd'
-  | 'cnpg'
-  | 'alertmanager';
+export type CheckId = 'nodes' | 'etcd' | 'pods' | 'longhorn' | 'certificates' | 'argocd' | 'cnpg' | 'alertmanager';
 
 export type WorkloadKind = 'Deployment' | 'StatefulSet' | 'DaemonSet';
 
@@ -36,7 +28,14 @@ export type IssueAction =
    * cause is gone (a crash loop). `changed`: a ConfigMap the pod reads through
    * env/envFrom changed after its last start, so the restart is the fix.
    */
-  | { type: 'restart'; kind: WorkloadKind; namespace: string; name: string; secondary?: boolean; changed?: { kind: 'ConfigMap'; name: string } }
+  | {
+      type: 'restart';
+      kind: WorkloadKind;
+      namespace: string;
+      name: string;
+      secondary?: boolean;
+      changed?: { kind: 'ConfigMap'; name: string };
+    }
   | { type: 'logs'; namespace: string; pod: string; container?: string; previous?: boolean }
   | { type: 'cnpg-backup'; namespace: string; cluster: string }
   | { type: 'uncordon'; node: string }
@@ -52,7 +51,8 @@ export type IssueAction =
   | { type: 'pvc-expand'; namespace: string; name: string; from: string; to: string; template?: string };
 
 /** The objects `reconcile-now` can ask their controller to reconcile at once. */
-export type ReconcileKind = 'Kustomization' | 'HelmRelease' | 'ExternalSecret' | 'InfisicalStaticSecret' | 'Certificate';
+export type ReconcileKind =
+  'Kustomization' | 'HelmRelease' | 'ExternalSecret' | 'InfisicalStaticSecret' | 'Certificate';
 
 export type IssueActionType = IssueAction['type'];
 
@@ -73,7 +73,14 @@ export type ActionType = IssueActionType | 'argocd-rollback' | 'config-change-hi
  * than the action itself (create Jobs, force-delete pods, end an Argo CD
  * operation, grow volumes), see docs/SECURITY.md.
  */
-export const OPT_IN_ACTIONS: readonly ActionType[] = ['argocd-rollback', 'job-rerun', 'force-delete-terminating', 'argocd-terminate-op', 'pvc-expand', 'config-change-hint'];
+export const OPT_IN_ACTIONS: readonly ActionType[] = [
+  'argocd-rollback',
+  'job-rerun',
+  'force-delete-terminating',
+  'argocd-terminate-op',
+  'pvc-expand',
+  'config-change-hint',
+];
 
 export interface Issue {
   /** Stable across runs, so the app and the notifier can follow one problem. */

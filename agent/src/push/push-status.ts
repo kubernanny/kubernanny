@@ -1,4 +1,5 @@
 import { PUSH_STATUS_PROBLEMS, PUSH_STATUS_TITLE, PushStatus } from '@kubernanny/protocol';
+
 import { Lang, render } from '../i18n/text';
 import type { Snapshot } from '../status/status.service';
 
@@ -16,9 +17,16 @@ export function pushStatus(snapshot: Snapshot, detail: 'full' | 'minimal', lang:
   const critical = counted.filter((i) => i.severity === 'critical');
   const warnings = counted.filter((i) => i.severity !== 'critical');
   const checked = snapshot.checkedAt ? Date.parse(snapshot.checkedAt) : NaN;
-  const status: PushStatus = { l: snapshot.light, c: critical.length, n: warnings.length, a: Number.isFinite(checked) ? checked : null };
+  const status: PushStatus = {
+    l: snapshot.light,
+    c: critical.length,
+    n: warnings.length,
+    a: Number.isFinite(checked) ? checked : null,
+  };
   if (detail === 'full' && counted.length > 0) {
-    status.i = [...critical, ...warnings].slice(0, PUSH_STATUS_PROBLEMS).map((i) => ({ s: i.severity === 'critical' ? 'c' : 'w', t: clip(render(i.title, lang)) }));
+    status.i = [...critical, ...warnings]
+      .slice(0, PUSH_STATUS_PROBLEMS)
+      .map((i) => ({ s: i.severity === 'critical' ? 'c' : 'w', t: clip(render(i.title, lang)) }));
   }
   return status;
 }

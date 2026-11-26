@@ -41,7 +41,11 @@ export function cleanReason(raw: unknown): string | undefined {
   if (typeof raw !== 'string') {
     return undefined;
   }
-  const text = raw.replace(/[\p{Cc}\p{Cf}]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_REASON);
+  const text = raw
+    .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_REASON);
   return text || undefined;
 }
 
@@ -62,7 +66,8 @@ export function parseAccepted(text: string | undefined): Map<string, Acceptance>
 }
 
 /** The acceptance component of a workload Trivy Operator scanned; lower case, so it fits COMPONENT. */
-export const trivyComponentKey = (namespace: string, kind: string, name: string) => `trivy:${namespace}:${kind.toLowerCase()}:${name}`;
+export const trivyComponentKey = (namespace: string, kind: string, name: string) =>
+  `trivy:${namespace}:${kind.toLowerCase()}:${name}`;
 
 /**
  * The component an advisory of an issue is accepted on: `vulnerabilities/<id>`

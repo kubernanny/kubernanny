@@ -15,14 +15,44 @@
  * socket too (a reconnect must not start it full), so it is also written to
  * the object's storage, one small row per object, after each push.
  */
-import { DeadmanDeposit, DepositOutcome, FrameType, RelayClose, RelayFrameError, decodeFrame, encodeFrame, relayOrigin } from '@kubernanny/protocol';
+import {
+  DeadmanDeposit,
+  decodeFrame,
+  DepositOutcome,
+  encodeFrame,
+  FrameType,
+  RelayClose,
+  RelayFrameError,
+  relayOrigin,
+} from '@kubernanny/protocol';
+
 import { AgentLink, LinkRates } from '../../src/core/agent-link';
-import { DeadmanConfig, DeadmanState, agentBack, agentLost, depositInto, dueItems, emptyDeadman, expire, fireDue, markSent, nextWake, parseDeadmanConfig } from '../../src/core/deadman';
-import { RelayErrorCode, relayError } from '../../src/core/http';
-import { RelayLimits, parseLimits } from '../../src/core/limits';
-import { PushConfig, PushSender, TokenGate, parsePushConfig, pushSender } from '../../src/core/push';
+import {
+  agentBack,
+  agentLost,
+  DeadmanConfig,
+  DeadmanState,
+  depositInto,
+  dueItems,
+  emptyDeadman,
+  expire,
+  fireDue,
+  markSent,
+  nextWake,
+  parseDeadmanConfig,
+} from '../../src/core/deadman';
+import { relayError, RelayErrorCode } from '../../src/core/http';
+import { parseLimits, RelayLimits } from '../../src/core/limits';
+import { parsePushConfig, PushConfig, PushSender, pushSender, TokenGate } from '../../src/core/push';
 import { AgentPushPolicy, PushPolicyState } from '../../src/core/push-policy';
-import { Session, endSession, newestRegistered, openSession, proveSession, registrationExpired } from '../../src/core/session';
+import {
+  endSession,
+  newestRegistered,
+  openSession,
+  proveSession,
+  registrationExpired,
+  Session,
+} from '../../src/core/session';
 
 /** The parts of a Workers WebSocket this object uses. */
 export interface HibernatableSocket {
@@ -191,7 +221,10 @@ export class AgentObjectCore {
     }
     return new Response(result.body, {
       status: result.status,
-      headers: { 'content-type': result.status === 200 ? 'application/octet-stream' : 'application/json', 'cache-control': 'no-store' },
+      headers: {
+        'content-type': result.status === 200 ? 'application/octet-stream' : 'application/json',
+        'cache-control': 'no-store',
+      },
     });
   }
 
@@ -249,7 +282,15 @@ export class AgentObjectCore {
       return; // closed while storage answered
     }
     const fired = await this.deadmanBack();
-    socket.send(encodeFrame(FrameType.Ready, 0, new TextEncoder().encode(JSON.stringify({ ...this.link(socket).info(), ...(fired ? { deadmanFired: fired } : {}) }))));
+    socket.send(
+      encodeFrame(
+        FrameType.Ready,
+        0,
+        new TextEncoder().encode(
+          JSON.stringify({ ...this.link(socket).info(), ...(fired ? { deadmanFired: fired } : {}) }),
+        ),
+      ),
+    );
   }
 
   async webSocketClose(socket: HibernatableSocket): Promise<void> {
@@ -258,7 +299,12 @@ export class AgentObjectCore {
     this.links.delete(socket);
     // The agent's current connection went away (not one replaced by a newer one): the dead man's switch arms.
     const attachment = socket.deserializeAttachment() as Attachment | null;
-    if (attachment?.session.phase === 'registered' && !this.sockets().some(({ socket: other, attachment: theirs }) => other !== socket && theirs?.session.phase === 'registered')) {
+    if (
+      attachment?.session.phase === 'registered' &&
+      !this.sockets().some(
+        ({ socket: other, attachment: theirs }) => other !== socket && theirs?.session.phase === 'registered',
+      )
+    ) {
       await this.deadmanLost(this.heardAt(socket, attachment));
     }
   }
@@ -298,8 +344,16 @@ export class AgentObjectCore {
     if (due.length > 0) {
       const saved = await this.state.storage.get<PushPolicyState>(PUSH_KEY).catch(() => undefined);
       const config = this.push.config;
-      const policy = new AgentPushPolicy({ burst: config.agentBurst, perHour: config.agentPerHour, tokensPerDay: config.tokensPerDay }, now, saved);
-      await fireDue(due, { send: this.push.send, allows: (d, at) => policy.allows(d, at), charge: (d, at) => policy.charge(d, at) }, now);
+      const policy = new AgentPushPolicy(
+        { burst: config.agentBurst, perHour: config.agentPerHour, tokensPerDay: config.tokensPerDay },
+        now,
+        saved,
+      );
+      await fireDue(
+        due,
+        { send: this.push.send, allows: (d, at) => policy.allows(d, at), charge: (d, at) => policy.charge(d, at) },
+        now,
+      );
       await this.state.storage.put(PUSH_KEY, policy.state()).catch(() => undefined);
     }
     await this.scheduleDeadman(state, now);
@@ -404,12 +458,28 @@ export class AgentObjectCore {
       let push = null;
       if (this.push) {
         const config = this.push.config;
-        const policy = new AgentPushPolicy({ burst: config.agentBurst, perHour: config.agentPerHour, tokensPerDay: config.tokensPerDay }, Date.now(), saved);
-        push = { send: this.push.send, policy, maxInFlight: config.maxInFlight, done: () => this.savePush(socket, policy) };
+        const policy = new AgentPushPolicy(
+          { burst: config.agentBurst, perHour: config.agentPerHour, tokensPerDay: config.tokensPerDay },
+          Date.now(),
+          saved,
+        );
+        push = {
+          send: this.push.send,
+          policy,
+          maxInFlight: config.maxInFlight,
+          done: () => this.savePush(socket, policy),
+        };
       }
       // A Workers WebSocket queues nothing the object can see: a frame counts as sent once handed over.
-      const deadman = push && this.deadman.enabled ? { deposit: (deposit: DeadmanDeposit | null) => this.deadmanDeposit(socket, deposit) } : null;
-      link = new AgentLink({ send: (bytes, sent) => (socket.send(bytes), sent?.()), close: (code, reason) => socket.close(code, reason) }, this.limits, { rates, push, deadman });
+      const deadman =
+        push && this.deadman.enabled
+          ? { deposit: (deposit: DeadmanDeposit | null) => this.deadmanDeposit(socket, deposit) }
+          : null;
+      link = new AgentLink(
+        { send: (bytes, sent) => (socket.send(bytes), sent?.()), close: (code, reason) => socket.close(code, reason) },
+        this.limits,
+        { rates, push, deadman },
+      );
       this.links.set(socket, link);
     }
     return link;
@@ -448,7 +518,9 @@ export class AgentObjectCore {
   }
 
   private sockets(): { socket: HibernatableSocket; attachment: Attachment | null }[] {
-    return this.state.getWebSockets().map((socket) => ({ socket, attachment: socket.deserializeAttachment() as Attachment | null }));
+    return this.state
+      .getWebSockets()
+      .map((socket) => ({ socket, attachment: socket.deserializeAttachment() as Attachment | null }));
   }
 
   /** Ends the socket's session (so it never registers, or counts as registered, again) and closes it. */

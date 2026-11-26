@@ -1,6 +1,16 @@
-import { FrameType, RelayClose, answerChallenge, decodeFrame, generateKeyPair, parsePublicKey, relayAgentId, sealRequest } from '@kubernanny/protocol';
+import {
+  answerChallenge,
+  decodeFrame,
+  FrameType,
+  generateKeyPair,
+  parsePublicKey,
+  relayAgentId,
+  RelayClose,
+  sealRequest,
+} from '@kubernanny/protocol';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
+
 import { DemoAgent, startDemoAgent } from '../../agent/src/testing/demo-agent';
 
 /**
@@ -31,7 +41,11 @@ describe.skipIf(!base)(`a running relay at ${base}`, () => {
   }
 
   const call = (body: Uint8Array, id = agentId) =>
-    fetch(`${base}/v1/agents/${id}/e2e`, { method: 'POST', body: Buffer.from(body), headers: { 'content-type': 'application/octet-stream', origin: 'https://app.example' } });
+    fetch(`${base}/v1/agents/${id}/e2e`, {
+      method: 'POST',
+      body: Buffer.from(body),
+      headers: { 'content-type': 'application/octet-stream', origin: 'https://app.example' },
+    });
 
   beforeAll(async () => {
     agent = await startDemoAgent({ RELAY_URL: wsBase });
@@ -44,7 +58,11 @@ describe.skipIf(!base)(`a running relay at ${base}`, () => {
   });
 
   it('carries a sealed call and its answer, and passes plain refusals through', async () => {
-    const sealed = sealRequest(device, parsePublicKey(agent.publicKey), { method: 'GET', path: '/status', time: Date.now() });
+    const sealed = sealRequest(device, parsePublicKey(agent.publicKey), {
+      method: 'GET',
+      path: '/status',
+      time: Date.now(),
+    });
     const res = await call(sealed.body);
     expect(res.status).toBe(200);
     expect(res.headers.get('access-control-allow-origin')).toBe('*');
@@ -75,7 +93,11 @@ describe.skipIf(!base)(`a running relay at ${base}`, () => {
       ws.on('close', (c) => resolve(c));
     });
     expect(code).toBe(RelayClose.ProofFailed);
-    const sealed = sealRequest(device, parsePublicKey(agent.publicKey), { method: 'GET', path: '/info', time: Date.now() });
+    const sealed = sealRequest(device, parsePublicKey(agent.publicKey), {
+      method: 'GET',
+      path: '/info',
+      time: Date.now(),
+    });
     expect((await call(sealed.body)).status).toBe(200);
   });
 
@@ -83,7 +105,11 @@ describe.skipIf(!base)(`a running relay at ${base}`, () => {
     const ws = new WebSocket(`${wsBase}/v1/agents/${relayAgentId(generateKeyPair().publicKey)}/ws`);
     await new Promise((resolve) => ws.on('open', resolve));
     ws.send('ping');
-    expect(await new Promise<string>((resolve) => ws.on('message', (data: Buffer, binary: boolean) => !binary && resolve(data.toString())))).toBe('pong');
+    expect(
+      await new Promise<string>((resolve) =>
+        ws.on('message', (data: Buffer, binary: boolean) => !binary && resolve(data.toString())),
+      ),
+    ).toBe('pong');
     ws.close();
   });
 });

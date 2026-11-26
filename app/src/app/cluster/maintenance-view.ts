@@ -15,12 +15,21 @@ export interface MaintenanceVM {
 }
 
 /** Whether a maintenance window holds back notifications, and until when; one that has ended reads as none. */
-export function maintenanceView(until: string | null | undefined, now: Date, tr: Translator): MaintenanceVM {
+export function maintenanceView(
+  until: string | null | undefined,
+  now: Date,
+  tr: Translator,
+): MaintenanceVM {
   if (!until || Date.parse(until) <= now.getTime()) {
     return { active: false, status: '', banner: '', time: '' };
   }
   const time = endTime(until, now, tr.lang);
-  return { active: true, status: tr.t('maintenance.active', { time }), banner: tr.t('maintenance.banner', { time }), time };
+  return {
+    active: true,
+    status: tr.t('maintenance.active', { time }),
+    banner: tr.t('maintenance.banner', { time }),
+    time,
+  };
 }
 
 /** The choices of the action sheet: "1 Stunde" … "24 Stunden". */

@@ -1,11 +1,34 @@
-import { Category, CheckStatus, Issue, IssueAction, IssueActionType, Light, ModuleView, Overview, PendingSync, Snapshot, Tone } from '../core/agent.model';
-import { KNOWN_AGENT_VERSION, UPGRADE_COMMAND, olderThan } from '../core/version';
-import { LIGHT_TONE, STATUS_TONE, bytes, cores, duration, percent, ratio, relativeTime, sinceText, untilText } from '../core/format';
-import { ResourceInput, resourceBarView } from '../ui/resource-bar';
+import {
+  Category,
+  CheckStatus,
+  Issue,
+  IssueAction,
+  IssueActionType,
+  Light,
+  ModuleView,
+  Overview,
+  PendingSync,
+  Snapshot,
+  Tone,
+} from '../core/agent.model';
+import {
+  bytes,
+  cores,
+  duration,
+  LIGHT_TONE,
+  percent,
+  ratio,
+  relativeTime,
+  sinceText,
+  STATUS_TONE,
+  untilText,
+} from '../core/format';
+import { KNOWN_AGENT_VERSION, olderThan, UPGRADE_COMMAND } from '../core/version';
 import { TranslationKey } from '../i18n/dictionary';
 import { Translator } from '../i18n/translator';
-import { MaintenanceVM, maintenanceView } from './maintenance-view';
-import { ACCEPTING_MODULES, acceptComponentOf } from './vulnerability-acceptance';
+import { resourceBarView, ResourceInput } from '../ui/resource-bar';
+import { maintenanceView, MaintenanceVM } from './maintenance-view';
+import { acceptComponentOf, ACCEPTING_MODULES } from './vulnerability-acceptance';
 
 export interface ActionButton {
   type: IssueActionType;
@@ -141,7 +164,20 @@ export const CATEGORY_KEY: Record<Category, TranslationKey> = {
   apps: 'categories.apps',
 };
 
-const CATEGORY_ORDER: Category[] = ['core', 'storage', 'database', 'gitops', 'certificates', 'observability', 'networking', 'security', 'backup', 'maintenance', 'platform', 'apps'];
+const CATEGORY_ORDER: Category[] = [
+  'core',
+  'storage',
+  'database',
+  'gitops',
+  'certificates',
+  'observability',
+  'networking',
+  'security',
+  'backup',
+  'maintenance',
+  'platform',
+  'apps',
+];
 
 const STATUS_KEY: Record<CheckStatus, TranslationKey> = {
   ok: 'status.ok',
@@ -156,12 +192,25 @@ type ButtonBase = Omit<ActionButton, 'emphasis' | 'hint'> & { secondary?: boolea
 const FLUX_KINDS = new Set(['Kustomization', 'HelmRelease']);
 
 function buttonBase(action: IssueAction, index: number, tr: Translator): ButtonBase {
-  const target = 'namespace' in action && 'name' in action ? `${action.namespace}/${action.name}` : '';
+  const target =
+    'namespace' in action && 'name' in action ? `${action.namespace}/${action.name}` : '';
   switch (action.type) {
     case 'argocd-sync':
-      return { type: action.type, index, label: tr.t('actions.sync'), icon: 'sync-outline', confirm: tr.t('actions.syncConfirm', { app: action.app }) };
+      return {
+        type: action.type,
+        index,
+        label: tr.t('actions.sync'),
+        icon: 'sync-outline',
+        confirm: tr.t('actions.syncConfirm', { app: action.app }),
+      };
     case 'argocd-refresh':
-      return { type: action.type, index, label: tr.t('actions.hardRefresh'), icon: 'refresh-outline', confirm: null };
+      return {
+        type: action.type,
+        index,
+        label: tr.t('actions.hardRefresh'),
+        icon: 'refresh-outline',
+        confirm: null,
+      };
     case 'restart':
       return {
         type: action.type,
@@ -169,31 +218,74 @@ function buttonBase(action: IssueAction, index: number, tr: Translator): ButtonB
         label: tr.t('actions.restart', { name: action.name }),
         icon: 'reload-outline',
         confirm: action.changed
-          ? tr.t('actions.restartConfirmChanged', { kind: action.kind, target, configMap: action.changed.name })
+          ? tr.t('actions.restartConfirmChanged', {
+              kind: action.kind,
+              target,
+              configMap: action.changed.name,
+            })
           : tr.t('actions.restartConfirm', { kind: action.kind, target }),
         ...(action.secondary ? { secondary: true, hint: tr.t('actions.restartHint') } : {}),
       };
     case 'logs':
-      return { type: action.type, index, label: tr.t(action.previous ? 'actions.logsBeforeCrash' : 'actions.logs'), icon: 'document-text-outline', confirm: null };
+      return {
+        type: action.type,
+        index,
+        label: tr.t(action.previous ? 'actions.logsBeforeCrash' : 'actions.logs'),
+        icon: 'document-text-outline',
+        confirm: null,
+      };
     case 'cnpg-backup':
-      return { type: action.type, index, label: tr.t('actions.backup'), icon: 'save-outline', confirm: tr.t('actions.backupConfirm', { cluster: action.cluster }) };
+      return {
+        type: action.type,
+        index,
+        label: tr.t('actions.backup'),
+        icon: 'save-outline',
+        confirm: tr.t('actions.backupConfirm', { cluster: action.cluster }),
+      };
     case 'longhorn-backup':
-      return { type: action.type, index, label: tr.t('actions.backup'), icon: 'save-outline', confirm: tr.t('actions.longhornBackupConfirm', { volume: action.label }) };
+      return {
+        type: action.type,
+        index,
+        label: tr.t('actions.backup'),
+        icon: 'save-outline',
+        confirm: tr.t('actions.longhornBackupConfirm', { volume: action.label }),
+      };
     case 'velero-backup':
-      return { type: action.type, index, label: tr.t('actions.backup'), icon: 'save-outline', confirm: tr.t('actions.veleroBackupConfirm', { schedule: action.schedule }) };
+      return {
+        type: action.type,
+        index,
+        label: tr.t('actions.backup'),
+        icon: 'save-outline',
+        confirm: tr.t('actions.veleroBackupConfirm', { schedule: action.schedule }),
+      };
     case 'uncordon':
-      return { type: action.type, index, label: tr.t('actions.uncordon'), icon: 'lock-open-outline', confirm: tr.t('actions.uncordonConfirm', { node: action.node }) };
+      return {
+        type: action.type,
+        index,
+        label: tr.t('actions.uncordon'),
+        icon: 'lock-open-outline',
+        confirm: tr.t('actions.uncordonConfirm', { node: action.node }),
+      };
     case 'job-rerun':
       return {
         type: action.type,
         index,
         label: tr.t('actions.rerun'),
         icon: 'play-outline',
-        confirm: tr.t(action.from === 'CronJob' ? 'actions.rerunCronConfirm' : 'actions.rerunJobConfirm', { target }),
+        confirm: tr.t(
+          action.from === 'CronJob' ? 'actions.rerunCronConfirm' : 'actions.rerunJobConfirm',
+          { target },
+        ),
       };
     case 'reconcile-now':
       if (action.kind === 'Certificate') {
-        return { type: action.type, index, label: tr.t('actions.renew'), icon: 'ribbon-outline', confirm: tr.t('actions.renewConfirm', { target }) };
+        return {
+          type: action.type,
+          index,
+          label: tr.t('actions.renew'),
+          icon: 'ribbon-outline',
+          confirm: tr.t('actions.renewConfirm', { target }),
+        };
       }
       return {
         type: action.type,
@@ -202,10 +294,23 @@ function buttonBase(action: IssueAction, index: number, tr: Translator): ButtonB
         icon: 'git-pull-request-outline',
         confirm: FLUX_KINDS.has(action.kind)
           ? tr.t('actions.reconcileFluxConfirm', { kind: action.kind, target })
-          : tr.t(action.kind === 'ExternalSecret' ? 'actions.reconcileExternalSecretConfirm' : 'actions.reconcileInfisicalConfirm', { target }),
+          : tr.t(
+              action.kind === 'ExternalSecret'
+                ? 'actions.reconcileExternalSecretConfirm'
+                : 'actions.reconcileInfisicalConfirm',
+              { target },
+            ),
       };
     case 'cleanup-pods':
-      return { type: action.type, index, label: tr.t('actions.cleanup'), icon: 'trash-outline', confirm: tr.n('actions.cleanupConfirm', action.pods.length, { namespace: action.namespace }) };
+      return {
+        type: action.type,
+        index,
+        label: tr.t('actions.cleanup'),
+        icon: 'trash-outline',
+        confirm: tr.n('actions.cleanupConfirm', action.pods.length, {
+          namespace: action.namespace,
+        }),
+      };
     case 'force-delete-terminating':
       return {
         type: action.type,
@@ -213,11 +318,24 @@ function buttonBase(action: IssueAction, index: number, tr: Translator): ButtonB
         label: tr.t('actions.forceDelete'),
         icon: 'close-circle-outline',
         confirm: action.statefulSet
-          ? tr.t('actions.forceDeleteConfirmStatefulSet', { target: `${action.namespace}/${action.pod}`, node: action.node, statefulSet: action.statefulSet })
-          : tr.t('actions.forceDeleteConfirm', { target: `${action.namespace}/${action.pod}`, node: action.node }),
+          ? tr.t('actions.forceDeleteConfirmStatefulSet', {
+              target: `${action.namespace}/${action.pod}`,
+              node: action.node,
+              statefulSet: action.statefulSet,
+            })
+          : tr.t('actions.forceDeleteConfirm', {
+              target: `${action.namespace}/${action.pod}`,
+              node: action.node,
+            }),
       };
     case 'argocd-terminate-op':
-      return { type: action.type, index, label: tr.t('actions.terminate'), icon: 'stop-circle-outline', confirm: tr.t('actions.terminateConfirm', { app: action.app }) };
+      return {
+        type: action.type,
+        index,
+        label: tr.t('actions.terminate'),
+        icon: 'stop-circle-outline',
+        confirm: tr.t('actions.terminateConfirm', { app: action.app }),
+      };
     case 'pvc-expand':
       return {
         type: action.type,
@@ -225,7 +343,12 @@ function buttonBase(action: IssueAction, index: number, tr: Translator): ButtonB
         label: tr.t('actions.expand', { size: action.to }),
         icon: 'resize-outline',
         confirm: action.template
-          ? tr.t('actions.expandConfirmTemplate', { target, from: action.from, to: action.to, template: action.template })
+          ? tr.t('actions.expandConfirmTemplate', {
+              target,
+              from: action.from,
+              to: action.to,
+              template: action.template,
+            })
           : tr.t('actions.expandConfirm', { target, from: action.from, to: action.to }),
       };
   }
@@ -236,9 +359,18 @@ function buttonBase(action: IssueAction, index: number, tr: Translator): ButtonB
  * filled; a secondary one (the restart of a crash loop) is drawn quiet and
  * explains under the row when it helps.
  */
-export function actionButton(action: IssueAction, index: number, tr: Translator, first = false): ActionButton {
+export function actionButton(
+  action: IssueAction,
+  index: number,
+  tr: Translator,
+  first = false,
+): ActionButton {
   const { secondary, hint, ...base } = buttonBase(action, index, tr);
-  return { ...base, emphasis: secondary ? 'secondary' : first ? 'primary' : 'normal', hint: hint ?? null };
+  return {
+    ...base,
+    emphasis: secondary ? 'secondary' : first ? 'primary' : 'normal',
+    hint: hint ?? null,
+  };
 }
 
 function buttonsFor(issue: Issue, tr: Translator): ActionButton[] {
@@ -250,13 +382,23 @@ function buttonsFor(issue: Issue, tr: Translator): ActionButton[] {
   });
 }
 
-export function issueCards(issues: Issue[], modules: ModuleView[], now: Date, tr: Translator): IssueCard[] {
+export function issueCards(
+  issues: Issue[],
+  modules: ModuleView[],
+  now: Date,
+  tr: Translator,
+): IssueCard[] {
   const names = new Map(modules.map((m) => [m.id, m.name]));
   const canAccept = modules.some((m) => ACCEPTING_MODULES.includes(m.id) && m.canAccept === true);
   return issues.map((issue) => ({
     issue,
     tone: issue.severity === 'info' ? 'muted' : issue.severity,
-    icon: issue.severity === 'critical' ? 'alert-circle' : issue.severity === 'warning' ? 'warning' : 'information-circle-outline',
+    icon:
+      issue.severity === 'critical'
+        ? 'alert-circle'
+        : issue.severity === 'warning'
+          ? 'warning'
+          : 'information-circle-outline',
     area: names.get(issue.module) ?? issue.module,
     sinceText: sinceText(issue.since, now, tr.lang),
     buttons: buttonsFor(issue, tr),
@@ -273,7 +415,9 @@ export function issueCards(issues: Issue[], modules: ModuleView[], now: Date, tr
  * builds the URL itself: an agent can never make it open another site.
  */
 export function advisoryLinks(ids: string[] | undefined): { id: string; url: string }[] {
-  return (ids ?? []).filter((id) => /^[A-Za-z0-9][A-Za-z0-9._:-]{1,80}$/.test(id)).map((id) => ({ id, url: `https://osv.dev/vulnerability/${encodeURIComponent(id)}` }));
+  return (ids ?? [])
+    .filter((id) => /^[A-Za-z0-9][A-Za-z0-9._:-]{1,80}$/.test(id))
+    .map((id) => ({ id, url: `https://osv.dev/vulnerability/${encodeURIComponent(id)}` }));
 }
 
 export function moduleRow(m: ModuleView, tr: Translator): ModuleRow {
@@ -282,13 +426,24 @@ export function moduleRow(m: ModuleView, tr: Translator): ModuleRow {
   const versions = new Set((m.instances ?? []).map((x) => x.version).filter(Boolean));
   const meta =
     copies > 1
-      ? [tr.n('services.instances', copies), versions.size > 1 ? tr.t('services.versionsDiffer') : m.version].filter(Boolean).join(', ')
+      ? [
+          tr.n('services.instances', copies),
+          versions.size > 1 ? tr.t('services.versionsDiffer') : m.version,
+        ]
+          .filter(Boolean)
+          .join(', ')
       : [m.version, m.namespace].filter(Boolean).join(', ');
   return { module: m, tone: STATUS_TONE[m.status], statusLabel: tr.t(STATUS_KEY[m.status]), meta };
 }
 
 /** The headline of a cluster: what someone needs to know, in one sentence. */
-export function headline(light: Light, critical: number, warning: number, tr: Translator, error?: string): string {
+export function headline(
+  light: Light,
+  critical: number,
+  warning: number,
+  tr: Translator,
+  error?: string,
+): string {
   if (error) {
     return tr.t('cluster.headline.noConnection');
   }
@@ -296,7 +451,9 @@ export function headline(light: Light, critical: number, warning: number, tr: Tr
     return tr.t('cluster.headline.checking');
   }
   if (critical === 0 && warning === 0) {
-    return tr.t(light === 'yellow' ? 'cluster.headline.partlyCheckable' : 'cluster.headline.allGood');
+    return tr.t(
+      light === 'yellow' ? 'cluster.headline.partlyCheckable' : 'cluster.headline.allGood',
+    );
   }
   const outages = tr.n('cluster.headline.outages', critical);
   const warnings = tr.n('cluster.headline.warnings', warning);
@@ -306,7 +463,12 @@ export function headline(light: Light, critical: number, warning: number, tr: Tr
   return critical > 0 ? outages : warnings;
 }
 
-export function buildClusterView(snapshot: Snapshot | null, error: string | null, now: Date, tr: Translator): ClusterView {
+export function buildClusterView(
+  snapshot: Snapshot | null,
+  error: string | null,
+  now: Date,
+  tr: Translator,
+): ClusterView {
   const lang = tr.lang;
   const s = snapshot;
   const stale = Boolean(error);
@@ -320,43 +482,85 @@ export function buildClusterView(snapshot: Snapshot | null, error: string | null
   const o = s?.overview;
   const k8s = s?.kubernetes;
   const subline = [
-    k8s ? `${k8s.distribution} ${k8s.version?.replace(/^v/, '').replace(/\+.*$/, '') ?? ''}`.trim() : null,
+    k8s
+      ? `${k8s.distribution} ${k8s.version?.replace(/^v/, '').replace(/\+.*$/, '') ?? ''}`.trim()
+      : null,
     o ? tr.n('cluster.subline.nodes', o.nodes.total) : null,
     o ? tr.n('cluster.subline.components', o.components) : null,
   ]
     .filter(Boolean)
     .join(', ')
     // Which Kubernanny runs there: the image tag CI baked in, else the version.
-    .concat(s ? ` · ${tr.t('cluster.subline.agent', { version: s.agentBuild ?? s.agentVersion })}` : '');
+    .concat(
+      s ? ` · ${tr.t('cluster.subline.agent', { version: s.agentBuild ?? s.agentVersion })}` : '',
+    );
 
   const cpu = o?.cpu ? ratio(o.cpu.usedMilli, o.cpu.allocatableMilli) : null;
   const mem = o?.memory ? ratio(o.memory.used, o.memory.allocatable) : null;
-  const withoutLimit = (o?.perNode ?? []).reduce((a, n) => ({ cpu: a.cpu + n.podsWithoutLimit.cpu, memory: a.memory + n.podsWithoutLimit.memory }), { cpu: 0, memory: 0 });
-  const toneFor = (r: number | null): Tone => (r === null ? 'muted' : r >= 0.9 ? 'critical' : r >= 0.8 ? 'warning' : 'ok');
+  const withoutLimit = (o?.perNode ?? []).reduce(
+    (a, n) => ({
+      cpu: a.cpu + n.podsWithoutLimit.cpu,
+      memory: a.memory + n.podsWithoutLimit.memory,
+    }),
+    { cpu: 0, memory: 0 },
+  );
+  const toneFor = (r: number | null): Tone =>
+    r === null ? 'muted' : r >= 0.9 ? 'critical' : r >= 0.8 ? 'warning' : 'ok';
   const kpis: Kpi[] = o
     ? [
         {
           label: tr.t('cluster.kpi.nodesReady'),
           value: `${o.nodes.ready}/${o.nodes.total}`,
-          note: o.nodes.ready === o.nodes.total ? tr.t('cluster.kpi.allThere') : tr.n('cluster.kpi.missing', o.nodes.total - o.nodes.ready),
+          note:
+            o.nodes.ready === o.nodes.total
+              ? tr.t('cluster.kpi.allThere')
+              : tr.n('cluster.kpi.missing', o.nodes.total - o.nodes.ready),
           tone: o.nodes.ready === o.nodes.total ? 'ok' : 'critical',
         },
         {
           label: tr.t('cluster.kpi.cpu'),
           value: percent(cpu, lang),
-          note: o.cpu ? tr.t('resources.cores', { used: cores(o.cpu.usedMilli, lang), total: cores(o.cpu.allocatableMilli, lang) }) : tr.t('cluster.kpi.noMetrics'),
+          note: o.cpu
+            ? tr.t('resources.cores', {
+                used: cores(o.cpu.usedMilli, lang),
+                total: cores(o.cpu.allocatableMilli, lang),
+              })
+            : tr.t('cluster.kpi.noMetrics'),
           tone: toneFor(cpu),
           ...(o.cpu?.requestedMilli !== undefined
-            ? { bar: { kind: 'cpu', used: o.cpu.usedMilli, capacity: o.cpu.allocatableMilli, requested: o.cpu.requestedMilli, limit: o.cpu.limitMilli, withoutLimit: withoutLimit.cpu } }
+            ? {
+                bar: {
+                  kind: 'cpu',
+                  used: o.cpu.usedMilli,
+                  capacity: o.cpu.allocatableMilli,
+                  requested: o.cpu.requestedMilli,
+                  limit: o.cpu.limitMilli,
+                  withoutLimit: withoutLimit.cpu,
+                },
+              }
             : {}),
         },
         {
           label: tr.t('cluster.kpi.ram'),
           value: percent(mem, lang),
-          note: o.memory ? tr.t('resources.of', { used: bytes(o.memory.used, lang), total: bytes(o.memory.allocatable, lang) }) : tr.t('cluster.kpi.noMetrics'),
+          note: o.memory
+            ? tr.t('resources.of', {
+                used: bytes(o.memory.used, lang),
+                total: bytes(o.memory.allocatable, lang),
+              })
+            : tr.t('cluster.kpi.noMetrics'),
           tone: toneFor(mem),
           ...(o.memory?.requested !== undefined
-            ? { bar: { kind: 'memory', used: o.memory.used, capacity: o.memory.allocatable, requested: o.memory.requested, limit: o.memory.limit, withoutLimit: withoutLimit.memory } }
+            ? {
+                bar: {
+                  kind: 'memory',
+                  used: o.memory.used,
+                  capacity: o.memory.allocatable,
+                  requested: o.memory.requested,
+                  limit: o.memory.limit,
+                  withoutLimit: withoutLimit.memory,
+                },
+              }
             : {}),
         },
         {
@@ -368,63 +572,119 @@ export function buildClusterView(snapshot: Snapshot | null, error: string | null
         {
           label: tr.t('cluster.kpi.volumesBound'),
           value: `${o.volumes.bound}/${o.volumes.total}`,
-          note: o.volumes.bound === o.volumes.total ? tr.t('cluster.kpi.allBound') : tr.n('cluster.kpi.waiting', o.volumes.total - o.volumes.bound),
+          note:
+            o.volumes.bound === o.volumes.total
+              ? tr.t('cluster.kpi.allBound')
+              : tr.n('cluster.kpi.waiting', o.volumes.total - o.volumes.bound),
           tone: o.volumes.bound === o.volumes.total ? 'ok' : 'warning',
         },
-        { label: tr.t('cluster.kpi.ingresses'), value: String(o.ingresses), note: tr.t('cluster.kpi.publicAddresses'), tone: 'muted' },
+        {
+          label: tr.t('cluster.kpi.ingresses'),
+          value: String(o.ingresses),
+          note: tr.t('cluster.kpi.publicAddresses'),
+          tone: 'muted',
+        },
       ]
     : [];
 
-  const rows = (s?.modules ?? []).filter((m) => m.status !== 'skipped').map((m) => moduleRow(m, tr));
+  const rows = (s?.modules ?? [])
+    .filter((m) => m.status !== 'skipped')
+    .map((m) => moduleRow(m, tr));
   const rank: Record<Tone, number> = { critical: 0, warning: 1, muted: 2, ok: 3 };
   const groups = CATEGORY_ORDER.map((category) => ({
     category,
     label: tr.t(CATEGORY_KEY[category]),
-    rows: rows.filter((r) => r.module.category === category).sort((a, b) => rank[a.tone] - rank[b.tone] || a.module.name.localeCompare(b.module.name)),
+    rows: rows
+      .filter((r) => r.module.category === category)
+      .sort((a, b) => rank[a.tone] - rank[b.tone] || a.module.name.localeCompare(b.module.name)),
   })).filter((g) => g.rows.length > 0);
 
   return {
     light,
     tone: LIGHT_TONE[light],
-    headline: headline(s ? s.light : 'unknown', critical, warning, tr, stale ? (error ?? undefined) : s?.error),
+    headline: headline(
+      s ? s.light : 'unknown',
+      critical,
+      warning,
+      tr,
+      stale ? (error ?? undefined) : s?.error,
+    ),
     subline,
     checked: stale
       ? (error ?? '')
       : s?.failingSince
-        ? tr.t('cluster.failing', { since: duration(s.failingSince, now, lang) ?? tr.t('cluster.failingMoment'), when: relativeTime(s.checkedAt, now, lang) })
+        ? tr.t('cluster.failing', {
+            since: duration(s.failingSince, now, lang) ?? tr.t('cluster.failingMoment'),
+            when: relativeTime(s.checkedAt, now, lang),
+          })
         : s?.checkedAt
-        ? s.durationMs !== null
-          ? tr.t('cluster.checkedIn', { when: relativeTime(s.checkedAt, now, lang), ms: s.durationMs })
-          : tr.t('cluster.checked', { when: relativeTime(s.checkedAt, now, lang) })
-        : tr.t('cluster.connecting'),
+          ? s.durationMs !== null
+            ? tr.t('cluster.checkedIn', {
+                when: relativeTime(s.checkedAt, now, lang),
+                ms: s.durationMs,
+              })
+            : tr.t('cluster.checked', { when: relativeTime(s.checkedAt, now, lang) })
+          : tr.t('cluster.connecting'),
     stale,
     issues: issueCards(issues, s?.modules ?? [], now, tr),
     hints: issueCards(hints, s?.modules ?? [], now, tr),
-    silenced: issueCards(all.filter((i) => i.silencedUntil), s?.modules ?? [], now, tr),
+    silenced: issueCards(
+      all.filter((i) => i.silencedUntil),
+      s?.modules ?? [],
+      now,
+      tr,
+    ),
     update:
       s?.agentVersion && olderThan(s.agentVersion, KNOWN_AGENT_VERSION)
-        ? { text: tr.t('cluster.update', { agent: s.agentVersion, app: KNOWN_AGENT_VERSION }), command: UPGRADE_COMMAND }
+        ? {
+            text: tr.t('cluster.update', { agent: s.agentVersion, app: KNOWN_AGENT_VERSION }),
+            command: UPGRADE_COMMAND,
+          }
         : null,
     critical,
     warning,
     kpis,
     rail: buildRail(kpis, o?.perNode ?? [], tr),
     pendingSyncs: stale ? [] : (s?.modules ?? []).flatMap((m) => m.pendingSyncs ?? []),
-    pendingLabel: stale ? '' : ((n) => (n ? tr.n('pendingSync.card', n) : ''))((s?.modules ?? []).reduce((c, m) => c + (m.pendingSyncs?.length ?? 0), 0)),
+    pendingLabel: stale
+      ? ''
+      : ((n) => (n ? tr.n('pendingSync.card', n) : ''))(
+          (s?.modules ?? []).reduce((c, m) => c + (m.pendingSyncs?.length ?? 0), 0),
+        ),
     perNode: (o?.perNode ?? []).map((n) => ({
       name: n.name,
-      cpu: { kind: 'cpu', used: n.cpu.usedMilli, capacity: n.cpu.allocatableMilli, requested: n.cpu.requestedMilli, limit: n.cpu.limitMilli, withoutLimit: n.podsWithoutLimit.cpu },
-      memory: { kind: 'memory', used: n.memory.used, capacity: n.memory.allocatable, requested: n.memory.requested, limit: n.memory.limit, withoutLimit: n.podsWithoutLimit.memory },
+      cpu: {
+        kind: 'cpu',
+        used: n.cpu.usedMilli,
+        capacity: n.cpu.allocatableMilli,
+        requested: n.cpu.requestedMilli,
+        limit: n.cpu.limitMilli,
+        withoutLimit: n.podsWithoutLimit.cpu,
+      },
+      memory: {
+        kind: 'memory',
+        used: n.memory.used,
+        capacity: n.memory.allocatable,
+        requested: n.memory.requested,
+        limit: n.memory.limit,
+        withoutLimit: n.podsWithoutLimit.memory,
+      },
     })),
     groups,
-    attention: rows.filter((r) => r.tone === 'critical' || r.tone === 'warning' || r.module.status === 'error'),
+    attention: rows.filter(
+      (r) => r.tone === 'critical' || r.tone === 'warning' || r.module.status === 'error',
+    ),
     hasPrometheus: o?.prometheus ?? false,
     maintenance: maintenanceView(s?.maintenanceUntil, now, tr),
   };
 }
 
 /** The rail from the figures: nodes, pods, volumes and addresses small; CPU and RAM with their per-node bars. */
-export function buildRail(kpis: Kpi[], perNode: NonNullable<Overview['perNode']>, tr: Translator): RailView {
+export function buildRail(
+  kpis: Kpi[],
+  perNode: NonNullable<Overview['perNode']>,
+  tr: Translator,
+): RailView {
   const rank: Record<Tone, number> = { critical: 0, warning: 1, muted: 2, ok: 3 };
   const resource = (key: 'cpu' | 'memory', kpi: Kpi | undefined): RailResource | null => {
     if (!kpi) {
@@ -434,17 +694,47 @@ export function buildRail(kpis: Kpi[], perNode: NonNullable<Overview['perNode']>
       .map((n): RailNode => {
         const bar: ResourceInput =
           key === 'cpu'
-            ? { kind: 'cpu', used: n.cpu.usedMilli, capacity: n.cpu.allocatableMilli, requested: n.cpu.requestedMilli, limit: n.cpu.limitMilli, withoutLimit: n.podsWithoutLimit.cpu }
-            : { kind: 'memory', used: n.memory.used, capacity: n.memory.allocatable, requested: n.memory.requested, limit: n.memory.limit, withoutLimit: n.podsWithoutLimit.memory };
+            ? {
+                kind: 'cpu',
+                used: n.cpu.usedMilli,
+                capacity: n.cpu.allocatableMilli,
+                requested: n.cpu.requestedMilli,
+                limit: n.cpu.limitMilli,
+                withoutLimit: n.podsWithoutLimit.cpu,
+              }
+            : {
+                kind: 'memory',
+                used: n.memory.used,
+                capacity: n.memory.allocatable,
+                requested: n.memory.requested,
+                limit: n.memory.limit,
+                withoutLimit: n.podsWithoutLimit.memory,
+              };
         const v = resourceBarView(bar, n.name, tr);
-        return { name: n.name, bar, pct: v.pct, tone: v.tone, problem: v.tone === 'warning' || v.tone === 'critical' };
+        return {
+          name: n.name,
+          bar,
+          pct: v.pct,
+          tone: v.tone,
+          problem: v.tone === 'warning' || v.tone === 'critical',
+        };
       })
       .sort((a, b) => rank[a.tone] - rank[b.tone] || a.name.localeCompare(b.name));
-    return { key, label: kpi.label, bar: kpi.bar ?? null, value: kpi.value, note: kpi.note, tone: kpi.tone, nodes };
+    return {
+      key,
+      label: kpi.label,
+      bar: kpi.bar ?? null,
+      value: kpi.value,
+      note: kpi.note,
+      tone: kpi.tone,
+      nodes,
+    };
   };
   const [nodes, cpu, ram, pods, volumes, addresses] = kpis;
   return {
     small: [nodes, pods, volumes, addresses].filter((k): k is Kpi => k !== undefined),
-    resources: [resource('cpu', cpu), resource('memory', ram)].filter((r): r is RailResource => r !== null),
+    resources: [resource('cpu', cpu), resource('memory', ram)].filter(
+      (r): r is RailResource => r !== null,
+    ),
   };
 }

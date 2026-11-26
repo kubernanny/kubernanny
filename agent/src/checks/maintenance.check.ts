@@ -1,15 +1,22 @@
 import { raw, rawOr, t } from '../i18n/text';
-import { Condition, Issue, IssueAction, ObjectMeta, ageText, condition } from './types';
+import { ageText, Condition, condition, Issue, IssueAction, ObjectMeta } from './types';
 
 // ---------- PodDisruptionBudgets ----------
 
 export interface Pdb {
   metadata: ObjectMeta;
-  spec?: { minAvailable?: number | string; maxUnavailable?: number | string; selector?: { matchLabels?: Record<string, string> } };
+  spec?: {
+    minAvailable?: number | string;
+    maxUnavailable?: number | string;
+    selector?: { matchLabels?: Record<string, string> };
+  };
   status?: { disruptionsAllowed?: number; currentHealthy?: number; desiredHealthy?: number; expectedPods?: number };
 }
 
-const cnpgOwner = (pdb: Pdb) => pdb.metadata.ownerReferences?.find((o) => o.kind === 'Cluster' && (o.apiVersion ?? '').startsWith('postgresql.cnpg.io/'));
+const cnpgOwner = (pdb: Pdb) =>
+  pdb.metadata.ownerReferences?.find(
+    (o) => o.kind === 'Cluster' && (o.apiVersion ?? '').startsWith('postgresql.cnpg.io/'),
+  );
 
 /**
  * PDBs an operator creates to steer drains itself, and that therefore never
@@ -30,7 +37,10 @@ const cnpgOwner = (pdb: Pdb) => pdb.metadata.ownerReferences?.find((o) => o.kind
  */
 function managedByDrainAwareOperator(pdb: Pdb, all: Pdb[]): boolean {
   const labels = pdb.spec?.selector?.matchLabels ?? {};
-  if (labels['longhorn.io/component'] === 'instance-manager' && labels['longhorn.io/managed-by'] === 'longhorn-manager') {
+  if (
+    labels['longhorn.io/component'] === 'instance-manager' &&
+    labels['longhorn.io/managed-by'] === 'longhorn-manager'
+  ) {
     return true;
   }
   const owner = cnpgOwner(pdb);
@@ -68,7 +78,10 @@ export function evaluatePdbs(pdbs: Pdb[]): Issue[] {
       continue;
     }
     const ns = pdb.metadata.namespace ?? 'default';
-    const rule = pdb.spec?.minAvailable !== undefined ? `minAvailable: ${pdb.spec.minAvailable}` : `maxUnavailable: ${pdb.spec?.maxUnavailable}`;
+    const rule =
+      pdb.spec?.minAvailable !== undefined
+        ? `minAvailable: ${pdb.spec.minAvailable}`
+        : `maxUnavailable: ${pdb.spec?.maxUnavailable}`;
     const cnpg = cnpgOwner(pdb);
     issues.push({
       id: `pdb/${ns}/${pdb.metadata.name}`,
@@ -127,7 +140,9 @@ export function evaluateHpas(hpas: Hpa[]): Issue[] {
         check: 'hpa',
         severity: 'warning',
         title: t('hpa.atMax.title', { target: `${ns}/${target}`, max: String(hpa.spec?.maxReplicas) }),
-        cause: t('hpa.atMax.cause', { desired: hpa.status?.desiredReplicas !== undefined ? String(hpa.status.desiredReplicas) : undefined }),
+        cause: t('hpa.atMax.cause', {
+          desired: hpa.status?.desiredReplicas !== undefined ? String(hpa.status.desiredReplicas) : undefined,
+        }),
         actions: [],
       });
     }
@@ -168,7 +183,11 @@ export function evaluateEtcdSnapshots(snapshots: EtcdSnapshot[], now: Date, maxA
       check: 'etcd',
       severity: 'warning',
       title: t('etcdSnapshots.failed.title'),
-      cause: t('etcdSnapshots.failed.cause', { node: newest.spec?.nodeName, location: newest.spec?.s3 ? raw('(S3)') : t('etcdSnapshots.local'), message: newest.status.error.message }),
+      cause: t('etcdSnapshots.failed.cause', {
+        node: newest.spec?.nodeName,
+        location: newest.spec?.s3 ? raw('(S3)') : t('etcdSnapshots.local'),
+        message: newest.status.error.message,
+      }),
       actions: [],
     });
   }
@@ -212,7 +231,14 @@ export function evaluateApiServerCertificate(notAfter: Date | null, now: Date): 
 
 export interface LonghornBackup {
   metadata: ObjectMeta;
-  status?: { state?: string; volumeName?: string; backupCreatedAt?: string; snapshotCreatedAt?: string; error?: string; messages?: Record<string, string> };
+  status?: {
+    state?: string;
+    volumeName?: string;
+    backupCreatedAt?: string;
+    snapshotCreatedAt?: string;
+    error?: string;
+    messages?: Record<string, string>;
+  };
 }
 
 export interface LonghornBackupTarget {
@@ -265,7 +291,8 @@ export function groupLonghornBackups(volumes: LonghornBackupVolume[], backups: L
   return { byVolume, orphaned: { volumes: orphanVolumes.size, backups: orphanBackups } };
 }
 
-export const longhornBackupTime = (b: LonghornBackup) => Date.parse(b.status?.backupCreatedAt || b.status?.snapshotCreatedAt || b.metadata.creationTimestamp || '');
+export const longhornBackupTime = (b: LonghornBackup) =>
+  Date.parse(b.status?.backupCreatedAt || b.status?.snapshotCreatedAt || b.metadata.creationTimestamp || '');
 
 export function evaluateLonghornBackups(
   targets: LonghornBackupTarget[],
@@ -303,7 +330,10 @@ export function evaluateLonghornBackups(
     // design: nothing writes to it either. Worth knowing, not a fault.
     const detached = volume.status?.state === 'detached';
     // A snapshot (and so a backup) needs the volume attached.
-    const backupNow: IssueAction[] = volume.status?.state === 'attached' ? [{ type: 'longhorn-backup', namespace: volume.metadata.namespace ?? 'longhorn-system', volume: name, label }] : [];
+    const backupNow: IssueAction[] =
+      volume.status?.state === 'attached'
+        ? [{ type: 'longhorn-backup', namespace: volume.metadata.namespace ?? 'longhorn-system', volume: name, label }]
+        : [];
     const sorted = list.filter((b) => Number.isFinite(time(b))).sort((a, b) => time(b) - time(a));
     const lastOk = sorted.find((b) => b.status?.state === 'Completed');
     const newest = sorted[0];
@@ -313,7 +343,10 @@ export function evaluateLonghornBackups(
         check: 'longhorn',
         severity: 'warning',
         title: t('longhorn.backup.failed.title', { volume: label }),
-        cause: rawOr(newest.status.error || Object.values(newest.status.messages ?? {})[0], t('longhorn.backup.failed.cause')),
+        cause: rawOr(
+          newest.status.error || Object.values(newest.status.messages ?? {})[0],
+          t('longhorn.backup.failed.cause'),
+        ),
         actions: backupNow,
       });
       continue;
@@ -324,7 +357,9 @@ export function evaluateLonghornBackups(
         id: `longhorn/backup/${name}`,
         check: 'longhorn',
         severity: detached ? 'info' : age > 2 * maxAgeHours * 3_600_000 ? 'critical' : 'warning',
-        title: lastOk ? t('longhorn.backup.old.title', { volume: label, age: ageText(age) }) : t('longhorn.backup.none.title', { volume: label }),
+        title: lastOk
+          ? t('longhorn.backup.old.title', { volume: label, age: ageText(age) })
+          : t('longhorn.backup.none.title', { volume: label }),
         cause: detached ? t('longhorn.backup.detached.cause') : t('longhorn.backup.old.cause'),
         actions: backupNow,
       });

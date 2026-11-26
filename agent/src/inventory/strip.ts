@@ -11,7 +11,11 @@
 type Obj = Record<string, unknown>;
 
 /** The annotations anything in the agent reads. */
-const KEPT_ANNOTATIONS = ['kubernetes.io/ingress.class', 'storageclass.kubernetes.io/is-default-class', 'weave.works/kured-node-lock'] as const;
+const KEPT_ANNOTATIONS = [
+  'kubernetes.io/ingress.class',
+  'storageclass.kubernetes.io/is-default-class',
+  'weave.works/kured-node-lock',
+] as const;
 
 /** Longest event message kept (a stuck pod's scheduler message can be long). */
 const MAX_EVENT_MESSAGE = 1024;
@@ -33,7 +37,17 @@ function pick(o: unknown, keys: readonly string[]): Obj | undefined {
 
 function stripMeta(meta: unknown): Obj {
   const m = isObj(meta) ? meta : {};
-  const out = pick(m, ['name', 'namespace', 'uid', 'resourceVersion', 'generation', 'creationTimestamp', 'deletionTimestamp', 'labels', 'ownerReferences'])!;
+  const out = pick(m, [
+    'name',
+    'namespace',
+    'uid',
+    'resourceVersion',
+    'generation',
+    'creationTimestamp',
+    'deletionTimestamp',
+    'labels',
+    'ownerReferences',
+  ])!;
   if (isObj(m.annotations)) {
     const kept: Record<string, unknown> = {};
     for (const key of KEPT_ANNOTATIONS) {
@@ -46,7 +60,9 @@ function stripMeta(meta: unknown): Obj {
     }
   }
   if (Array.isArray(out.ownerReferences)) {
-    out.ownerReferences = (out.ownerReferences as unknown[]).map((r) => pick(r, ['kind', 'name', 'apiVersion', 'uid', 'controller']));
+    out.ownerReferences = (out.ownerReferences as unknown[]).map((r) =>
+      pick(r, ['kind', 'name', 'apiVersion', 'uid', 'controller']),
+    );
   }
   return out;
 }
@@ -60,7 +76,9 @@ const CONTAINER_KEYS = ['name', 'image', 'resources', 'securityContext', 'ports'
  */
 function envRefs(c: Obj, out: Obj): void {
   if (Array.isArray(c.envFrom)) {
-    const refs = c.envFrom.filter((e) => isObj(e) && isObj(e.configMapRef)).map((e) => ({ configMapRef: pick((e as Obj).configMapRef, ['name']) }));
+    const refs = c.envFrom
+      .filter((e) => isObj(e) && isObj(e.configMapRef))
+      .map((e) => ({ configMapRef: pick((e as Obj).configMapRef, ['name']) }));
     if (refs.length) {
       out.envFrom = refs;
     }
@@ -68,7 +86,10 @@ function envRefs(c: Obj, out: Obj): void {
   if (Array.isArray(c.env)) {
     const refs = c.env
       .filter((e) => isObj(e) && isObj(e.valueFrom) && isObj(e.valueFrom.configMapKeyRef))
-      .map((e) => ({ name: (e as Obj).name, valueFrom: { configMapKeyRef: pick(((e as Obj).valueFrom as Obj).configMapKeyRef, ['name']) } }));
+      .map((e) => ({
+        name: (e as Obj).name,
+        valueFrom: { configMapKeyRef: pick(((e as Obj).valueFrom as Obj).configMapKeyRef, ['name']) },
+      }));
     if (refs.length) {
       out.env = refs;
     }
@@ -92,7 +113,15 @@ function stripPodSpec(spec: unknown): Obj | undefined {
   if (!isObj(spec)) {
     return undefined;
   }
-  const out = pick(spec, ['nodeName', 'hostNetwork', 'hostPID', 'hostIPC', 'securityContext', 'serviceAccountName', 'priorityClassName'])!;
+  const out = pick(spec, [
+    'nodeName',
+    'hostNetwork',
+    'hostPID',
+    'hostIPC',
+    'securityContext',
+    'serviceAccountName',
+    'priorityClassName',
+  ])!;
   out.containers = stripContainers(spec.containers);
   if (spec.initContainers !== undefined) {
     out.initContainers = stripContainers(spec.initContainers);
@@ -127,7 +156,13 @@ export function stripNode(o: unknown): Obj {
   // When the node was cordoned: only the managedFields entries that own spec.unschedulable, without their field lists.
   const meta = isObj(n.metadata) ? n.metadata : {};
   if (Array.isArray(meta.managedFields)) {
-    const owners = meta.managedFields.filter((m) => isObj(m) && isObj(m.fieldsV1) && isObj((m.fieldsV1 as Obj)['f:spec']) && ((m.fieldsV1 as Obj)['f:spec'] as Obj)['f:unschedulable'] !== undefined);
+    const owners = meta.managedFields.filter(
+      (m) =>
+        isObj(m) &&
+        isObj(m.fieldsV1) &&
+        isObj((m.fieldsV1 as Obj)['f:spec']) &&
+        ((m.fieldsV1 as Obj)['f:spec'] as Obj)['f:unschedulable'] !== undefined,
+    );
     if (owners.length) {
       metadata.managedFields = owners.map((m) => pick(m, ['manager', 'operation', 'time']));
     }
@@ -138,11 +173,24 @@ export function stripNode(o: unknown): Obj {
 /** Deployments, StatefulSets, DaemonSets. */
 export function stripWorkload(o: unknown): Obj {
   const w = o as Obj;
-  const spec = isObj(w.spec) ? pick(w.spec, ['replicas', 'selector', 'paused', 'serviceName', 'volumeClaimTemplates', 'updateStrategy', 'strategy']) : undefined;
+  const spec = isObj(w.spec)
+    ? pick(w.spec, [
+        'replicas',
+        'selector',
+        'paused',
+        'serviceName',
+        'volumeClaimTemplates',
+        'updateStrategy',
+        'strategy',
+      ])
+    : undefined;
   if (spec && isObj(w.spec)) {
     spec.template = stripTemplate(w.spec.template);
     if (Array.isArray(spec.volumeClaimTemplates)) {
-      spec.volumeClaimTemplates = spec.volumeClaimTemplates.map((t) => ({ metadata: pick((t as Obj).metadata, ['name']), spec: (t as Obj).spec }));
+      spec.volumeClaimTemplates = spec.volumeClaimTemplates.map((t) => ({
+        metadata: pick((t as Obj).metadata, ['name']),
+        spec: (t as Obj).spec,
+      }));
     }
   }
   return { metadata: stripMeta(w.metadata), spec, status: w.status };
@@ -150,7 +198,11 @@ export function stripWorkload(o: unknown): Obj {
 
 export function stripJob(o: unknown): Obj {
   const j = o as Obj;
-  return { metadata: stripMeta(j.metadata), spec: pick(j.spec, ['completions', 'parallelism', 'backoffLimit', 'suspend']), status: j.status };
+  return {
+    metadata: stripMeta(j.metadata),
+    spec: pick(j.spec, ['completions', 'parallelism', 'backoffLimit', 'suspend']),
+    status: j.status,
+  };
 }
 
 export function stripCronJob(o: unknown): Obj {
@@ -164,7 +216,11 @@ export function stripCronJob(o: unknown): Obj {
 
 export function stripService(o: unknown): Obj {
   const s = o as Obj;
-  return { metadata: stripMeta(s.metadata), spec: pick(s.spec, ['type', 'selector', 'ports', 'clusterIP', 'externalName']), status: s.status };
+  return {
+    metadata: stripMeta(s.metadata),
+    spec: pick(s.spec, ['type', 'selector', 'ports', 'clusterIP', 'externalName']),
+    status: s.status,
+  };
 }
 
 /** Ingresses, PVCs, StorageClasses, Namespaces: small already, only the metadata is trimmed. */
@@ -175,7 +231,17 @@ export function stripPlain(o: unknown): Obj {
 
 export function stripEvent(o: unknown): Obj {
   const e = o as Obj;
-  const out = pick(e, ['type', 'reason', 'message', 'count', 'lastTimestamp', 'eventTime', 'firstTimestamp', 'involvedObject', 'series'])!;
+  const out = pick(e, [
+    'type',
+    'reason',
+    'message',
+    'count',
+    'lastTimestamp',
+    'eventTime',
+    'firstTimestamp',
+    'involvedObject',
+    'series',
+  ])!;
   out.metadata = stripMeta(e.metadata);
   if (typeof out.message === 'string' && out.message.length > MAX_EVENT_MESSAGE) {
     out.message = `${out.message.slice(0, MAX_EVENT_MESSAGE)}…`;
@@ -187,8 +253,15 @@ export function stripEvent(o: unknown): Obj {
 }
 
 /** When an event last happened, for the age cap. */
-export function eventTime(e: { lastTimestamp?: string; eventTime?: string; firstTimestamp?: string; series?: { lastObservedTime?: string }; metadata: { creationTimestamp?: string } }): number {
-  const t = e.series?.lastObservedTime ?? e.lastTimestamp ?? e.eventTime ?? e.firstTimestamp ?? e.metadata.creationTimestamp;
+export function eventTime(e: {
+  lastTimestamp?: string;
+  eventTime?: string;
+  firstTimestamp?: string;
+  series?: { lastObservedTime?: string };
+  metadata: { creationTimestamp?: string };
+}): number {
+  const t =
+    e.series?.lastObservedTime ?? e.lastTimestamp ?? e.eventTime ?? e.firstTimestamp ?? e.metadata.creationTimestamp;
   const ms = t ? Date.parse(t) : NaN;
   return Number.isNaN(ms) ? 0 : ms;
 }

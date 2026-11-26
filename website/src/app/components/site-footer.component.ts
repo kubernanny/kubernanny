@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+
 import { SITE } from '../../site.config';
 
 @Component({
@@ -17,8 +18,9 @@ import { SITE } from '../../site.config';
           <p>{{ site.pitch }}</p>
           <p class="fine">Open source under {{ site.licence }}. No account, no telemetry, no backend of ours.</p>
           <p class="fine">
-            A project by <a [href]="site.author.url">{{ site.author.name }}</a>
-            (<a [href]="site.author.github">GitHub</a>).
+            A project by <a [href]="site.author.url">{{ site.author.name }}</a> (<a [href]="site.author.github"
+              >GitHub</a
+            >).
           </p>
         </div>
         <nav aria-label="Footer">

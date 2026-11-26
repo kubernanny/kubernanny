@@ -1,8 +1,8 @@
 import { Issue, IssueSeverity } from '../../checks/types';
-import { Text, t } from '../../i18n/text';
-import { cvss3Score } from './cvss';
+import { t, Text } from '../../i18n/text';
 import type { AcceptedAdvisory } from '../types';
 import { Acceptance, acceptanceKey } from './acceptance';
+import { cvss3Score } from './cvss';
 import { OsvVuln } from './osv-client';
 import { compareVersions, isPseudoVersion } from './versions';
 
@@ -35,13 +35,24 @@ export function levelOfScore(score: number): Level {
 
 /** A CVSS v3 vector when there is one, else the label of the database (GitHub's advisories carry one). */
 export function levelOf(v: OsvVuln): { level: Level; score?: number } {
-  const scores = (v.severity ?? []).map((s) => (s.type === 'CVSS_V3' ? cvss3Score(s.score) : null)).filter((s): s is number => s !== null);
+  const scores = (v.severity ?? [])
+    .map((s) => (s.type === 'CVSS_V3' ? cvss3Score(s.score) : null))
+    .filter((s): s is number => s !== null);
   if (scores.length > 0) {
     const score = Math.max(...scores);
     return { level: levelOfScore(score), score };
   }
   const label = v.database_specific?.severity?.toUpperCase();
-  const level: Level = label === 'CRITICAL' ? 'critical' : label === 'HIGH' ? 'high' : label === 'MODERATE' || label === 'MEDIUM' ? 'medium' : label === 'LOW' ? 'low' : 'unknown';
+  const level: Level =
+    label === 'CRITICAL'
+      ? 'critical'
+      : label === 'HIGH'
+        ? 'high'
+        : label === 'MODERATE' || label === 'MEDIUM'
+          ? 'medium'
+          : label === 'LOW'
+            ? 'low'
+            : 'unknown';
   return { level };
 }
 
@@ -67,7 +78,9 @@ export function fixedVersion(v: OsvVuln, pkg: { ecosystem: string; name: string 
           introduced = e.introduced;
         } else if (introduced !== null && (e.fixed !== undefined || e.last_affected !== undefined)) {
           const end = (e.fixed ?? e.last_affected)!;
-          const inside = compareVersions(version, introduced) >= 0 && (e.fixed !== undefined ? compareVersions(version, end) < 0 : compareVersions(version, end) <= 0);
+          const inside =
+            compareVersions(version, introduced) >= 0 &&
+            (e.fixed !== undefined ? compareVersions(version, end) < 0 : compareVersions(version, end) <= 0);
           if (inside && e.fixed !== undefined && !isPseudoVersion(e.fixed)) {
             fixes.push(e.fixed);
           }
@@ -93,11 +106,21 @@ export function findingsFor(vulns: OsvVuln[], pkg: { ecosystem: string; name: st
   }
   const findings = groups.map((g): Finding => {
     const shown = g.find((v) => v.id.startsWith('GHSA-')) ?? [...g].sort((a, b) => a.id.localeCompare(b.id))[0];
-    const rated = g.map(levelOf).sort((a, b) => LEVEL_RANK[b.level] - LEVEL_RANK[a.level] || (b.score ?? 0) - (a.score ?? 0))[0];
+    const rated = g
+      .map(levelOf)
+      .sort((a, b) => LEVEL_RANK[b.level] - LEVEL_RANK[a.level] || (b.score ?? 0) - (a.score ?? 0))[0];
     const fixes = g.map((v) => fixedVersion(v, pkg, version)).filter((f): f is string => f !== null);
-    return { id: shown.id, level: rated.level, score: rated.score, fixed: fixes.sort(compareVersions).at(-1) ?? null, summary: shown.summary ?? g.find((v) => v.summary)?.summary };
+    return {
+      id: shown.id,
+      level: rated.level,
+      score: rated.score,
+      fixed: fixes.sort(compareVersions).at(-1) ?? null,
+      summary: shown.summary ?? g.find((v) => v.summary)?.summary,
+    };
   });
-  return findings.sort((a, b) => LEVEL_RANK[b.level] - LEVEL_RANK[a.level] || (b.score ?? 0) - (a.score ?? 0) || a.id.localeCompare(b.id));
+  return findings.sort(
+    (a, b) => LEVEL_RANK[b.level] - LEVEL_RANK[a.level] || (b.score ?? 0) - (a.score ?? 0) || a.id.localeCompare(b.id),
+  );
 }
 
 /**
@@ -146,7 +169,14 @@ export function applyAcceptance(
     for (const f of c.findings) {
       const a = accepted.get(acceptanceKey(c.key, f.id));
       if (a) {
-        list.push({ component: c.key, name: c.name, advisory: f.id, until: new Date(a.until).toISOString(), by: a.by, ...(a.reason ? { reason: a.reason } : {}) });
+        list.push({
+          component: c.key,
+          name: c.name,
+          advisory: f.id,
+          until: new Date(a.until).toISOString(),
+          by: a.by,
+          ...(a.reason ? { reason: a.reason } : {}),
+        });
       } else {
         remaining.push(f);
       }
@@ -157,7 +187,10 @@ export function applyAcceptance(
   return { components: kept, accepted: list };
 }
 
-export const scoreText = (f: Finding): Text => (f.score !== undefined ? t('vulnerabilities.rated', { level: LEVEL_LABEL[f.level], score: f.score }) : LEVEL_LABEL[f.level]);
+export const scoreText = (f: Finding): Text =>
+  f.score !== undefined
+    ? t('vulnerabilities.rated', { level: LEVEL_LABEL[f.level], score: f.score })
+    : LEVEL_LABEL[f.level];
 
 /** One issue per component with advisories. */
 export function vulnerabilityIssue(c: ComponentFindings): Issue | null {
@@ -167,12 +200,23 @@ export function vulnerabilityIssue(c: ComponentFindings): Issue | null {
   const n = c.findings.length;
   const worst = c.findings.slice(0, 3).map((f) => t('vulnerabilities.advisory', { id: f.id, rating: scoreText(f) }));
   const fixable = c.findings.filter((f) => f.fixed !== null);
-  const fixedIn = fixable.map((f) => f.fixed!).sort(compareVersions).at(-1);
+  const fixedIn = fixable
+    .map((f) => f.fixed!)
+    .sort(compareVersions)
+    .at(-1);
   const open = n - fixable.length;
   const severity = issueSeverity(c.findings, c.reachable);
-  const parts: Text[] = [n === 1 ? t('vulnerabilities.worst.one', { advisories: worst }) : t('vulnerabilities.worst.many', { advisories: worst })];
+  const parts: Text[] = [
+    n === 1
+      ? t('vulnerabilities.worst.one', { advisories: worst })
+      : t('vulnerabilities.worst.many', { advisories: worst }),
+  ];
   if (fixedIn) {
-    parts.push(open === 0 ? t('vulnerabilities.fixed', { version: fixedIn }) : t('vulnerabilities.fixedSome', { version: fixedIn, open }));
+    parts.push(
+      open === 0
+        ? t('vulnerabilities.fixed', { version: fixedIn })
+        : t('vulnerabilities.fixedSome', { version: fixedIn, open }),
+    );
   } else {
     parts.push(t('vulnerabilities.noFix'));
   }

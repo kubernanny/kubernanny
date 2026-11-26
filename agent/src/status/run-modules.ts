@@ -1,14 +1,23 @@
 import { CheckStatus, Issue, Severity, worst } from '../checks/types';
 import { Detected } from '../discovery/discovery';
 import { errorText, raw, t, Text } from '../i18n/text';
+import type { Inventory, InventoryKind } from '../inventory/inventory';
+import { componentDetails, componentStats } from '../modules/component-details';
 import { CoreCheck, Integration } from '../modules/module';
 import { ModuleContext, ModuleResult, ModuleView } from '../modules/types';
-import { componentDetails, componentStats } from '../modules/component-details';
-import type { Inventory, InventoryKind } from '../inventory/inventory';
 import { IssueView } from './snapshot';
 
 /** What a recognised component's health rests on: its workloads, pods, services and routes. */
-const COMPONENT_USES: readonly InventoryKind[] = ['pods', 'deployments', 'statefulsets', 'daemonsets', 'services', 'ingresses', 'httpRoutes', 'ingressRoutes'];
+const COMPONENT_USES: readonly InventoryKind[] = [
+  'pods',
+  'deployments',
+  'statefulsets',
+  'daemonsets',
+  'services',
+  'ingresses',
+  'httpRoutes',
+  'ingressRoutes',
+];
 
 /** The error of a module whose inputs include a list that could not be read this run. */
 function staleError(inv: Inventory, uses: readonly InventoryKind[]): Text | undefined {
@@ -39,11 +48,17 @@ async function safe(fn: () => Promise<ModuleResult>): Promise<ModuleResult & { e
  * wrong or it already names the problem (the same text as an issue title).
  */
 function summaryFor(summary: Text, issues: Pick<Issue, 'severity' | 'title'>[]): Text {
-  const problems = issues.filter((i) => i.severity !== 'info').sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'critical' ? -1 : 1));
+  const problems = issues
+    .filter((i) => i.severity !== 'info')
+    .sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'critical' ? -1 : 1));
   if (problems.length === 0 || problems.some((p) => JSON.stringify(p.title) === JSON.stringify(summary))) {
-    return problems.length > 1 && problems.some((p) => JSON.stringify(p.title) === JSON.stringify(summary)) ? t('module.summary.more', { first: summary, n: problems.length - 1 }) : summary;
+    return problems.length > 1 && problems.some((p) => JSON.stringify(p.title) === JSON.stringify(summary))
+      ? t('module.summary.more', { first: summary, n: problems.length - 1 })
+      : summary;
   }
-  return problems.length === 1 ? problems[0]!.title : t('module.summary.more', { first: problems[0]!.title, n: problems.length - 1 });
+  return problems.length === 1
+    ? problems[0]!.title
+    : t('module.summary.more', { first: problems[0]!.title, n: problems.length - 1 });
 }
 
 /** The line under a component without a deep check: how many of its pods are ready. */
@@ -65,14 +80,24 @@ function readinessStatus(items: { ready: number; desired: number }[]): CheckStat
 }
 
 /** A recognised component: its integration if it has one, else the health of its workloads. */
-export async function runComponent(ctx: ModuleContext, d: Detected, integration: Integration | undefined, allowed: ActionFilter): Promise<ModuleOutcome> {
+export async function runComponent(
+  ctx: ModuleContext,
+  d: Detected,
+  integration: Integration | undefined,
+  allowed: ActionFilter,
+): Promise<ModuleOutcome> {
   const total = d.workloads.reduce((s, w) => s + w.desired, 0);
   const ready = d.workloads.reduce((s, w) => s + Math.min(w.ready, w.desired), 0);
-  const ran: ModuleResult & { error?: Text } = integration ? await safe(() => integration.run(ctx, d, allowed)) : { issues: [], stats: componentStats(ctx.inv, d), summary: workloadSummary(d.workloads, ready, total) };
+  const ran: ModuleResult & { error?: Text } = integration
+    ? await safe(() => integration.run(ctx, d, allowed))
+    : { issues: [], stats: componentStats(ctx.inv, d), summary: workloadSummary(d.workloads, ready, total) };
   const result = ran.error ? ran : { ...ran, error: staleError(ctx.inv, COMPONENT_USES) };
   const status: CheckStatus = result.error
     ? 'error'
-    : worst([...result.issues.map((i) => i.severity), ...([readinessStatus(d.workloads)].filter((s) => s !== 'ok') as Severity[])]);
+    : worst([
+        ...result.issues.map((i) => i.severity),
+        ...([readinessStatus(d.workloads)].filter((s) => s !== 'ok') as Severity[]),
+      ]);
   // The integration's own objects first, then what every component has: pods, resources, volumes.
   const details = [...(result.details ?? []), ...componentDetails(ctx.inv, ctx.data, d, ctx.now)];
   return {
@@ -91,7 +116,11 @@ export async function runComponent(ctx: ModuleContext, d: Detected, integration:
       stats: result.stats.filter((s) => s.label.$t !== 'stat.version'),
       ...(details.length ? { details } : {}),
       // An integration may list its own copies; otherwise every namespace the component runs in is one (Valkey per app).
-      ...(result.instances?.length ? { instances: result.instances } : (d.instances?.length ?? 0) > 1 ? { instances: d.instances } : {}),
+      ...(result.instances?.length
+        ? { instances: result.instances }
+        : (d.instances?.length ?? 0) > 1
+          ? { instances: d.instances }
+          : {}),
       links: d.links,
       workloads: { ready, total, items: d.workloads },
       issueIds: result.issues.map((i) => i.id),
@@ -104,7 +133,11 @@ export async function runComponent(ctx: ModuleContext, d: Detected, integration:
   };
 }
 
-export async function runCoreCheck(ctx: ModuleContext, check: CoreCheck, allowed: ActionFilter): Promise<ModuleOutcome> {
+export async function runCoreCheck(
+  ctx: ModuleContext,
+  check: CoreCheck,
+  allowed: ActionFilter,
+): Promise<ModuleOutcome> {
   const ran = await safe(() => check.run(ctx, allowed));
   const result = ran.error ? ran : { ...ran, error: staleError(ctx.inv, check.uses) };
   return {
@@ -146,7 +179,9 @@ export function mergeIssues(core: ModuleOutcome[], components: ModuleOutcome[]):
   }
   for (const { view } of components) {
     const ids = [
-      ...view.workloads.items.flatMap((w) => ['pods', 'workloads', 'trivy'].map((prefix) => `${prefix}/${w.namespace}/${w.kind}/${w.name}`)),
+      ...view.workloads.items.flatMap((w) =>
+        ['pods', 'workloads', 'trivy'].map((prefix) => `${prefix}/${w.namespace}/${w.kind}/${w.name}`),
+      ),
       `vulnerabilities/${view.id}`,
       `image-updates/${view.id}`,
     ];
@@ -161,7 +196,10 @@ export function mergeIssues(core: ModuleOutcome[], components: ModuleOutcome[]):
     }
     // A crashing workload or a known vulnerability makes the component's line say so too.
     if (view.status === 'warning' || view.status === 'critical') {
-      view.summary = summaryFor(view.summary, view.issueIds.map((id) => byId.get(id)).filter((i): i is IssueView => i !== undefined && !i.silencedUntil));
+      view.summary = summaryFor(
+        view.summary,
+        view.issueIds.map((id) => byId.get(id)).filter((i): i is IssueView => i !== undefined && !i.silencedUntil),
+      );
     }
   }
   return byId;

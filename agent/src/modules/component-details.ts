@@ -11,13 +11,20 @@ import { ageText } from '../checks/types';
 import type { Detected } from '../discovery/discovery';
 import { raw, t, Text } from '../i18n/text';
 import { FullPod, Inventory, parseQuantity } from '../inventory/inventory';
-import { containerViews } from '../views/workloads';
 import { addResources, NO_RESOURCES, podResources } from '../views/resources';
+import { containerViews } from '../views/workloads';
 import { listSection, sections } from './details';
 import { bytes, pct } from './format';
 import type { DetailMeta, DetailRow, DetailSection, RunData, Stat, Tone } from './types';
 
-const BROKEN = new Set(['CrashLoopBackOff', 'ImagePullBackOff', 'ErrImagePull', 'CreateContainerConfigError', 'CreateContainerError', 'RunContainerError']);
+const BROKEN = new Set([
+  'CrashLoopBackOff',
+  'ImagePullBackOff',
+  'ErrImagePull',
+  'CreateContainerConfigError',
+  'CreateContainerError',
+  'RunContainerError',
+]);
 
 const cores = (milli: number): Text => t('detail.cores', { milli: Math.round(milli) });
 
@@ -31,11 +38,19 @@ function podsOf(inv: Inventory, d: Pick<Detected, 'workloads'>): FullPod[] {
 }
 
 /** "OOMKilled at the limit of 512 MiB, exit code 137, 3 h ago". */
-function terminationMeta(term: { reason?: string; exitCode?: number; finishedAt?: string; memLimit?: number }, now: Date): DetailMeta {
+function terminationMeta(
+  term: { reason?: string; exitCode?: number; finishedAt?: string; memLimit?: number },
+  now: Date,
+): DetailMeta {
   const at = Date.parse(term.finishedAt ?? '');
   const when = Number.isFinite(at) ? t('common.ago', { age: ageText(Math.max(0, now.getTime() - at)) }) : undefined;
   if (term.reason === 'OOMKilled') {
-    return { text: term.memLimit ? t('detail.pod.oomLimit', { limit: bytes(term.memLimit), when }) : t('detail.pod.oom', { when }), tone: 'warning' };
+    return {
+      text: term.memLimit
+        ? t('detail.pod.oomLimit', { limit: bytes(term.memLimit), when })
+        : t('detail.pod.oom', { when }),
+      tone: 'warning',
+    };
   }
   return { text: t('detail.pod.lastExit', { reason: term.reason ?? '?', code: term.exitCode ?? 0, when }) };
 }
@@ -48,9 +63,20 @@ function podRows(pods: FullPod[], inv: Inventory, now: Date): DetailRow[] {
     const ready = podReady(p);
     const last = containers
       .filter((c) => c.restarts > 0 && c.lastTermination)
-      .sort((a, b) => (b.lastTermination!.finishedAt ?? '').localeCompare(a.lastTermination!.finishedAt ?? ''))[0]?.lastTermination;
+      .sort((a, b) =>
+        (b.lastTermination!.finishedAt ?? '').localeCompare(a.lastTermination!.finishedAt ?? ''),
+      )[0]?.lastTermination;
     const usage = inv.podUsage?.get(`${p.metadata.namespace}/${p.metadata.name}`);
-    const tone: Tone = p.status?.phase === 'Succeeded' ? 'muted' : ready ? (last?.reason === 'OOMKilled' ? 'warning' : 'ok') : waiting && BROKEN.has(waiting) ? 'critical' : 'warning';
+    const tone: Tone =
+      p.status?.phase === 'Succeeded'
+        ? 'muted'
+        : ready
+          ? last?.reason === 'OOMKilled'
+            ? 'warning'
+            : 'ok'
+          : waiting && BROKEN.has(waiting)
+            ? 'critical'
+            : 'warning';
     const meta: DetailMeta[] = [];
     if (restarts > 0) {
       meta.push({ text: t('detail.pod.restarts', { n: restarts }) });
@@ -105,7 +131,10 @@ function runtimeRows(d: Pick<Detected, 'workloads'>, pods: FullPod[], inv: Inven
         res.cpuLimitMilli === 0 && res.memLimit === 0
           ? { text: t('detail.res.noLimits') }
           : {
-              text: t('detail.res.limits', { cpu: res.cpuUnlimited ? undefined : cores(res.cpuLimitMilli), mem: res.memUnlimited ? undefined : bytes(res.memLimit) }),
+              text: t('detail.res.limits', {
+                cpu: res.cpuUnlimited ? undefined : cores(res.cpuLimitMilli),
+                mem: res.memUnlimited ? undefined : bytes(res.memLimit),
+              }),
               ...(memShare !== null && memShare >= 0.9 ? { tone: 'warning' as const } : {}),
             },
       );
@@ -113,7 +142,9 @@ function runtimeRows(d: Pick<Detected, 'workloads'>, pods: FullPod[], inv: Inven
     const tone: Tone =
       w.desired > 0 && w.ready === 0 && w.kind !== 'CronJob'
         ? 'critical'
-        : w.ready < w.desired || children.some((c) => c.tone === 'critical' || c.tone === 'warning') || (memShare !== null && memShare >= 0.9)
+        : w.ready < w.desired ||
+            children.some((c) => c.tone === 'critical' || c.tone === 'warning') ||
+            (memShare !== null && memShare >= 0.9)
           ? 'warning'
           : 'ok';
     return {
@@ -147,8 +178,19 @@ function volumeRows(pods: FullPod[], inv: Inventory, data: RunData): DetailRow[]
         name: key,
         ...(pvc?.spec?.storageClassName ? { sub: raw(pvc.spec.storageClassName) } : {}),
         ...(size > 0 ? { value: bytes(size) } : {}),
-        tone: pvc?.status?.phase && pvc.status.phase !== 'Bound' ? 'warning' : fill !== null && fill >= 85 ? 'warning' : 'ok',
-        ...(fill !== null ? { meta: [{ text: t('detail.volume.fill', { pct: fill }), ...(fill >= 85 ? { tone: 'warning' as const } : {}) }] } : {}),
+        tone:
+          pvc?.status?.phase && pvc.status.phase !== 'Bound'
+            ? 'warning'
+            : fill !== null && fill >= 85
+              ? 'warning'
+              : 'ok',
+        ...(fill !== null
+          ? {
+              meta: [
+                { text: t('detail.volume.fill', { pct: fill }), ...(fill >= 85 ? { tone: 'warning' as const } : {}) },
+              ],
+            }
+          : {}),
       });
     }
   }
@@ -156,10 +198,18 @@ function volumeRows(pods: FullPod[], inv: Inventory, data: RunData): DetailRow[]
 }
 
 /** Pods, resources and volumes of one recognised component. */
-export function componentDetails(inv: Inventory, data: RunData, d: Pick<Detected, 'workloads'>, now: Date): DetailSection[] {
+export function componentDetails(
+  inv: Inventory,
+  data: RunData,
+  d: Pick<Detected, 'workloads'>,
+  now: Date,
+): DetailSection[] {
   const pods = podsOf(inv, d);
   const runtime = listSection(t('detail.runtime'), runtimeRows(d, pods, inv, now));
-  return sections(runtime && runtime.kind === 'list' ? { ...runtime, role: 'runtime' } : null, listSection(t('detail.volumes'), volumeRows(pods, inv, data)));
+  return sections(
+    runtime && runtime.kind === 'list' ? { ...runtime, role: 'runtime' } : null,
+    listSection(t('detail.volumes'), volumeRows(pods, inv, data)),
+  );
 }
 
 /** Key figures of a component without an integration: pods ready, restarts, and what it uses. */
@@ -169,9 +219,16 @@ export function componentStats(inv: Inventory, d: Pick<Detected, 'workloads'>): 
     return [];
   }
   const ready = pods.filter(podReady).length;
-  const restarts = pods.reduce((s, p) => s + (p.status?.containerStatuses ?? []).reduce((x, c) => x + c.restartCount, 0), 0);
+  const restarts = pods.reduce(
+    (s, p) => s + (p.status?.containerStatuses ?? []).reduce((x, c) => x + c.restartCount, 0),
+    0,
+  );
   const stats: Stat[] = [
-    { label: t('stat.podsReady'), value: `${ready}/${pods.length}`, tone: ready === pods.length ? 'ok' : ready === 0 ? 'critical' : 'warning' },
+    {
+      label: t('stat.podsReady'),
+      value: `${ready}/${pods.length}`,
+      tone: ready === pods.length ? 'ok' : ready === 0 ? 'critical' : 'warning',
+    },
     { label: t('pods.stat.restarts'), value: String(restarts), tone: restarts > 0 ? 'muted' : 'ok' },
   ];
   if (inv.podUsage) {

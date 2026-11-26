@@ -1,16 +1,27 @@
-import { BadRequestError, ForbiddenError } from '../../http/errors';
-import { Logger } from '../../logger';
 import type { Principal } from '../../auth/devices.service';
 import type { Config } from '../../config';
+import { BadRequestError, ForbiddenError } from '../../http/errors';
 import { t } from '../../i18n/text';
+import { upsertConfigMapData } from '../../kube/configmap';
 import { KubeClient } from '../../kube/kube-client';
+import { Logger } from '../../logger';
 import { Notifier } from '../../notify/notifier';
 import { SETTINGS_CONFIGMAP, SettingsService } from '../../settings/settings.service';
-import { Serial } from '../../util/serial';
 import { logSafe } from '../../util/log-safe';
-import { upsertConfigMapData } from '../../kube/configmap';
+import { Serial } from '../../util/serial';
 import { NotLoadedError, readAtStartup } from '../../util/startup-read';
-import { ACCEPT_DAYS, ADVISORY, Acceptance, AcceptanceState, COMPONENT, DAY, MAX_ACCEPTED, acceptanceKey, cleanReason, parseAccepted } from './acceptance';
+import {
+  ACCEPT_DAYS,
+  Acceptance,
+  acceptanceKey,
+  AcceptanceState,
+  ADVISORY,
+  cleanReason,
+  COMPONENT,
+  DAY,
+  MAX_ACCEPTED,
+  parseAccepted,
+} from './acceptance';
 
 export { ACCEPT_DAYS, acceptanceKey } from './acceptance';
 
@@ -54,9 +65,16 @@ export class AcceptanceService {
       return;
     }
     const log = new Logger(AcceptanceService.name);
-    const cm = await readAtStartup('accepted advisories', () => this.kube.get<{ data?: { accepted?: string } }>(`${this.path}/${SETTINGS_CONFIGMAP}`), {
-      onRetry: (err, attempt) => log.warn(`cannot read accepted advisories (${err instanceof Error ? err.message : err}), attempt ${attempt}; retrying`),
-    });
+    const cm = await readAtStartup(
+      'accepted advisories',
+      () => this.kube.get<{ data?: { accepted?: string } }>(`${this.path}/${SETTINGS_CONFIGMAP}`),
+      {
+        onRetry: (err, attempt) =>
+          log.warn(
+            `cannot read accepted advisories (${err instanceof Error ? err.message : err}), attempt ${attempt}; retrying`,
+          ),
+      },
+    );
     this.accepted = parseAccepted(cm?.data?.accepted);
     this.loaded = true;
   }
@@ -77,7 +95,14 @@ export class AcceptanceService {
     return { allowed: this.allowed(), accepted: this.pruned(now) };
   }
 
-  async accept(component: string, advisory: string, days: number, reason: unknown, who: Principal, now = Date.now()): Promise<string> {
+  async accept(
+    component: string,
+    advisory: string,
+    days: number,
+    reason: unknown,
+    who: Principal,
+    now = Date.now(),
+  ): Promise<string> {
     this.assertAllowed();
     return await this.writes.run(() => this.doAccept(component, advisory, days, reason, who, now));
   }
@@ -97,24 +122,41 @@ export class AcceptanceService {
     }
   }
 
-  private async doAccept(component: string, advisory: string, days: number, reason: unknown, who: Principal, now: number): Promise<string> {
+  private async doAccept(
+    component: string,
+    advisory: string,
+    days: number,
+    reason: unknown,
+    who: Principal,
+    now: number,
+  ): Promise<string> {
     checkIds(component, advisory);
     if (!(ACCEPT_DAYS as readonly number[]).includes(days)) {
-      throw new BadRequestError({ code: 'ACCEPT_DAYS', message: t('error.acceptDays', { days: ACCEPT_DAYS.join(', ') }) });
+      throw new BadRequestError({
+        code: 'ACCEPT_DAYS',
+        message: t('error.acceptDays', { days: ACCEPT_DAYS.join(', ') }),
+      });
     }
     if (reason !== undefined && typeof reason !== 'string') {
       throw new BadRequestError({ code: 'ACCEPT_REASON', message: t('error.acceptReason') });
     }
     const next = this.pruned(now);
     const text = cleanReason(reason);
-    next.set(acceptanceKey(component, advisory), { until: now + days * DAY, at: now, by: who.name, ...(text ? { reason: text } : {}) });
+    next.set(acceptanceKey(component, advisory), {
+      until: now + days * DAY,
+      at: now,
+      by: who.name,
+      ...(text ? { reason: text } : {}),
+    });
     if (next.size > MAX_ACCEPTED) {
       throw new BadRequestError({ code: 'ACCEPT_LIMIT', message: t('error.acceptLimit') });
     }
     // Before it takes effect: hiding a real advisory is what a stolen device would do.
     await this.notifier?.securityAlert(who.name, [{ kind: 'advisoryAccepted', component, advisory, days }]);
     await this.save(next);
-    this.audit.log(`advisory ${logSafe(advisory)} on ${logSafe(component)} accepted for ${days} days by "${who.name}" (${who.id})${text ? `: ${JSON.stringify(text)}` : ''}`);
+    this.audit.log(
+      `advisory ${logSafe(advisory)} on ${logSafe(component)} accepted for ${days} days by "${who.name}" (${who.id})${text ? `: ${JSON.stringify(text)}` : ''}`,
+    );
     return new Date(now + days * DAY).toISOString();
   }
 
@@ -123,7 +165,9 @@ export class AcceptanceService {
     const next = this.pruned(now);
     if (next.delete(acceptanceKey(component, advisory))) {
       await this.save(next);
-      this.audit.log(`advisory ${logSafe(advisory)} on ${logSafe(component)} no longer accepted, by "${who.name}" (${who.id})`);
+      this.audit.log(
+        `advisory ${logSafe(advisory)} on ${logSafe(component)} no longer accepted, by "${who.name}" (${who.id})`,
+      );
     }
   }
 
@@ -135,13 +179,20 @@ export class AcceptanceService {
     if (!this.loaded) {
       throw new NotLoadedError('accepted advisories');
     }
-    await upsertConfigMapData(this.kube, this.config.namespace, SETTINGS_CONFIGMAP, { accepted: JSON.stringify(Object.fromEntries(next)) });
+    await upsertConfigMapData(this.kube, this.config.namespace, SETTINGS_CONFIGMAP, {
+      accepted: JSON.stringify(Object.fromEntries(next)),
+    });
     this.accepted = next;
   }
 }
 
 function checkIds(component: string, advisory: string): void {
-  if (typeof component !== 'string' || !COMPONENT.test(component) || typeof advisory !== 'string' || !ADVISORY.test(advisory)) {
+  if (
+    typeof component !== 'string' ||
+    !COMPONENT.test(component) ||
+    typeof advisory !== 'string' ||
+    !ADVISORY.test(advisory)
+  ) {
     throw new BadRequestError({ code: 'ACCEPT_TARGET', message: t('error.acceptTarget') });
   }
 }

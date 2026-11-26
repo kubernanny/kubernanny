@@ -1,6 +1,22 @@
-import { DeadmanDeposit, DepositOutcome, Frame, FrameType, RelayClose, RelayFrameError, RelayLimitsInfo, decodeDeposit, decodePushRequest, decodeReplyEnd, encodeDepositResult, encodeFrame, encodePushResult, pushTokenDigest } from '@kubernanny/protocol';
-import { RelayErrorCode, checkAgentReply } from './http';
-import { BucketState, BudgetHolder, ByteBudget, CallerLimiter, RelayLimits, TokenBucket, shareBytes } from './limits';
+import {
+  DeadmanDeposit,
+  decodeDeposit,
+  decodePushRequest,
+  decodeReplyEnd,
+  DepositOutcome,
+  encodeDepositResult,
+  encodeFrame,
+  encodePushResult,
+  Frame,
+  FrameType,
+  pushTokenDigest,
+  RelayClose,
+  RelayFrameError,
+  RelayLimitsInfo,
+} from '@kubernanny/protocol';
+
+import { checkAgentReply, RelayErrorCode } from './http';
+import { BucketState, BudgetHolder, ByteBudget, CallerLimiter, RelayLimits, shareBytes, TokenBucket } from './limits';
 import { PushSender } from './push';
 import { AgentPushPolicy } from './push-policy';
 
@@ -98,7 +114,13 @@ export class AgentLink {
   constructor(
     private readonly socket: LinkSocket,
     private readonly limits: RelayLimits,
-    { now = Date.now, parent = new ByteBudget(limits.maxInflightBytes), rates, push = null, deadman = null }: LinkOptions = {},
+    {
+      now = Date.now,
+      parent = new ByteBudget(limits.maxInflightBytes),
+      rates,
+      push = null,
+      deadman = null,
+    }: LinkOptions = {},
   ) {
     this.now = now;
     this.push = push;
@@ -148,7 +170,12 @@ export class AgentLink {
     }
     const now = this.now();
     const callerAllowed = caller === undefined || this.callers.allows(caller, body.length, now);
-    if (this.pending.size >= this.limits.maxConcurrent || !callerAllowed || !this.calls.has(1, now) || !this.bytes.has(body.length, now)) {
+    if (
+      this.pending.size >= this.limits.maxConcurrent ||
+      !callerAllowed ||
+      !this.calls.has(1, now) ||
+      !this.bytes.has(body.length, now)
+    ) {
       return Promise.resolve({ kind: 'error', code: 'RELAY_RATE_LIMITED' });
     }
     if ((this.socket.bufferedAmount?.() ?? 0) + body.length > this.limits.maxSocketBufferBytes) {
@@ -233,7 +260,10 @@ export class AgentLink {
     call.parts.push(part.slice());
     if (frame.type === FrameType.ReplyEnd) {
       const reply = checkAgentReply(status, join(call.parts, call.size));
-      this.finish(frame.callId, reply ? { kind: 'reply', ...reply } : { kind: 'error', code: 'RELAY_BAD_AGENT_RESPONSE' });
+      this.finish(
+        frame.callId,
+        reply ? { kind: 'reply', ...reply } : { kind: 'error', code: 'RELAY_BAD_AGENT_RESPONSE' },
+      );
     }
   }
 
@@ -259,7 +289,11 @@ export class AgentLink {
     const now = this.now();
     const digest = pushTokenDigest(request.token);
     const { send, done, policy, gate } = this.push;
-    if (this.pushesInFlight.size >= this.push.maxInFlight || !policy.allows(digest, now) || (gate && !gate.allows(now))) {
+    if (
+      this.pushesInFlight.size >= this.push.maxInFlight ||
+      !policy.allows(digest, now) ||
+      (gate && !gate.allows(now))
+    ) {
       this.trySend(encodePushResult(id, 'rate_limited'));
       done?.();
       return;
@@ -345,7 +379,10 @@ export class AgentLink {
       call.startedAt = now;
     }
     clearTimeout(call.timer);
-    const wait = Math.max(0, Math.min(this.limits.progressTimeoutMs, call.startedAt + this.limits.streamTimeoutMs - now));
+    const wait = Math.max(
+      0,
+      Math.min(this.limits.progressTimeoutMs, call.startedAt + this.limits.streamTimeoutMs - now),
+    );
     call.timer = setTimeout(() => {
       this.finish(callId, { kind: 'error', code: 'RELAY_TIMEOUT' });
       this.trySend(encodeFrame(FrameType.Cancel, callId));

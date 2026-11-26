@@ -1,6 +1,22 @@
 import { DeadmanDeposit, DepositOutcome } from '@kubernanny/protocol';
+
 import { Admission } from './core/admission';
-import { DeadmanConfig, DeadmanState, HeldItem, agentBack, agentLost, depositInto, dueItems, emptyDeadman, expire, fireDue, heldBytes, isIdle, markSent, nextWake } from './core/deadman';
+import {
+  agentBack,
+  agentLost,
+  DeadmanConfig,
+  DeadmanState,
+  depositInto,
+  dueItems,
+  emptyDeadman,
+  expire,
+  fireDue,
+  heldBytes,
+  HeldItem,
+  isIdle,
+  markSent,
+  nextWake,
+} from './core/deadman';
 import { idPrefix } from './core/http';
 import { PushSender } from './core/push';
 
@@ -140,7 +156,9 @@ export class DeadmanRegistry {
       for (const outcome of outcomes) {
         this.metrics.deadmanEvent(`fired_${outcome}`);
       }
-      this.log(`agent ${idPrefix(agentId)} silent: sent ${outcomes.filter((o) => o === 'sent').length} of ${due.length} dead man's switch message(s)`);
+      this.log(
+        `agent ${idPrefix(agentId)} silent: sent ${outcomes.filter((o) => o === 'sent').length} of ${due.length} dead man's switch message(s)`,
+      );
     }
     if (!this.connected(agentId)) {
       this.schedule(agentId);

@@ -1,6 +1,16 @@
-import { FrameType, REPLY_CHUNK, answerChallenge, decodeFrame, encodeFrame, encodeReply, generateKeyPair, relayAgentId } from '@kubernanny/protocol';
+import {
+  answerChallenge,
+  decodeFrame,
+  encodeFrame,
+  encodeReply,
+  FrameType,
+  generateKeyPair,
+  relayAgentId,
+  REPLY_CHUNK,
+} from '@kubernanny/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
+
 import { RunningRelay, startRelay } from '../src/bootstrap';
 
 /**
@@ -31,7 +41,9 @@ describe('fair shares between client addresses', () => {
   function register(address: string, onCall: OnCall = () => undefined): Promise<{ result: string; id: string }> {
     const keys = generateKeyPair();
     const id = relayAgentId(keys.publicKey);
-    const ws = new WebSocket(`ws://127.0.0.1:${relay!.port}/v1/agents/${id}/ws`, { headers: { 'x-forwarded-for': address } });
+    const ws = new WebSocket(`ws://127.0.0.1:${relay!.port}/v1/agents/${id}/ws`, {
+      headers: { 'x-forwarded-for': address },
+    });
     sockets.push(ws);
     return new Promise((resolve) => {
       ws.on('unexpected-response', (_req, res) => resolve({ result: `refused ${res.statusCode}`, id }));
@@ -53,7 +65,8 @@ describe('fair shares between client addresses', () => {
     });
   }
 
-  const call = (id: string) => fetch(`http://127.0.0.1:${relay!.port}/v1/agents/${id}/e2e`, { method: 'POST', body: 'x' });
+  const call = (id: string) =>
+    fetch(`http://127.0.0.1:${relay!.port}/v1/agents/${id}/e2e`, { method: 'POST', body: 'x' });
 
   it('R1: hogs from two addresses cannot starve a legitimate agent, and lose their hold when they stall', async () => {
     await start({ RELAY_MAX_INFLIGHT_BYTES: String(8 * 1024 * 1024) }); // a share of 2 MiB per agent and per address
@@ -62,8 +75,15 @@ describe('fair shares between client addresses', () => {
         ws.send(encodeFrame(FrameType.ReplyChunk, callId, new Uint8Array(REPLY_CHUNK))); // 1 MiB, never finished
       }
     };
-    const hogs = [await register('6.6.6.1', hog), await register('6.6.6.1', hog), await register('6.6.6.2', hog), await register('6.6.6.2', hog)];
-    const legit = await register('7.7.7.7', (ws, callId) => encodeReply(callId, 200, new Uint8Array(8000)).forEach((f) => ws.send(f)));
+    const hogs = [
+      await register('6.6.6.1', hog),
+      await register('6.6.6.1', hog),
+      await register('6.6.6.2', hog),
+      await register('6.6.6.2', hog),
+    ];
+    const legit = await register('7.7.7.7', (ws, callId) =>
+      encodeReply(callId, 200, new Uint8Array(8000)).forEach((f) => ws.send(f)),
+    );
     const started = Date.now();
     const hogCalls = hogs.flatMap((h) => [call(h.id), call(h.id), call(h.id), call(h.id)]);
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -83,7 +103,9 @@ describe('fair shares between client addresses', () => {
       }
     };
     const hogs = [await register('6.6.6.1', hog), await register('6.6.6.1', hog)];
-    const legit = await register('6.6.6.1', (ws, callId) => encodeReply(callId, 200, new Uint8Array(8000)).forEach((f) => ws.send(f)));
+    const legit = await register('6.6.6.1', (ws, callId) =>
+      encodeReply(callId, 200, new Uint8Array(8000)).forEach((f) => ws.send(f)),
+    );
     const hogCalls = hogs.flatMap((h) => [call(h.id), call(h.id), call(h.id), call(h.id)]);
     await new Promise((resolve) => setTimeout(resolve, 500));
     for (let i = 0; i < 3; i++) {

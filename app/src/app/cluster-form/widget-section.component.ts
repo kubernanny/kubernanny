@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { IonButton } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
+
 import { ClusterConfig } from '../core/agent.model';
 import { WidgetSync } from '../core/widget/widget-sync.service';
 import { LanguageService } from '../i18n/language.service';
@@ -34,7 +35,9 @@ import { widgetView } from './widget-view';
                 <span class="dot" aria-hidden="true"></span>
                 <p>{{ v.pushLine }}</p>
                 @if (v.offerPush) {
-                  <ion-button fill="outline" size="small" (click)="showPush()">{{ t('widget.turnOnPush') }}</ion-button>
+                  <ion-button fill="outline" size="small" (click)="showPush()">{{
+                    t('widget.turnOnPush')
+                  }}</ion-button>
                 }
               </div>
             }
@@ -122,7 +125,11 @@ export class WidgetSectionComponent {
     if (!c || !this.widgets.supported) {
       return null;
     }
-    return { shown: !c.widgetOff, allOff: this.widgets.allOff(), ...widgetView({ cluster: c, push: this.push()?.view() ?? null }, this.language.translator()) };
+    return {
+      shown: !c.widgetOff,
+      allOff: this.widgets.allOff(),
+      ...widgetView({ cluster: c, push: this.push()?.view() ?? null }, this.language.translator()),
+    };
   });
 
   showPush(): void {

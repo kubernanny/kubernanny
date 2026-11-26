@@ -1,7 +1,10 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 import { parse, parseAllDocuments } from 'yaml';
+
+import { render } from './i18n/text';
 import { CORE_CHECKS } from './modules/core';
 import { INTEGRATIONS } from './modules/integrations';
 import { INVENTORY_READS, NAMESPACE_ROLE, NEVER, RbacRule, WRITE_EFFECTS } from './rbac/permissions';
@@ -9,7 +12,6 @@ import { fillSections, permissionSections } from './rbac/permissions-doc';
 import { rbacExport } from './rbac/rules';
 import { SWITCHES } from './rbac/switches';
 import { ACTION_TYPES } from './settings/settings.service';
-import { render } from './i18n/text';
 
 const ROOT = join(__dirname, '../..');
 const DOC = join(ROOT, 'docs/PERMISSIONS.md');
@@ -48,7 +50,10 @@ function templateRoles(): { kind: Kind; rules: RbacRule[] }[] {
   return parseAllDocuments(raw)
     .map((d) => d.toJS())
     .filter((d) => d?.kind === 'ClusterRole' || d?.kind === 'Role')
-    .map((d) => ({ kind: d.kind as Kind, rules: ((d.rules ?? []) as RbacRule[]).filter((r) => !r.apiGroups.includes('x')) }));
+    .map((d) => ({
+      kind: d.kind as Kind,
+      rules: ((d.rules ?? []) as RbacRule[]).filter((r) => !r.apiGroups.includes('x')),
+    }));
 }
 
 function staticClusterRules(): RbacRule[] {
@@ -59,8 +64,13 @@ function staticClusterRules(): RbacRule[] {
 function chartRules(): { kind: Kind; rules: RbacRule[] }[] {
   const roles = templateRoles();
   const generated = rbacExport();
-  const dynamic = [...Object.values(generated.modules).flat(), ...Object.values(generated.actions).flatMap((a) => a.rules)];
-  roles.find((r) => r.kind === 'ClusterRole')!.rules.push(...dynamic.map((r) => ({ apiGroups: [r.group], resources: r.resources, verbs: r.verbs })));
+  const dynamic = [
+    ...Object.values(generated.modules).flat(),
+    ...Object.values(generated.actions).flatMap((a) => a.rules),
+  ];
+  roles
+    .find((r) => r.kind === 'ClusterRole')!
+    .rules.push(...dynamic.map((r) => ({ apiGroups: [r.group], resources: r.resources, verbs: r.verbs })));
   return roles;
 }
 
@@ -71,7 +81,10 @@ function installRoles(): { kind: Kind; rules: RbacRule[] }[] {
     .map((d) => ({ kind: d.kind as Kind, rules: d.rules as RbacRule[] }));
 }
 
-const flat = (rules: RbacRule[]) => rules.flatMap((r) => r.apiGroups.flatMap((g) => r.resources.flatMap((x) => r.verbs.map((v) => `${g}/${x}:${v}`)))).sort();
+const flat = (rules: RbacRule[]) =>
+  rules
+    .flatMap((r) => r.apiGroups.flatMap((g) => r.resources.flatMap((x) => r.verbs.map((v) => `${g}/${x}:${v}`))))
+    .sort();
 
 describe('docs/PERMISSIONS.md', () => {
   it('is up to date with the code and the chart (run `npm run docs:permissions`)', () => {
@@ -99,7 +112,9 @@ describe('docs/PERMISSIONS.md', () => {
   });
 
   it('describes write actions with what actions.service.ts (and rollback.service.ts) really sends', () => {
-    const source = ['actions/actions.service.ts', 'actions/rollback.service.ts'].map((f) => readFileSync(join(__dirname, f), 'utf8')).join('\n');
+    const source = ['actions/actions.service.ts', 'actions/rollback.service.ts']
+      .map((f) => readFileSync(join(__dirname, f), 'utf8'))
+      .join('\n');
     for (const [type, effect] of Object.entries(WRITE_EFFECTS)) {
       expect(source, type).toContain(effect.marker);
     }
@@ -113,9 +128,15 @@ describe('docs/PERMISSIONS.md', () => {
     expect(flat(documented).filter((x) => !install.has(x))).toEqual([]);
   });
 
-  it('describes exactly the Role in the agent\'s own namespace', () => {
-    const documented = NAMESPACE_ROLE.map((r) => ({ apiGroups: [r.group ?? ''], resources: r.resources, verbs: r.verbs, resourceNames: r.names }));
-    const key = (rules: RbacRule[]) => rules.map((r) => `${flat([r]).join(',')}|${(r.resourceNames ?? []).join(',')}`).sort();
+  it("describes exactly the Role in the agent's own namespace", () => {
+    const documented = NAMESPACE_ROLE.map((r) => ({
+      apiGroups: [r.group ?? ''],
+      resources: r.resources,
+      verbs: r.verbs,
+      resourceNames: r.names,
+    }));
+    const key = (rules: RbacRule[]) =>
+      rules.map((r) => `${flat([r]).join(',')}|${(r.resourceNames ?? []).join(',')}`).sort();
     expect(key(installRoles().find((r) => r.kind === 'Role')!.rules)).toEqual(key(documented));
     expect(key(chartRules().find((r) => r.kind === 'Role')!.rules)).toEqual(key(documented));
   });
@@ -154,7 +175,10 @@ describe('docs/PERMISSIONS.md', () => {
       [{ apiGroups: ['constraints.gatekeeper.sh'], resources: ['*'], verbs: ['patch'] }, 'ClusterRole'],
     ];
     for (const [rule, kind] of bad) {
-      expect(NEVER.some((n) => n.matches(rule, kind)), JSON.stringify(rule)).toBe(true);
+      expect(
+        NEVER.some((n) => n.matches(rule, kind)),
+        JSON.stringify(rule),
+      ).toBe(true);
     }
   });
 });

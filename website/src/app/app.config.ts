@@ -1,8 +1,8 @@
+import { provideFileRouter } from '@analogjs/router';
 import { APP_BASE_HREF } from '@angular/common';
 import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
 import { withInMemoryScrolling } from '@angular/router';
-import { provideFileRouter } from '@analogjs/router';
 
 export const appConfig: ApplicationConfig = {
   providers: [

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
+
 import { SITE } from '../../site.config';
 import { IconComponent } from './icon.component';
 
@@ -16,7 +17,9 @@ import { IconComponent } from './icon.component';
         </a>
         <nav aria-label="Main">
           <a routerLink="/docs" routerLinkActive="active" ariaCurrentWhenActive="page">Docs</a>
-          <a routerLink="/docs/security" class="wide-only" routerLinkActive="active" ariaCurrentWhenActive="page">Security</a>
+          <a routerLink="/docs/security" class="wide-only" routerLinkActive="active" ariaCurrentWhenActive="page"
+            >Security</a
+          >
           <a [href]="site.demoUrl" class="wide-only">Demo</a>
           <a [href]="site.repoUrl" class="icon-link" aria-label="Kubernanny on GitHub">
             <kn-icon name="github" />

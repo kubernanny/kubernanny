@@ -1,9 +1,9 @@
-import { Issue, ReconcileKind, condition } from '../../checks/types';
+import { condition, Issue, ReconcileKind } from '../../checks/types';
 import { raw, rawOr, t } from '../../i18n/text';
+import { readyDetails } from '../details';
 import { Integration } from '../module';
 import { ApiRead, ModuleContext, ModuleResult, Stat } from '../types';
 import { Conditioned } from './util';
-import { readyDetails } from '../details';
 
 export interface ReadyKind {
   /** "/apis/<group>/<version>/<resource>" */
@@ -33,12 +33,21 @@ export abstract class ReadyConditionIntegration extends Integration {
     super();
     this.reads = kinds.map((k) => {
       const [, , group, , resource] = k.path.split('/');
-      return { group: group!, resource: resource!, why: `the ${k.conditionType ?? 'Ready'} condition of every ${k.kind}` };
+      return {
+        group: group!,
+        resource: resource!,
+        why: `the ${k.conditionType ?? 'Ready'} condition of every ${k.kind}`,
+      };
     });
   }
 
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
-    const lists = await Promise.all(this.kinds.map(async (k) => ({ ...k, items: (await ctx.kube.list<Conditioned>(k.path).catch(() => null)) ?? [] })));
+    const lists = await Promise.all(
+      this.kinds.map(async (k) => ({
+        ...k,
+        items: (await ctx.kube.list<Conditioned>(k.path).catch(() => null)) ?? [],
+      })),
+    );
     const issues: Issue[] = [];
     const stats: Stat[] = [];
     let total = 0;
@@ -60,20 +69,33 @@ export abstract class ReadyConditionIntegration extends Integration {
             check: this.id,
             severity: 'warning',
             title: t('ready.notReady.title', { kind, name: `${ns}/${item.metadata.name}` }),
-            cause: rawOr(c?.message ?? c?.reason, t('ready.notReady.cause', { label: this.label, condition: `${shortType}=${c?.status}` })),
-            actions: reconcile ? [{ type: 'reconcile-now', kind: reconcile, namespace: ns, name: item.metadata.name }] : [],
+            cause: rawOr(
+              c?.message ?? c?.reason,
+              t('ready.notReady.cause', { label: this.label, condition: `${shortType}=${c?.status}` }),
+            ),
+            actions: reconcile
+              ? [{ type: 'reconcile-now', kind: reconcile, namespace: ns, name: item.metadata.name }]
+              : [],
           });
         }
       }
       total += items.length;
       readyTotal += ready;
       if (items.length) {
-        stats.push({ label: raw(kind), value: t('ready.stat.value', { ready, total: items.length }), tone: ready === items.length ? 'ok' : 'warning' });
+        stats.push({
+          label: raw(kind),
+          value: t('ready.stat.value', { ready, total: items.length }),
+          tone: ready === items.length ? 'ok' : 'warning',
+        });
       }
     }
     // The summary and the stats count the same thing: resources without a verdict yet are named, not called ready.
     const summary =
-      issues.length > 0 ? t('ready.summary.problems', { n: issues.length }) : readyTotal === total ? t('ready.summary.ok') : t('ready.summary.pending', { n: total - readyTotal });
+      issues.length > 0
+        ? t('ready.summary.problems', { n: issues.length })
+        : readyTotal === total
+          ? t('ready.summary.ok')
+          : t('ready.summary.pending', { n: total - readyTotal });
     return { issues, stats, details: readyDetails(lists, ctx.now), summary };
   }
 }

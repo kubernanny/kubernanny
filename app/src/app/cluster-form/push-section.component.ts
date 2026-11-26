@@ -1,8 +1,18 @@
-import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  ElementRef,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 import { IonButton, ToastController } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
-import { AgentClient, describeError } from '../core/agent-client.service';
+
 import { AgentPushView, ClusterConfig } from '../core/agent.model';
+import { AgentClient, describeError } from '../core/agent-client.service';
 import { NativePushStatus, PushNative } from '../core/push/push-native';
 import { PushRegistration } from '../core/push/push-registration.service';
 import { pushView } from '../core/push/push-view';
@@ -34,19 +44,38 @@ import { PushMarkerPickerComponent } from './push-marker-picker.component';
             <p class="hint marker">{{ view().markerLine }}</p>
           }
           @if (picking()) {
-            <app-push-marker-picker [current]="marker()" [clusterName]="clusterName()" (chosen)="markerChosen($event)" (cancelled)="pickerClosed()" />
+            <app-push-marker-picker
+              [current]="marker()"
+              [clusterName]="clusterName()"
+              (chosen)="markerChosen($event)"
+              (cancelled)="pickerClosed()"
+            />
           }
           @if (view().deadman; as d) {
             <div class="deadman">
               <label class="toggle">
-                <input type="checkbox" [checked]="d.on" [disabled]="!d.editable || busy()" (change)="setDeadman(d.on ? false : d.grace)" />
+                <input
+                  type="checkbox"
+                  [checked]="d.on"
+                  [disabled]="!d.editable || busy()"
+                  (change)="setDeadman(d.on ? false : d.grace)"
+                />
                 <span>{{ t('push.deadmanTitle') }}</span>
               </label>
               @if (d.on && d.editable) {
                 <span class="after" id="deadman-after">{{ t('push.deadmanAfter') }}</span>
                 <div class="graces" role="radiogroup" aria-labelledby="deadman-after">
                   @for (g of d.graces; track g.minutes) {
-                    <button type="button" role="radio" [attr.aria-checked]="g.minutes === d.grace" [class.chosen]="g.minutes === d.grace" [disabled]="busy()" (click)="setDeadman(g.minutes)">{{ g.label }}</button>
+                    <button
+                      type="button"
+                      role="radio"
+                      [attr.aria-checked]="g.minutes === d.grace"
+                      [class.chosen]="g.minutes === d.grace"
+                      [disabled]="busy()"
+                      (click)="setDeadman(g.minutes)"
+                    >
+                      {{ g.label }}
+                    </button>
                   }
                 </div>
               }
@@ -55,13 +84,19 @@ import { PushMarkerPickerComponent } from './push-marker-picker.component';
           }
           <div class="actions">
             @if (view().action) {
-              <ion-button fill="outline" [disabled]="busy()" (click)="toggle()">{{ view().actionLabel }}</ion-button>
+              <ion-button fill="outline" [disabled]="busy()" (click)="toggle()">{{
+                view().actionLabel
+              }}</ion-button>
             }
             @if (view().canTest) {
-              <ion-button fill="clear" [disabled]="busy()" (click)="test()">{{ t('push.test') }}</ion-button>
+              <ion-button fill="clear" [disabled]="busy()" (click)="test()">{{
+                t('push.test')
+              }}</ion-button>
             }
             @if (view().markerActionLabel && !picking()) {
-              <ion-button fill="clear" [disabled]="busy()" (click)="changeMarker()">{{ view().markerActionLabel }}</ion-button>
+              <ion-button fill="clear" [disabled]="busy()" (click)="changeMarker()">{{
+                view().markerActionLabel
+              }}</ion-button>
             }
           </div>
         </section>
@@ -157,7 +192,17 @@ export class PushSectionComponent {
   private enableAfterPick = false;
 
   readonly clusterName = computed(() => this.cluster()?.name ?? '');
-  readonly view = computed(() => pushView({ demo: !!this.cluster()?.demo, native: this.nativeStatus(), agent: this.agent(), marker: this.marker() }, this.language.translator()));
+  readonly view = computed(() =>
+    pushView(
+      {
+        demo: !!this.cluster()?.demo,
+        native: this.nativeStatus(),
+        agent: this.agent(),
+        marker: this.marker(),
+      },
+      this.language.translator(),
+    ),
+  );
 
   constructor() {
     void this.native.status().then(async (s) => {
@@ -243,7 +288,15 @@ export class PushSectionComponent {
     try {
       if (action === 'enable') {
         const outcome = await this.registration.enable(cluster);
-        await this.toast(tr.t(outcome === 'enabled' ? 'push.enabled' : outcome === 'denied' ? 'push.denied' : 'push.noRelay'));
+        await this.toast(
+          tr.t(
+            outcome === 'enabled'
+              ? 'push.enabled'
+              : outcome === 'denied'
+                ? 'push.denied'
+                : 'push.noRelay',
+          ),
+        );
       } else {
         await this.registration.disable(cluster);
         await this.toast(tr.t('push.disabled'));
@@ -267,7 +320,9 @@ export class PushSectionComponent {
     try {
       await this.registration.setDeadman(cluster, deadman);
       await this.load(cluster);
-      await this.toast(deadman === false ? tr.t('push.deadmanOff') : tr.t('push.deadmanOn', { n: deadman }));
+      await this.toast(
+        deadman === false ? tr.t('push.deadmanOff') : tr.t('push.deadmanOn', { n: deadman }),
+      );
     } catch (err) {
       await this.toast(describeError(err, tr));
     } finally {
@@ -284,7 +339,9 @@ export class PushSectionComponent {
     this.busy.set(true);
     try {
       const { outcome } = await this.client.testPush(cluster);
-      await this.toast(outcome === 'sent' ? tr.t('push.testSent') : tr.t('push.testFailed', { outcome }));
+      await this.toast(
+        outcome === 'sent' ? tr.t('push.testSent') : tr.t('push.testFailed', { outcome }),
+      );
     } catch (err) {
       await this.toast(describeError(err, tr));
     } finally {

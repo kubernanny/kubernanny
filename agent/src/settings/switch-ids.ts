@@ -22,12 +22,18 @@ export function checkSwitchIds(config: Config): Config {
   }
   const unknownActions = config.disabledActions.filter((type) => !(ACTION_TYPE_IDS as string[]).includes(type));
   if (unknownActions.length > 0) {
-    throw new Error(`DISABLED_ACTIONS (actions.disabled) names unknown action types: ${unknownActions.join(', ')}. Known: ${ACTION_TYPE_IDS.join(', ')}`);
+    throw new Error(
+      `DISABLED_ACTIONS (actions.disabled) names unknown action types: ${unknownActions.join(', ')}. Known: ${ACTION_TYPE_IDS.join(', ')}`,
+    );
   }
   // Only the opt-in types: naming one that is on anyway would read as if it had been off.
-  const notOptIn = (config.enabledActions ?? []).filter((type) => !(OPT_IN_ACTIONS as readonly string[]).includes(type));
+  const notOptIn = (config.enabledActions ?? []).filter(
+    (type) => !(OPT_IN_ACTIONS as readonly string[]).includes(type),
+  );
   if (notOptIn.length > 0) {
-    throw new Error(`ENABLED_ACTIONS (actions.enabled) names action types that cannot be enabled: ${notOptIn.join(', ')}. Only these are off by default: ${OPT_IN_ACTIONS.join(', ')}`);
+    throw new Error(
+      `ENABLED_ACTIONS (actions.enabled) names action types that cannot be enabled: ${notOptIn.join(', ')}. Only these are off by default: ${OPT_IN_ACTIONS.join(', ')}`,
+    );
   }
   return config;
 }

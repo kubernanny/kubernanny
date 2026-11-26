@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { IdentityService } from './auth/identity.service';
 import { loadConfig } from './config';
 import { DemoKubeClient } from './demo/demo-cluster';
 import { localize } from './i18n/text';
@@ -8,9 +10,8 @@ import { SettingsService } from './settings/settings.service';
 import { checkSwitchIds } from './settings/switch-ids';
 import { SilenceService } from './silence/silence.service';
 import { StatusService } from './status/status.service';
-import { E2eClient } from './testing/e2e-client';
-import { IdentityService } from './auth/identity.service';
 import { startDemoAgent } from './testing/demo-agent';
+import { E2eClient } from './testing/e2e-client';
 
 /**
  * Regression tests for the findings of the independent security review that
@@ -22,7 +23,11 @@ function statusFor(kube: DemoKubeClient, overrides: Partial<ReturnType<typeof lo
   const cfg = { ...loadConfig(), demo: kube.scenario, ...overrides };
   const notifier = new Notifier(cfg);
   const settings = new SettingsService(cfg, kube);
-  return { status: new StatusService(kube, cfg, notifier, settings, new SilenceService(cfg, kube), new IncidentsService()), notifier, cfg };
+  return {
+    status: new StatusService(kube, cfg, notifier, settings, new SilenceService(cfg, kube), new IncidentsService()),
+    notifier,
+    cfg,
+  };
 }
 
 afterEach(() => {
@@ -35,8 +40,13 @@ describe('H1: a fake in-cluster service cannot crash the agent or blank /status'
     const kube = new DemoKubeClient(undefined, 'healthy');
     const get = kube.get.bind(kube);
     vi.spyOn(kube, 'get').mockImplementation(((path: string) =>
-      /grafana.*\/api\/health/.test(path) ? Promise.resolve({ database: { $t: 'valueOf' }, version: { $t: '__proto__' } }) : get(path)) as typeof kube.get);
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('ok')));
+      /grafana.*\/api\/health/.test(path)
+        ? Promise.resolve({ database: { $t: 'valueOf' }, version: { $t: '__proto__' } })
+        : get(path)) as typeof kube.get);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('ok')),
+    );
     const rejections: unknown[] = [];
     const onRejection = (e: unknown) => rejections.push(e);
     process.on('unhandledRejection', onRejection);
@@ -59,11 +69,18 @@ describe('H1: a fake in-cluster service cannot crash the agent or blank /status'
   it('caps an Alertmanager answer of thousands of alerts to a bounded number of issues', async () => {
     const kube = new DemoKubeClient(undefined, 'healthy');
     const get = kube.get.bind(kube);
-    const flood = Array.from({ length: 20_000 }, (_, i) => ({ labels: { alertname: `A${i}\nforged log line`, severity: 'critical' }, annotations: { summary: 'x'.repeat(5000) } }));
-    vi.spyOn(kube, 'get').mockImplementation(((path: string) => (/\/api\/v2\/alerts/.test(path) ? Promise.resolve(flood) : get(path))) as typeof kube.get);
+    const flood = Array.from({ length: 20_000 }, (_, i) => ({
+      labels: { alertname: `A${i}\nforged log line`, severity: 'critical' },
+      annotations: { summary: 'x'.repeat(5000) },
+    }));
+    vi.spyOn(kube, 'get').mockImplementation(((path: string) =>
+      /\/api\/v2\/alerts/.test(path) ? Promise.resolve(flood) : get(path)) as typeof kube.get);
     const { status } = statusFor(kube, {});
     await status.refresh();
-    const ids = status.snapshot().issues.filter((i) => i.module === 'alertmanager').map((i) => i.id);
+    const ids = status
+      .snapshot()
+      .issues.filter((i) => i.module === 'alertmanager')
+      .map((i) => i.id);
     expect(ids.length).toBeLessThanOrEqual(50);
     expect(ids).toContain('alertmanager/more');
     expect(ids.every((id) => !id.includes('\n'))).toBe(true);
@@ -111,7 +128,11 @@ describe('H3: checks.disabled: [notifications] is hard', () => {
   it('has no channel, sends no security alert and refuses the test route with 403', async () => {
     const fetchMock = vi.fn(async (_url: unknown, _init?: unknown) => new Response('ok'));
     vi.stubGlobal('fetch', fetchMock);
-    const agent = await startDemoAgent({ DISABLED_MODULES: 'notifications', NTFY_URL: 'https://ntfy.example/topic', WEBHOOK_URL: 'https://hooks.slack.com/services/x' });
+    const agent = await startDemoAgent({
+      DISABLED_MODULES: 'notifications',
+      NTFY_URL: 'https://ntfy.example/topic',
+      WEBHOOK_URL: 'https://hooks.slack.com/services/x',
+    });
     try {
       const notifier = agent.app.get(Notifier);
       expect(notifier.channels).toEqual([]);
@@ -133,8 +154,17 @@ describe('M2: hard switches refuse typos instead of failing open', () => {
     expect(() => checkSwitchIds({ ...base, disabledModules: ['prometeus'] })).toThrow(/unknown modules: prometeus/);
     expect(() => checkSwitchIds({ ...base, enabledModules: ['vulnerabilitys'] })).toThrow(/unknown modules/);
     expect(() => checkSwitchIds({ ...base, disabledActions: ['restarts'] })).toThrow(/unknown action types: restarts/);
-    expect(checkSwitchIds({ ...base, disabledModules: ['prometheus', 'notifications', 'vulnerabilities', 'etcd'], disabledActions: ['restart', 'logs'] })).toBeTruthy();
-    const custom = { ...base, customComponents: [{ id: 'custom:shop', name: 'Shop', images: ['x/y'], category: 'apps', icon: 'cube' }] };
+    expect(
+      checkSwitchIds({
+        ...base,
+        disabledModules: ['prometheus', 'notifications', 'vulnerabilities', 'etcd'],
+        disabledActions: ['restart', 'logs'],
+      }),
+    ).toBeTruthy();
+    const custom = {
+      ...base,
+      customComponents: [{ id: 'custom:shop', name: 'Shop', images: ['x/y'], category: 'apps', icon: 'cube' }],
+    };
     expect(checkSwitchIds({ ...custom, disabledModules: ['custom:shop'] })).toBeTruthy();
   });
 });

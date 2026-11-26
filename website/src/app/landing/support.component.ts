@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
+
 import { SITE } from '../../site.config';
 import { IconComponent } from '../components/icon.component';
 
@@ -11,7 +12,10 @@ import { IconComponent } from '../components/icon.component';
       <div class="demo-card">
         <div>
           <h2 id="demo-title">See it on a cluster that is on fire.</h2>
-          <p>The live demo runs Kubernanny against its built-in demo clusters: outages, warnings, the lot. Nothing to install, nothing to break.</p>
+          <p>
+            The live demo runs Kubernanny against its built-in demo clusters: outages, warnings, the lot. Nothing to
+            install, nothing to break.
+          </p>
         </div>
         <a class="btn btn-primary" [href]="vm.demoUrl">
           <kn-icon name="play" />
@@ -67,8 +71,7 @@ import { IconComponent } from '../components/icon.component';
       border: 1px solid color-mix(in srgb, var(--crit) 35%, var(--line));
       background:
         radial-gradient(36rem 20rem at 0% 0%, var(--crit-soft), transparent 70%),
-        radial-gradient(30rem 20rem at 100% 100%, var(--warn-soft), transparent 70%),
-        var(--surface);
+        radial-gradient(30rem 20rem at 100% 100%, var(--warn-soft), transparent 70%), var(--surface);
       box-shadow: var(--shadow);
     }
     @media (max-width: 600px) {
@@ -104,9 +107,7 @@ import { IconComponent } from '../components/icon.component';
       padding: 40px;
       border-radius: 28px;
       border: 1px solid var(--line);
-      background:
-        radial-gradient(30rem 18rem at 100% 0%, var(--ok-soft), transparent 70%),
-        var(--surface);
+      background: radial-gradient(30rem 18rem at 100% 0%, var(--ok-soft), transparent 70%), var(--surface);
     }
     @media (max-width: 600px) {
       .support-card {
@@ -137,5 +138,10 @@ import { IconComponent } from '../components/icon.component';
   `,
 })
 export class SupportComponent {
-  protected readonly vm = { demoUrl: SITE.demoUrl, sponsorsUrl: SITE.sponsorsUrl, kofiUrl: SITE.kofiUrl, repoUrl: SITE.repoUrl };
+  protected readonly vm = {
+    demoUrl: SITE.demoUrl,
+    sponsorsUrl: SITE.sponsorsUrl,
+    kofiUrl: SITE.kofiUrl,
+    repoUrl: SITE.repoUrl,
+  };
 }

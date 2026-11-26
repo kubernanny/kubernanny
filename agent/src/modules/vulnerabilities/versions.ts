@@ -29,7 +29,11 @@ function isCalendarYear(major: string): boolean {
 }
 
 /** The OSV package for a component at a version, or null when the catalog entry does not cover it. */
-export function osvPackageFor(pkg: OsvPackage, version: string, image?: string): { ecosystem: string; name: string } | null {
+export function osvPackageFor(
+  pkg: OsvPackage,
+  version: string,
+  image?: string,
+): { ecosystem: string; name: string } | null {
   if (pkg.image && !(image && pkg.image.test(image))) {
     return null;
   }

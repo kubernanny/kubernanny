@@ -10,7 +10,13 @@ export interface LeaseApi {
 
 interface Lease {
   metadata: { resourceVersion?: string };
-  spec?: { holderIdentity?: string | null; leaseDurationSeconds?: number; acquireTime?: string; renewTime?: string; leaseTransitions?: number };
+  spec?: {
+    holderIdentity?: string | null;
+    leaseDurationSeconds?: number;
+    acquireTime?: string;
+    renewTime?: string;
+    leaseTransitions?: number;
+  };
 }
 
 export interface LeaderOptions {
@@ -93,7 +99,9 @@ export class LeaderElection {
 
   /** One round now (tests and the first start). */
   async tryNow(): Promise<boolean> {
-    this.tick = this.tick.then(() => this.round()).catch((err: unknown) => this.logger.warn(`lease: ${err instanceof Error ? err.message : String(err)}`));
+    this.tick = this.tick
+      .then(() => this.round())
+      .catch((err: unknown) => this.logger.warn(`lease: ${err instanceof Error ? err.message : String(err)}`));
     await this.tick;
     return this.isLeader();
   }
@@ -113,11 +121,16 @@ export class LeaderElection {
     try {
       const lease = await this.api.get<Lease>(this.path);
       if (lease.spec?.holderIdentity === this.options.identity) {
-        await this.api.mergePatch(this.path, { metadata: { resourceVersion: lease.metadata.resourceVersion }, spec: { holderIdentity: null, leaseDurationSeconds: 1, renewTime: microTime(this.now()) } });
+        await this.api.mergePatch(this.path, {
+          metadata: { resourceVersion: lease.metadata.resourceVersion },
+          spec: { holderIdentity: null, leaseDurationSeconds: 1, renewTime: microTime(this.now()) },
+        });
         this.logger.log('released');
       }
     } catch (err) {
-      this.logger.warn(`could not release, it expires in ${this.duration}s: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.warn(
+        `could not release, it expires in ${this.duration}s: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
@@ -176,12 +189,21 @@ export class LeaderElection {
   }
 
   private async create(now: number): Promise<void> {
-    await this.api.create(`/apis/coordination.k8s.io/v1/namespaces/${encodeURIComponent(this.options.namespace)}/leases`, {
-      apiVersion: 'coordination.k8s.io/v1',
-      kind: 'Lease',
-      metadata: { name: this.options.name, labels: { 'app.kubernetes.io/name': 'kubernanny' } },
-      spec: { holderIdentity: this.options.identity, leaseDurationSeconds: this.duration, acquireTime: microTime(now), renewTime: microTime(now), leaseTransitions: 0 },
-    });
+    await this.api.create(
+      `/apis/coordination.k8s.io/v1/namespaces/${encodeURIComponent(this.options.namespace)}/leases`,
+      {
+        apiVersion: 'coordination.k8s.io/v1',
+        kind: 'Lease',
+        metadata: { name: this.options.name, labels: { 'app.kubernetes.io/name': 'kubernanny' } },
+        spec: {
+          holderIdentity: this.options.identity,
+          leaseDurationSeconds: this.duration,
+          acquireTime: microTime(now),
+          renewTime: microTime(now),
+          leaseTransitions: 0,
+        },
+      },
+    );
     this.lastRenew = now;
     this.logger.log('acquired (created the lease)');
     this.setLeader(true);

@@ -11,7 +11,7 @@
  * frame must carry the flag, so a cut-off response is detected; nonces count
  * up, so frames cannot be reordered or dropped.
  */
-import { CipherState, Initiator, KeyPair, MAX_MESSAGE, Responder, TAGLEN, concat } from './noise.js';
+import { CipherState, concat, Initiator, KeyPair, MAX_MESSAGE, Responder, TAGLEN } from './noise.js';
 
 export const VERSION = 1;
 /** Mixed into every handshake, binding it to this protocol and version. */
@@ -61,12 +61,7 @@ export interface InnerResponse {
 export class ProtocolError extends Error {
   constructor(
     readonly code:
-      | 'E2E_VERSION'
-      | 'E2E_MALFORMED'
-      | 'E2E_HANDSHAKE'
-      | 'E2E_REQUEST'
-      | 'E2E_TRUNCATED'
-      | 'E2E_TOO_LARGE',
+      'E2E_VERSION' | 'E2E_MALFORMED' | 'E2E_HANDSHAKE' | 'E2E_REQUEST' | 'E2E_TRUNCATED' | 'E2E_TOO_LARGE',
     message: string,
   ) {
     super(message);
@@ -179,7 +174,12 @@ export interface SealedRequest {
 }
 
 /** App side: one request to the agent whose public key was pinned at pairing. */
-export function sealRequest(device: KeyPair, agentPublicKey: Uint8Array, request: InnerRequest, ephemeral?: KeyPair): SealedRequest {
+export function sealRequest(
+  device: KeyPair,
+  agentPublicKey: Uint8Array,
+  request: InnerRequest,
+  ephemeral?: KeyPair,
+): SealedRequest {
   const initiator = new Initiator(device, agentPublicKey, PROLOGUE, ephemeral);
   const message1 = initiator.writeMessage1(encodeRequest(request));
   let used = false;

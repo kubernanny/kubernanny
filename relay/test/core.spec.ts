@@ -1,17 +1,48 @@
-import { FrameType, MAX_SEALED_REQUEST, RelayClose, decodeFrame, encodeFrame, encodeReply, generateKeyPair, relayAgentId } from '@kubernanny/protocol';
+import {
+  decodeFrame,
+  encodeFrame,
+  encodeReply,
+  FrameType,
+  generateKeyPair,
+  MAX_SEALED_REQUEST,
+  relayAgentId,
+  RelayClose,
+} from '@kubernanny/protocol';
+import { answerChallenge } from '@kubernanny/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AgentLink, LinkSocket } from '../src/core/agent-link';
-import { checkAgentReply, corsHeaders, parseRoute, pathOf, registrationOrigin, relayError, toBytes } from '../src/core/http';
-import { BudgetHolder, ByteBudget, CallerLimiter, DEFAULT_LIMITS, RelayLimits, TokenBucket, clientAddress, parseLimits } from '../src/core/limits';
+
 import { Admission } from '../src/core/admission';
+import { AgentLink, LinkSocket } from '../src/core/agent-link';
+import {
+  checkAgentReply,
+  corsHeaders,
+  parseRoute,
+  pathOf,
+  registrationOrigin,
+  relayError,
+  toBytes,
+} from '../src/core/http';
+import {
+  BudgetHolder,
+  ByteBudget,
+  CallerLimiter,
+  clientAddress,
+  DEFAULT_LIMITS,
+  parseLimits,
+  RelayLimits,
+  TokenBucket,
+} from '../src/core/limits';
 import { parsePushConfig } from '../src/core/push';
 import { endSession, newestRegistered, openSession, proveSession, registrationExpired } from '../src/core/session';
-import { answerChallenge } from '@kubernanny/protocol';
 
 describe('limits', () => {
   it('has fair-use defaults and reads RELAY_* overrides', () => {
     expect(parseLimits({})).toEqual(DEFAULT_LIMITS);
-    const limits = parseLimits({ RELAY_MAX_AGENTS: '5', RELAY_CALL_TIMEOUT_MS: '1000', CORS_ORIGINS: 'https://a.example, capacitor://localhost' });
+    const limits = parseLimits({
+      RELAY_MAX_AGENTS: '5',
+      RELAY_CALL_TIMEOUT_MS: '1000',
+      CORS_ORIGINS: 'https://a.example, capacitor://localhost',
+    });
     expect(limits.maxAgents).toBe(5);
     expect(limits.callTimeoutMs).toBe(1000);
     expect(limits.corsOrigins).toEqual(['https://a.example', 'capacitor://localhost']);
@@ -70,8 +101,12 @@ describe('routes and CORS', () => {
 
   it('allows any origin by default and only listed ones otherwise', () => {
     expect(corsHeaders('https://x.example', ['*'])['access-control-allow-origin']).toBe('*');
-    expect(corsHeaders('capacitor://localhost', ['capacitor://localhost'])['access-control-allow-origin']).toBe('capacitor://localhost');
-    expect(corsHeaders('https://evil.example', ['capacitor://localhost'])['access-control-allow-origin']).toBeUndefined();
+    expect(corsHeaders('capacitor://localhost', ['capacitor://localhost'])['access-control-allow-origin']).toBe(
+      'capacitor://localhost',
+    );
+    expect(
+      corsHeaders('https://evil.example', ['capacitor://localhost'])['access-control-allow-origin'],
+    ).toBeUndefined();
   });
 });
 
@@ -80,7 +115,14 @@ describe('AgentLink', () => {
   let closed: number[];
   let socket: LinkSocket;
   let now: number;
-  const limits: RelayLimits = { ...DEFAULT_LIMITS, maxConcurrent: 2, callBurst: 3, callsPerMinute: 60, maxResponseBytes: 1000, callTimeoutMs: 1000 };
+  const limits: RelayLimits = {
+    ...DEFAULT_LIMITS,
+    maxConcurrent: 2,
+    callBurst: 3,
+    callsPerMinute: 60,
+    maxResponseBytes: 1000,
+    callTimeoutMs: 1000,
+  };
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -91,7 +133,8 @@ describe('AgentLink', () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  const link = (overrides: Partial<RelayLimits> = {}) => new AgentLink(socket, { ...limits, ...overrides }, { now: () => now });
+  const link = (overrides: Partial<RelayLimits> = {}) =>
+    new AgentLink(socket, { ...limits, ...overrides }, { now: () => now });
   const lastCall = () => decodeFrame(sent.at(-1)!);
 
   it('forwards the body and resolves with the reassembled reply', async () => {
@@ -197,7 +240,10 @@ describe('security review regressions (relay core)', () => {
 
   it('hardening: passes on only 200 or a plain E2E refusal, rebuilt by the relay', () => {
     expect(checkAgentReply(200, Uint8Array.of(1))).toEqual({ status: 200, body: Uint8Array.of(1) });
-    expect(checkAgentReply(429, text('{"code":"E2E_RATE_LIMITED","x":"<script>"}'))).toEqual({ status: 429, body: text('{"code":"E2E_RATE_LIMITED"}') });
+    expect(checkAgentReply(429, text('{"code":"E2E_RATE_LIMITED","x":"<script>"}'))).toEqual({
+      status: 429,
+      body: text('{"code":"E2E_RATE_LIMITED"}'),
+    });
     for (const status of [100, 101, 204, 301, 304, 401, 500]) {
       expect(checkAgentReply(status, text('{"code":"E2E_X"}'))).toBeNull();
     }
@@ -227,7 +273,8 @@ describe('security review regressions (H1: memory held for answers)', () => {
   const socket: LinkSocket = { send: (b, done) => (sent.push(b), done?.()), close: () => undefined };
   const limits: RelayLimits = { ...DEFAULT_LIMITS, maxResponseBytes: 1000, maxConcurrent: 8, callBurst: 100 };
   const text = (s: string) => new TextEncoder().encode(s);
-  const chunk = (callId: number, n: number) => decodeFrame(encodeFrame(FrameType.ReplyChunk, callId, new Uint8Array(n)));
+  const chunk = (callId: number, n: number) =>
+    decodeFrame(encodeFrame(FrameType.ReplyChunk, callId, new Uint8Array(n)));
 
   it('caps answer bytes held across all agents, and gives them back when a call ends', async () => {
     const budget = new ByteBudget(1500);
@@ -264,7 +311,9 @@ describe('security review regressions (H1: memory held for answers)', () => {
   });
 
   it('keeps the worst case per agent within the documented sizing', () => {
-    expect(DEFAULT_LIMITS.maxConcurrent * DEFAULT_LIMITS.maxResponseBytes).toBeLessThanOrEqual(DEFAULT_LIMITS.maxInflightBytes);
+    expect(DEFAULT_LIMITS.maxConcurrent * DEFAULT_LIMITS.maxResponseBytes).toBeLessThanOrEqual(
+      DEFAULT_LIMITS.maxInflightBytes,
+    );
     expect(DEFAULT_LIMITS.maxInflightBytes).toBeLessThanOrEqual(64 * 1024 * 1024);
   });
 });
@@ -277,7 +326,8 @@ describe('security re-review regressions (R1: fair shares of the answer budget)'
   });
   afterEach(() => vi.useRealTimers());
   const socket: LinkSocket = { send: (b, done) => (sent.push(b), done?.()), close: () => undefined };
-  const chunk = (callId: number, n: number) => decodeFrame(encodeFrame(FrameType.ReplyChunk, callId, new Uint8Array(n)));
+  const chunk = (callId: number, n: number) =>
+    decodeFrame(encodeFrame(FrameType.ReplyChunk, callId, new Uint8Array(n)));
   const lastId = () => decodeFrame(sent.at(-1)!).callId;
 
   it('nests budgets: a reservation must fit the agent, its address and the relay', () => {
@@ -291,7 +341,14 @@ describe('security re-review regressions (R1: fair shares of the answer budget)'
   });
 
   it('gives one agent only its share of the relay budget', async () => {
-    const limits: RelayLimits = { ...DEFAULT_LIMITS, maxInflightBytes: 4000, inflightShare: 0.25, maxResponseBytes: 1000, maxConcurrent: 8, callBurst: 100 };
+    const limits: RelayLimits = {
+      ...DEFAULT_LIMITS,
+      maxInflightBytes: 4000,
+      inflightShare: 0.25,
+      maxResponseBytes: 1000,
+      maxConcurrent: 8,
+      callBurst: 100,
+    };
     const total = new ByteBudget(limits.maxInflightBytes);
     const hog = new AgentLink(socket, limits, { parent: total });
     const first = hog.call(Uint8Array.of(1));
@@ -307,7 +364,13 @@ describe('security re-review regressions (R1: fair shares of the answer budget)'
 
   it('makes the largest unfinished answer give way to a smaller one', async () => {
     const total = new ByteBudget(2000);
-    const limits: RelayLimits = { ...DEFAULT_LIMITS, maxInflightBytes: 2000, inflightShare: 1, maxResponseBytes: 2000, callBurst: 100 };
+    const limits: RelayLimits = {
+      ...DEFAULT_LIMITS,
+      maxInflightBytes: 2000,
+      inflightShare: 1,
+      maxResponseBytes: 2000,
+      callBurst: 100,
+    };
     const hog = new AgentLink(socket, limits, { parent: total });
     const legit = new AgentLink(socket, limits, { parent: total });
     const held = hog.call(Uint8Array.of(1));
@@ -364,11 +427,21 @@ describe('second security review (relay core)', () => {
     open = true;
   });
   afterEach(() => vi.useRealTimers());
-  const socket = (): LinkSocket => ({ send: (b, done) => (sent.push(b), done?.()), close: () => undefined, bufferedAmount: () => buffered, isOpen: () => open });
+  const socket = (): LinkSocket => ({
+    send: (b, done) => (sent.push(b), done?.()),
+    close: () => undefined,
+    bufferedAmount: () => buffered,
+    isOpen: () => open,
+  });
   const calls = () => sent.map(decodeFrame).filter((f) => f.type === FrameType.Call);
 
   it('H1: refuses calls with RELAY_BUSY while the agent does not read what it was sent', async () => {
-    const link = new AgentLink(socket(), { ...DEFAULT_LIMITS, callBurst: 10_000, callsPerMinute: 1_000_000, maxConcurrent: 4 });
+    const link = new AgentLink(socket(), {
+      ...DEFAULT_LIMITS,
+      callBurst: 10_000,
+      callsPerMinute: 1_000_000,
+      maxConcurrent: 4,
+    });
     const body = new Uint8Array(64 * 1024);
     void link.call(body);
     buffered = DEFAULT_LIMITS.maxSocketBufferBytes; // what the socket says it still holds for the agent
@@ -422,7 +495,13 @@ describe('second security review (relay core)', () => {
   });
 
   it('M1: one calling address gets only its share of the agent buckets, and junk never drives a bucket negative', async () => {
-    const limits: RelayLimits = { ...DEFAULT_LIMITS, callBurst: 8, callsPerMinute: 8, callerShare: 0.25, maxConcurrent: 100 };
+    const limits: RelayLimits = {
+      ...DEFAULT_LIMITS,
+      callBurst: 8,
+      callsPerMinute: 8,
+      callerShare: 0.25,
+      maxConcurrent: 100,
+    };
     const link = new AgentLink(socket(), limits, { now: () => 0 });
     expect(await Promise.race([link.call(Uint8Array.of(1), 'junk'), Promise.resolve('pending')])).toBe('pending');
     void link.call(Uint8Array.of(1), 'junk');
@@ -501,7 +580,11 @@ describe('registration sessions (shared by the Node relay and the Worker)', () =
     expect(done.session).toMatchObject({ phase: 'registered', registeredAt: 5 });
     expect(proveSession(done.session, proof, 6).outcome).toBeNull();
     const other = openSession(agentId, 'https://relay.example', 0);
-    const elsewhere = proveSession(other.session, answerChallenge(keys, decodeFrame(other.challenge).payload, 'wss://other.example'), 1);
+    const elsewhere = proveSession(
+      other.session,
+      answerChallenge(keys, decodeFrame(other.challenge).payload, 'wss://other.example'),
+      1,
+    );
     expect(elsewhere.outcome).toMatchObject({ ok: false, close: RelayClose.ProofFailed });
     expect(elsewhere.session.phase).toBe('ended');
   });

@@ -1,15 +1,15 @@
-import { BadRequestError } from '../http/errors';
-import { Logger } from '../logger';
 import type { Principal } from '../auth/devices.service';
-import type { Config } from '../config';
-import { t } from '../i18n/text';
-import { KubeClient } from '../kube/kube-client';
 import { IssueSeverity } from '../checks/types';
-import { Notifier, SecurityEvent } from '../notify/notifier';
-import { logSafe } from '../util/log-safe';
-import { SETTINGS_CONFIGMAP } from '../settings/settings.service';
-import { Serial } from '../util/serial';
+import type { Config } from '../config';
+import { BadRequestError } from '../http/errors';
+import { t } from '../i18n/text';
 import { upsertConfigMapData } from '../kube/configmap';
+import { KubeClient } from '../kube/kube-client';
+import { Logger } from '../logger';
+import { Notifier, SecurityEvent } from '../notify/notifier';
+import { SETTINGS_CONFIGMAP } from '../settings/settings.service';
+import { logSafe } from '../util/log-safe';
+import { Serial } from '../util/serial';
 import { NotLoadedError, readAtStartup } from '../util/startup-read';
 
 /** The durations the app offers; anything else is refused, so nobody silences an issue for a year by accident. */
@@ -62,9 +62,16 @@ export class SilenceService {
   /** Reads the stored silences, retrying transient errors; throws when they stay unreadable, so the process ends and restarts. */
   async onModuleInit(): Promise<void> {
     const log = new Logger(SilenceService.name);
-    const cm = await readAtStartup('silenced issues', () => this.kube.get<{ data?: { silenced?: string } }>(`${this.path}/${SETTINGS_CONFIGMAP}`), {
-      onRetry: (err, attempt) => log.warn(`cannot read silenced issues (${err instanceof Error ? err.message : err}), attempt ${attempt}; retrying`),
-    });
+    const cm = await readAtStartup(
+      'silenced issues',
+      () => this.kube.get<{ data?: { silenced?: string } }>(`${this.path}/${SETTINGS_CONFIGMAP}`),
+      {
+        onRetry: (err, attempt) =>
+          log.warn(
+            `cannot read silenced issues (${err instanceof Error ? err.message : err}), attempt ${attempt}; retrying`,
+          ),
+      },
+    );
     this.until = parseSilences(cm?.data?.silenced);
     this.loaded = true;
   }
@@ -101,7 +108,10 @@ export class SilenceService {
 
   private async doStartMaintenance(hours: number, who: Principal, now: number): Promise<string> {
     if (!(MAINTENANCE_HOURS as readonly number[]).includes(hours)) {
-      throw new BadRequestError({ code: 'MAINTENANCE_HOURS', message: t('error.maintenanceHours', { hours: MAINTENANCE_HOURS.join(', ') }) });
+      throw new BadRequestError({
+        code: 'MAINTENANCE_HOURS',
+        message: t('error.maintenanceHours', { hours: MAINTENANCE_HOURS.join(', ') }),
+      });
     }
     await this.notifier?.securityAlert(who.name, [{ kind: 'maintenance', hours }]);
     const next = this.pruned(now);
@@ -128,12 +138,21 @@ export class SilenceService {
     return this.writes.run(() => this.doSilence(issueId, hours, who, now, severity));
   }
 
-  private async doSilence(issueId: string, hours: number, who: Principal, now: number, severity?: IssueSeverity): Promise<string> {
+  private async doSilence(
+    issueId: string,
+    hours: number,
+    who: Principal,
+    now: number,
+    severity?: IssueSeverity,
+  ): Promise<string> {
     if (!issueId || issueId.length > 300 || issueId === MAINTENANCE) {
       throw new BadRequestError({ code: 'ISSUE_MISSING', message: t('error.issueMissing') });
     }
     if (!(SILENCE_HOURS as readonly number[]).includes(hours)) {
-      throw new BadRequestError({ code: 'SILENCE_HOURS', message: t('error.silenceHours', { hours: SILENCE_HOURS.join(', ') }) });
+      throw new BadRequestError({
+        code: 'SILENCE_HOURS',
+        message: t('error.silenceHours', { hours: SILENCE_HOURS.join(', ') }),
+      });
     }
     const next = this.pruned(now);
     // Unknown severity (an issue the caller did not look up) counts as a warning: an outage then still breaks through.
@@ -176,7 +195,9 @@ export class SilenceService {
     if (!this.loaded) {
       throw new NotLoadedError('silenced issues');
     }
-    await upsertConfigMapData(this.kube, this.config.namespace, SETTINGS_CONFIGMAP, { silenced: JSON.stringify(Object.fromEntries(next)) });
+    await upsertConfigMapData(this.kube, this.config.namespace, SETTINGS_CONFIGMAP, {
+      silenced: JSON.stringify(Object.fromEntries(next)),
+    });
     this.until = next;
   }
 }

@@ -1,10 +1,10 @@
-import { Issue, ageText } from '../../checks/types';
+import { ageText, Issue } from '../../checks/types';
 import { ingressUrls, servicesOf } from '../../discovery/discovery';
+import { t, Text } from '../../i18n/text';
 import { Inventory, PodSpecLite } from '../../inventory/inventory';
-import { Text, t } from '../../i18n/text';
-import { Acceptance, acceptanceKey, trivyComponentKey } from '../vulnerabilities/acceptance';
-import { Finding, Level, LEVEL_RANK, issueSeverity, levelOfScore, scoreText } from '../vulnerabilities/evaluate';
 import type { AcceptedAdvisory } from '../types';
+import { Acceptance, acceptanceKey, trivyComponentKey } from '../vulnerabilities/acceptance';
+import { Finding, issueSeverity, Level, LEVEL_RANK, levelOfScore, scoreText } from '../vulnerabilities/evaluate';
 
 /**
  * A VulnerabilityReport or ClusterVulnerabilityReport
@@ -17,7 +17,13 @@ export interface VulnerabilityReport {
     updateTimestamp?: string;
     registry?: { server?: string };
     artifact?: { repository?: string; tag?: string; digest?: string };
-    summary?: { criticalCount?: number; highCount?: number; mediumCount?: number; lowCount?: number; unknownCount?: number };
+    summary?: {
+      criticalCount?: number;
+      highCount?: number;
+      mediumCount?: number;
+      lowCount?: number;
+      unknownCount?: number;
+    };
     vulnerabilities?: TrivyVulnerability[];
   };
 }
@@ -63,15 +69,40 @@ function containersOf(spec: PodSpecLite | undefined): Map<string, string> {
 /** The workloads Trivy Operator's reports can name, by key. */
 export function workloadIndex(inv: Inventory): Map<string, TrivyWorkload> {
   const index = new Map<string, TrivyWorkload>();
-  const add = (kind: ScannedKind, namespace: string | undefined, name: string, spec: PodSpecLite | undefined, podLabels: Record<string, string> | undefined) => {
+  const add = (
+    kind: ScannedKind,
+    namespace: string | undefined,
+    name: string,
+    spec: PodSpecLite | undefined,
+    podLabels: Record<string, string> | undefined,
+  ) => {
     const ns = namespace ?? 'default';
-    index.set(workloadKey(ns, kind, name), { key: workloadKey(ns, kind, name), namespace: ns, kind, name, containers: containersOf(spec), podLabels });
+    index.set(workloadKey(ns, kind, name), {
+      key: workloadKey(ns, kind, name),
+      namespace: ns,
+      kind,
+      name,
+      containers: containersOf(spec),
+      podLabels,
+    });
   };
   for (const w of inv.deployments) {
-    add('Deployment', w.metadata.namespace, w.metadata.name, w.spec?.template?.spec, w.spec?.template?.metadata?.labels);
+    add(
+      'Deployment',
+      w.metadata.namespace,
+      w.metadata.name,
+      w.spec?.template?.spec,
+      w.spec?.template?.metadata?.labels,
+    );
   }
   for (const w of inv.statefulsets) {
-    add('StatefulSet', w.metadata.namespace, w.metadata.name, w.spec?.template?.spec, w.spec?.template?.metadata?.labels);
+    add(
+      'StatefulSet',
+      w.metadata.namespace,
+      w.metadata.name,
+      w.spec?.template?.spec,
+      w.spec?.template?.metadata?.labels,
+    );
   }
   for (const w of inv.daemonsets) {
     add('DaemonSet', w.metadata.namespace, w.metadata.name, w.spec?.template?.spec, w.spec?.template?.metadata?.labels);
@@ -87,7 +118,10 @@ export function workloadIndex(inv: Inventory): Map<string, TrivyWorkload> {
  * Deployment is scanned through its ReplicaSet (`<deployment>-<pod template
  * hash>`). Bare pods, Jobs and anything no longer in the cluster: null.
  */
-export function workloadOf(labels: Record<string, string> | undefined, index: Map<string, TrivyWorkload>): TrivyWorkload | null {
+export function workloadOf(
+  labels: Record<string, string> | undefined,
+  index: Map<string, TrivyWorkload>,
+): TrivyWorkload | null {
   const kind = labels?.['trivy-operator.resource.kind'];
   const name = labels?.['trivy-operator.resource.name'];
   const ns = labels?.['trivy-operator.resource.namespace'];
@@ -126,7 +160,10 @@ export function parseImage(image: string): { registry: string; repository: strin
  * The registry host is not compared: a registry mirror in Trivy's settings
  * changes it.
  */
-export function sameImage(running: string, artifact: { repository?: string; tag?: string; digest?: string } | undefined): boolean {
+export function sameImage(
+  running: string,
+  artifact: { repository?: string; tag?: string; digest?: string } | undefined,
+): boolean {
   if (!artifact?.repository) {
     return false;
   }
@@ -152,7 +189,10 @@ function levelOfTrivy(v: TrivyVulnerability): Level {
 
 /** Worst first; among equals the fixable one first, since a fix decides the severity. */
 const order = (a: TrivyFinding, b: TrivyFinding) =>
-  LEVEL_RANK[b.level] - LEVEL_RANK[a.level] || Number(b.fixed !== null) - Number(a.fixed !== null) || (b.score ?? 0) - (a.score ?? 0) || a.id.localeCompare(b.id);
+  LEVEL_RANK[b.level] - LEVEL_RANK[a.level] ||
+  Number(b.fixed !== null) - Number(a.fixed !== null) ||
+  (b.score ?? 0) - (a.score ?? 0) ||
+  a.id.localeCompare(b.id);
 
 /** The worst KEEP findings, plus the worst KEEP with a fix: enough to judge and to show, never the whole list. */
 export function keepTop(findings: TrivyFinding[]): TrivyFinding[] {
@@ -182,7 +222,13 @@ export interface ContainerScan {
 
 function digestReport(r: VulnerabilityReport, container: string, scannedAt: number): ContainerScan {
   const s = r.report?.summary;
-  const counts: Counts = { critical: s?.criticalCount ?? 0, high: s?.highCount ?? 0, medium: s?.mediumCount ?? 0, low: s?.lowCount ?? 0, unknown: s?.unknownCount ?? 0 };
+  const counts: Counts = {
+    critical: s?.criticalCount ?? 0,
+    high: s?.highCount ?? 0,
+    medium: s?.mediumCount ?? 0,
+    low: s?.lowCount ?? 0,
+    unknown: s?.unknownCount ?? 0,
+  };
   const findings = keepTop(
     (r.report?.vulnerabilities ?? [])
       .filter((v) => typeof v.vulnerabilityID === 'string' && v.vulnerabilityID.length > 0)
@@ -304,7 +350,10 @@ export function workloadFindings(inv: Inventory, scan: WorkloadScan): WorkloadFi
 }
 
 /** Takes accepted advisories out, like the built-in lookup: they stop counting for the issue, the light and the stats. */
-export function acceptTrivy(items: WorkloadFindings[], accepted: ReadonlyMap<string, Acceptance>): { items: WorkloadFindings[]; accepted: AcceptedAdvisory[] } {
+export function acceptTrivy(
+  items: WorkloadFindings[],
+  accepted: ReadonlyMap<string, Acceptance>,
+): { items: WorkloadFindings[]; accepted: AcceptedAdvisory[] } {
   const list: AcceptedAdvisory[] = [];
   const kept = items.map((w) => {
     const remaining = w.findings.filter((f) => !accepted.has(acceptanceKey(w.component, f.id)));
@@ -315,7 +364,14 @@ export function acceptTrivy(items: WorkloadFindings[], accepted: ReadonlyMap<str
     for (const f of w.findings.filter((x) => !remaining.includes(x))) {
       const a = accepted.get(acceptanceKey(w.component, f.id))!;
       counts[f.level] = Math.max(0, counts[f.level] - 1);
-      list.push({ component: w.component, name: w.workload.name, advisory: f.id, until: new Date(a.until).toISOString(), by: a.by, ...(a.reason ? { reason: a.reason } : {}) });
+      list.push({
+        component: w.component,
+        name: w.workload.name,
+        advisory: f.id,
+        until: new Date(a.until).toISOString(),
+        by: a.by,
+        ...(a.reason ? { reason: a.reason } : {}),
+      });
     }
     return { ...w, counts, findings: remaining, accepted: w.findings.length - remaining.length };
   });
@@ -334,14 +390,20 @@ export function trivyIssue(w: WorkloadFindings, now: Date): Issue | null {
   const parts: Text[] = [];
   const worst = w.findings.slice(0, 3).map((f) => t('vulnerabilities.advisory', { id: f.id, rating: scoreText(f) }));
   if (worst.length) {
-    parts.push(n === 1 ? t('vulnerabilities.worst.one', { advisories: worst }) : t('vulnerabilities.worst.many', { advisories: worst }));
+    parts.push(
+      n === 1
+        ? t('vulnerabilities.worst.one', { advisories: worst })
+        : t('vulnerabilities.worst.many', { advisories: worst }),
+    );
   }
   const fixable = w.findings.filter((f) => f.fixed !== null);
   const packages = [...new Set(fixable.map((f) => (f.pkg ? `${f.pkg} ${f.fixed}` : f.fixed!)))].slice(0, 3);
   if (packages.length === 0) {
     parts.push(t('vulnerabilities.noFix'));
   } else {
-    parts.push(fixable.length === w.findings.length ? t('trivy.fixed', { packages }) : t('trivy.fixedSome', { packages }));
+    parts.push(
+      fixable.length === w.findings.length ? t('trivy.fixed', { packages }) : t('trivy.fixedSome', { packages }),
+    );
   }
   if (severity === 'critical') {
     parts.push(t('vulnerabilities.exposed'));

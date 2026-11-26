@@ -15,7 +15,14 @@ export interface VolumeView {
 }
 
 export interface StorageView {
-  classes: { name: string; provisioner?: string; isDefault: boolean; reclaimPolicy?: string; expansion: boolean; volumes: number }[];
+  classes: {
+    name: string;
+    provisioner?: string;
+    isDefault: boolean;
+    reclaimPolicy?: string;
+    expansion: boolean;
+    volumes: number;
+  }[];
   volumes: VolumeView[];
 }
 
@@ -44,7 +51,9 @@ export function buildStorage(inv: Inventory, data: RunData): StorageView {
         accessModes: pvc.spec?.accessModes ?? [],
         used: data.volumeUsage?.get(key)?.used ?? null,
         usedBy: usedBy.get(key) ?? [],
-        longhorn: lh ? { robustness: lh.status?.robustness, state: lh.status?.state, replicas: lh.spec?.numberOfReplicas } : undefined,
+        longhorn: lh
+          ? { robustness: lh.status?.robustness, state: lh.status?.state, replicas: lh.spec?.numberOfReplicas }
+          : undefined,
       };
     })
     .sort((a, b) => a.namespace.localeCompare(b.namespace) || a.name.localeCompare(b.name));

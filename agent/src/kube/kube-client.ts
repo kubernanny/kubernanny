@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { connect } from 'node:tls';
+
 import { readCapped } from '../util/read-capped';
 
 const SA_DIR = '/var/run/secrets/kubernetes.io/serviceaccount';
@@ -32,7 +33,9 @@ export class KubeError extends Error {
 export class KubeClient {
   private readonly baseUrl: string | null =
     process.env.K8S_API_URL ??
-    (process.env.KUBERNETES_SERVICE_HOST ? `https://${process.env.KUBERNETES_SERVICE_HOST}:${process.env.KUBERNETES_SERVICE_PORT ?? '443'}` : null);
+    (process.env.KUBERNETES_SERVICE_HOST
+      ? `https://${process.env.KUBERNETES_SERVICE_HOST}:${process.env.KUBERNETES_SERVICE_PORT ?? '443'}`
+      : null);
 
   /**
    * True inside a pod: services are then reached directly over cluster DNS,
@@ -53,7 +56,12 @@ export class KubeClient {
     }
     return new Promise((resolve) => {
       const socket = connect(
-        { host: process.env.KUBERNETES_SERVICE_HOST, port: Number(process.env.KUBERNETES_SERVICE_PORT ?? 443), servername: 'kubernetes.default.svc', timeout: 5000 },
+        {
+          host: process.env.KUBERNETES_SERVICE_HOST,
+          port: Number(process.env.KUBERNETES_SERVICE_PORT ?? 443),
+          servername: 'kubernetes.default.svc',
+          timeout: 5000,
+        },
         () => {
           const cert = socket.getPeerCertificate();
           socket.end();
@@ -99,7 +107,11 @@ export class KubeClient {
    * instead of holding all of them at once. Stops after `maxItems`. False when
    * the resource type does not exist.
    */
-  async listEach<T>(path: string, each: (items: T[]) => void, { pageSize = 100, maxItems = 5000 }: { pageSize?: number; maxItems?: number } = {}): Promise<boolean> {
+  async listEach<T>(
+    path: string,
+    each: (items: T[]) => void,
+    { pageSize = 100, maxItems = 5000 }: { pageSize?: number; maxItems?: number } = {},
+  ): Promise<boolean> {
     let token: string | undefined;
     let seen = 0;
     do {
@@ -127,7 +139,9 @@ export class KubeClient {
    * ConfigMaps, whose contents the agent has no reason to see.
    */
   async metadata<T>(path: string): Promise<T> {
-    const res = await this.request(path, { headers: { accept: 'application/json;as=PartialObjectMetadata;g=meta.k8s.io;v=v1' } });
+    const res = await this.request(path, {
+      headers: { accept: 'application/json;as=PartialObjectMetadata;g=meta.k8s.io;v=v1' },
+    });
     await this.assertOk(res, path);
     return (await this.json(res)) as T;
   }
@@ -157,7 +171,11 @@ export class KubeClient {
     const res = await this.request(path, {
       method: 'DELETE',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ kind: 'DeleteOptions', apiVersion: 'v1', ...(opts.gracePeriodSeconds !== undefined ? { gracePeriodSeconds: opts.gracePeriodSeconds } : {}) }),
+      body: JSON.stringify({
+        kind: 'DeleteOptions',
+        apiVersion: 'v1',
+        ...(opts.gracePeriodSeconds !== undefined ? { gracePeriodSeconds: opts.gracePeriodSeconds } : {}),
+      }),
     });
     await this.assertOk(res, path);
   }
@@ -187,7 +205,11 @@ export class KubeClient {
 
   private request(path: string, init: RequestInit = {}): Promise<Response> {
     if (this.baseUrl === null) {
-      return Promise.reject(new Error('not running in a cluster: KUBERNETES_SERVICE_HOST is unset. Outside a cluster set K8S_API_URL (e.g. http://127.0.0.1:8001 with `kubectl proxy`), or DEMO=1.'));
+      return Promise.reject(
+        new Error(
+          'not running in a cluster: KUBERNETES_SERVICE_HOST is unset. Outside a cluster set K8S_API_URL (e.g. http://127.0.0.1:8001 with `kubectl proxy`), or DEMO=1.',
+        ),
+      );
     }
     const headers = new Headers(init.headers);
     const token = this.token();

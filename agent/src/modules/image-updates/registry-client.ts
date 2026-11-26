@@ -105,7 +105,9 @@ export class RegistryClient implements TagSource {
         throw new Error(`${ref.registry.name}: HTTP ${res.status}`);
       }
       const body = (JSON.parse(await readCapped(res, REGISTRY_MAX_RESPONSE)) ?? {}) as { tags?: unknown };
-      tags.push(...(Array.isArray(body.tags) ? body.tags.filter((x): x is string => typeof x === 'string' && TAG.test(x)) : []));
+      tags.push(
+        ...(Array.isArray(body.tags) ? body.tags.filter((x): x is string => typeof x === 'string' && TAG.test(x)) : []),
+      );
       const next = nextPage(res.headers.get('link'));
       if (!next) {
         break;
@@ -125,7 +127,11 @@ export class RegistryClient implements TagSource {
       if (token && current.startsWith(`${registry.api}/`)) {
         headers['authorization'] = `Bearer ${token}`;
       }
-      const res = await this.fetchFn(current, { headers, redirect: 'manual', signal: AbortSignal.timeout(this.timeoutMs) });
+      const res = await this.fetchFn(current, {
+        headers,
+        redirect: 'manual',
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
       if (res.status < 300 || res.status >= 400) {
         return res;
       }
@@ -150,12 +156,20 @@ export class RegistryClient implements TagSource {
       realm.searchParams.set('service', challenge!.service);
     }
     realm.searchParams.set('scope', `repository:${ref.repository}:pull`);
-    const res = await this.fetchFn(realm.toString(), { headers: { accept: 'application/json', 'user-agent': USER_AGENT }, redirect: 'error', signal: AbortSignal.timeout(this.timeoutMs) });
+    const res = await this.fetchFn(realm.toString(), {
+      headers: { accept: 'application/json', 'user-agent': USER_AGENT },
+      redirect: 'error',
+      signal: AbortSignal.timeout(this.timeoutMs),
+    });
     if (!res.ok) {
       throw new Error(`${ref.registry.name}: token HTTP ${res.status}`);
     }
-    const body = (JSON.parse(await readCapped(res, REGISTRY_MAX_RESPONSE)) ?? {}) as { token?: unknown; access_token?: unknown };
-    const token = typeof body.token === 'string' ? body.token : typeof body.access_token === 'string' ? body.access_token : '';
+    const body = (JSON.parse(await readCapped(res, REGISTRY_MAX_RESPONSE)) ?? {}) as {
+      token?: unknown;
+      access_token?: unknown;
+    };
+    const token =
+      typeof body.token === 'string' ? body.token : typeof body.access_token === 'string' ? body.access_token : '';
     if (!token || token.length > 16_384) {
       throw new Error(`${ref.registry.name}: no token`);
     }

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
-export type CallOutcome = 'ok' | 'agent_error' | 'offline' | 'timeout' | 'rate_limited' | 'too_large' | 'response_too_large' | 'bad_request';
+export type CallOutcome =
+  'ok' | 'agent_error' | 'offline' | 'timeout' | 'rate_limited' | 'too_large' | 'response_too_large' | 'bad_request';
 export type RegistrationOutcome = 'ok' | 'proof_failed' | 'timeout' | 'protocol' | 'full';
 
 /**
@@ -58,14 +59,16 @@ export class RelayMetrics {
       ...[...this.calls].map(([outcome, n]) => `kubernanny_relay_calls_total{outcome="${outcome}"} ${n}`),
       '# HELP kubernanny_relay_registrations_total Agent registrations by outcome.',
       '# TYPE kubernanny_relay_registrations_total counter',
-      ...[...this.registrations].map(([outcome, n]) => `kubernanny_relay_registrations_total{outcome="${outcome}"} ${n}`),
+      ...[...this.registrations].map(
+        ([outcome, n]) => `kubernanny_relay_registrations_total{outcome="${outcome}"} ${n}`,
+      ),
       '# HELP kubernanny_relay_pushes_total Native pushes by outcome.',
       '# TYPE kubernanny_relay_pushes_total counter',
       ...[...this.pushes].map(([outcome, n]) => `kubernanny_relay_pushes_total{outcome="${outcome}"} ${n}`),
-      '# HELP kubernanny_relay_deadman_deposits Agents whose dead man\'s switch deposit the relay holds.',
+      "# HELP kubernanny_relay_deadman_deposits Agents whose dead man's switch deposit the relay holds.",
       '# TYPE kubernanny_relay_deadman_deposits gauge',
       `kubernanny_relay_deadman_deposits ${this.deadmanDeposits}`,
-      '# HELP kubernanny_relay_deadman_total Dead man\'s switch deposits by outcome (deposit_*) and messages sent by push outcome (fired_*).',
+      "# HELP kubernanny_relay_deadman_total Dead man's switch deposits by outcome (deposit_*) and messages sent by push outcome (fired_*).",
       '# TYPE kubernanny_relay_deadman_total counter',
       ...[...this.deadman].map(([event, n]) => `kubernanny_relay_deadman_total{event="${event}"} ${n}`),
       '# HELP kubernanny_relay_bytes_total Bytes carried, request (in) and response (out).',

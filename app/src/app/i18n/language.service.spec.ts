@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { Preferences } from '@capacitor/preferences';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { LanguageService } from './language.service';
 
 function service(deviceLanguage: string): LanguageService {

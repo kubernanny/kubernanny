@@ -4,8 +4,17 @@ import { TranslationKey } from '../i18n/dictionary';
 import { Translator } from '../i18n/translator';
 import { ClusterView, IssueCard } from './cluster-view';
 
-const LIGHT: Record<Light, TranslationKey> = { green: 'report.green', yellow: 'report.yellow', red: 'report.red', unknown: 'report.unknown' };
-const SEVERITY: Record<IssueCard['issue']['severity'], TranslationKey> = { critical: 'report.critical', warning: 'report.warning', info: 'report.info' };
+const LIGHT: Record<Light, TranslationKey> = {
+  green: 'report.green',
+  yellow: 'report.yellow',
+  red: 'report.red',
+  unknown: 'report.unknown',
+};
+const SEVERITY: Record<IssueCard['issue']['severity'], TranslationKey> = {
+  critical: 'report.critical',
+  warning: 'report.warning',
+  info: 'report.info',
+};
 
 export interface ReportInput {
   /** The name this device gave the cluster. */
@@ -31,7 +40,10 @@ function issueLines(cards: IssueCard[], tr: Translator, withUntil = false): stri
  * person sees, in the UI language. Only what is on screen anyway; no issue
  * ids, addresses or keys, so it can be pasted publicly.
  */
-export function statusReport({ name, view, checkedAt, agentVersion, error }: ReportInput, tr: Translator): string {
+export function statusReport(
+  { name, view, checkedAt, agentVersion, error }: ReportInput,
+  tr: Translator,
+): string {
   const light = tr.t(LIGHT[view.stale ? 'unknown' : view.light]);
   const lines = [
     tr.t('report.heading', { cluster: name }),
@@ -43,15 +55,27 @@ export function statusReport({ name, view, checkedAt, agentVersion, error }: Rep
     '',
   ];
   if (view.issues.length) {
-    lines.push(tr.t('report.issues', { count: view.issues.length }), ...issueLines(view.issues, tr), '');
+    lines.push(
+      tr.t('report.issues', { count: view.issues.length }),
+      ...issueLines(view.issues, tr),
+      '',
+    );
   } else {
     lines.push(tr.t('report.none'), '');
   }
   if (view.hints.length) {
-    lines.push(tr.t('report.hints', { count: view.hints.length }), ...issueLines(view.hints, tr), '');
+    lines.push(
+      tr.t('report.hints', { count: view.hints.length }),
+      ...issueLines(view.hints, tr),
+      '',
+    );
   }
   if (view.silenced.length) {
-    lines.push(tr.t('report.silenced', { count: view.silenced.length }), ...issueLines(view.silenced, tr, true), '');
+    lines.push(
+      tr.t('report.silenced', { count: view.silenced.length }),
+      ...issueLines(view.silenced, tr, true),
+      '',
+    );
   }
   return lines.join('\n').trimEnd() + '\n';
 }

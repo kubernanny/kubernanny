@@ -1,7 +1,18 @@
 import { AddressInfo } from 'node:net';
-import { FrameType, KeyPair, RegistrationChallenge, decodeFrame, encodeFrame, generateKeyPair, randomBytes, relayAgentId } from '@kubernanny/protocol';
+
+import {
+  decodeFrame,
+  encodeFrame,
+  FrameType,
+  generateKeyPair,
+  KeyPair,
+  randomBytes,
+  RegistrationChallenge,
+  relayAgentId,
+} from '@kubernanny/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
+
 import { IdentityService } from '../auth/identity.service';
 import { Config } from '../config';
 import { E2eService } from '../e2e/e2e.service';
@@ -38,7 +49,12 @@ describe('agent behind a hostile relay', () => {
     const keys: KeyPair = generateKeyPair();
     wss = new WebSocketServer({ port: 0 });
     const port = (wss.address() as AddressInfo).port;
-    const relaySide = new Promise<{ ws: WebSocket; messages: Uint8Array[]; closed: Promise<number>; proven: (origin: string) => boolean }>((resolve) => {
+    const relaySide = new Promise<{
+      ws: WebSocket;
+      messages: Uint8Array[];
+      closed: Promise<number>;
+      proven: (origin: string) => boolean;
+    }>((resolve) => {
       wss!.on('connection', (ws) => {
         const nonce = randomBytes(32);
         const secret = randomBytes(32);
@@ -55,7 +71,13 @@ describe('agent behind a hostile relay', () => {
             const proof = frame.payload.slice();
             ws.send(encodeFrame(FrameType.Ready, 0, new TextEncoder().encode('{}')));
             // A fresh check per origin; the challenge itself verifies only once.
-            resolve({ ws, messages, closed, proven: (origin) => new RegistrationChallenge(nonce, secret).verify(proof, relayAgentId(keys.publicKey), origin) });
+            resolve({
+              ws,
+              messages,
+              closed,
+              proven: (origin) =>
+                new RegistrationChallenge(nonce, secret).verify(proof, relayAgentId(keys.publicKey), origin),
+            });
           } else {
             messages.push(bytes);
           }
@@ -63,7 +85,11 @@ describe('agent behind a hostile relay', () => {
         ws.send(challenge.frame());
       });
     });
-    client = new RelayClient({ relayUrl: `ws://127.0.0.1:${port}` } as Config, { keyPair: keys } as IdentityService, { handle } as unknown as E2eService);
+    client = new RelayClient(
+      { relayUrl: `ws://127.0.0.1:${port}` } as Config,
+      { keyPair: keys } as IdentityService,
+      { handle } as unknown as E2eService,
+    );
     client.onApplicationBootstrap();
     const side = await relaySide;
     await until(() => client!.status()?.connected === true);
@@ -90,7 +116,9 @@ describe('agent behind a hostile relay', () => {
 
   it('honours a cancel for a call in flight and sends no answer for it', async () => {
     let release!: () => void;
-    const { ws, messages } = await setup(() => new Promise((resolve) => (release = () => resolve({ kind: 'plain', status: 400, code: 'X' }))));
+    const { ws, messages } = await setup(
+      () => new Promise((resolve) => (release = () => resolve({ kind: 'plain', status: 400, code: 'X' }))),
+    );
     ws.send(encodeFrame(FrameType.Call, 7, Uint8Array.of(1)));
     await until(() => client!.stats().inFlight === 1);
     ws.send(encodeFrame(FrameType.Cancel, 7));
@@ -152,7 +180,11 @@ describe('relayed calls are marked as such', () => {
       seen.push(args);
       return { kind: 'plain' as const, status: 400, code: 'X' };
     };
-    const client = new RelayClient({ relayUrl: `ws://127.0.0.1:${port}` } as Config, { keyPair: generateKeyPair() } as IdentityService, { handle } as unknown as E2eService);
+    const client = new RelayClient(
+      { relayUrl: `ws://127.0.0.1:${port}` } as Config,
+      { keyPair: generateKeyPair() } as IdentityService,
+      { handle } as unknown as E2eService,
+    );
     client.onApplicationBootstrap();
     const end = Date.now() + 5000;
     while (seen.length === 0 && Date.now() < end) {
@@ -166,11 +198,25 @@ describe('relayed calls are marked as such', () => {
 
 describe('reconnect backoff after a silent drop (review)', () => {
   it('starts over after a connection that held, also when the heartbeat found it dead', () => {
-    const client = new RelayClient({ relayUrl: 'ws://127.0.0.1:1' } as Config, { keyPair: generateKeyPair() } as IdentityService, {} as E2eService);
+    const client = new RelayClient(
+      { relayUrl: 'ws://127.0.0.1:1' } as Config,
+      { keyPair: generateKeyPair() } as IdentityService,
+      {} as E2eService,
+    );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const c = client as any;
     let terminated = false;
-    const session = { socket: { terminate: () => (terminated = true), readyState: 1 }, answered: true, readyAt: Date.now() - 120_000, inFlight: new Set(), cancelled: new Set(), push: false, pushes: new Map(), deadman: false, deposits: new Map() };
+    const session = {
+      socket: { terminate: () => (terminated = true), readyState: 1 },
+      answered: true,
+      readyAt: Date.now() - 120_000,
+      inFlight: new Set(),
+      cancelled: new Set(),
+      push: false,
+      pushes: new Map(),
+      deadman: false,
+      deposits: new Map(),
+    };
     c.session = session;
     c.attempt = 7;
     c.lastHeard = Date.now() - 120_000;

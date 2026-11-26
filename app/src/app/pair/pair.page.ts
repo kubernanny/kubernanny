@@ -1,17 +1,27 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+  untracked,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { IonButton, IonContent, IonSpinner } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { fingerprint, parsePublicKey } from '@kubernanny/protocol';
-import { AgentClient, Pairing, describeError, deviceName } from '../core/agent-client.service';
+
 import { ClusterConfig } from '../core/agent.model';
+import { AgentClient, describeError, deviceName, Pairing } from '../core/agent-client.service';
 import { ClusterStore } from '../core/cluster-store.service';
 import { PushRegistration } from '../core/push/push-registration.service';
 import { relayUrlAllowed } from '../core/relay-route';
 import { StatusStore } from '../core/status-store.service';
 import { LanguageService } from '../i18n/language.service';
-import { PairingCheck, checkPairing } from './pairing-check';
+import { checkPairing, PairingCheck } from './pairing-check';
 
 type State = 'checking' | 'confirm' | 'keyChanged' | 'connecting' | 'failed';
 
@@ -67,10 +77,14 @@ function keyFingerprint(key: string): string {
                   <dd>{{ vm().name }}</dd>
                 }
                 <dt>{{ t('pair.addressLabel') }}</dt>
-                <dd><code>{{ address() }}</code></dd>
+                <dd>
+                  <code>{{ address() }}</code>
+                </dd>
                 @if (relayUrl()) {
                   <dt>{{ t('pair.relayLabel') }}</dt>
-                  <dd><code>{{ relayUrl() }}</code></dd>
+                  <dd>
+                    <code>{{ relayUrl() }}</code>
+                  </dd>
                 }
                 <dt>{{ t('pair.agentKey') }}</dt>
                 <dd>
@@ -90,32 +104,52 @@ function keyFingerprint(key: string): string {
               <form (ngSubmit)="connect()">
                 @if (!linkCode()) {
                   <p class="muted" [innerHTML]="t('pair.codeHelp')"></p>
-                  <input name="code" [ngModel]="codeInput()" (ngModelChange)="codeInput.set($event)" placeholder="ABCDE-23456" [attr.aria-label]="t('pair.codeLabel')" autocomplete="off" autocapitalize="characters" />
+                  <input
+                    name="code"
+                    [ngModel]="codeInput()"
+                    (ngModelChange)="codeInput.set($event)"
+                    placeholder="ABCDE-23456"
+                    [attr.aria-label]="t('pair.codeLabel')"
+                    autocomplete="off"
+                    autocapitalize="characters"
+                  />
                 }
                 <ion-button type="submit" expand="block">{{ t('pair.confirm') }}</ion-button>
               </form>
-              <ion-button fill="clear" expand="block" (click)="cancel()">{{ t('common.cancel') }}</ion-button>
+              <ion-button fill="clear" expand="block" (click)="cancel()">{{
+                t('common.cancel')
+              }}</ion-button>
             }
             @case ('keyChanged') {
               <h1 class="display warn">{{ t('pair.keyChangedTitle') }}</h1>
               <p>{{ t('pair.keyChangedText', { name: vm().existingName }) }}</p>
               <dl class="facts">
                 <dt>{{ t('pair.addressLabel') }}</dt>
-                <dd><code>{{ address() }}</code></dd>
+                <dd>
+                  <code>{{ address() }}</code>
+                </dd>
                 <dt>{{ t('pair.oldKey') }}</dt>
-                <dd><code class="fingerprint">{{ vm().existingFingerprint }}</code></dd>
+                <dd>
+                  <code class="fingerprint">{{ vm().existingFingerprint }}</code>
+                </dd>
                 <dt>{{ t('pair.newKey') }}</dt>
-                <dd><code class="fingerprint">{{ vm().fingerprint }}</code></dd>
+                <dd>
+                  <code class="fingerprint">{{ vm().fingerprint }}</code>
+                </dd>
               </dl>
               <ion-button expand="block" (click)="cancel()">{{ t('common.cancel') }}</ion-button>
-              <ion-button fill="clear" color="danger" expand="block" (click)="replace()">{{ t('pair.replace') }}</ion-button>
+              <ion-button fill="clear" color="danger" expand="block" (click)="replace()">{{
+                t('pair.replace')
+              }}</ion-button>
             }
             @case ('failed') {
               <h1 class="display">{{ t('pair.failed') }}</h1>
               <p>{{ error() }}</p>
               <p class="muted">{{ address() }}</p>
               @if (vm().fingerprint) {
-                <p class="muted">{{ t('pair.agentKey') }} <code>{{ vm().fingerprint }}</code></p>
+                <p class="muted">
+                  {{ t('pair.agentKey') }} <code>{{ vm().fingerprint }}</code>
+                </p>
               }
               <ion-button (click)="retry()">{{ t('pair.retry') }}</ion-button>
               <ion-button fill="clear" (click)="cancel()">{{ t('common.cancel') }}</ion-button>
@@ -237,7 +271,12 @@ export class PairPage {
     });
   }
 
-  private async start(url: string | undefined, code: string | undefined, key: string | undefined, relay: string | undefined): Promise<void> {
+  private async start(
+    url: string | undefined,
+    code: string | undefined,
+    key: string | undefined,
+    relay: string | undefined,
+  ): Promise<void> {
     const generation = ++this.generation;
     this.state.set('checking');
     this.error.set('');
@@ -249,7 +288,9 @@ export class PairPage {
     this.linkCode.set(!!code);
     this.agentKey.set(key && keyFingerprint(key) ? key : '');
     // Never fetch an unpinned key through a relay: the relay is only for a key the link itself carries.
-    this.relayUrl.set(this.agentKey() && relay && relayUrlAllowed(relay) ? relay.replace(/\/+$/, '') : '');
+    this.relayUrl.set(
+      this.agentKey() && relay && relayUrlAllowed(relay) ? relay.replace(/\/+$/, '') : '',
+    );
     await this.clusters.loaded;
     try {
       // This page's own agent: asking it for its key reaches nobody new, and the fingerprint can be shown before pairing.
@@ -275,7 +316,12 @@ export class PairPage {
       this.state.set('confirm');
       return;
     }
-    const check = checkPairing(this.clusters.clusters(), this.address(), this.name(), this.agentKey());
+    const check = checkPairing(
+      this.clusters.clusters(),
+      this.address(),
+      this.name(),
+      this.agentKey(),
+    );
     this.check.set(check);
     this.state.set(check.kind === 'keyChanged' && !this.replacing() ? 'keyChanged' : 'confirm');
   }
@@ -317,7 +363,13 @@ export class PairPage {
           this.state.set('confirm');
           return;
         }
-        pairing = await this.client.pair(this.address(), this.agentKey(), this.codeInput(), deviceName(navigator.userAgent, this.language.translator().t('common.device')), this.relayUrl() || undefined);
+        pairing = await this.client.pair(
+          this.address(),
+          this.agentKey(),
+          this.codeInput(),
+          deviceName(navigator.userAgent, this.language.translator().t('common.device')),
+          this.relayUrl() || undefined,
+        );
         this.pairing.set(pairing);
         this.codeInput.set('');
       }
@@ -327,7 +379,9 @@ export class PairPage {
       await this.router.navigate(['/c', saved.id], { replaceUrl: true });
     } catch (err) {
       this.error.set(describeError(err, this.language.translator()));
-      this.state.set(this.pairing() ? 'failed' : this.agentKey() || this.linkCode() ? 'confirm' : 'failed');
+      this.state.set(
+        this.pairing() ? 'failed' : this.agentKey() || this.linkCode() ? 'confirm' : 'failed',
+      );
     }
   }
 
@@ -346,7 +400,13 @@ export class PairPage {
     }
     const old = check.existing;
     const saved = await this.clusters.save(
-      { ...connection, id: old.id, name: this.name() || old.name, ...(old.widgetOff ? { widgetOff: true } : {}), ...(old.relayOff ? { relayOff: true } : {}) },
+      {
+        ...connection,
+        id: old.id,
+        name: this.name() || old.name,
+        ...(old.widgetOff ? { widgetOff: true } : {}),
+        ...(old.relayOff ? { relayOff: true } : {}),
+      },
       { replaceKeys: true },
     );
     this.status.forget(old.id);

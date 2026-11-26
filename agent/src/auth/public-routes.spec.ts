@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
 import { DemoAgent, startDemoAgent } from '../testing/demo-agent';
 
 /** The only routes anyone on the network may call. Adding one here is a security decision. */
@@ -17,7 +18,12 @@ describe('every route is guarded unless marked public (fail closed)', () => {
   it('marks exactly the known public routes as public', () => {
     const all = agent.app.routes;
     expect(all.length).toBeGreaterThan(20);
-    expect(all.filter((r) => r.public).map((r) => `${r.method} ${r.path}`).sort()).toEqual([...PUBLIC].sort());
+    expect(
+      all
+        .filter((r) => r.public)
+        .map((r) => `${r.method} ${r.path}`)
+        .sort(),
+    ).toEqual([...PUBLIC].sort());
   });
 
   it('answers 401 E2E_REQUIRED on the public port on every other route, even with the principal header', async () => {

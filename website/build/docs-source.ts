@@ -5,6 +5,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { routeForFile, slugForFile } from './doc-paths.ts';
 
 export const WEBSITE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -114,7 +115,10 @@ export function buildNav(files: string[], titleOf: (file: string) => string): Na
           return [own];
         }
         decisions.forEach((d) => listed.add(d));
-        return [own, ...decisions.map((d) => entry(d, `${DECISION.exec(d)![1]} ${titleOf(d).replace(/^\d{4}:\s*/, '')}`))];
+        return [
+          own,
+          ...decisions.map((d) => entry(d, `${DECISION.exec(d)![1]} ${titleOf(d).replace(/^\d{4}:\s*/, '')}`)),
+        ];
       }),
   }));
   const rest = files.filter((f) => !listed.has(f));

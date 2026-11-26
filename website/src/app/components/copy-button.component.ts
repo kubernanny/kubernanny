@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, inject, input, signal } from '@angular/core';
-import { IconComponent } from './icon.component';
+
 import { copyText } from '../core/clipboard';
+import { IconComponent } from './icon.component';
 
 @Component({
   selector: 'kn-copy-button',
@@ -28,7 +29,10 @@ import { copyText } from '../core/clipboard';
       color: var(--ink-2);
       font: 600 0.8125rem/1 var(--font-body);
       cursor: pointer;
-      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      transition:
+        color 0.15s,
+        border-color 0.15s,
+        background 0.15s;
     }
     .copy:hover {
       color: var(--ink);

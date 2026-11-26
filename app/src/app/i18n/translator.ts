@@ -1,7 +1,7 @@
 import { de } from './de';
-import { Dictionary, PluralKey, TranslationKey, flatten } from './dictionary';
+import { Dictionary, flatten, PluralKey, TranslationKey } from './dictionary';
 import { en } from './en';
-import { LOCALE, Lang } from './lang';
+import { Lang, LOCALE } from './lang';
 
 export const DICTIONARIES: Record<Lang, Dictionary> = { de, en };
 
@@ -23,7 +23,11 @@ export interface Translator {
 
 /** Same placeholder syntax as Transloco (`{{ name }}`), so one text works in templates and in code. */
 export function interpolate(text: string, params?: Params): string {
-  return params ? text.replace(/\{\{\s*(\w+)\s*\}\}/g, (all, name: string) => (name in params ? String(params[name]) : all)) : text;
+  return params
+    ? text.replace(/\{\{\s*(\w+)\s*\}\}/g, (all, name: string) =>
+        name in params ? String(params[name]) : all,
+      )
+    : text;
 }
 
 const cache = new Map<Lang, Translator>();
@@ -37,7 +41,11 @@ export function translatorFor(lang: Lang): Translator {
       lang,
       locale: LOCALE[lang],
       t: (key, params) => interpolate(texts[key] ?? key, params),
-      n: (key, count, params) => interpolate(texts[`${key}.${rules.select(count) === 'one' ? 'one' : 'other'}`] ?? key, { ...params, count }),
+      n: (key, count, params) =>
+        interpolate(texts[`${key}.${rules.select(count) === 'one' ? 'one' : 'other'}`] ?? key, {
+          ...params,
+          count,
+        }),
     };
     cache.set(lang, translator);
   }

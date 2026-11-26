@@ -6,7 +6,7 @@
 import { corsHeaders, parseRoute } from '../../src/core/http';
 import { parseLimits } from '../../src/core/limits';
 import { AgentObjectCore, AgentObjectState, HibernatableSocket, refuse, stringVars } from './agent-object';
-import { TokenLimiterCore, TokenLimiterNamespace, durableTokenGate } from './token-limiter';
+import { durableTokenGate, TokenLimiterCore, TokenLimiterNamespace } from './token-limiter';
 
 export interface Env {
   AGENTS: DurableObjectNamespace;
@@ -48,14 +48,20 @@ export class AgentObject {
   private readonly core: AgentObjectCore;
 
   constructor(state: DurableObjectState, env: Env) {
-    this.core = new AgentObjectCore(state as unknown as AgentObjectState, env, {
-      newSocketPair: () => {
-        const pair = new WebSocketPair();
-        return [pair[0], pair[1] as unknown as HibernatableSocket];
+    this.core = new AgentObjectCore(
+      state as unknown as AgentObjectState,
+      env,
+      {
+        newSocketPair: () => {
+          const pair = new WebSocketPair();
+          return [pair[0], pair[1] as unknown as HibernatableSocket];
+        },
+        autoResponse: (req, res) => new WebSocketRequestResponsePair(req, res),
+        upgradeResponse: (client) => new Response(null, { status: 101, webSocket: client as WebSocket }),
       },
-      autoResponse: (req, res) => new WebSocketRequestResponsePair(req, res),
-      upgradeResponse: (client) => new Response(null, { status: 101, webSocket: client as WebSocket }),
-    }, undefined, env.TOKENS ? durableTokenGate(env.TOKENS as unknown as TokenLimiterNamespace) : undefined);
+      undefined,
+      env.TOKENS ? durableTokenGate(env.TOKENS as unknown as TokenLimiterNamespace) : undefined,
+    );
   }
 
   fetch(request: Request): Promise<Response> {

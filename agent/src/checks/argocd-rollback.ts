@@ -75,7 +75,13 @@ export function shortRevision(revision: string): string {
 
 /** Same repository and the same path or chart; the target revision may differ (that is the point). */
 function sameSource(a: ArgoSource | undefined, b: ArgoSource): boolean {
-  return a !== undefined && typeof a.repoURL === 'string' && a.repoURL === b.repoURL && (a.path ?? '') === (b.path ?? '') && (a.chart ?? '') === (b.chart ?? '');
+  return (
+    a !== undefined &&
+    typeof a.repoURL === 'string' &&
+    a.repoURL === b.repoURL &&
+    (a.path ?? '') === (b.path ?? '') &&
+    (a.chart ?? '') === (b.chart ?? '')
+  );
 }
 
 /** Why the app as a whole cannot be rolled back by Kubernanny, or null. */
@@ -115,7 +121,10 @@ function entryRefusal(app: ArgoApplication, entry: ArgoHistoryEntry | undefined)
 }
 
 /** The history entry the route rolls back to, or why not. */
-export function rollbackTarget(app: ArgoApplication, id: number): { revision: string; entry: ArgoHistoryEntry } | { refusal: RollbackRefusal } {
+export function rollbackTarget(
+  app: ArgoApplication,
+  id: number,
+): { revision: string; entry: ArgoHistoryEntry } | { refusal: RollbackRefusal } {
   const refusal = appRefusal(app);
   if (refusal) {
     return { refusal };
@@ -140,19 +149,35 @@ export function rollbackApps(apps: ArgoApplication[]): RollbackApp[] {
     const source = app.spec!.source!;
     const currentRevision = app.status?.sync?.revision;
     const entries = (app.status?.history ?? [])
-      .filter((h): h is ArgoHistoryEntry & { id: number; revision: string } => Number.isSafeInteger(h.id) && h.sources === undefined && sameSource(h.source, source) && plausibleRevision(h.revision, source))
+      .filter(
+        (h): h is ArgoHistoryEntry & { id: number; revision: string } =>
+          Number.isSafeInteger(h.id) &&
+          h.sources === undefined &&
+          sameSource(h.source, source) &&
+          plausibleRevision(h.revision, source),
+      )
       .sort((a, b) => b.id - a.id)
       .slice(0, MAX_ENTRIES)
-      .map((h) => ({ id: h.id, revision: h.revision, short: shortRevision(h.revision), ...(typeof h.deployedAt === 'string' ? { deployedAt: h.deployedAt } : {}), current: h.revision === currentRevision }));
+      .map((h) => ({
+        id: h.id,
+        revision: h.revision,
+        short: shortRevision(h.revision),
+        ...(typeof h.deployedAt === 'string' ? { deployedAt: h.deployedAt } : {}),
+        current: h.revision === currentRevision,
+      }));
     if (!entries.some((e) => !e.current)) {
       continue;
     }
     out.push({
       namespace: app.metadata.namespace ?? 'argocd',
       app: app.metadata.name,
-      ...(typeof currentRevision === 'string' && plausibleRevision(currentRevision, source) ? { current: shortRevision(currentRevision) } : {}),
+      ...(typeof currentRevision === 'string' && plausibleRevision(currentRevision, source)
+        ? { current: shortRevision(currentRevision) }
+        : {}),
       entries,
     });
   }
-  return out.sort((a, b) => a.app.localeCompare(b.app, 'en') || a.namespace.localeCompare(b.namespace, 'en')).slice(0, MAX_APPS);
+  return out
+    .sort((a, b) => a.app.localeCompare(b.app, 'en') || a.namespace.localeCompare(b.namespace, 'en'))
+    .slice(0, MAX_APPS);
 }

@@ -1,7 +1,13 @@
 import { t } from '../../i18n/text';
 import { CoreCheck } from '../module';
 import { ModuleContext, ModuleResult } from '../types';
-import { HOST_LEVEL_COMPONENTS, SYSTEM_NAMESPACES, SecurityPod, cronJobTemplatePods, evaluateSecurity } from './evaluate';
+import {
+  cronJobTemplatePods,
+  evaluateSecurity,
+  HOST_LEVEL_COMPONENTS,
+  SecurityPod,
+  SYSTEM_NAMESPACES,
+} from './evaluate';
 
 /** Security posture from the pod specs the run already read: no extra API calls, no extra RBAC. */
 export class SecurityCheck extends CoreCheck {
@@ -20,7 +26,9 @@ export class SecurityCheck extends CoreCheck {
       }
     }
     const hostLevel = new Set(
-      (ctx.detected ?? []).filter((d) => HOST_LEVEL_COMPONENTS.has(d.entry.id)).flatMap((d) => d.workloads.map((w) => `${w.namespace}/${w.kind}/${w.name}`)),
+      (ctx.detected ?? [])
+        .filter((d) => HOST_LEVEL_COMPONENTS.has(d.entry.id))
+        .flatMap((d) => d.workloads.map((w) => `${w.namespace}/${w.kind}/${w.name}`)),
     );
     const systemNamespaces = new Set([...SYSTEM_NAMESPACES, ...ctx.config.securitySystemNamespaces]);
     const pods = [...(ctx.inv.pods as SecurityPod[]), ...cronJobTemplatePods(ctx.inv.cronjobs)];

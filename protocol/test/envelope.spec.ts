@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_CHUNK, PROLOGUE, VERSION, openRequest, peekEphemeral, ProtocolError, sealRequest, validPath } from '../src/envelope.js';
-import { Initiator, concat, generateKeyPair } from '../src/noise.js';
+
+import {
+  MAX_CHUNK,
+  openRequest,
+  peekEphemeral,
+  PROLOGUE,
+  ProtocolError,
+  sealRequest,
+  validPath,
+  VERSION,
+} from '../src/envelope.js';
 import { fingerprint, fromBase64Url, parsePublicKey, toBase64Url } from '../src/keys.js';
+import { concat, generateKeyPair, Initiator } from '../src/noise.js';
 
 const json = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
 const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
@@ -18,10 +28,20 @@ describe('envelope', () => {
   it('carries a request and its answer', () => {
     const device = generateKeyPair();
     const agent = generateKeyPair();
-    const sealed = sealRequest(device, agent.publicKey, { method: 'POST', path: '/actions/restart', body: { issue: 'x', index: 0 }, time: 1234 });
+    const sealed = sealRequest(device, agent.publicKey, {
+      method: 'POST',
+      path: '/actions/restart',
+      body: { issue: 'x', index: 0 },
+      time: 1234,
+    });
     const opened = openRequest(agent, sealed.body);
     expect(opened.devicePublicKey).toEqual(device.publicKey);
-    expect(opened.request).toEqual({ method: 'POST', path: '/actions/restart', body: { issue: 'x', index: 0 }, time: 1234 });
+    expect(opened.request).toEqual({
+      method: 'POST',
+      path: '/actions/restart',
+      body: { issue: 'x', index: 0 },
+      time: 1234,
+    });
     const answer = sealed.open(opened.respond(201, json({ done: 'ok' }), 5678));
     expect(answer.status).toBe(201);
     expect(answer.time).toBe(5678);
@@ -32,14 +52,30 @@ describe('envelope', () => {
     const device = generateKeyPair();
     const agent = generateKeyPair();
     const sealed = sealRequest(device, agent.publicKey, { method: 'GET', path: '/status', time: 1, language: 'en' });
-    expect(openRequest(agent, sealed.body).request).toEqual({ method: 'GET', path: '/status', time: 1, language: 'en' });
+    expect(openRequest(agent, sealed.body).request).toEqual({
+      method: 'GET',
+      path: '/status',
+      time: 1,
+      language: 'en',
+    });
     // A newer app may know more languages: the request still goes through, without one.
-    const raw = (wire: unknown) => concat(Uint8Array.of(VERSION), new Initiator(device, agent.publicKey, PROLOGUE).writeMessage1(json(wire)));
-    expect(openRequest(agent, raw({ m: 'GET', p: '/status', t: 1, l: 'fr' })).request).toEqual({ method: 'GET', path: '/status', time: 1 });
-    expect(openRequest(agent, raw({ m: 'GET', p: '/status', t: 1, l: 7 })).request).toEqual({ method: 'GET', path: '/status', time: 1 });
+    const raw = (wire: unknown) =>
+      concat(Uint8Array.of(VERSION), new Initiator(device, agent.publicKey, PROLOGUE).writeMessage1(json(wire)));
+    expect(openRequest(agent, raw({ m: 'GET', p: '/status', t: 1, l: 'fr' })).request).toEqual({
+      method: 'GET',
+      path: '/status',
+      time: 1,
+    });
+    expect(openRequest(agent, raw({ m: 'GET', p: '/status', t: 1, l: 7 })).request).toEqual({
+      method: 'GET',
+      path: '/status',
+      time: 1,
+    });
     expect(openRequest(agent, raw({ m: 'GET', p: '/status', t: 1, l: 'de' })).request.language).toBe('de');
     // The sending side only sends what it knows.
-    expect(() => sealRequest(device, agent.publicKey, { method: 'GET', path: '/status', time: 1, language: 'fr' as 'en' })).toThrow(ProtocolError);
+    expect(() =>
+      sealRequest(device, agent.publicKey, { method: 'GET', path: '/status', time: 1, language: 'fr' as 'en' }),
+    ).toThrow(ProtocolError);
   });
 
   it('splits large bodies into frames and joins them again', () => {
@@ -106,15 +142,35 @@ describe('envelope', () => {
   });
 
   it('accepts only routable paths', () => {
-    for (const ok of ['/status', '/history?hours=24', '/devices/0b6f5a4e-0d4e-4a37-9d73-2d5f6f1c1e0b', '/logs?issue=pods%2Fdefault&index=0']) {
+    for (const ok of [
+      '/status',
+      '/history?hours=24',
+      '/devices/0b6f5a4e-0d4e-4a37-9d73-2d5f6f1c1e0b',
+      '/logs?issue=pods%2Fdefault&index=0',
+    ]) {
       expect(validPath(ok)).toBe(true);
     }
-    for (const bad of ['status', '//evil', '/../healthz', '/a/./b', '/%2e%2e/x', '/a%2fb', '/a b', '/x#y', '/a\\b', '/' + 'a'.repeat(2048)]) {
+    for (const bad of [
+      'status',
+      '//evil',
+      '/../healthz',
+      '/a/./b',
+      '/%2e%2e/x',
+      '/a%2fb',
+      '/a b',
+      '/x#y',
+      '/a\\b',
+      '/' + 'a'.repeat(2048),
+    ]) {
       expect(validPath(bad)).toBe(false);
     }
     const agent = generateKeyPair();
-    expect(() => sealRequest(generateKeyPair(), agent.publicKey, { method: 'GET', path: '/../x', time: 0 })).toThrow(ProtocolError);
-    expect(() => sealRequest(generateKeyPair(), agent.publicKey, { method: 'PUT' as 'GET', path: '/x', time: 0 })).toThrow(ProtocolError);
+    expect(() => sealRequest(generateKeyPair(), agent.publicKey, { method: 'GET', path: '/../x', time: 0 })).toThrow(
+      ProtocolError,
+    );
+    expect(() =>
+      sealRequest(generateKeyPair(), agent.publicKey, { method: 'PUT' as 'GET', path: '/x', time: 0 }),
+    ).toThrow(ProtocolError);
   });
 });
 

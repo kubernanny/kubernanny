@@ -6,10 +6,11 @@
  * 'unsafe-inline'), and fails the build if any route did not prerender.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, renameSync, rmSync, writeFileSync, readdirSync, rmdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { NOT_FOUND_ROUTE, allRoutes, sitemapRoutes } from '../build/routes.ts';
+
 import { WEBSITE_ROOT } from '../build/docs-source.ts';
+import { allRoutes, NOT_FOUND_ROUTE, sitemapRoutes } from '../build/routes.ts';
 
 export const OUT_DIR = join(WEBSITE_ROOT, 'dist', 'analog', 'public');
 const SITE_URL = 'https://kubernanny.app';
@@ -80,7 +81,12 @@ function main(): void {
     }
   }
 
-  pinInlineScripts(allRoutes().filter((r) => r !== NOT_FOUND_ROUTE).map((r) => join(OUT_DIR, htmlFileFor(r))).concat(join(OUT_DIR, '404.html')));
+  pinInlineScripts(
+    allRoutes()
+      .filter((r) => r !== NOT_FOUND_ROUTE)
+      .map((r) => join(OUT_DIR, htmlFileFor(r)))
+      .concat(join(OUT_DIR, '404.html')),
+  );
 
   const today = new Date().toISOString().slice(0, 10);
   const urls = sitemapRoutes()

@@ -1,8 +1,25 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { IonButton, IonButtons, IonContent, IonHeader, IonSpinner, IonTitle, IonToolbar, ModalController } from '@ionic/angular/standalone';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
+import {
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonSpinner,
+  IonTitle,
+  IonToolbar,
+  ModalController,
+} from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
-import { AgentClient, describeError } from '../core/agent-client.service';
+
 import { ClusterConfig, Logs } from '../core/agent.model';
+import { AgentClient, describeError } from '../core/agent-client.service';
 import { LanguageService } from '../i18n/language.service';
 import { Translator } from '../i18n/translator';
 
@@ -20,7 +37,11 @@ export function parseLog(text: string): LogLine[] {
     .map((line) => {
       const m = /^(\d{4}-\d{2}-\d{2}T(\d{2}:\d{2}:\d{2}))\S*\s(.*)$/.exec(line);
       const body = m ? m[3] : line;
-      const level = /\b(error|fatal|panic|exception|failed)\b/i.test(body) ? 'error' : /\b(warn|warning)\b/i.test(body) ? 'warn' : 'plain';
+      const level = /\b(error|fatal|panic|exception|failed)\b/i.test(body)
+        ? 'error'
+        : /\b(warn|warning)\b/i.test(body)
+          ? 'warn'
+          : 'plain';
       return { time: m ? m[2] : '', text: body, level };
     });
 }
@@ -29,7 +50,12 @@ const LOG_LINES = 300;
 
 /** "pod-x, Container app, der Lauf vor dem letzten Absturz, letzte 300 Zeilen": where the lines come from. */
 export function logSource(logs: Logs, tr: Translator): string {
-  return [logs.pod, logs.container ? tr.t('logs.container', { name: logs.container }) : null, logs.previous ? tr.t('logs.previousRun') : null, tr.t('logs.lastLines', { count: LOG_LINES })]
+  return [
+    logs.pod,
+    logs.container ? tr.t('logs.container', { name: logs.container }) : null,
+    logs.previous ? tr.t('logs.previousRun') : null,
+    tr.t('logs.lastLines', { count: LOG_LINES }),
+  ]
     .filter(Boolean)
     .join(', ');
 }
@@ -37,7 +63,16 @@ export function logSource(logs: Logs, tr: Translator): string {
 @Component({
   selector: 'app-logs',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonContent, IonSpinner],
+  imports: [
+    TranslocoDirective,
+    IonHeader,
+    IonToolbar,
+    IonTitle,
+    IonButtons,
+    IonButton,
+    IonContent,
+    IonSpinner,
+  ],
   template: `
     <ng-container *transloco="let t">
       <ion-header>

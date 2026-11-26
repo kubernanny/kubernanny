@@ -1,6 +1,6 @@
 import { t } from '../i18n/text';
-import { Issue } from './types';
 import { Pod, podReady } from './pods.check';
+import { Issue } from './types';
 
 /**
  * etcd as RKE2 and kubeadm run it: one static pod per server node in
@@ -25,7 +25,10 @@ export function evaluateEtcd(pods: Pod[]): Issue[] | null {
       check: 'etcd',
       severity: ready < quorum ? 'critical' : 'warning',
       title: ready < quorum ? t('etcd.noQuorum.title', { ready, total }) : t('etcd.memberDown.title', { ready, total }),
-      cause: ready < quorum ? t('etcd.noQuorum.cause', { ready, total, quorum, names }) : t('etcd.memberDown.cause', { names, spare: ready - quorum }),
+      cause:
+        ready < quorum
+          ? t('etcd.noQuorum.cause', { ready, total, quorum, names })
+          : t('etcd.memberDown.cause', { names, spare: ready - quorum }),
       actions: down.slice(0, 2).map((p) => ({
         type: 'logs' as const,
         namespace: p.metadata.namespace ?? 'kube-system',

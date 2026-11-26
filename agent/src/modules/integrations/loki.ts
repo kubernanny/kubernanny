@@ -1,9 +1,9 @@
 import { Detected } from '../../discovery/discovery';
-import { Integration } from '../module';
 import { raw, t } from '../../i18n/text';
+import { bytes, decimal } from '../format';
+import { Integration } from '../module';
 import { ModuleContext, ModuleResult, Stat } from '../types';
 import { str } from '../untrusted';
-import { bytes, decimal } from '../format';
 
 export class LokiIntegration extends Integration {
   readonly id = 'loki';
@@ -16,7 +16,9 @@ export class LokiIntegration extends Integration {
     }
     const ready = (str(await l.text('/ready').catch((e: Error) => e.message), 200) ?? '').trim();
     const ok = ready === 'ready';
-    const stats: Stat[] = [{ label: t('stat.ready'), value: ok ? t('common.yes') : ready.slice(0, 60), tone: ok ? 'ok' : 'warning' }];
+    const stats: Stat[] = [
+      { label: t('stat.ready'), value: ok ? t('common.yes') : ready.slice(0, 60), tone: ok ? 'ok' : 'warning' },
+    ];
     if (ctx.prom) {
       const [rate, bytesRate, errors] = await Promise.all([
         ctx.prom.scalar('sum(rate(loki_distributor_lines_received_total[5m]))').catch(() => null),
@@ -35,7 +37,18 @@ export class LokiIntegration extends Integration {
       }
     }
     return {
-      issues: ok ? [] : [{ id: 'loki/ready', check: 'loki', severity: 'warning', title: t('loki.notReady.title'), cause: raw(ready), actions: [] }],
+      issues: ok
+        ? []
+        : [
+            {
+              id: 'loki/ready',
+              check: 'loki',
+              severity: 'warning',
+              title: t('loki.notReady.title'),
+              cause: raw(ready),
+              actions: [],
+            },
+          ],
       stats,
       summary: ok ? t('loki.summary.ok') : t('loki.summary.notReady'),
     };

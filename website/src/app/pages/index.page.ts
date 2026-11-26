@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { componentGroups } from 'virtual:kubernanny-components';
+
 import { SITE } from '../../site.config';
 import { SeoService } from '../core/seo.service';
 import { FaqComponent } from '../landing/faq.component';
@@ -34,7 +35,15 @@ const SOFTWARE_APPLICATION = {
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HeroComponent, InstallComponent, FeaturesComponent, ShowcaseComponent, SecurityComponent, FaqComponent, SupportComponent],
+  imports: [
+    HeroComponent,
+    InstallComponent,
+    FeaturesComponent,
+    ShowcaseComponent,
+    SecurityComponent,
+    FaqComponent,
+    SupportComponent,
+  ],
   template: `
     <kn-hero />
     <kn-install />

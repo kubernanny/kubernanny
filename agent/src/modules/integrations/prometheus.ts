@@ -1,9 +1,9 @@
-import { Integration } from '../module';
 import { Issue } from '../../checks/types';
 import { raw, t } from '../../i18n/text';
-import { DetailRow, ModuleContext, ModuleResult, Stat } from '../types';
 import { listSection, prometheusDetails, sections } from '../details';
 import { bytes } from '../format';
+import { Integration } from '../module';
+import { DetailRow, ModuleContext, ModuleResult, Stat } from '../types';
 
 export class PrometheusIntegration extends Integration {
   readonly id = 'prometheus';
@@ -35,11 +35,17 @@ export class PrometheusIntegration extends Integration {
       check: 'prometheus',
       severity: 'warning',
       title: t('prometheus.down.title', { job, n: instances.length }),
-      cause: t('prometheus.down.cause', { targets: `${instances.slice(0, 3).join(', ')}${instances.length > 3 ? ' …' : ''}` }),
+      cause: t('prometheus.down.cause', {
+        targets: `${instances.slice(0, 3).join(', ')}${instances.length > 3 ? ' …' : ''}`,
+      }),
       actions: [],
     }));
     const stats: Stat[] = [
-      { label: t('prometheus.stat.reachable'), value: `${total - down.length}/${total}`, tone: down.length === 0 ? 'ok' : 'warning' },
+      {
+        label: t('prometheus.stat.reachable'),
+        value: `${total - down.length}/${total}`,
+        tone: down.length === 0 ? 'ok' : 'warning',
+      },
       { label: t('prometheus.stat.jobs'), value: String(up.length) },
     ];
     if (series !== null) {
@@ -50,10 +56,18 @@ export class PrometheusIntegration extends Integration {
     }
     const facts: DetailRow[] = [];
     if (retention !== null && retention > 0) {
-      facts.push({ name: t('prometheus.fact.retention'), value: t('prometheus.fact.days', { n: Math.round(retention / 86_400) }), tone: 'muted' });
+      facts.push({
+        name: t('prometheus.fact.retention'),
+        value: t('prometheus.fact.days', { n: Math.round(retention / 86_400) }),
+        tone: 'muted',
+      });
     }
     if (ruleFailures !== null) {
-      facts.push({ name: t('prometheus.fact.ruleFailures'), value: String(Math.round(ruleFailures)), tone: ruleFailures >= 1 ? 'warning' : 'ok' });
+      facts.push({
+        name: t('prometheus.fact.ruleFailures'),
+        value: String(Math.round(ruleFailures)),
+        tone: ruleFailures >= 1 ? 'warning' : 'ok',
+      });
     }
     const downRows: DetailRow[] = downTargets.map((x) => ({
       name: x.instance,
@@ -63,9 +77,20 @@ export class PrometheusIntegration extends Integration {
     }));
     const details = [
       ...sections(listSection(t('prometheus.detail.down'), downRows)),
-      ...prometheusDetails(up.map((u) => ({ job: u.metric.job ?? '?', total: u.value })), byJob),
+      ...prometheusDetails(
+        up.map((u) => ({ job: u.metric.job ?? '?', total: u.value })),
+        byJob,
+      ),
       ...sections(facts.length ? { title: t('prometheus.detail.storage'), kind: 'list', rows: facts } : null),
     ];
-    return { issues, stats, details, summary: down.length === 0 ? t('prometheus.summary.ok', { n: total }) : t('prometheus.summary.down', { down: down.length, total }) };
+    return {
+      issues,
+      stats,
+      details,
+      summary:
+        down.length === 0
+          ? t('prometheus.summary.ok', { n: total })
+          : t('prometheus.summary.down', { down: down.length, total }),
+    };
   }
 }

@@ -16,7 +16,9 @@ export class StartupReadError extends Error {
     readonly what: string,
     readonly cause: unknown,
   ) {
-    super(`cannot read ${what} (${cause instanceof Error ? cause.message : String(cause)}); giving up so the pod restarts`);
+    super(
+      `cannot read ${what} (${cause instanceof Error ? cause.message : String(cause)}); giving up so the pod restarts`,
+    );
   }
 }
 
@@ -31,7 +33,11 @@ export class StartupReadError extends Error {
  * Plain async code, no framework: whoever starts the services awaits their
  * init and ends the process when it throws.
  */
-export async function readAtStartup<T>(what: string, read: () => Promise<T>, options: StartupReadOptions = {}): Promise<T | null> {
+export async function readAtStartup<T>(
+  what: string,
+  read: () => Promise<T>,
+  options: StartupReadOptions = {},
+): Promise<T | null> {
   const delays = options.delaysMs ?? STARTUP_READ_DELAYS_MS;
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   for (let attempt = 0; ; attempt++) {

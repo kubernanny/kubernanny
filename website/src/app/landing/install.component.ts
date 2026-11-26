@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+
 import { SITE } from '../../site.config';
 import { CopyButtonComponent } from '../components/copy-button.component';
 import { IconComponent } from '../components/icon.component';
@@ -19,7 +20,9 @@ import { qrModules } from './pseudo-qr';
           configure for the defaults.
         </p>
         <div class="other">
-          <p><strong>Other ways:</strong> <code>kubectl apply -f deploy/install.yaml</code>, or an Argo CD Application.</p>
+          <p>
+            <strong>Other ways:</strong> <code>kubectl apply -f deploy/install.yaml</code>, or an Argo CD Application.
+          </p>
           <p>
             <strong>No ingress?</strong> Port-forward the service: the agent serves the full web UI itself.
             <a routerLink="/docs/configuration">Configuration</a>
@@ -52,7 +55,9 @@ import { qrModules } from './pseudo-qr';
               </div>
               <pre><code><span class="prompt" aria-hidden="true">$ </span>{{ vm.logs }}</code></pre>
             </div>
-            <p class="note">It prints a QR code, a one-time pairing code (valid for an hour) and the agent's public key.</p>
+            <p class="note">
+              It prints a QR code, a one-time pairing code (valid for an hour) and the agent's public key.
+            </p>
           </div>
         </li>
         <li class="step">
@@ -90,7 +95,11 @@ export class InstallComponent {
   protected readonly vm = {
     helm: SITE.install.helm,
     // Shown over three lines; the copy button copies the one-line command.
-    helmLines: ['helm install kubernanny \\', 'oci://ghcr.io/kubernanny/charts/kubernanny \\', '-n kubernanny --create-namespace'],
+    helmLines: [
+      'helm install kubernanny \\',
+      'oci://ghcr.io/kubernanny/charts/kubernanny \\',
+      '-n kubernanny --create-namespace',
+    ],
     logs: SITE.install.logs,
     demo: SITE.install.demo,
     qr: qrModules(),

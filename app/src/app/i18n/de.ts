@@ -7,7 +7,8 @@
  */
 export const de = {
   app: {
-    description: 'Kubernanny zeigt, ob in deinem Kubernetes-Cluster alles okay ist, und wenn nicht, was genau.',
+    description:
+      'Kubernanny zeigt, ob in deinem Kubernetes-Cluster alles okay ist, und wenn nicht, was genau.',
     titles: {
       clusters: 'Cluster',
       cluster: 'Cluster',
@@ -52,8 +53,10 @@ export const de = {
       logsTitle: 'Logs öffnen',
       logsNote: 'Dort steht ein QR-Code mit Adresse, Einmal-Code und dem Schlüssel des Agents.',
       scanTitle: 'Code scannen',
-      scanNote: 'Mit der Handykamera, oder den Link öffnen. Kubernanny verbindet sich und zeigt den Zustand.',
-      scanNoteInApp: 'Hier mit „QR-Code scannen“, oder den Link öffnen. Kubernanny verbindet sich und zeigt den Zustand.',
+      scanNote:
+        'Mit der Handykamera, oder den Link öffnen. Kubernanny verbindet sich und zeigt den Zustand.',
+      scanNoteInApp:
+        'Hier mit „QR-Code scannen“, oder den Link öffnen. Kubernanny verbindet sich und zeigt den Zustand.',
       manual: 'Adresse und Code selbst eingeben',
       tryDemo: 'Erst mal die Demo ansehen',
     },
@@ -65,7 +68,8 @@ export const de = {
     settings: 'Einstellungen des Clusters',
     demoTitle: 'Erfundene Daten, Aktionen werden nur gespielt.',
     viaRelay: 'über Relay',
-    viaRelayTitle: 'Der Agent ist gerade nicht direkt erreichbar. Die Verbindung läuft verschlüsselt über das Relay, das nichts davon lesen kann.',
+    viaRelayTitle:
+      'Der Agent ist gerade nicht direkt erreichbar. Die Verbindung läuft verschlüsselt über das Relay, das nichts davon lesen kann.',
     share: 'Zustand teilen',
     shareTitle: 'Zustand von {{cluster}}',
     copiedReport: 'Zustand in die Zwischenablage kopiert.',
@@ -100,7 +104,8 @@ export const de = {
     failing: 'Cluster seit {{since}} nicht lesbar, Stand {{when}}',
     failingMoment: 'kurzem',
     connecting: 'Verbinde…',
-    update: 'Agent {{agent}} ist älter als diese App ({{app}}). Ein Update bringt neue Prüfungen und Korrekturen.',
+    update:
+      'Agent {{agent}} ist älter als diese App ({{app}}). Ein Update bringt neue Prüfungen und Korrekturen.',
     kpi: {
       nodesReady: 'Nodes bereit',
       allThere: 'alle da',
@@ -148,34 +153,51 @@ export const de = {
     logsBeforeCrash: 'Logs vor dem Absturz',
     backup: 'Backup starten',
     backupConfirm: 'Ein Base-Backup von {{cluster}} starten?',
-    restartHint: 'Hilft, wenn du die Ursache schon behoben hast, z.\u00a0B. ein Secret geändert oder eine Abhängigkeit ist wieder da.',
-    restartConfirmChanged: '{{kind}} {{target}} neu starten? Die Pods werden nacheinander ersetzt und lesen dabei die geänderte ConfigMap {{configMap}}.',
+    restartHint:
+      'Hilft, wenn du die Ursache schon behoben hast, z.\u00a0B. ein Secret geändert oder eine Abhängigkeit ist wieder da.',
+    restartConfirmChanged:
+      '{{kind}} {{target}} neu starten? Die Pods werden nacheinander ersetzt und lesen dabei die geänderte ConfigMap {{configMap}}.',
     uncordon: 'Wieder freigeben',
-    uncordonConfirm: 'Node {{node}} wieder für neue Pods öffnen? Kubernanny setzt spec.unschedulable auf false, wie kubectl uncordon. Laufende Pods bleiben, wo sie sind.',
+    uncordonConfirm:
+      'Node {{node}} wieder für neue Pods öffnen? Kubernanny setzt spec.unschedulable auf false, wie kubectl uncordon. Laufende Pods bleiben, wo sie sind.',
     rerun: 'Erneut ausführen',
-    rerunCronConfirm: 'Einen neuen Job aus der Vorlage von CronJob {{target}} starten, wie kubectl create job --from=cronjob? Der nächste geplante Lauf kommt trotzdem.',
-    rerunJobConfirm: 'Job {{target}} erneut ausführen? Kubernanny legt eine Kopie mit demselben Pod-Template an. Der fehlgeschlagene Job bleibt zum Nachlesen stehen.',
+    rerunCronConfirm:
+      'Einen neuen Job aus der Vorlage von CronJob {{target}} starten, wie kubectl create job --from=cronjob? Der nächste geplante Lauf kommt trotzdem.',
+    rerunJobConfirm:
+      'Job {{target}} erneut ausführen? Kubernanny legt eine Kopie mit demselben Pod-Template an. Der fehlgeschlagene Job bleibt zum Nachlesen stehen.',
     reconcile: 'Jetzt abgleichen',
-    reconcileFluxConfirm: 'Flux bitten, {{kind}} {{target}} sofort abzugleichen? Kubernanny setzt die Annotation reconcile.fluxcd.io/requestedAt, wie flux reconcile.',
-    reconcileExternalSecretConfirm: 'ExternalSecret {{target}} sofort neu vom Secret-Store holen? Kubernanny setzt die Annotation force-sync.',
-    reconcileInfisicalConfirm: 'InfisicalStaticSecret {{target}} sofort neu von Infisical holen? Kubernanny setzt eine Annotation, auf die der Operator abgleicht.',
+    reconcileFluxConfirm:
+      'Flux bitten, {{kind}} {{target}} sofort abzugleichen? Kubernanny setzt die Annotation reconcile.fluxcd.io/requestedAt, wie flux reconcile.',
+    reconcileExternalSecretConfirm:
+      'ExternalSecret {{target}} sofort neu vom Secret-Store holen? Kubernanny setzt die Annotation force-sync.',
+    reconcileInfisicalConfirm:
+      'InfisicalStaticSecret {{target}} sofort neu von Infisical holen? Kubernanny setzt eine Annotation, auf die der Operator abgleicht.',
     renew: 'Neu ausstellen',
-    renewConfirm: 'Zertifikat {{target}} jetzt neu ausstellen lassen, wie cmctl renew? cert-manager fordert beim Aussteller ein neues an.',
+    renewConfirm:
+      'Zertifikat {{target}} jetzt neu ausstellen lassen, wie cmctl renew? cert-manager fordert beim Aussteller ein neues an.',
     cleanup: 'Aufräumen',
     cleanupConfirm: {
       one: 'Einen beendeten Pod in {{namespace}} löschen? Er läuft nicht mehr. Seine Logs gehen damit verloren.',
-      other: '{{count}} beendete Pods in {{namespace}} löschen? Nur Pods, die nicht mehr laufen. Ihre Logs gehen damit verloren.',
+      other:
+        '{{count}} beendete Pods in {{namespace}} löschen? Nur Pods, die nicht mehr laufen. Ihre Logs gehen damit verloren.',
     },
     forceDelete: 'Sofort entfernen',
-    forceDeleteConfirm: 'Pod {{target}} sofort entfernen, ohne auf Node {{node}} zu warten? Nur sicher, wenn der Node wirklich aus ist: läuft er doch noch, kann der Pod zweimal laufen.',
-    forceDeleteConfirmStatefulSet: 'Pod {{target}} sofort entfernen, ohne auf Node {{node}} zu warten? Nur sicher, wenn der Node wirklich aus ist: läuft er doch noch, startet StatefulSet {{statefulSet}} denselben Pod ein zweites Mal, und beide schreiben auf dasselbe Volume.',
-    longhornBackupConfirm: 'Jetzt ein Backup von {{volume}} anlegen? Kubernanny erstellt einen Longhorn-Snapshot und lädt ihn ins Backup-Ziel hoch.',
-    veleroBackupConfirm: 'Jetzt ein Backup aus dem Zeitplan {{schedule}} starten, wie velero backup create --from-schedule?',
+    forceDeleteConfirm:
+      'Pod {{target}} sofort entfernen, ohne auf Node {{node}} zu warten? Nur sicher, wenn der Node wirklich aus ist: läuft er doch noch, kann der Pod zweimal laufen.',
+    forceDeleteConfirmStatefulSet:
+      'Pod {{target}} sofort entfernen, ohne auf Node {{node}} zu warten? Nur sicher, wenn der Node wirklich aus ist: läuft er doch noch, startet StatefulSet {{statefulSet}} denselben Pod ein zweites Mal, und beide schreiben auf dasselbe Volume.',
+    longhornBackupConfirm:
+      'Jetzt ein Backup von {{volume}} anlegen? Kubernanny erstellt einen Longhorn-Snapshot und lädt ihn ins Backup-Ziel hoch.',
+    veleroBackupConfirm:
+      'Jetzt ein Backup aus dem Zeitplan {{schedule}} starten, wie velero backup create --from-schedule?',
     terminate: 'Sync abbrechen',
-    terminateConfirm: 'Den laufenden Sync von {{app}} abbrechen, wie argocd app terminate-op? Schon angewendete Änderungen bleiben, der Rest wird nicht mehr ausgerollt.',
+    terminateConfirm:
+      'Den laufenden Sync von {{app}} abbrechen, wie argocd app terminate-op? Schon angewendete Änderungen bleiben, der Rest wird nicht mehr ausgerollt.',
     expand: 'Auf {{size}} vergrößern',
-    expandConfirm: 'PVC {{target}} von {{from}} auf {{to}} vergrößern? Ein Volume lässt sich danach nicht mehr verkleinern.',
-    expandConfirmTemplate: 'PVC {{target}} von {{from}} auf {{to}} vergrößern? Ein Volume lässt sich danach nicht mehr verkleinern. Die volumeClaimTemplates von StatefulSet {{template}} bleiben bei der alten Größe: passe sie dort an, wo du es verwaltest.',
+    expandConfirm:
+      'PVC {{target}} von {{from}} auf {{to}} vergrößern? Ein Volume lässt sich danach nicht mehr verkleinern.',
+    expandConfirmTemplate:
+      'PVC {{target}} von {{from}} auf {{to}} vergrößern? Ein Volume lässt sich danach nicht mehr verkleinern. Die volumeClaimTemplates von StatefulSet {{template}} bleiben bei der alten Größe: passe sie dort an, wo du es verwaltest.',
   },
   overview: {
     showWarnings: 'Alle {{n}} Warnungen zeigen',
@@ -188,28 +210,33 @@ export const de = {
     calmTitle: 'Nichts zu tun.',
     calmText: 'Jede Prüfung ist grün. Kubernanny meldet sich, sobald sich das ändert.',
     hints: 'Hinweise',
-    hintsIntro: 'Kein Fehler, nur gut zu wissen. Hinweise färben die Ampel nicht und lösen keine Benachrichtigung aus.',
+    hintsIntro:
+      'Kein Fehler, nur gut zu wissen. Hinweise färben die Ampel nicht und lösen keine Benachrichtigung aus.',
     silenced: 'Stummgeschaltet',
-    silencedIntro: 'Bekannt und für eine Weile stumm. Zählt nicht für die Ampel, bis die Zeit um ist.',
+    silencedIntro:
+      'Bekannt und für eine Weile stumm. Zählt nicht für die Ampel, bis die Zeit um ist.',
     usage: 'Auslastung',
     range: 'Zeitraum',
     historyFromAgent:
       'Verlauf aus metrics-server, seit der Agent läuft. Mit Prometheus im Cluster zeigt Kubernanny auch Netz, Neustarts und etcd über Tage.',
     loadingHistory: 'Lade Verlauf…',
-    noHistory: 'Noch kein Verlauf. Ohne Prometheus und metrics-server misst Kubernanny keine Auslastung.',
+    noHistory:
+      'Noch kein Verlauf. Ohne Prometheus und metrics-server misst Kubernanny keine Auslastung.',
     keyFigures: 'Kennzahlen',
     attention: 'Auffällige Dienste',
   },
   services: {
     instances: { one: '{{count}} Instanz', other: '{{count}} Instanzen' },
     versionsDiffer: 'Versionen verschieden',
-    intro: 'Kubernanny erkennt Komponenten an ihren Container-Images, egal wie sie installiert wurden. Tippe auf eine für Details.',
+    intro:
+      'Kubernanny erkennt Komponenten an ihren Container-Images, egal wie sie installiert wurden. Tippe auf eine für Details.',
   },
   pendingSync: {
     card: { one: '{{count}} App bereit zum Sync', other: '{{count}} Apps bereit zum Sync' },
     cardHint: 'Änderungen im Repo, die noch nicht ausgerollt sind. Kein Fehler.',
     title: 'Bereit zum Sync',
-    intro: 'Argo CD-Apps mit manuellem Sync, in deren Repo eine Änderung liegt. Gesund und ohne Fehler: ausrollen, wenn es passt.',
+    intro:
+      'Argo CD-Apps mit manuellem Sync, in deren Repo eine Änderung liegt. Gesund und ohne Fehler: ausrollen, wenn es passt.',
     into: 'nach {{namespace}}',
     project: 'Projekt {{project}}',
     since: 'wartet seit dem letzten Sync {{when}}',
@@ -221,7 +248,8 @@ export const de = {
     new: 'neu',
     prune: 'wird entfernt',
     sync: 'Synchronisieren',
-    noSync: 'Sync aus der App ist ausgeschaltet. Synchronisiere in Argo CD (UI oder argocd app sync) oder schalte die Aktion in den Einstellungen ein.',
+    noSync:
+      'Sync aus der App ist ausgeschaltet. Synchronisiere in Argo CD (UI oder argocd app sync) oder schalte die Aktion in den Einstellungen ein.',
   },
   countdown: {
     seconds: '{{n}} s',
@@ -326,7 +354,8 @@ export const de = {
   },
   events: {
     workload: 'gehört zu {{kind}} {{name}}',
-    intro: 'Warnungen, die Kubernetes selbst gemeldet hat. Sie verschwinden nach etwa einer Stunde aus dem Cluster.',
+    intro:
+      'Warnungen, die Kubernetes selbst gemeldet hat. Sie verschwinden nach etwa einer Stunde aus dem Cluster.',
     none: 'Keine Warnungen. Kubernetes ist zufrieden.',
     repeated: '{{count}}× seit {{span}}',
     merged: '{{count}} Kubernetes-Events zusammengefasst',
@@ -348,7 +377,8 @@ export const de = {
     showLess: 'Weniger zeigen',
   },
   backups: {
-    intro: 'Wann zuletzt gesichert wurde. Älter als {{hours}} h gilt als überfällig, doppelt so alt als kritisch.',
+    intro:
+      'Wann zuletzt gesichert wurde. Älter als {{hours}} h gilt als überfällig, doppelt so alt als kritisch.',
     allGood: { one: 'Das Backup ist aktuell.', other: 'Alle {{count}} Backups sind aktuell.' },
     needAttention: '{{bad}} von {{count}} brauchen Aufmerksamkeit.',
     cnpg: 'Datenbanken',
@@ -370,9 +400,11 @@ export const de = {
     unreachable: 'Nicht erreichbar',
     unchecked: 'Noch nicht geprüft',
     unprotected: 'Ohne Backup',
-    orphaned: 'Das Backup-Ziel hält außerdem {{backups}} Backups von {{volumes}}, die inzwischen gelöscht sind. Sie schützen hier nichts; lösch sie in Longhorn, wenn du sie nicht brauchst.',
+    orphaned:
+      'Das Backup-Ziel hält außerdem {{backups}} Backups von {{volumes}}, die inzwischen gelöscht sind. Sie schützen hier nichts; lösch sie in Longhorn, wenn du sie nicht brauchst.',
     volumes: { one: '{{count}} Volume', other: '{{count}} Volumes' },
-    unprotectedIntro: 'Für diese Datenbanken und Volumes ist kein Backup eingerichtet. Nicht jedes braucht eins, aber prüf, ob das so gewollt ist.',
+    unprotectedIntro:
+      'Für diese Datenbanken und Volumes ist kein Backup eingerichtet. Nicht jedes braucht eins, aber prüf, ob das so gewollt ist.',
     database: 'Datenbank',
     volume: 'Volume',
     emptyTitle: 'Keine Backups gefunden',
@@ -398,17 +430,22 @@ export const de = {
     disable: 'Push ausschalten',
     test: 'Test-Push senden',
     on: 'Für dieses Gerät eingeschaltet.',
-    relayNotNow: 'Für dieses Gerät eingeschaltet. Das Relay stellt gerade keine Pushes zu; Nachrichten gehen raus, sobald es das wieder tut.',
+    relayNotNow:
+      'Für dieses Gerät eingeschaltet. Das Relay stellt gerade keine Pushes zu; Nachrichten gehen raus, sobald es das wieder tut.',
     locked: 'In der Installation abgeschaltet (notifications.appPush.enabled). Nur dort änderbar.',
-    noRelay: 'Dafür braucht der Agent ein Relay (relay.enabled in Helm), der einzige Weg, auf dem ein Push den Cluster verlässt.',
-    denied: 'Kubernanny darf keine Mitteilungen zeigen. Erlaube sie in den Systemeinstellungen und versuch es noch einmal.',
+    noRelay:
+      'Dafür braucht der Agent ein Relay (relay.enabled in Helm), der einzige Weg, auf dem ein Push den Cluster verlässt.',
+    denied:
+      'Kubernanny darf keine Mitteilungen zeigen. Erlaube sie in den Systemeinstellungen und versuch es noch einmal.',
     enabled: 'Push ist eingeschaltet. Eine Testnachricht ist unterwegs.',
     disabled: 'Push ist für dieses Gerät ausgeschaltet.',
     testSent: 'Test-Push gesendet.',
     testFailed: 'Das Relay hat den Test-Push nicht angenommen ({{outcome}}).',
     markerTitle: 'Dein Zeichen für Pushes',
-    markerExplain: 'Jeder Push, den Kubernanny auf diesem Gerät öffnet, beginnt mit diesem Zeichen. Ein Push ohne dein Zeichen kommt nicht von deinem Cluster. Drei zufällige Emoji sind schwer zu erraten; zieh gern neu oder nimm ein eigenes Wort mit mindestens drei Zeichen.',
-    markerDevice: 'Das Zeichen bleibt auf diesem Gerät. Es geht nie an den Agenten, das Relay oder Google und gilt für alle Cluster auf diesem Gerät.',
+    markerExplain:
+      'Jeder Push, den Kubernanny auf diesem Gerät öffnet, beginnt mit diesem Zeichen. Ein Push ohne dein Zeichen kommt nicht von deinem Cluster. Drei zufällige Emoji sind schwer zu erraten; zieh gern neu oder nimm ein eigenes Wort mit mindestens drei Zeichen.',
+    markerDevice:
+      'Das Zeichen bleibt auf diesem Gerät. Es geht nie an den Agenten, das Relay oder Google und gilt für alle Cluster auf diesem Gerät.',
     markerOwn: 'Eigenes Wort',
     markerOwnPlaceholder: '3 bis 12 Zeichen',
     markerPreview: 'So sieht ein Push dann aus:',
@@ -416,17 +453,21 @@ export const de = {
     markerSave: 'Dieses Zeichen nehmen',
     markerInvalid: 'Drei bis 12 Zeichen, ohne Zeilenumbruch.',
     markerAnother: 'Neu ziehen',
-    markerOn: 'Dein Zeichen: {{marker}}. Ein Push ohne dieses Zeichen kommt nicht von deinem Cluster.',
-    markerMissing: 'Noch kein Zeichen gewählt. Damit erkennst du, ob ein Push von deinem Cluster kommt oder von jemand anderem.',
+    markerOn:
+      'Dein Zeichen: {{marker}}. Ein Push ohne dieses Zeichen kommt nicht von deinem Cluster.',
+    markerMissing:
+      'Noch kein Zeichen gewählt. Damit erkennst du, ob ein Push von deinem Cluster kommt oder von jemand anderem.',
     markerChange: 'Zeichen ändern',
     markerChoose: 'Zeichen wählen',
     markerSaved: 'Zeichen auf diesem Gerät gespeichert.',
     deadmanTitle: 'Warnen, wenn der Agent schweigt',
-    deadmanHint: 'Antwortet Kubernanny nicht mehr (Cluster oder Agent ausgefallen), schickt das Relay diesem Telefon eine Nachricht, die es versiegelt hinterlegt hat und nicht lesen kann.',
+    deadmanHint:
+      'Antwortet Kubernanny nicht mehr (Cluster oder Agent ausgefallen), schickt das Relay diesem Telefon eine Nachricht, die es versiegelt hinterlegt hat und nicht lesen kann.',
     deadmanAfter: 'Nach so langer Stille',
     deadmanMinutes: '{{n}} Min.',
     deadmanLocked: 'In der Installation abgeschaltet (notifications.appPush.deadman.enabled).',
-    deadmanRelay: 'Das Relay unterstützt das noch nicht. Sobald es das tut, geht es ohne weiteres Zutun.',
+    deadmanRelay:
+      'Das Relay unterstützt das noch nicht. Sobald es das tut, geht es ohne weiteres Zutun.',
     deadmanOn: 'Ein: eine Nachricht nach {{n}} Minuten Stille.',
     deadmanOff: 'Für dieses Gerät aus.',
   },
@@ -453,7 +494,8 @@ export const de = {
     silence: 'Stumm',
     unsilence: 'Wieder melden',
     silenceHeader: 'Stummschalten',
-    silenceText: 'Es bleibt sichtbar, ändert aber die Ampel nicht und schickt keine Benachrichtigungen. Wird daraus ein Ausfall, meldet es sich wieder. Deine Benachrichtigungskanäle erfahren, dass du es stummgeschaltet hast.',
+    silenceText:
+      'Es bleibt sichtbar, ändert aber die Ampel nicht und schickt keine Benachrichtigungen. Wird daraus ein Ausfall, meldet es sich wieder. Deine Benachrichtigungskanäle erfahren, dass du es stummgeschaltet hast.',
     hour: '1 Stunde',
     hours8: '8 Stunden',
     day: '1 Tag',
@@ -463,7 +505,8 @@ export const de = {
     accept: 'Trifft nicht zu',
     acceptLabel: '{{id}} als nicht zutreffend markieren',
     acceptHeader: '{{id}} trifft hier nicht zu',
-    acceptText: 'Zählt für diese Komponente nicht mehr, bis die Zeit um ist. Deine Benachrichtigungskanäle erfahren davon.',
+    acceptText:
+      'Zählt für diese Komponente nicht mehr, bis die Zeit um ist. Deine Benachrichtigungskanäle erfahren davon.',
     days30: '30 Tage',
     days90: '90 Tage',
     days365: '1 Jahr',
@@ -489,14 +532,16 @@ export const de = {
     acceptedMeta: '{{name}}, bis {{until}}, von {{by}}',
     unaccept: 'Wieder zählen',
     rollbackTitle: 'Zurückrollen',
-    rollbackHint: 'Apps mit manuellem Sync. Setzt eine App auf einen früher ausgerollten Stand zurück, auch wenn nichts falsch aussieht.',
+    rollbackHint:
+      'Apps mit manuellem Sync. Setzt eine App auf einen früher ausgerollten Stand zurück, auch wenn nichts falsch aussieht.',
     rollbackButton: 'Zurückrollen',
     rollbackNow: 'Jetzt ausgerollt: {{revision}}',
     rollbackSheet: '{{app}} zurückrollen',
     rollbackSheetText: 'Frühere Stände, der neueste zuerst.',
     rollbackChoice: '{{date}}, {{revision}}',
     rollbackConfirmTitle: '{{app}} zurückrollen?',
-    rollbackConfirm: '{{app}} geht von {{from}} zurück auf {{to}}. Der Cluster weicht danach von Git ab, bis du die Änderung dort mit einem Revert zurücknimmst.',
+    rollbackConfirm:
+      '{{app}} geht von {{from}} zurück auf {{to}}. Der Cluster weicht danach von Git ab, bis du die Änderung dort mit einem Revert zurücknimmst.',
     rollbackConfirmButton: 'Zurückrollen',
     keyFigures: 'Kennzahlen',
     showAll: 'Alle {{n}} zeigen',
@@ -526,15 +571,18 @@ export const de = {
     retry: 'Nochmal versuchen',
     checking: 'Lese den Pairing-Link…',
     confirmTitle: 'Mit diesem Agent koppeln?',
-    confirmLead: 'Pairing-Links kann jeder erstellen. Kopple nur, wenn du diesen Link selbst geöffnet hast und der Schlüssel unten der aus dem Log des Agents ist („Schlüssel des Agents: …“).',
+    confirmLead:
+      'Pairing-Links kann jeder erstellen. Kopple nur, wenn du diesen Link selbst geöffnet hast und der Schlüssel unten der aus dem Log des Agents ist („Schlüssel des Agents: …“).',
     nameLabel: 'Name',
     addressLabel: 'Adresse',
     relayLabel: 'Relay',
     keyLater: 'wird beim Fortfahren von der Adresse geholt (TLS bürgt dafür)',
-    alreadyPaired: '{{name}} ist mit diesem Schlüssel schon in der App. Erneutes Koppeln gibt diesem Gerät einen neuen Schlüssel dafür und entfernt den alten.',
+    alreadyPaired:
+      '{{name}} ist mit diesem Schlüssel schon in der App. Erneutes Koppeln gibt diesem Gerät einen neuen Schlüssel dafür und entfernt den alten.',
     confirm: 'Koppeln',
     keyChangedTitle: 'Der Schlüssel des Agents hat sich geändert',
-    keyChangedText: '{{name}} ist schon in der App, mit einem anderen Schlüssel. Wenn du den Agent nicht neu installiert oder seinen Schlüssel nicht selbst ersetzt hast, stammt dieser Link vielleicht von jemandem, der sich als dein Cluster ausgeben will. Brich ab und vergleiche den Schlüssel mit dem im Log des Agents.',
+    keyChangedText:
+      '{{name}} ist schon in der App, mit einem anderen Schlüssel. Wenn du den Agent nicht neu installiert oder seinen Schlüssel nicht selbst ersetzt hast, stammt dieser Link vielleicht von jemandem, der sich als dein Cluster ausgeben will. Brich ab und vergleiche den Schlüssel mit dem im Log des Agents.',
     oldKey: 'Schlüssel in der App:',
     newKey: 'Schlüssel im Link:',
     replace: 'Schlüssel trotzdem ersetzen',
@@ -543,8 +591,10 @@ export const de = {
       or: 'oder von Hand',
       title: 'QR-Code scannen',
       hint: 'Halte den QR-Code aus den Logs des Agents in den Rahmen.',
-      notPairing: 'Das ist kein Pairing-Code von Kubernanny. Scanne den QR-Code aus den Logs des Agents (kubectl -n kubernanny logs deploy/kubernanny).',
-      denied: 'Kubernanny darf die Kamera nicht nutzen. Erlaube es in den Einstellungen des Geräts, oder gib Adresse und Code von Hand ein.',
+      notPairing:
+        'Das ist kein Pairing-Code von Kubernanny. Scanne den QR-Code aus den Logs des Agents (kubectl -n kubernanny logs deploy/kubernanny).',
+      denied:
+        'Kubernanny darf die Kamera nicht nutzen. Erlaube es in den Einstellungen des Geräts, oder gib Adresse und Code von Hand ein.',
       preparing: 'Der Scanner wird gerade eingerichtet. Gleich nochmal versuchen.',
       failed: 'Die Kamera ließ sich nicht öffnen. Gib Adresse und Code von Hand ein.',
     },
@@ -558,7 +608,8 @@ export const de = {
     code: 'Pairing-Code',
     hintNew:
       'Adresse und Code stehen im Log des Agents: <code>kubectl -n kubernanny logs deploy/kubernanny</code>. Schneller und auch ohne https geht es mit dem QR-Code dort: Er enthält den Schlüssel des Agents.',
-    hintEdit: 'Die Adresse lässt sich ändern, etwa nach einem Umzug ins VPN: Die App erkennt den Agent an seinem Schlüssel, nicht an der Adresse.',
+    hintEdit:
+      'Die Adresse lässt sich ändern, etwa nach einem Umzug ins VPN: Die App erkennt den Agent an seinem Schlüssel, nicht an der Adresse.',
     connecting: 'Verbinde…',
     save: 'Verbinden und speichern',
     agent: 'Agent',
@@ -590,7 +641,8 @@ export const de = {
     noRelay:
       'Kein Relay eingerichtet. Für unterwegs ohne VPN am Agent <code>relay.enabled=true</code> setzen (Helm), dann erfährt die App die Adresse von selbst.',
     checks: 'Was geprüft wird',
-    checksHint: 'Tools wie Argo CD oder Longhorn, Aktionen und Benachrichtigungen einzeln ein- und ausschalten.',
+    checksHint:
+      'Tools wie Argo CD oder Longhorn, Aktionen und Benachrichtigungen einzeln ein- und ausschalten.',
     modules: 'Module und Aktionen',
     devices: 'Gekoppelte Geräte',
     devicesHint:
@@ -602,8 +654,10 @@ export const de = {
     newCode: 'Pairing-Code erzeugen',
     removeCluster: 'Cluster aus der App entfernen',
     revokeTitle: '{{name}} entfernen?',
-    revokeCurrent: 'Dieses Gerät verliert sofort den Zugriff auf den Cluster, und der Cluster wird aus der App entfernt.',
-    revokeOther: 'Das Gerät verliert sofort den Zugriff. Zum erneuten Koppeln braucht es einen neuen Pairing-Code.',
+    revokeCurrent:
+      'Dieses Gerät verliert sofort den Zugriff auf den Cluster, und der Cluster wird aus der App entfernt.',
+    revokeOther:
+      'Das Gerät verliert sofort den Zugriff. Zum erneuten Koppeln braucht es einen neuen Pairing-Code.',
     removeTitle: 'Cluster entfernen?',
     removeText: 'Nur aus der App. Der Agent im Cluster läuft weiter.',
   },
@@ -615,11 +669,14 @@ export const de = {
     coreTitle: 'Kubernetes',
     coreHint: 'Was immer geprüft wird, solange es an ist.',
     foundTitle: 'Erkannte Komponenten',
-    foundHint: 'Ausgeschaltet liest der Agent bei diesem Tool nichts mehr und zeigt es nicht an. Seine Pods prüft der Kubernetes-Check weiter.',
+    foundHint:
+      'Ausgeschaltet liest der Agent bei diesem Tool nichts mehr und zeigt es nicht an. Seine Pods prüft der Kubernetes-Check weiter.',
     actionsTitle: 'Aktionen',
-    actionsHint: 'Was die App am Cluster auslösen darf. Immer nur für ein offenes Problem, außer dem Zurückrollen in Argo CD: das gilt für jede App mit manuellem Sync und nur, wenn das Helm-Chart es erlaubt.',
+    actionsHint:
+      'Was die App am Cluster auslösen darf. Immer nur für ein offenes Problem, außer dem Zurückrollen in Argo CD: das gilt für jede App mit manuellem Sync und nur, wenn das Helm-Chart es erlaubt.',
     notificationsTitle: 'Benachrichtigungen',
-    notificationsHint: 'Pausiert gehen keine Nachrichten an ntfy oder Webhooks. Die App zeigt den Zustand weiter.',
+    notificationsHint:
+      'Pausiert gehen keine Nachrichten an ntfy oder Webhooks. Die App zeigt den Zustand weiter.',
     sendNotifications: 'Benachrichtigungen senden',
     sendNotificationsNote: 'Über die am Agent eingerichteten Kanäle.',
     missingTitle: 'Nicht gefunden',
@@ -629,9 +686,12 @@ export const de = {
   errors: {
     insecureTransport:
       'Ohne QR-Code nur über https:// (oder http://localhost per Port-Forward): Sonst ließe sich der Schlüssel des Agents unterwegs austauschen. Scanne den QR-Code aus dem Log, dann geht auch http.',
-    tampered: 'Die Antwort stammt nicht vom gekoppelten Agent oder wurde unterwegs verändert. Sie wurde verworfen.',
-    pairingCodeInvalid: 'Code falsch, abgelaufen oder schon benutzt. Neuer Code: kubectl -n kubernanny exec deploy/kubernanny -- node dist/cli.js pair',
-    deviceUnknown: 'Dieses Gerät ist am Agent nicht (mehr) gekoppelt. Neu koppeln mit einem Pairing-Code.',
+    tampered:
+      'Die Antwort stammt nicht vom gekoppelten Agent oder wurde unterwegs verändert. Sie wurde verworfen.',
+    pairingCodeInvalid:
+      'Code falsch, abgelaufen oder schon benutzt. Neuer Code: kubectl -n kubernanny exec deploy/kubernanny -- node dist/cli.js pair',
+    deviceUnknown:
+      'Dieses Gerät ist am Agent nicht (mehr) gekoppelt. Neu koppeln mit einem Pairing-Code.',
     actionDisabled: 'Diese Aktion ist in den Einstellungen des Clusters ausgeschaltet.',
     forbidden: 'Der Agent darf das nicht (RBAC). Im Helm-Chart rbac.allowActions prüfen.',
     unreachable: 'Agent nicht erreichbar. Bist du im VPN?',
@@ -643,13 +703,17 @@ export const de = {
     status: 'Agent antwortet mit {{status}}.',
     timeout: 'Agent antwortet nicht (Zeitüberschreitung).',
     unknown: 'Unbekannter Fehler.',
-    relayAgentOffline: 'Agent weder direkt noch über das Relay erreichbar. Läuft er, und ist er mit dem Relay verbunden?',
-    relayRateLimited: 'Das Relay begrenzt gerade die Anfragen an diesen Agent (faire Nutzung). Gleich nochmal versuchen.',
+    relayAgentOffline:
+      'Agent weder direkt noch über das Relay erreichbar. Läuft er, und ist er mit dem Relay verbunden?',
+    relayRateLimited:
+      'Das Relay begrenzt gerade die Anfragen an diesen Agent (faire Nutzung). Gleich nochmal versuchen.',
     relayTimeout: 'Der Agent antwortet über das Relay nicht rechtzeitig.',
     relayTooLarge: 'Die Anfrage ist zu groß für das Relay.',
     relayResponseTooLarge: 'Die Antwort ist zu groß für das Relay.',
-    relayFull: 'Das Relay ist gerade voll. Später nochmal versuchen oder ein eigenes Relay betreiben.',
-    pairingRateLimited: 'Zu viele Kopplungsversuche. Code prüfen und in ein paar Minuten nochmal versuchen.',
+    relayFull:
+      'Das Relay ist gerade voll. Später nochmal versuchen oder ein eigenes Relay betreiben.',
+    pairingRateLimited:
+      'Zu viele Kopplungsversuche. Code prüfen und in ein paar Minuten nochmal versuchen.',
   },
   demo: {
     device: 'Demo-Gerät',
@@ -659,7 +723,8 @@ export const de = {
     missing: 'Die Demo-Daten konnten nicht geladen werden.',
     issueGone: 'Das Problem besteht nicht mehr.',
     done: 'Demo: {{title}} ist behoben. In deinem Cluster würde der Agent das jetzt wirklich tun.',
-    rolledBack: 'Demo: {{app}} würde jetzt auf {{revision}} zurückgehen. Simuliert, nichts geändert.',
+    rolledBack:
+      'Demo: {{app}} würde jetzt auf {{revision}} zurückgehen. Simuliert, nichts geändert.',
   },
   widget: {
     title: 'Widget auf dem Home-Bildschirm',
@@ -667,11 +732,14 @@ export const de = {
     hint: 'Das Widget zeigt nur Name, Ampel, Zahl der Ausfälle und Warnungen, die größten Probleme und die Zeit der letzten Prüfung. Ausschalten löscht den Cluster sofort aus dem Widget.',
     updates: 'Es wird aktuell, wenn du die App öffnest oder ein Push von diesem Cluster ankommt.',
     quiet: 'Passiert nichts, bringt ein stiller Push etwa stündlich den Stand, nur mit Push.',
-    stale: 'Grau mit „Nicht aktuell“ heißt: seit {{hours}} Stunden nichts Neues. Öffne Kubernanny, dann stimmt es wieder.',
-    silent: 'Koralle mit „Agent antwortet nicht“: Das Relay hat die Warnung geschickt, dass der Agent schweigt. Sie verschwindet mit dem nächsten Stand aus dem Cluster.',
+    stale:
+      'Grau mit „Nicht aktuell“ heißt: seit {{hours}} Stunden nichts Neues. Öffne Kubernanny, dann stimmt es wieder.',
+    silent:
+      'Koralle mit „Agent antwortet nicht“: Das Relay hat die Warnung geschickt, dass der Agent schweigt. Sie verschwindet mit dem nächsten Stand aus dem Cluster.',
     pushOn: 'Push ist auf diesem Gerät an: Das Widget bleibt aktuell.',
     pushOff: 'Push ist auf diesem Gerät aus: Das Widget wird nur aktuell, wenn du die App öffnest.',
-    pushUnavailable: 'Push gibt es für diesen Cluster nicht: Das Widget wird nur aktuell, wenn du die App öffnest.',
+    pushUnavailable:
+      'Push gibt es für diesen Cluster nicht: Das Widget wird nur aktuell, wenn du die App öffnest.',
     turnOnPush: 'Push einschalten',
     allOffNote: 'Widgets sind für alle Cluster ausgeschaltet (in der Clusterliste).',
     allLabel: 'Widgets',

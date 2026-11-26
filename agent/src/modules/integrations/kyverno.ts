@@ -29,7 +29,10 @@ export function enforces(p: KyvernoPolicy): boolean {
 }
 
 /** How reports name a policy: its name, for a namespaced Policy also "<namespace>/<name>". */
-const policyKeys = (p: KyvernoPolicy) => [p.metadata.name, ...(p.metadata.namespace ? [`${p.metadata.namespace}/${p.metadata.name}`] : [])];
+const policyKeys = (p: KyvernoPolicy) => [
+  p.metadata.name,
+  ...(p.metadata.namespace ? [`${p.metadata.namespace}/${p.metadata.name}`] : []),
+];
 
 /**
  * Violations are the security posture, not an outage: one hint per policy
@@ -59,11 +62,16 @@ export function evaluateKyverno(reports: PolicyReport[], policies: KyvernoPolicy
       id: `kyverno/policy/${policy}`,
       check: 'kyverno',
       severity,
-      title: severity === 'warning' ? t('policy.errors.title', { policy, n: tally.error }) : t('policy.violations.title', { policy, n: tally.fail + tally.error }),
+      title:
+        severity === 'warning'
+          ? t('policy.errors.title', { policy, n: tally.error })
+          : t('policy.violations.title', { policy, n: tally.fail + tally.error }),
       cause: t('common.sentences', {
         parts: [
           ...(tally.fail ? [t('policy.violations.fail', { n: tally.fail })] : []),
-          ...(tally.error ? [t(enforced ? 'kyverno.errors.enforced' : 'policy.violations.error', { n: tally.error })] : []),
+          ...(tally.error
+            ? [t(enforced ? 'kyverno.errors.enforced' : 'policy.violations.error', { n: tally.error })]
+            : []),
           ...(tally.message ? [raw(tally.message.slice(0, 300))] : []),
         ],
       }),
@@ -74,7 +82,14 @@ export function evaluateKyverno(reports: PolicyReport[], policies: KyvernoPolicy
     const ready = condition(p.status?.conditions, 'Ready');
     if (enforces(p) && ready?.status === 'False') {
       const name = policyKeys(p).at(-1)!;
-      issues.push({ id: `kyverno/policy/${name}/not-ready`, check: 'kyverno', severity: 'warning', title: t('kyverno.notReady.title', { policy: name }), cause: rawOr(ready.message, t('kyverno.notReady.cause')), actions: [] });
+      issues.push({
+        id: `kyverno/policy/${name}/not-ready`,
+        check: 'kyverno',
+        severity: 'warning',
+        title: t('kyverno.notReady.title', { policy: name }),
+        cause: rawOr(ready.message, t('kyverno.notReady.cause')),
+        actions: [],
+      });
     }
   }
   return issues;
@@ -106,7 +121,11 @@ export class KyvernoIntegration extends Integration {
         { label: t('policy.stat.enforced'), value: String(allPolicies.filter(enforces).length) },
         { label: t('policy.stat.violating'), value: String(violating), tone: violating ? 'muted' : 'ok' },
       ],
-      summary: issues.find((i) => i.severity !== 'info')?.title ?? (violating ? t('policy.summary.violations', { n: violating }) : t('policy.summary.ok', { n: allPolicies.length })),
+      summary:
+        issues.find((i) => i.severity !== 'info')?.title ??
+        (violating
+          ? t('policy.summary.violations', { n: violating })
+          : t('policy.summary.ok', { n: allPolicies.length })),
     };
   }
 }

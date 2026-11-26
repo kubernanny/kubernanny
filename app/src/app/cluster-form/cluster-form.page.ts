@@ -1,11 +1,31 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  OnInit,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { AlertController, IonBackButton, IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonTitle, IonToolbar } from '@ionic/angular/standalone';
+import {
+  AlertController,
+  IonBackButton,
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonIcon,
+  IonTitle,
+  IonToolbar,
+} from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
-import { AgentClient, describeError, deviceName } from '../core/agent-client.service';
+
 import { AgentInfo } from '../core/agent.model';
+import { AgentClient, describeError, deviceName } from '../core/agent-client.service';
 import { ClusterStore } from '../core/cluster-store.service';
+import { PushRegistration } from '../core/push/push-registration.service';
 import { adoptedRelay } from '../core/relay-route';
 import { ScanPairing } from '../core/scan/scan-pairing.service';
 import { StatusStore } from '../core/status-store.service';
@@ -15,7 +35,6 @@ import { DevicesSectionComponent } from './devices-section.component';
 import { MaintenanceSectionComponent } from './maintenance-section.component';
 import { PairingSectionComponent } from './pairing-section.component';
 import { PushSectionComponent } from './push-section.component';
-import { PushRegistration } from '../core/push/push-registration.service';
 import { RelaySectionComponent } from './relay-section.component';
 import { WidgetSectionComponent } from './widget-section.component';
 
@@ -56,22 +75,50 @@ import { WidgetSectionComponent } from './widget-section.component';
       <ion-content class="ion-padding">
         <div class="wrap">
           @if (scanFirst()) {
-            <ion-button class="scan" expand="block" (click)="scan()"><ion-icon slot="start" name="qr-code-outline" />{{ t('pair.scan.button') }}</ion-button>
-            <p class="or"><span>{{ t('pair.scan.or') }}</span></p>
+            <ion-button class="scan" expand="block" (click)="scan()"
+              ><ion-icon slot="start" name="qr-code-outline" />{{
+                t('pair.scan.button')
+              }}</ion-button
+            >
+            <p class="or">
+              <span>{{ t('pair.scan.or') }}</span>
+            </p>
           }
           <form (ngSubmit)="save()">
             <label>
               <span>{{ t('form.name') }}</span>
-              <input name="name" [placeholder]="t('form.namePlaceholder')" [ngModel]="name()" (ngModelChange)="name.set($event)" />
+              <input
+                name="name"
+                [placeholder]="t('form.namePlaceholder')"
+                [ngModel]="name()"
+                (ngModelChange)="name.set($event)"
+              />
             </label>
             <label>
               <span>{{ t('form.url') }}</span>
-              <input name="url" type="url" inputmode="url" autocapitalize="off" required placeholder="https://kubernanny.example.com" [ngModel]="url()" (ngModelChange)="url.set($event)" />
+              <input
+                name="url"
+                type="url"
+                inputmode="url"
+                autocapitalize="off"
+                required
+                placeholder="https://kubernanny.example.com"
+                [ngModel]="url()"
+                (ngModelChange)="url.set($event)"
+              />
             </label>
             @if (isNew()) {
               <label>
                 <span>{{ t('form.code') }}</span>
-                <input name="code" autocapitalize="characters" autocomplete="off" required placeholder="ABCDE-23456" [ngModel]="code()" (ngModelChange)="code.set($event)" />
+                <input
+                  name="code"
+                  autocapitalize="characters"
+                  autocomplete="off"
+                  required
+                  placeholder="ABCDE-23456"
+                  [ngModel]="code()"
+                  (ngModelChange)="code.set($event)"
+                />
               </label>
               <p class="hint" [innerHTML]="t('form.hintNew')"></p>
             } @else {
@@ -81,7 +128,13 @@ import { WidgetSectionComponent } from './widget-section.component';
             @if (result(); as r) {
               <p [class]="r.ok ? 'ok' : 'error'">{{ r.text }}</p>
             }
-            <ion-button expand="block" type="submit" [fill]="unchanged() || scanFirst() ? 'outline' : 'solid'" [disabled]="testing()">{{ testing() ? t('form.connecting') : t('form.save') }}</ion-button>
+            <ion-button
+              expand="block"
+              type="submit"
+              [fill]="unchanged() || scanFirst() ? 'outline' : 'solid'"
+              [disabled]="testing()"
+              >{{ testing() ? t('form.connecting') : t('form.save') }}</ion-button
+            >
           </form>
 
           @if (info(); as i) {
@@ -94,7 +147,9 @@ import { WidgetSectionComponent } from './widget-section.component';
             <section>
               <h2>{{ t('form.checks') }}</h2>
               <p class="hint">{{ t('form.checksHint') }}</p>
-              <ion-button fill="outline" [routerLink]="modulesLink()">{{ t('form.modules') }}</ion-button>
+              <ion-button fill="outline" [routerLink]="modulesLink()">{{
+                t('form.modules')
+              }}</ion-button>
             </section>
 
             <app-push-section #pushSection [cluster]="saved()" />
@@ -102,7 +157,9 @@ import { WidgetSectionComponent } from './widget-section.component';
             <app-widget-section [cluster]="saved()" [push]="pushSection" />
             <app-devices-section [cluster]="saved()" (revokedSelf)="forget($event)" />
             <app-pairing-section [cluster]="saved()" />
-            <ion-button expand="block" fill="clear" color="danger" (click)="remove()">{{ t('form.removeCluster') }}</ion-button>
+            <ion-button expand="block" fill="clear" color="danger" (click)="remove()">{{
+              t('form.removeCluster')
+            }}</ion-button>
           }
         </div>
       </ion-content>
@@ -182,7 +239,12 @@ export class ClusterFormPage implements OnInit {
   /** An existing cluster with name and address as saved: saving is offered, not pressed on (outline, not filled). */
   readonly unchanged = computed(() => {
     const s = this.saved();
-    return !this.isNew() && s !== undefined && s.name === this.name().trim() && s.url === this.url().trim();
+    return (
+      !this.isNew() &&
+      s !== undefined &&
+      s.name === this.name().trim() &&
+      s.url === this.url().trim()
+    );
   });
 
   async ngOnInit(): Promise<void> {
@@ -223,12 +285,21 @@ export class ClusterFormPage implements OnInit {
       let saved;
       if (this.isNew()) {
         const { publicKey } = await this.client.identity(url);
-        const { cluster, ...connection } = await this.client.pair(url, publicKey, this.code(), deviceName(navigator.userAgent, this.language.translator().t('common.device')));
+        const { cluster, ...connection } = await this.client.pair(
+          url,
+          publicKey,
+          this.code(),
+          deviceName(navigator.userAgent, this.language.translator().t('common.device')),
+        );
         saved = await this.store.save({ ...connection, name: this.name().trim() || cluster });
       } else {
         const existing = this.store.find(this.id()!)!;
         const snapshot = await this.client.status({ ...existing, url });
-        saved = await this.store.save({ ...existing, url, name: this.name().trim() || snapshot.cluster });
+        saved = await this.store.save({
+          ...existing,
+          url,
+          name: this.name().trim() || snapshot.cluster,
+        });
       }
       void this.status.refresh(saved);
       await this.router.navigate(['/c', saved.id], { replaceUrl: true });

@@ -1,9 +1,10 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { inject, Injectable, signal } from '@angular/core';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { ModalController } from '@ionic/angular/standalone';
 
 /** What one scan came to. Only `text` carries anything; the caller decides whether it is a pairing link. */
-export type ScanOutcome = { kind: 'text'; text: string } | { kind: 'cancelled' | 'denied' | 'preparing' | 'failed' };
+export type ScanOutcome =
+  { kind: 'text'; text: string } | { kind: 'cancelled' | 'denied' | 'preparing' | 'failed' };
 
 /**
  * iOS: `@capacitor/barcode-scanner` (Ionic's plugin, a Swift package; ML Kit
@@ -11,7 +12,15 @@ export type ScanOutcome = { kind: 'text'; text: string } | { kind: 'cancelled' |
  * the QR library behind it never reach the bundle.
  */
 interface IosScannerPlugin {
-  scanBarcode(options: { hint: number; scanInstructions: string; scanButton: boolean; scanText: string; cameraDirection: number; scanOrientation: number; cancelButtonAccessibilityLabel?: string }): Promise<{ ScanResult: string }>;
+  scanBarcode(options: {
+    hint: number;
+    scanInstructions: string;
+    scanButton: boolean;
+    scanText: string;
+    cameraDirection: number;
+    scanOrientation: number;
+    cancelButtonAccessibilityLabel?: string;
+  }): Promise<{ ScanResult: string }>;
 }
 const iosScanner = registerPlugin<IosScannerPlugin>('CapacitorBarcodeScanner');
 /** Html5QrcodeSupportedFormats.QR_CODE, BACK camera, ADAPTIVE orientation in that plugin's numbering. */
@@ -27,7 +36,9 @@ const ANDROID_INSTALL_WAIT_MS = 30_000;
 
 /** Whether this browser can scan QR codes itself (BarcodeDetector with QR support, and a camera API). */
 export async function browserCanScan(win: Window = window): Promise<boolean> {
-  const detector = (win as unknown as { BarcodeDetector?: { getSupportedFormats?: () => Promise<string[]> } }).BarcodeDetector;
+  const detector = (
+    win as unknown as { BarcodeDetector?: { getSupportedFormats?: () => Promise<string[]> } }
+  ).BarcodeDetector;
   if (!detector?.getSupportedFormats || !win.navigator.mediaDevices?.getUserMedia) {
     return false;
   }
@@ -96,22 +107,32 @@ export class QrScanner {
       return { kind: 'text', text: ScanResult };
     } catch (err) {
       const code = String((err as { code?: unknown }).code ?? '');
-      return { kind: IOS_CANCELLED.test(code) ? 'cancelled' : IOS_DENIED.test(code) ? 'denied' : 'failed' };
+      return {
+        kind: IOS_CANCELLED.test(code) ? 'cancelled' : IOS_DENIED.test(code) ? 'denied' : 'failed',
+      };
     }
   }
 
   private async scanAndroid(): Promise<ScanOutcome> {
-    const { BarcodeScanner, BarcodeFormat, GoogleBarcodeScannerModuleInstallState } = await import('@capacitor-mlkit/barcode-scanning');
+    const { BarcodeScanner, BarcodeFormat, GoogleBarcodeScannerModuleInstallState } =
+      await import('@capacitor-mlkit/barcode-scanning');
     try {
       if (!(await BarcodeScanner.isGoogleBarcodeScannerModuleAvailable()).available) {
         const done = new Promise<boolean>((resolve) => {
           const timer = setTimeout(() => resolve(false), ANDROID_INSTALL_WAIT_MS);
-          void BarcodeScanner.addListener('googleBarcodeScannerModuleInstallProgress', ({ state }) => {
-            if (state === GoogleBarcodeScannerModuleInstallState.COMPLETED || state === GoogleBarcodeScannerModuleInstallState.FAILED || state === GoogleBarcodeScannerModuleInstallState.CANCELED) {
-              clearTimeout(timer);
-              resolve(state === GoogleBarcodeScannerModuleInstallState.COMPLETED);
-            }
-          });
+          void BarcodeScanner.addListener(
+            'googleBarcodeScannerModuleInstallProgress',
+            ({ state }) => {
+              if (
+                state === GoogleBarcodeScannerModuleInstallState.COMPLETED ||
+                state === GoogleBarcodeScannerModuleInstallState.FAILED ||
+                state === GoogleBarcodeScannerModuleInstallState.CANCELED
+              ) {
+                clearTimeout(timer);
+                resolve(state === GoogleBarcodeScannerModuleInstallState.COMPLETED);
+              }
+            },
+          );
         });
         await BarcodeScanner.installGoogleBarcodeScannerModule();
         const installed = await done;
@@ -124,11 +145,17 @@ export class QrScanner {
       const text = barcodes[0]?.rawValue;
       return text ? { kind: 'text', text } : { kind: 'cancelled' };
     } catch (err) {
-      return { kind: /cancel/i.test(String((err as Error).message ?? err)) ? 'cancelled' : 'failed' };
+      return {
+        kind: /cancel/i.test(String((err as Error).message ?? err)) ? 'cancelled' : 'failed',
+      };
     }
   }
 
-  private async scanWeb(labels: { title: string; hint: string; cancel: string }): Promise<ScanOutcome> {
+  private async scanWeb(labels: {
+    title: string;
+    hint: string;
+    cancel: string;
+  }): Promise<ScanOutcome> {
     const { WebQrScanModal } = await import('./web-qr-scan.modal');
     const modal = await this.modals.create({ component: WebQrScanModal, componentProps: labels });
     await modal.present();

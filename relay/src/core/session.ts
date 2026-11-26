@@ -1,5 +1,6 @@
-import { RegistrationChallenge, fromBase64Url, randomBytes, toBase64Url } from '@kubernanny/protocol';
-import { RegistrationOutcome, checkRegistration } from './registration';
+import { fromBase64Url, randomBytes, RegistrationChallenge, toBase64Url } from '@kubernanny/protocol';
+
+import { checkRegistration, RegistrationOutcome } from './registration';
 
 /**
  * The registration state of one agent connection, shared by the Node relay
@@ -42,7 +43,12 @@ export function proveSession(session: Session, message: Uint8Array, now: number)
   }
   const challenge = new RegistrationChallenge(fromBase64Url(session.nonce), fromBase64Url(session.secret));
   const outcome = checkRegistration(challenge, message, session.agentId, session.origin);
-  return { session: outcome.ok ? { phase: 'registered', agentId: session.agentId, since: session.since, registeredAt: now } : endSession(session), outcome };
+  return {
+    session: outcome.ok
+      ? { phase: 'registered', agentId: session.agentId, since: session.since, registeredAt: now }
+      : endSession(session),
+    outcome,
+  };
 }
 
 /** Drops the challenge and the registration: what a timed-out, failed, evicted or replaced connection keeps. */

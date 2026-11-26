@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { IssueView } from '../status/status.service';
+
 import { raw } from '../i18n/text';
-import { EpisodeLog, MAX_EPISODES, MAX_EPISODES_PER_ISSUE, digestDue, formatDigest, weekKey } from './digest';
+import { IssueView } from '../status/status.service';
+import { digestDue, EpisodeLog, formatDigest, MAX_EPISODES, MAX_EPISODES_PER_ISSUE, weekKey } from './digest';
 
 const hour = 3_600_000;
-const issue = (id: string, severity: IssueView['severity'], since: number): IssueView => ({ id, check: 'pods', module: 'pods', severity, title: raw(`Problem ${id}`), cause: raw(''), actions: [], since: new Date(since).toISOString() });
+const issue = (id: string, severity: IssueView['severity'], since: number): IssueView => ({
+  id,
+  check: 'pods',
+  module: 'pods',
+  severity,
+  title: raw(`Problem ${id}`),
+  cause: raw(''),
+  actions: [],
+  since: new Date(since).toISOString(),
+});
 
 describe('weekly report', () => {
   it('follows episodes from run to run, escalations included, hints never', () => {
@@ -13,7 +23,17 @@ describe('weekly report', () => {
     log.record([issue('a', 'critical', 0)], 2 * hour);
     log.record([], 5 * hour);
     const week = log.lastWeek(6 * hour);
-    expect(week).toEqual([{ id: 'a', title: raw('Problem a'), severity: 'critical', module: 'pods', start: 0, end: 5 * hour, silenced: false }]);
+    expect(week).toEqual([
+      {
+        id: 'a',
+        title: raw('Problem a'),
+        severity: 'critical',
+        module: 'pods',
+        start: 0,
+        end: 5 * hour,
+        silenced: false,
+      },
+    ]);
     // Ended episodes older than a week are forgotten.
     log.record([], 5 * hour + 8 * 24 * hour);
     expect(log.lastWeek(5 * hour + 8 * 24 * hour)).toEqual([]);
@@ -47,8 +67,24 @@ describe('weekly report', () => {
   it('writes the longest problems, or a calm line, and only counts in minimal mode', () => {
     const now = 10 * 24 * hour;
     const episodes = [
-      { id: 'a', title: raw('Backup überfällig'), severity: 'warning' as const, module: 'cnpg', start: now - 30 * hour, end: now - 2 * hour, silenced: false },
-      { id: 'b', title: raw('Node down'), severity: 'critical' as const, module: 'nodes', start: now - 3 * hour, end: null, silenced: false },
+      {
+        id: 'a',
+        title: raw('Backup überfällig'),
+        severity: 'warning' as const,
+        module: 'cnpg',
+        start: now - 30 * hour,
+        end: now - 2 * hour,
+        silenced: false,
+      },
+      {
+        id: 'b',
+        title: raw('Node down'),
+        severity: 'critical' as const,
+        module: 'nodes',
+        start: now - 3 * hour,
+        end: null,
+        silenced: false,
+      },
     ];
     const full = formatDigest('homelab', episodes, now, 0, 'full', 'de');
     expect(full.title).toBe('homelab: Wochenbericht');
@@ -56,7 +92,9 @@ describe('weekly report', () => {
     expect(full.body.indexOf('Backup überfällig')).toBeLessThan(full.body.indexOf('Node down'));
     expect(full.body).toContain('noch offen');
     expect(formatDigest('homelab', episodes, now, 0, 'minimal', 'de').body).not.toContain('Backup');
-    expect(formatDigest('homelab', [], now, now - 2 * 24 * hour, 'full', 'de').body).toMatch(/^Keine Probleme in den letzten 7 Tagen \(seit 2 Tagen/);
+    expect(formatDigest('homelab', [], now, now - 2 * 24 * hour, 'full', 'de').body).toMatch(
+      /^Keine Probleme in den letzten 7 Tagen \(seit 2 Tagen/,
+    );
     // The same report in English, as an agent with LANGUAGE=en sends it.
     const english = formatDigest('homelab', episodes, now, 0, 'full', 'en');
     expect(english.title).toBe('homelab: weekly report');

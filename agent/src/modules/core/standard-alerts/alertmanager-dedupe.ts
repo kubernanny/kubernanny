@@ -6,7 +6,7 @@
  * issue Kubernanny raised, the built-in issue stays, with its fuller text and a line
  * saying Alertmanager fires it too, and the alert leaves the Alertmanager module.
  */
-import { evaluateAlerts, AmAlert } from '../../../checks/alertmanager.check';
+import { AmAlert, evaluateAlerts } from '../../../checks/alertmanager.check';
 import { podOwner } from '../../../checks/pods.check';
 import { worst } from '../../../checks/types';
 import { t } from '../../../i18n/text';
@@ -46,7 +46,8 @@ const COVERED_ELSEWHERE: Record<string, (labels: Record<string, string>, inv: In
   KubeNodeNotReady: (l) => l.node && `nodes/${l.node}/not-ready`,
   KubeNodeUnreachable: (l) => l.node && `nodes/${l.node}/not-ready`,
   KubeNodePressure: (l) => l.node && l.condition && `nodes/${l.node}/${l.condition}`,
-  KubePersistentVolumeFillingUp: (l) => l.namespace && l.persistentvolumeclaim && `volumes/${l.namespace}/${l.persistentvolumeclaim}/full`,
+  KubePersistentVolumeFillingUp: (l) =>
+    l.namespace && l.persistentvolumeclaim && `volumes/${l.namespace}/${l.persistentvolumeclaim}/full`,
   NodeFilesystemSpaceFillingUp: (l, inv) => rootDisk(l, inv),
   NodeFilesystemAlmostOutOfSpace: (l, inv) => rootDisk(l, inv),
   NodeClockNotSynchronising: (l, inv) => clock(l, inv),
@@ -56,8 +57,10 @@ const COVERED_ELSEWHERE: Record<string, (labels: Record<string, string>, inv: In
   TargetDown: (l) => l.job && `prometheus/down/${l.job}`,
   KubePodCrashLooping: (l, inv) => podIssue(l, inv),
   KubeContainerWaiting: (l, inv) => podIssue(l, inv),
-  KubeDeploymentReplicasMismatch: (l) => l.namespace && l.deployment && `workloads/${l.namespace}/Deployment/${l.deployment}`,
-  KubeStatefulSetReplicasMismatch: (l) => l.namespace && l.statefulset && `workloads/${l.namespace}/StatefulSet/${l.statefulset}`,
+  KubeDeploymentReplicasMismatch: (l) =>
+    l.namespace && l.deployment && `workloads/${l.namespace}/Deployment/${l.deployment}`,
+  KubeStatefulSetReplicasMismatch: (l) =>
+    l.namespace && l.statefulset && `workloads/${l.namespace}/StatefulSet/${l.statefulset}`,
 };
 
 function rootDisk(l: Record<string, string>, inv: Inventory): string | undefined {
@@ -80,7 +83,12 @@ function podIssue(l: Record<string, string>, inv: Inventory): string | undefined
 }
 
 /** The issue an alert duplicates and the (trusted) alert name to mention, if any. */
-function coveringIssue(alert: AmAlert, found: AlertMatch[], inv: Inventory, ids: ReadonlySet<string>): { issueId: string; alert: string } | undefined {
+function coveringIssue(
+  alert: AmAlert,
+  found: AlertMatch[],
+  inv: Inventory,
+  ids: ReadonlySet<string>,
+): { issueId: string; alert: string } | undefined {
   const name = alert.labels.alertname;
   for (const m of found) {
     const known = m.alerts.find((a) => a === name);
@@ -91,7 +99,9 @@ function coveringIssue(alert: AmAlert, found: AlertMatch[], inv: Inventory, ids:
   const elsewhere = Object.hasOwn(COVERED_ELSEWHERE, name ?? '') ? COVERED_ELSEWHERE[name!] : undefined;
   const id = elsewhere?.(alert.labels, inv) || undefined;
   // The key of the table, not the label: what is shown is always our own word.
-  return id && ids.has(id) ? { issueId: id, alert: Object.keys(COVERED_ELSEWHERE).find((k) => k === name)! } : undefined;
+  return id && ids.has(id)
+    ? { issueId: id, alert: Object.keys(COVERED_ELSEWHERE).find((k) => k === name)! }
+    : undefined;
 }
 
 /**
@@ -122,7 +132,10 @@ export function dedupeAlerts(byId: Map<string, IssueView>, views: ModuleView[], 
   }
   for (const [id, names] of mentioned) {
     const issue = byId.get(id)!;
-    byId.set(id, { ...issue, cause: t('std.alsoAlertmanager', { cause: issue.cause, alerts: [...names].sort().join(', ') }) });
+    byId.set(id, {
+      ...issue,
+      cause: t('std.alsoAlertmanager', { cause: issue.cause, alerts: [...names].sort().join(', ') }),
+    });
   }
   const rebuilt = new Map(evaluateAlerts(left).map((i) => [i.id, i]));
   const am = views.find((v) => v.id === 'alertmanager');
@@ -142,7 +155,11 @@ export function dedupeAlerts(byId: Map<string, IssueView>, views: ModuleView[], 
     if (am.status !== 'error' && am.status !== 'skipped') {
       // As runComponent judges it: its issues, and its own pods.
       const pods = am.workloads.items;
-      const readiness = pods.some((w) => w.desired > 0 && w.ready === 0) ? ('critical' as const) : pods.some((w) => w.ready < w.desired) ? ('warning' as const) : null;
+      const readiness = pods.some((w) => w.desired > 0 && w.ready === 0)
+        ? ('critical' as const)
+        : pods.some((w) => w.ready < w.desired)
+          ? ('warning' as const)
+          : null;
       am.status = worst([...am.issueIds.map((id) => byId.get(id)!.severity), ...(readiness ? [readiness] : [])]);
     }
   }

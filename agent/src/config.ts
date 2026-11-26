@@ -1,7 +1,7 @@
+import type { DemoScenario } from './demo/demo-cluster';
 import { DEFAULT_LANG, Lang, resolveLang } from './i18n/text';
 import { checkRelayUrl } from './relay/relay-url';
 import { isInClusterHost } from './security/in-cluster-host';
-import type { DemoScenario } from './demo/demo-cluster';
 
 function num(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -41,7 +41,12 @@ export function parseSwitch(name: string, raw: string | undefined, fallback: boo
 }
 
 /** One of `allowed`; unset or empty is `fallback`; anything else stops the start. */
-export function parseChoice<T extends string>(name: string, raw: string | undefined, allowed: readonly T[], fallback: T): T {
+export function parseChoice<T extends string>(
+  name: string,
+  raw: string | undefined,
+  allowed: readonly T[],
+  fallback: T,
+): T {
   const value = (raw ?? '').trim().toLowerCase();
   if (value === '') {
     return fallback;
@@ -57,12 +62,20 @@ export function parseDigest(env: NodeJS.ProcessEnv): { weekday: number; hour: nu
   if (parseChoice('DIGEST', env.DIGEST, ['off', 'weekly'], 'off') === 'off') {
     return null;
   }
-  return { weekday: int('DIGEST_WEEKDAY', env.DIGEST_WEEKDAY, 1, 0, 6), hour: int('DIGEST_HOUR', env.DIGEST_HOUR, 9, 0, 23) };
+  return {
+    weekday: int('DIGEST_WEEKDAY', env.DIGEST_WEEKDAY, 1, 0, 6),
+    hour: int('DIGEST_HOUR', env.DIGEST_HOUR, 9, 0, 23),
+  };
 }
 
 function list(name: string, fallback: string[]): string[] {
   const raw = process.env[name];
-  return raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : fallback;
+  return raw
+    ? raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : fallback;
 }
 
 /**
@@ -92,7 +105,11 @@ export function checkNotifyUrl(name: string, raw: string | undefined): string | 
  * else unknown falls back to English rather than stopping the start.
  */
 export function parseLanguage(raw: string | undefined): Lang {
-  const first = (raw ?? '').trim().toLowerCase().split(':')[0]!.split(/[_.@-]/)[0];
+  const first = (raw ?? '')
+    .trim()
+    .toLowerCase()
+    .split(':')[0]!
+    .split(/[_.@-]/)[0];
   return resolveLang(first, DEFAULT_LANG);
 }
 
@@ -161,7 +178,19 @@ export interface CustomComponent {
   description?: string;
 }
 
-const CATEGORIES = ['storage', 'gitops', 'database', 'certificates', 'observability', 'networking', 'security', 'maintenance', 'backup', 'platform', 'apps'];
+const CATEGORIES = [
+  'storage',
+  'gitops',
+  'database',
+  'certificates',
+  'observability',
+  'networking',
+  'security',
+  'maintenance',
+  'backup',
+  'platform',
+  'apps',
+];
 
 /** Parses CUSTOM_COMPONENTS (JSON array). Fails the start on anything malformed rather than silently ignoring it. */
 export function parseCustomComponents(raw: string | undefined): CustomComponent[] {
@@ -179,12 +208,21 @@ export function parseCustomComponents(raw: string | undefined): CustomComponent[
   }
   return list.map((item, i) => {
     const c = item as Partial<CustomComponent>;
-    if (typeof c.name !== 'string' || !c.name.trim() || !Array.isArray(c.images) || c.images.length === 0 || !c.images.every((x) => typeof x === 'string' && x.length > 2)) {
+    if (
+      typeof c.name !== 'string' ||
+      !c.name.trim() ||
+      !Array.isArray(c.images) ||
+      c.images.length === 0 ||
+      !c.images.every((x) => typeof x === 'string' && x.length > 2)
+    ) {
       throw new Error(`CUSTOM_COMPONENTS[${i}] needs a name and a non-empty list of image prefixes`);
     }
     const category = c.category && CATEGORIES.includes(c.category) ? c.category : 'apps';
     return {
-      id: `custom:${(c.id ?? c.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`,
+      id: `custom:${(c.id ?? c.name)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')}`,
       name: c.name.trim().slice(0, 60),
       images: c.images,
       category,
@@ -300,7 +338,12 @@ export function loadConfig(): Config {
     webhookUrl: checkNotifyUrl('WEBHOOK_URL', process.env.WEBHOOK_URL || undefined),
     notifyDetail: parseChoice('NOTIFY_DETAIL', process.env.NOTIFY_DETAIL, ['full', 'minimal'], 'full'),
     digest: parseDigest(process.env),
-    webhookFormat: parseChoice<NonNullable<Config['webhookFormat']>>('WEBHOOK_FORMAT', process.env.WEBHOOK_FORMAT, ['auto', 'discord', 'slack', 'gotify', 'json'], 'auto'),
+    webhookFormat: parseChoice<NonNullable<Config['webhookFormat']>>(
+      'WEBHOOK_FORMAT',
+      process.env.WEBHOOK_FORMAT,
+      ['auto', 'discord', 'slack', 'gotify', 'json'],
+      'auto',
+    ),
     metricsPort: int('METRICS_PORT', process.env.METRICS_PORT, 9100, 0, 65535),
     webRoot: process.env.WEB_ROOT || undefined,
     namespace: process.env.POD_NAMESPACE || 'kubernanny',
@@ -311,7 +354,10 @@ export function loadConfig(): Config {
     disabledActions: list('DISABLED_ACTIONS', []),
     enabledActions: list('ENABLED_ACTIONS', []),
     enabledModules: list('ENABLED_MODULES', []),
-    vulnDbUrl: (checkNotifyUrl('VULN_DB_URL', process.env.VULN_DB_URL || undefined) ?? 'https://api.osv.dev').replace(/\/+$/, ''),
+    vulnDbUrl: (checkNotifyUrl('VULN_DB_URL', process.env.VULN_DB_URL || undefined) ?? 'https://api.osv.dev').replace(
+      /\/+$/,
+      '',
+    ),
     vulnAcceptLocked: !parseSwitch('VULN_ACCEPT', process.env.VULN_ACCEPT, true),
     securitySystemNamespaces: list('SECURITY_SYSTEM_NAMESPACES', []),
     customComponents: parseCustomComponents(process.env.CUSTOM_COMPONENTS),

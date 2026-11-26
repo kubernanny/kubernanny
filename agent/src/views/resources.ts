@@ -12,7 +12,14 @@ export interface Resources {
   memUnlimited: number;
 }
 
-export const NO_RESOURCES: Resources = { cpuRequestMilli: 0, cpuLimitMilli: 0, memRequest: 0, memLimit: 0, cpuUnlimited: 0, memUnlimited: 0 };
+export const NO_RESOURCES: Resources = {
+  cpuRequestMilli: 0,
+  cpuLimitMilli: 0,
+  memRequest: 0,
+  memLimit: 0,
+  cpuUnlimited: 0,
+  memUnlimited: 0,
+};
 
 /** A pod that holds resources on its node: scheduled and not finished. */
 export function holdsResources(pod: FullPod): boolean {

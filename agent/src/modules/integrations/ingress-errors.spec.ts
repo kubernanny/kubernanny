@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
+
+import type { Detected } from '../../discovery/discovery';
 import { de } from '../../testing/i18n';
 import { Prometheus, PromSample } from '../service-proxy';
 import { ModuleContext } from '../types';
 import { evaluateErrorRates, routeTraffic } from './ingress-errors';
 import { IngressNginxIntegration } from './ingress-nginx';
 import { TraefikIntegration } from './traefik';
-import type { Detected } from '../../discovery/discovery';
 
 /** Answers `sum by (…)` queries from a table: [labels, requests, 5xx]. */
-function fakeProm(metric: string, rows: [Record<string, string>, number, number][]): Prometheus & { queries: string[] } {
+function fakeProm(
+  metric: string,
+  rows: [Record<string, string>, number, number][],
+): Prometheus & { queries: string[] } {
   const queries: string[] = [];
   return {
     queries,
@@ -56,7 +60,9 @@ describe('Traefik and ingress-nginx', () => {
     const prom = fakeProm('traefik_router_requests_total', [[{ router: 'web@kubernetes' }, 1000, 400]]);
     const r = await new TraefikIntegration().run(ctx(prom), det, () => true);
     expect(r.issues.map((i) => [i.id, i.severity])).toEqual([['traefik/errors/web@kubernetes', 'critical']]);
-    expect(prom.queries[0]).toBe('sum by (router) (increase(traefik_router_requests_total{router!~".*@internal"}[15m]))');
+    expect(prom.queries[0]).toBe(
+      'sum by (router) (increase(traefik_router_requests_total{router!~".*@internal"}[15m]))',
+    );
     expect(prom.queries[1]).toContain('code=~"5.."');
   });
 
@@ -73,7 +79,9 @@ describe('Traefik and ingress-nginx', () => {
     ]);
     const r = await new IngressNginxIntegration().run(ctx(prom), det, () => true);
     expect(r.issues.map((i) => [i.id, i.severity])).toEqual([['ingress-nginx/errors/shop/api', 'warning']]);
-    expect(prom.queries[1]).toBe('sum by (namespace, ingress) (increase(nginx_ingress_controller_requests{ingress!="",status=~"5.."}[15m]))');
+    expect(prom.queries[1]).toBe(
+      'sum by (namespace, ingress) (increase(nginx_ingress_controller_requests{ingress!="",status=~"5.."}[15m]))',
+    );
   });
 
   it('joins requests and errors per route', async () => {

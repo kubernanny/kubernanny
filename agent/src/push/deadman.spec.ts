@@ -1,5 +1,16 @@
-import { DeadmanDeposit, PushRequest, PushStatus, decodePushContent, fromBase64Url, generateKeyPair, isDeadman, openPush, toBase64Url } from '@kubernanny/protocol';
+import {
+  DeadmanDeposit,
+  decodePushContent,
+  fromBase64Url,
+  generateKeyPair,
+  isDeadman,
+  openPush,
+  PushRequest,
+  PushStatus,
+  toBase64Url,
+} from '@kubernanny/protocol';
 import { describe, expect, it } from 'vitest';
+
 import { DevicesService, Principal } from '../auth/devices.service';
 import { IdentityService } from '../auth/identity.service';
 import { Config, loadConfig, parseDeadman } from '../config';
@@ -18,7 +29,13 @@ const MIN = 60_000;
 const armed = { armed: true, holdUntil: null, status };
 
 async function setup(options: { config?: Partial<Config>; relayDeadman?: boolean } = {}) {
-  const config: Config = { ...loadConfig(), relayUrl: 'wss://relay.example.org', clusterName: 'homelab', language: 'de', ...options.config };
+  const config: Config = {
+    ...loadConfig(),
+    relayUrl: 'wss://relay.example.org',
+    clusterName: 'homelab',
+    language: 'de',
+    ...options.config,
+  };
   const devices = new DevicesService(config, new DemoKubeClient());
   await devices.onModuleInit();
   const view = await devices.add('Phone', generateKeyPair().publicKey);
@@ -53,11 +70,15 @@ describe('DEADMAN', () => {
   });
 });
 
-describe('registration with the dead man\'s switch', () => {
+describe("registration with the dead man's switch", () => {
   it('stores the grace, refuses other values, and shows it in the view', async () => {
     const { device, push, devices } = await setup();
-    await expect(push.register(device, { ...registration, deadman: 20 })).rejects.toMatchObject({ response: { code: 'PUSH_INVALID' } });
-    await expect(push.register(device, { ...registration, deadman: 'yes' })).rejects.toMatchObject({ response: { code: 'PUSH_INVALID' } });
+    await expect(push.register(device, { ...registration, deadman: 20 })).rejects.toMatchObject({
+      response: { code: 'PUSH_INVALID' },
+    });
+    await expect(push.register(device, { ...registration, deadman: 'yes' })).rejects.toMatchObject({
+      response: { code: 'PUSH_INVALID' },
+    });
     await push.register(device, { ...registration, deadman: 15 });
     expect(devices.pushTargets()[0]!.push.deadman).toBe(15);
     expect(push.view(device).deadman).toEqual({ state: 'on', grace: 15 });
@@ -67,8 +88,12 @@ describe('registration with the dead man\'s switch', () => {
   });
 
   it('says locked with DEADMAN=off and relay when the relay does not hold deposits', async () => {
-    expect((await setup({ config: { deadman: false } })).push.view({ kind: 'device', id: 'x', name: 'x' }).deadman.state).toBe('locked');
-    expect((await setup({ relayDeadman: false })).push.view({ kind: 'device', id: 'x', name: 'x' }).deadman.state).toBe('relay');
+    expect(
+      (await setup({ config: { deadman: false } })).push.view({ kind: 'device', id: 'x', name: 'x' }).deadman.state,
+    ).toBe('locked');
+    expect((await setup({ relayDeadman: false })).push.view({ kind: 'device', id: 'x', name: 'x' }).deadman.state).toBe(
+      'relay',
+    );
   });
 });
 
@@ -85,7 +110,13 @@ describe('the deposit', () => {
     expect(deposit!.items[0]).toMatchObject({ token: TOKEN, platform: 'ios', graceMinutes: 30, lang: 'de' });
     const content = opened(deposit!.items[0]!.message);
     expect(isDeadman(content)).toBe(true);
-    expect(content).toMatchObject({ t: 'homelab: Kubernanny schweigt', b: 'Kubernanny meldet sich seit 30 Min. nicht. Cluster oder Agent prüfen.', p: 3, s: clock.now, d: { u: clock.now + DEADMAN_VALIDITY_MS, g: 30 } });
+    expect(content).toMatchObject({
+      t: 'homelab: Kubernanny schweigt',
+      b: 'Kubernanny meldet sich seit 30 Min. nicht. Cluster oder Agent prüfen.',
+      p: 3,
+      s: clock.now,
+      d: { u: clock.now + DEADMAN_VALIDITY_MS, g: 30 },
+    });
     expect(content.w).toBeUndefined();
   });
 
@@ -160,7 +191,12 @@ describe('back after a silence', () => {
     await settle();
     expect(pushes).toHaveLength(1);
     const content = opened(pushes[0]!.message);
-    expect(content).toMatchObject({ t: 'homelab: Kubernanny ist wieder erreichbar', b: 'War 42 Min. weg.', p: 2, w: status });
+    expect(content).toMatchObject({
+      t: 'homelab: Kubernanny ist wieder erreichbar',
+      b: 'War 42 Min. weg.',
+      p: 2,
+      w: status,
+    });
     expect(isDeadman(content)).toBe(false);
     expect(pushes[0]!.silent).toBeUndefined();
   });

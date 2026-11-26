@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+
 import { loadConfig } from '../config';
-import { raw } from '../i18n/text';
 import { DemoKubeClient } from '../demo/demo-cluster';
+import { raw } from '../i18n/text';
 import { planNotifications } from '../notify/notifier';
 import { IssueView } from '../status/status.service';
 import { SilenceService } from './silence.service';
@@ -54,11 +55,24 @@ describe('silencing issues', () => {
   });
 
   it('sends nothing new for a silenced issue, and no "resolved" just because it was silenced', () => {
-    const issue: IssueView = { id: 'i', check: 'pods', module: 'pods', severity: 'critical', title: raw('t'), cause: raw('c'), actions: [], since: new Date(0).toISOString() };
+    const issue: IssueView = {
+      id: 'i',
+      check: 'pods',
+      module: 'pods',
+      severity: 'critical',
+      title: raw('t'),
+      cause: raw('c'),
+      actions: [],
+      since: new Date(0).toISOString(),
+    };
     const now = new Date(hour);
-    expect(planNotifications(new Map(), [{ ...issue, silencedUntil: new Date(2 * hour).toISOString() }], now, 0).opened).toEqual([]);
+    expect(
+      planNotifications(new Map(), [{ ...issue, silencedUntil: new Date(2 * hour).toISOString() }], now, 0).opened,
+    ).toEqual([]);
     const pushed = new Map([['i', { severity: 'critical' as const, title: raw('t') }]]);
-    expect(planNotifications(pushed, [{ ...issue, silencedUntil: new Date(2 * hour).toISOString() }], now, 0).resolved).toEqual([]);
+    expect(
+      planNotifications(pushed, [{ ...issue, silencedUntil: new Date(2 * hour).toISOString() }], now, 0).resolved,
+    ).toEqual([]);
     expect(planNotifications(pushed, [], now, 0).resolved).toEqual([{ id: 'i', title: raw('t') }]);
   });
 });

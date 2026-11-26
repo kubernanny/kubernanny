@@ -22,7 +22,12 @@ export interface EventView {
 }
 
 /** The workload behind a Pod or ReplicaSet the event is about; a workload itself is its own. */
-function workloadOf(inv: Inventory, namespace: string | undefined, kind: string | undefined, name: string | undefined): { kind: string; name: string } | undefined {
+function workloadOf(
+  inv: Inventory,
+  namespace: string | undefined,
+  kind: string | undefined,
+  name: string | undefined,
+): { kind: string; name: string } | undefined {
   if (!name || !kind) {
     return undefined;
   }
@@ -36,7 +41,12 @@ function workloadOf(inv: Inventory, namespace: string | undefined, kind: string 
   }
   if (kind === 'ReplicaSet') {
     // A ReplicaSet is named after its Deployment plus the pod-template-hash.
-    const deployment = inv.deployments.find((d) => d.metadata.namespace === namespace && name.startsWith(`${d.metadata.name}-`) && !name.slice(d.metadata.name.length + 1).includes('-'));
+    const deployment = inv.deployments.find(
+      (d) =>
+        d.metadata.namespace === namespace &&
+        name.startsWith(`${d.metadata.name}-`) &&
+        !name.slice(d.metadata.name.length + 1).includes('-'),
+    );
     return deployment ? { kind: 'Deployment', name: deployment.metadata.name } : undefined;
   }
   return undefined;
@@ -51,7 +61,13 @@ function workloadOf(inv: Inventory, namespace: string | undefined, kind: string 
 export function buildEvents(inv: Inventory, limit = 200): EventView[] {
   const groups = new Map<string, EventView>();
   for (const e of inv.events) {
-    const time = e.series?.lastObservedTime ?? e.lastTimestamp ?? e.eventTime ?? e.firstTimestamp ?? e.metadata.creationTimestamp ?? '';
+    const time =
+      e.series?.lastObservedTime ??
+      e.lastTimestamp ??
+      e.eventTime ??
+      e.firstTimestamp ??
+      e.metadata.creationTimestamp ??
+      '';
     const first = e.firstTimestamp ?? e.eventTime ?? e.metadata.creationTimestamp ?? time;
     const row: EventView = {
       time,

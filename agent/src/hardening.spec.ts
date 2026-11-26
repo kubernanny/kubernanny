@@ -1,20 +1,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { ActionsService, LOG_LIMIT_BYTES } from './actions/actions.service';
+import type { Issue } from './checks/types';
 import { int, loadConfig, parseChoice, parseDigest, parseSwitch } from './config';
 import { DemoKubeClient } from './demo/demo-cluster';
 import { errorText, localize, raw, render, reviveText, t } from './i18n/text';
 import { upsertConfigMapData } from './kube/configmap';
 import { KubeClient, KubeError, MAX_KUBE_ERROR_BODY } from './kube/kube-client';
+import { RegistryClient } from './modules/image-updates/registry-client';
 import { parseAlerts } from './modules/integrations/alertmanager';
 import { Prometheus, ServiceHttp } from './modules/service-proxy';
-import { MAX_ISSUES_PER_MODULE, boundStats, capIssues, str, strings } from './modules/untrusted';
+import { boundStats, capIssues, MAX_ISSUES_PER_MODULE, str, strings } from './modules/untrusted';
 import { OSV_MAX_IDS_PER_QUERY, OsvClient, sanitize } from './modules/vulnerabilities/osv-client';
-import { RegistryClient } from './modules/image-updates/registry-client';
 import { parseNotified } from './notify/notified-store';
-import { Notifier, escapeDiscord, escapeSlack, webhookBody } from './notify/notifier';
+import { escapeDiscord, escapeSlack, Notifier, webhookBody } from './notify/notifier';
 import { SilenceService } from './silence/silence.service';
 import { logSafe } from './util/log-safe';
-import { ActionsService, LOG_LIMIT_BYTES } from './actions/actions.service';
-import type { Issue } from './checks/types';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -41,7 +42,10 @@ describe('H1: Texts are only what the agent made', () => {
     expect(render(reviveText({ $t: 'raw', p: { text: 'x' } })!, 'en')).toBe('x');
     expect(reviveText({ $t: 'valueOf' })).toBeNull();
     expect(reviveText({ $t: 'raw', p: { text: { toString: 'x' } } })).toBeNull();
-    const stored = JSON.stringify({ v: 1, issues: { a: { s: 'c', t: { $t: 'constructor' } }, b: { s: 'w', t: raw('ok') } } });
+    const stored = JSON.stringify({
+      v: 1,
+      issues: { a: { s: 'c', t: { $t: 'constructor' } }, b: { s: 'w', t: raw('ok') } },
+    });
     expect([...parseNotified(stored).keys()]).toEqual(['b']);
   });
 
@@ -56,7 +60,14 @@ describe('H1: Texts are only what the agent made', () => {
   });
 
   it('cuts the issues of one untrusted module to a summary', () => {
-    const issues: Issue[] = Array.from({ length: 120 }, (_, i) => ({ id: `x/${i}`, check: 'x', severity: i === 119 ? 'critical' : 'warning', title: raw(''), cause: raw(''), actions: [] }));
+    const issues: Issue[] = Array.from({ length: 120 }, (_, i) => ({
+      id: `x/${i}`,
+      check: 'x',
+      severity: i === 119 ? 'critical' : 'warning',
+      title: raw(''),
+      cause: raw(''),
+      actions: [],
+    }));
     const capped = capIssues(issues, 'x');
     expect(capped).toHaveLength(MAX_ISSUES_PER_MODULE);
     expect(capped[0]!.id).toBe('x/119');
@@ -65,9 +76,16 @@ describe('H1: Texts are only what the agent made', () => {
   });
 
   it('reads a forged Prometheus answer without throwing on its shape', async () => {
-    const http = { get: async () => ({ status: 'success', data: { result: [{ metric: { job: { $t: 'x' }, ok: 'y' }, value: [0, '3'] }, { value: 'nope' }, 'junk'] } }) } as unknown as ServiceHttp;
+    const http = {
+      get: async () => ({
+        status: 'success',
+        data: { result: [{ metric: { job: { $t: 'x' }, ok: 'y' }, value: [0, '3'] }, { value: 'nope' }, 'junk'] },
+      }),
+    } as unknown as ServiceHttp;
     expect(await new Prometheus(http).query('up')).toEqual([{ metric: { ok: 'y' }, value: 3 }]);
-    const bad = { get: async () => ({ status: 'success', data: { result: { not: 'an array' } } }) } as unknown as ServiceHttp;
+    const bad = {
+      get: async () => ({ status: 'success', data: { result: { not: 'an array' } } }),
+    } as unknown as ServiceHttp;
     expect(await new Prometheus(bad).query('up')).toEqual([]);
   });
 });
@@ -78,11 +96,19 @@ describe('M2: every switch refuses what it does not know', () => {
     expect(parseSwitch('X', '1', false)).toBe(true);
     expect(parseSwitch('X', undefined, true)).toBe(true);
     expect(() => parseSwitch('VULN_ACCEPT', 'of', true)).toThrow(/VULN_ACCEPT must be on or off/);
-    expect(() => parseChoice('NOTIFY_DETAIL', 'minmal', ['full', 'minimal'], 'full')).toThrow(/NOTIFY_DETAIL must be one of/);
+    expect(() => parseChoice('NOTIFY_DETAIL', 'minmal', ['full', 'minimal'], 'full')).toThrow(
+      /NOTIFY_DETAIL must be one of/,
+    );
   });
 
   it('fails the start on a typo in VULN_ACCEPT, NOTIFY_DETAIL, WEBHOOK_FORMAT, DIGEST and PAIRING_LOG', () => {
-    for (const [name, value] of [['VULN_ACCEPT', 'disabled'], ['NOTIFY_DETAIL', 'minmal'], ['WEBHOOK_FORMAT', 'teams'], ['DIGEST', 'weekley'], ['PAIRING_LOG', 'no']]) {
+    for (const [name, value] of [
+      ['VULN_ACCEPT', 'disabled'],
+      ['NOTIFY_DETAIL', 'minmal'],
+      ['WEBHOOK_FORMAT', 'teams'],
+      ['DIGEST', 'weekley'],
+      ['PAIRING_LOG', 'no'],
+    ]) {
       vi.stubEnv(name!, value!);
       expect(() => loadConfig(), name).toThrow(name);
       vi.unstubAllEnvs();
@@ -126,7 +152,13 @@ describe('M3: OSV and registry answers are bounded', () => {
     const res = await client.lookup([q], NOW);
     expect(res.results[0]).toHaveLength(OSV_MAX_IDS_PER_QUERY);
     expect(details).toBe(OSV_MAX_IDS_PER_QUERY);
-    const record = sanitize({ aliases: Array(500).fill('CVE-2026-1'), affected: Array(500).fill({ ranges: Array(500).fill({ events: [] }) }) }, 'x');
+    const record = sanitize(
+      {
+        aliases: Array(500).fill('CVE-2026-1'),
+        affected: Array(500).fill({ ranges: Array(500).fill({ events: [] }) }),
+      },
+      'x',
+    );
     expect(record.aliases!.length).toBeLessThanOrEqual(20);
     expect(record.affected!.length).toBeLessThanOrEqual(50);
     expect(record.affected![0]!.ranges!.length).toBeLessThanOrEqual(20);
@@ -147,7 +179,11 @@ describe('M3: OSV and registry answers are bounded', () => {
 
   it('caps a registry tag list answer', async () => {
     const client = new RegistryClient(async () => new Response('x'.repeat(3 * 1024 * 1024), { status: 200 }));
-    const ref = { registry: { name: 'ghcr.io', api: 'https://ghcr.io', tokenHosts: ['ghcr.io'] }, repository: 'a/b', tag: '1.0' } as never;
+    const ref = {
+      registry: { name: 'ghcr.io', api: 'https://ghcr.io', tokenHosts: ['ghcr.io'] },
+      repository: 'a/b',
+      tag: '1.0',
+    } as never;
     await expect(client.tags(ref, NOW)).rejects.toThrow(/refused/);
   });
 });
@@ -207,11 +243,18 @@ describe('LOW: log lines and chat messages carry no forged syntax', () => {
   });
 
   it('escapes Slack control syntax and Discord markdown, and allows no Discord mention', () => {
-    expect(escapeSlack('<!channel> <@U1> <https://evil|click> & x')).toBe('&lt;!channel&gt; &lt;@U1&gt; &lt;https://evil|click&gt; &amp; x');
-    expect(escapeDiscord('@everyone [click](https://evil) **b**')).toBe('\\@everyone \\[click\\]\\(https://evil\\) \\*\\*b\\*\\*');
+    expect(escapeSlack('<!channel> <@U1> <https://evil|click> & x')).toBe(
+      '&lt;!channel&gt; &lt;@U1&gt; &lt;https://evil|click&gt; &amp; x',
+    );
+    expect(escapeDiscord('@everyone [click](https://evil) **b**')).toBe(
+      '\\@everyone \\[click\\]\\(https://evil\\) \\*\\*b\\*\\*',
+    );
     const push = { title: '<!here>', body: '[x](https://evil) @everyone', priority: 5, tags: '' };
     const plan = { opened: [], resolved: [], escalated: [] };
-    const discord = webhookBody('discord', 'c', push, plan, 'en') as { allowed_mentions: unknown; embeds: { description: string }[] };
+    const discord = webhookBody('discord', 'c', push, plan, 'en') as {
+      allowed_mentions: unknown;
+      embeds: { description: string }[];
+    };
     expect(discord.allowed_mentions).toEqual({ parse: [] });
     expect(discord.embeds[0]!.description).not.toContain('](');
     expect(JSON.stringify(webhookBody('slack', 'c', push, plan, 'en'))).not.toContain('<!here>');
@@ -245,7 +288,10 @@ describe('LOW: Kubernetes responses are bounded', () => {
     vi.stubGlobal('fetch', async () => new Response(bodies.shift()!, { status: 403, statusText: 'Forbidden' }));
     try {
       const kube = new KubeClient();
-      await expect(kube.get('/a')).rejects.toMatchObject({ status: 403, message: '403 on /a: configmaps "x" is forbidden' });
+      await expect(kube.get('/a')).rejects.toMatchObject({
+        status: 403,
+        message: '403 on /a: configmaps "x" is forbidden',
+      });
       // Too large to be a Status: refused unread, the status text stands in.
       await expect(kube.get('/b')).rejects.toMatchObject({ status: 403, message: '403 on /b: Forbidden' });
     } finally {

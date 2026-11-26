@@ -1,11 +1,15 @@
-import { Text, t } from '../i18n/text';
-import { Issue, IssueAction, ObjectMeta, WorkloadKind, ageText, condition, Condition } from './types';
+import { t, Text } from '../i18n/text';
+import { ageText, Condition, condition, Issue, IssueAction, ObjectMeta, WorkloadKind } from './types';
 
 interface ContainerStatus {
   name: string;
   ready: boolean;
   restartCount: number;
-  state?: { waiting?: { reason?: string; message?: string }; terminated?: { reason?: string }; running?: { startedAt?: string } };
+  state?: {
+    waiting?: { reason?: string; message?: string };
+    terminated?: { reason?: string };
+    running?: { startedAt?: string };
+  };
   lastState?: { terminated?: { reason?: string; exitCode?: number; startedAt?: string; finishedAt?: string } };
 }
 
@@ -87,14 +91,20 @@ function findProblem(pod: Pod, now: Date): Finding | null {
     const waiting = cs.state?.waiting;
     if (waiting?.reason && BROKEN_REASONS.has(waiting.reason)) {
       const lastExit = cs.lastState?.terminated;
-      const spec = [...(pod.spec?.initContainers ?? []), ...(pod.spec?.containers ?? [])].find((c) => c.name === cs.name);
+      const spec = [...(pod.spec?.initContainers ?? []), ...(pod.spec?.containers ?? [])].find(
+        (c) => c.name === cs.name,
+      );
       const oom = waiting.reason === 'CrashLoopBackOff' && lastExit?.reason === 'OOMKilled';
       return {
         pod,
         reason: waiting.reason,
         message: oom
           ? spec?.resources?.limits?.memory
-            ? t('pods.oom.cause', { container: cs.name, limit: spec.resources.limits.memory, restarts: cs.restartCount })
+            ? t('pods.oom.cause', {
+                container: cs.name,
+                limit: spec.resources.limits.memory,
+                restarts: cs.restartCount,
+              })
             : t('pods.oom.noLimit', { container: cs.name, restarts: cs.restartCount })
           : t('pods.broken.cause', {
               message: waiting.message?.replace(/\.?$/, '.'),
@@ -130,7 +140,10 @@ export function envConfigMaps(pod: Pod, container: string | undefined): string[]
   if (!c) {
     return [];
   }
-  const names = [...(c.envFrom ?? []).map((e) => e.configMapRef?.name), ...(c.env ?? []).map((e) => e.valueFrom?.configMapKeyRef?.name)];
+  const names = [
+    ...(c.envFrom ?? []).map((e) => e.configMapRef?.name),
+    ...(c.env ?? []).map((e) => e.valueFrom?.configMapKeyRef?.name),
+  ];
   return [...new Set(names.filter((n): n is string => typeof n === 'string' && n.length > 0))];
 }
 
@@ -177,7 +190,9 @@ export function evaluatePods(pods: Pod[], now: Date, changed: Map<string, string
 
   return [...byOwner.entries()].map(([key, { owner, namespace, findings }]) => {
     const first = findings[0];
-    const configMap = findings.map((f) => changed.get(`${namespace}/${f.pod.metadata.name}`)).find((n) => n !== undefined);
+    const configMap = findings
+      .map((f) => changed.get(`${namespace}/${f.pod.metadata.name}`))
+      .find((n) => n !== undefined);
     const logs: IssueAction = {
       type: 'logs',
       namespace,
@@ -204,7 +219,11 @@ export function evaluatePods(pods: Pod[], now: Date, changed: Map<string, string
       id: `pods/${key}`,
       check: 'pods' as const,
       severity: first.reason === 'Pending' ? ('warning' as const) : ('critical' as const),
-      title: t(first.oom ? 'pods.oom.title' : 'pods.title', { workload: `${namespace}/${owner.name}`, reason: first.reason, pods: findings.length }),
+      title: t(first.oom ? 'pods.oom.title' : 'pods.title', {
+        workload: `${namespace}/${owner.name}`,
+        reason: first.reason,
+        pods: findings.length,
+      }),
       cause: configMap ? t('pods.configChanged.cause', { name: configMap, cause: first.message }) : first.message,
       actions,
     };
@@ -219,8 +238,14 @@ const TERMINATING_GRACE_MS = 10 * 60_000;
  * would confirm the end is not there, so the pod object stays, a StatefulSet
  * does not start its replacement and a Longhorn volume stays attached.
  */
-export function evaluateStuckTerminating(pods: Pod[], nodes: { metadata: { name: string }; status?: { conditions?: Condition[] } }[], now: Date): Issue[] {
-  const ready = new Map(nodes.map((n) => [n.metadata.name, condition(n.status?.conditions, 'Ready')?.status === 'True']));
+export function evaluateStuckTerminating(
+  pods: Pod[],
+  nodes: { metadata: { name: string }; status?: { conditions?: Condition[] } }[],
+  now: Date,
+): Issue[] {
+  const ready = new Map(
+    nodes.map((n) => [n.metadata.name, condition(n.status?.conditions, 'Ready')?.status === 'True']),
+  );
   const issues: Issue[] = [];
   for (const pod of pods) {
     const since = Date.parse(pod.metadata.deletionTimestamp ?? '');
@@ -236,7 +261,15 @@ export function evaluateStuckTerminating(pods: Pod[], nodes: { metadata: { name:
       severity: 'warning',
       title: t('pods.terminating.title', { pod: `${ns}/${pod.metadata.name}`, age: ageText(now.getTime() - since) }),
       cause: ready.has(node) ? t('pods.terminating.notReady', { node }) : t('pods.terminating.nodeGone', { node }),
-      actions: [{ type: 'force-delete-terminating', namespace: ns, pod: pod.metadata.name, node, ...(owner.kind === 'StatefulSet' ? { statefulSet: owner.name } : {}) }],
+      actions: [
+        {
+          type: 'force-delete-terminating',
+          namespace: ns,
+          pod: pod.metadata.name,
+          node,
+          ...(owner.kind === 'StatefulSet' ? { statefulSet: owner.name } : {}),
+        },
+      ],
     });
   }
   return issues;
@@ -251,7 +284,11 @@ const CLEANUP_AFTER_MS = 60 * 60_000;
  * left alone: their logs belong to the Job, and the Job controller counts
  * them. One hint per namespace.
  */
-export function evaluateFinishedPods(pods: Pod[], jobs: { metadata: { name: string; namespace?: string } }[], now: Date): Issue[] {
+export function evaluateFinishedPods(
+  pods: Pod[],
+  jobs: { metadata: { name: string; namespace?: string } }[],
+  now: Date,
+): Issue[] {
   const jobNames = new Set(jobs.map((j) => `${j.metadata.namespace ?? 'default'}/${j.metadata.name}`));
   const byNs = new Map<string, Pod[]>();
   for (const pod of pods) {
@@ -280,7 +317,12 @@ export function evaluateFinishedPods(pods: Pod[], jobs: { metadata: { name: stri
         check: 'pods',
         severity: 'info' as const,
         title: t('pods.finished.title', { n: names.length, namespace: ns }),
-        cause: t('pods.finished.cause', { evicted, others: names.length - evicted, names: names.slice(0, 3).join(', '), more: Math.max(0, names.length - 3) }),
+        cause: t('pods.finished.cause', {
+          evicted,
+          others: names.length - evicted,
+          names: names.slice(0, 3).join(', '),
+          more: Math.max(0, names.length - 3),
+        }),
         // At most 50 per issue: the next run offers the rest.
         actions: [{ type: 'cleanup-pods' as const, namespace: ns, pods: names.slice(0, 50) }],
       };

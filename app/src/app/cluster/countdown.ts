@@ -18,7 +18,9 @@ export function shortSpan(ms: number, tr: Translator): string {
     return tr.t('countdown.seconds', { n: s });
   }
   const m = Math.round(s / 60);
-  return m < 60 ? tr.t('countdown.minutes', { n: m }) : tr.t('countdown.hours', { n: Math.round(m / 60) });
+  return m < 60
+    ? tr.t('countdown.minutes', { n: m })
+    : tr.t('countdown.hours', { n: Math.round(m / 60) });
 }
 
 /**
@@ -26,7 +28,12 @@ export function shortSpan(ms: number, tr: Translator): string {
  * headline and the ring around the eye. With reduced motion the caller ticks
  * every 5 s, and the progress moves in the same steps.
  */
-export function countdownView(s: Pick<Snapshot, 'checkedAt' | 'nextCheckAt'> | null, now: number, tr: Translator, step = 1000): CountdownView | null {
+export function countdownView(
+  s: Pick<Snapshot, 'checkedAt' | 'nextCheckAt'> | null,
+  now: number,
+  tr: Translator,
+  step = 1000,
+): CountdownView | null {
   const checked = Date.parse(s?.checkedAt ?? '');
   if (!Number.isFinite(checked)) {
     return null;
@@ -39,7 +46,8 @@ export function countdownView(s: Pick<Snapshot, 'checkedAt' | 'nextCheckAt'> | n
   const left = next - now;
   const total = next - checked;
   const raw = Math.min(1, Math.max(0, (now - checked) / total));
-  const progress = step > 1000 ? Math.min(1, Math.floor((now - checked) / step) * step / total) : raw;
+  const progress =
+    step > 1000 ? Math.min(1, (Math.floor((now - checked) / step) * step) / total) : raw;
   return {
     text: `${ago} · ${left > 1000 ? tr.t('countdown.next', { span: shortSpan(left, tr) }) : tr.t('countdown.due')}`,
     progress,

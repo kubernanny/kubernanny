@@ -1,4 +1,15 @@
-import { DEADMAN_MAX_VALIDITY_MS, DeadmanItem, DepositOutcome, PushStatus, deadmanPushContent, encodePushContent, parsePublicKey, sealPush, toBase64Url } from '@kubernanny/protocol';
+import {
+  DEADMAN_MAX_VALIDITY_MS,
+  DeadmanItem,
+  deadmanPushContent,
+  DepositOutcome,
+  encodePushContent,
+  parsePublicKey,
+  PushStatus,
+  sealPush,
+  toBase64Url,
+} from '@kubernanny/protocol';
+
 import { DevicesService } from '../auth/devices.service';
 import { IdentityService } from '../auth/identity.service';
 import type { Config } from '../config';
@@ -111,7 +122,12 @@ export class DeadmanService {
     const targets = on ? this.devices.pushTargets().filter((target) => target.push.deadman) : [];
     const holdUntil = context.holdUntil && context.holdUntil > now ? context.holdUntil : null;
     const lang = this.config.language;
-    const fingerprint = JSON.stringify([lang, this.config.clusterName, holdUntil, targets.map((t) => [t.deviceId, t.push.token, t.push.platform, t.push.kid, t.push.deadman])]);
+    const fingerprint = JSON.stringify([
+      lang,
+      this.config.clusterName,
+      holdUntil,
+      targets.map((t) => [t.deviceId, t.push.token, t.push.platform, t.push.kid, t.push.deadman]),
+    ]);
     const last = this.last?.connection === this.connection ? this.last : null;
     const due = !last || last.fingerprint !== fingerprint || now - last.at >= (last.ok ? DEADMAN_REFRESH_MS : RETRY_MS);
     // Nothing held and nothing to hold: no frame at all, except once per connection (it clears what an earlier pod left).
@@ -132,16 +148,31 @@ export class DeadmanService {
       );
       try {
         const sealed = sealPush(this.identity.keyPair, parsePublicKey(push.key), encodePushContent(content));
-        items.push({ token: push.token, platform: push.platform, kid: push.kid, message: toBase64Url(sealed), lang, graceMinutes: grace });
+        items.push({
+          token: push.token,
+          platform: push.platform,
+          kid: push.kid,
+          message: toBase64Url(sealed),
+          lang,
+          graceMinutes: grace,
+        });
       } catch {
         // A key that does not parse: that device gets none (it registered with a broken key).
       }
     }
     const connection = this.connection;
-    const outcome: DepositOutcome = await this.transport.deposit({ validitySeconds: Math.floor(validityMs / 1000), holdSeconds: Math.ceil(holdMs / 1000), items });
+    const outcome: DepositOutcome = await this.transport.deposit({
+      validitySeconds: Math.floor(validityMs / 1000),
+      holdSeconds: Math.ceil(holdMs / 1000),
+      items,
+    });
     this.last = { fingerprint, connection, at: now, ok: outcome === 'stored' };
     if (outcome === 'stored') {
-      this.logger.log(items.length > 0 ? `dead man's switch armed for ${items.length} device(s)${holdUntil ? ', waiting out the maintenance window' : ''}` : "dead man's switch cleared");
+      this.logger.log(
+        items.length > 0
+          ? `dead man's switch armed for ${items.length} device(s)${holdUntil ? ', waiting out the maintenance window' : ''}`
+          : "dead man's switch cleared",
+      );
     } else {
       this.logger.warn(`dead man's switch: the relay did not take the deposit (${outcome}), trying again later`);
     }
@@ -164,6 +195,8 @@ export class DeadmanService {
       priority: 2,
       ...(context.status ? { status: context.status } : {}),
     });
-    this.logger.log(`back after ${minutes} min: told ${outcomes.filter((o) => o === 'sent').length} of ${ids.length} device(s)`);
+    this.logger.log(
+      `back after ${minutes} min: told ${outcomes.filter((o) => o === 'sent').length} of ${ids.length} device(s)`,
+    );
   }
 }

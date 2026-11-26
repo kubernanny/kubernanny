@@ -55,7 +55,9 @@ export class PushTransport {
 
   /** `disabled` when no relay holds deposits now. */
   deposit(deposit: DeadmanDeposit): Promise<DepositOutcome> {
-    return this.carrier?.deposit && this.deadmanAvailable() ? this.carrier.deposit(deposit) : Promise.resolve('disabled');
+    return this.carrier?.deposit && this.deadmanAvailable()
+      ? this.carrier.deposit(deposit)
+      : Promise.resolve('disabled');
   }
 
   /** Whether a push could go out now: a relay is connected and offers push. */

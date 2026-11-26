@@ -1,12 +1,12 @@
 import { ageText } from '../../checks/types';
-import { MessageKey, TextError, t } from '../../i18n/text';
-import { keyFigures } from '../details';
 import type { Config } from '../../config';
 import { CATALOG } from '../../discovery/catalog';
 import { Detected } from '../../discovery/discovery';
+import { MessageKey, t, TextError } from '../../i18n/text';
+import { keyFigures } from '../details';
 import { CoreCheck } from '../module';
 import { ModuleContext, ModuleResult, Stat } from '../types';
-import { ComponentFindings, applyAcceptance, countByLevel, findingsFor, vulnerabilityIssue } from './evaluate';
+import { applyAcceptance, ComponentFindings, countByLevel, findingsFor, vulnerabilityIssue } from './evaluate';
 import { OsvQuery } from './osv-client';
 import { osvPackageFor, releaseVersion } from './versions';
 
@@ -32,11 +32,21 @@ export const MAPPED_COMPONENTS = CATALOG.filter((e) => e.osv).length;
  * layer included, so its findings are the better ones, and the same
  * advisories would otherwise show twice. It is then not even sent to OSV.
  */
-export function vulnTargets(gitVersion: string | undefined, detected: Detected[], covered?: ReadonlySet<string>): { targets: Target[]; unmatched: number; covered: number } {
+export function vulnTargets(
+  gitVersion: string | undefined,
+  detected: Detected[],
+  covered?: ReadonlySet<string>,
+): { targets: Target[]; unmatched: number; covered: number } {
   const targets: Target[] = [];
   const k8s = releaseVersion(gitVersion);
   if (k8s) {
-    targets.push({ key: 'kubernetes', name: 'Kubernetes', version: k8s, reachable: false, query: { ecosystem: 'Go', name: 'k8s.io/kubernetes', version: k8s } });
+    targets.push({
+      key: 'kubernetes',
+      name: 'Kubernetes',
+      version: k8s,
+      reachable: false,
+      query: { ecosystem: 'Go', name: 'k8s.io/kubernetes', version: k8s },
+    });
   }
   let unmatched = 0;
   let byTrivy = 0;
@@ -47,11 +57,21 @@ export function vulnTargets(gitVersion: string | undefined, detected: Detected[]
       unmatched++;
       continue;
     }
-    if (covered && d.workloads.length > 0 && d.workloads.every((w) => covered.has(`${w.namespace}/${w.kind}/${w.name}`))) {
+    if (
+      covered &&
+      d.workloads.length > 0 &&
+      d.workloads.every((w) => covered.has(`${w.namespace}/${w.kind}/${w.name}`))
+    ) {
       byTrivy++;
       continue;
     }
-    targets.push({ key: d.entry.id, name: d.entry.name, version, reachable: d.links.length > 0, query: { ...pkg, version } });
+    targets.push({
+      key: d.entry.id,
+      name: d.entry.name,
+      version,
+      reachable: d.links.length > 0,
+      query: { ...pkg, version },
+    });
   }
   return { targets, unmatched, covered: byTrivy };
 }
@@ -61,7 +81,11 @@ export function trivyHint(trivyRan: boolean, trivyDetected: boolean): Stat {
   if (trivyRan) {
     return { label: t('vulnerabilities.stat.everyImage'), value: t('vulnerabilities.trivy.found'), tone: 'ok' };
   }
-  return { label: t('vulnerabilities.stat.everyImage'), value: t(trivyDetected ? 'vulnerabilities.trivy.off' : 'vulnerabilities.trivy.missing'), tone: 'muted' };
+  return {
+    label: t('vulnerabilities.stat.everyImage'),
+    value: t(trivyDetected ? 'vulnerabilities.trivy.off' : 'vulnerabilities.trivy.missing'),
+    tone: 'muted',
+  };
 }
 
 export class VulnerabilitiesCheck extends CoreCheck {
@@ -82,36 +106,73 @@ export class VulnerabilitiesCheck extends CoreCheck {
       throw new TextError(t('vulnerabilities.noDatabase'));
     }
     const trivy = ctx.data.trivy;
-    const { targets, unmatched, covered } = vulnTargets(ctx.inv.version?.gitVersion, ctx.detected ?? [], trivy?.covered);
+    const { targets, unmatched, covered } = vulnTargets(
+      ctx.inv.version?.gitVersion,
+      ctx.detected ?? [],
+      trivy?.covered,
+    );
     const { results, staleSince } = await ctx.vulnDb.lookup(
       targets.map((t) => t.query),
       ctx.now,
     );
-    const found: ComponentFindings[] = targets.map((t, i) => ({ key: t.key, name: t.name, version: t.version, reachable: t.reachable, findings: findingsFor(results[i], t.query, t.version) }));
+    const found: ComponentFindings[] = targets.map((t, i) => ({
+      key: t.key,
+      name: t.name,
+      version: t.version,
+      reachable: t.reachable,
+      findings: findingsFor(results[i], t.query, t.version),
+    }));
     const acceptance = ctx.vulnAcceptance ?? { allowed: false, accepted: new Map() };
     const { components, accepted } = applyAcceptance(found, acceptance.accepted);
     const issues = components.map(vulnerabilityIssue).filter((i) => i !== null);
     const counts = countByLevel(components);
     const stats: Stat[] = [
       { label: t('vulnerabilities.stat.scope'), value: t('vulnerabilities.scope', { n: MAPPED_COMPONENTS }) },
-      trivyHint(trivy !== undefined, (ctx.detected ?? []).some((d) => d.entry.id === 'trivy')),
+      trivyHint(
+        trivy !== undefined,
+        (ctx.detected ?? []).some((d) => d.entry.id === 'trivy'),
+      ),
       { label: t('vulnerabilities.stat.checked'), value: t('vulnerabilities.stat.versions', { n: targets.length }) },
-      ...(covered ? [{ label: t('vulnerabilities.stat.byTrivy'), value: String(covered), tone: 'muted' as const }] : []),
-      { label: t('vulnerabilities.stat.critical'), value: String(counts.critical), tone: counts.critical ? 'critical' : 'ok' },
+      ...(covered
+        ? [{ label: t('vulnerabilities.stat.byTrivy'), value: String(covered), tone: 'muted' as const }]
+        : []),
+      {
+        label: t('vulnerabilities.stat.critical'),
+        value: String(counts.critical),
+        tone: counts.critical ? 'critical' : 'ok',
+      },
       { label: t('vulnerabilities.stat.high'), value: String(counts.high), tone: counts.high ? 'warning' : 'ok' },
       { label: t('vulnerabilities.stat.medium'), value: String(counts.medium), tone: 'muted' },
       { label: t('vulnerabilities.stat.lowOrUnrated'), value: String(counts.low + counts.unknown), tone: 'muted' },
       { label: t('vulnerabilities.stat.unmatched'), value: String(unmatched), tone: 'muted' },
-      ...(accepted.length ? [{ label: t('vulnerabilities.stat.accepted'), value: String(accepted.length), tone: 'muted' as const }] : []),
+      ...(accepted.length
+        ? [{ label: t('vulnerabilities.stat.accepted'), value: String(accepted.length), tone: 'muted' as const }]
+        : []),
       { label: t('stat.database'), value: ctx.vulnDb.host },
     ];
     const affected = issues.length;
     const none = trivy ? 'vulnerabilities.summary.noneTrivy' : 'vulnerabilities.summary.none';
-    const base = affected === 0 ? t(none, { n: targets.length }) : t('vulnerabilities.summary.affected', { n: affected });
+    const base =
+      affected === 0 ? t(none, { n: targets.length }) : t('vulnerabilities.summary.affected', { n: affected });
     const summary = staleSince
-      ? t('vulnerabilities.summary.stale', { summary: base, age: ageText(ctx.now.getTime() - staleSince.getTime()), host: ctx.vulnDb.host })
+      ? t('vulnerabilities.summary.stale', {
+          summary: base,
+          age: ageText(ctx.now.getTime() - staleSince.getTime()),
+          host: ctx.vulnDb.host,
+        })
       : base;
-    const severities: MessageKey[] = ['vulnerabilities.stat.critical', 'vulnerabilities.stat.high', 'vulnerabilities.stat.medium', 'vulnerabilities.stat.lowOrUnrated'];
-    return { issues, ...keyFigures(stats, severities, t('detail.lookup')), summary, accepted, canAccept: acceptance.allowed };
+    const severities: MessageKey[] = [
+      'vulnerabilities.stat.critical',
+      'vulnerabilities.stat.high',
+      'vulnerabilities.stat.medium',
+      'vulnerabilities.stat.lowOrUnrated',
+    ];
+    return {
+      issues,
+      ...keyFigures(stats, severities, t('detail.lookup')),
+      summary,
+      accepted,
+      canAccept: acceptance.allowed,
+    };
   }
 }

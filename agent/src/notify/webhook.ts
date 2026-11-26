@@ -1,4 +1,4 @@
-import { Lang, Text, render } from '../i18n/text';
+import { Lang, render, Text } from '../i18n/text';
 import type { NotifyPlan, Push } from './format';
 
 export type WebhookFormat = 'discord' | 'slack' | 'gotify' | 'json';
@@ -35,14 +35,26 @@ export function escapeDiscord(text: string): string {
 }
 
 /** The body each chat service expects. */
-export function webhookBody(format: WebhookFormat | 'json-minimal', cluster: string, push: Push, plan: NotifyPlan, lang: Lang): unknown {
+export function webhookBody(
+  format: WebhookFormat | 'json-minimal',
+  cluster: string,
+  push: Push,
+  plan: NotifyPlan,
+  lang: Lang,
+): unknown {
   const s = (text: Text) => render(text, lang);
   switch (format) {
     case 'discord':
       return {
         username: 'Kubernanny',
         allowed_mentions: { parse: [] },
-        embeds: [{ title: escapeDiscord(push.title), description: escapeDiscord(push.body), color: push.priority >= 5 ? 0xff5c6c : push.priority >= 3 ? 0xf2b33d : 0x3dd9b4 }],
+        embeds: [
+          {
+            title: escapeDiscord(push.title),
+            description: escapeDiscord(push.body),
+            color: push.priority >= 5 ? 0xff5c6c : push.priority >= 3 ? 0xf2b33d : 0x3dd9b4,
+          },
+        ],
       };
     case 'slack':
       return { text: `*${escapeSlack(push.title)}*\n${escapeSlack(push.body)}` };
@@ -54,8 +66,18 @@ export function webhookBody(format: WebhookFormat | 'json-minimal', cluster: str
         title: push.title,
         body: push.body,
         priority: push.priority,
-        opened: plan.opened.map(({ id, title, severity, cause }) => ({ id, title: s(title), severity, cause: s(cause) })),
-        escalated: plan.escalated.map(({ id, title, severity, cause }) => ({ id, title: s(title), severity, cause: s(cause) })),
+        opened: plan.opened.map(({ id, title, severity, cause }) => ({
+          id,
+          title: s(title),
+          severity,
+          cause: s(cause),
+        })),
+        escalated: plan.escalated.map(({ id, title, severity, cause }) => ({
+          id,
+          title: s(title),
+          severity,
+          cause: s(cause),
+        })),
         resolved: plan.resolved.map(({ id, title }) => ({ id, title: s(title) })),
       };
     case 'json-minimal':

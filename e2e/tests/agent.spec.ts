@@ -1,5 +1,7 @@
 import { randomBytes } from 'node:crypto';
+
 import { expect, test } from '@playwright/test';
+
 import { expectToast, openTab, visiblePage, watchErrors } from './helpers';
 
 const AGENT = 'http://127.0.0.1:4320';
@@ -16,12 +18,16 @@ test.describe('agent web UI', () => {
     await page.waitForURL(/#\/c\//);
   });
 
-  test('shows the agent key from the log before pairing, and refuses a link with another key for the same cluster', async ({ page }) => {
+  test('shows the agent key from the log before pairing, and refuses a link with another key for the same cluster', async ({
+    page,
+  }) => {
     const { fingerprint } = (await (await page.request.get(`${AGENT}/api/identity`)).json()) as { fingerprint: string };
     const cluster = page.url();
     // Someone else's link for the cluster already in the app: their key, their relay.
     const forged = randomBytes(32).toString('base64url');
-    await page.goto(`${AGENT}/#/pair?code=E2ETEST001&name=homelab&key=${forged}&relay=${encodeURIComponent('https://relay.evil.example')}`);
+    await page.goto(
+      `${AGENT}/#/pair?code=E2ETEST001&name=homelab&key=${forged}&relay=${encodeURIComponent('https://relay.evil.example')}`,
+    );
     const warning = visiblePage(page);
     await expect(warning.getByRole('heading', { name: 'Der Schlüssel des Agents hat sich geändert' })).toBeVisible();
     await expect(warning).toContainText(fingerprint);

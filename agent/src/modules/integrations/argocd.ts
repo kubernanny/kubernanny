@@ -1,20 +1,28 @@
-import { Integration } from '../module';
 import { ArgoApplication, evaluateArgoApps, isAutomated } from '../../checks/argocd.check';
+import { isReadyToSync, pendingSync } from '../../checks/argocd-pending';
 import { rollbackApps } from '../../checks/argocd-rollback';
 import { t } from '../../i18n/text';
 import { argoDetails } from '../details';
-import { isReadyToSync, pendingSync } from '../../checks/argocd-pending';
+import { Integration } from '../module';
 import { ModuleContext, ModuleResult } from '../types';
 
 export class ArgoCdIntegration extends Integration {
   readonly id = 'argocd';
   // argocd-rollback is no issue action: it is offered on the sheet (`rollbacks`), for apps without a problem too.
-  override readonly actions = ['argocd-sync', 'argocd-refresh', 'argocd-rollback', 'argocd-terminate-op', 'restart'] as const;
+  override readonly actions = [
+    'argocd-sync',
+    'argocd-refresh',
+    'argocd-rollback',
+    'argocd-terminate-op',
+    'restart',
+  ] as const;
   readonly reads = [{ group: 'argoproj.io', resource: 'applications', why: 'sync and health status of every app' }];
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
     const apps = (await ctx.kube.list<ArgoApplication>('/apis/argoproj.io/v1alpha1/applications')) ?? [];
     const issues = evaluateArgoApps(apps, ctx.inv, ctx.now);
-    const pendingSyncs = apps.filter((a) => isReadyToSync(a, isAutomated(a))).map((a) => pendingSync(a, ctx.syncOn ?? false));
+    const pendingSyncs = apps
+      .filter((a) => isReadyToSync(a, isAutomated(a)))
+      .map((a) => pendingSync(a, ctx.syncOn ?? false));
     const synced = apps.filter((a) => a.status?.sync?.status === 'Synced').length;
     const healthy = apps.filter((a) => a.status?.health?.status === 'Healthy').length;
     const progressing = apps.filter((a) => a.status?.health?.status === 'Progressing').length;
@@ -25,8 +33,21 @@ export class ArgoCdIntegration extends Integration {
       issues,
       stats: [
         { label: t('argocd.stat.apps'), value: String(apps.length) },
-        { label: t('argocd.stat.synced'), value: `${synced}/${apps.length}`, tone: synced === apps.length ? 'ok' : drifting > 0 ? 'warning' : 'muted' },
-        { label: t('argocd.stat.healthy'), value: `${healthy}/${apps.length}`, tone: healthy === apps.length ? 'ok' : progressing > 0 && healthy + progressing === apps.length ? 'muted' : 'critical' },
+        {
+          label: t('argocd.stat.synced'),
+          value: `${synced}/${apps.length}`,
+          tone: synced === apps.length ? 'ok' : drifting > 0 ? 'warning' : 'muted',
+        },
+        {
+          label: t('argocd.stat.healthy'),
+          value: `${healthy}/${apps.length}`,
+          tone:
+            healthy === apps.length
+              ? 'ok'
+              : progressing > 0 && healthy + progressing === apps.length
+                ? 'muted'
+                : 'critical',
+        },
         { label: t('argocd.stat.automated'), value: `${auto}/${apps.length}` },
       ],
       details: argoDetails(apps, ctx.now),

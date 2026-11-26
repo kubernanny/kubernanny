@@ -7,19 +7,19 @@
  * are fine (the app may ignore them).
  */
 import type * as App from '../../app/src/app/core/agent.model';
-import type { Text } from '../src/i18n/text';
-import type { IssueView, Overview, Snapshot } from '../src/status/snapshot';
-import type { ModuleView } from '../src/modules/types';
-import type { NodeView } from '../src/views/nodes';
-import type { WorkloadView, ContainerView } from '../src/views/workloads';
-import type { StorageView } from '../src/views/storage';
-import type { NetworkView } from '../src/views/network';
-import type { EventView } from '../src/views/events';
-import type { IncidentView, IncidentsView } from '../src/views/incidents';
-import type { BackupRow, BackupTargetView, BackupsView } from '../src/views/backups';
-import type { HistoryView, Series } from '../src/views/history';
-import type { SettingsPatch, SettingsView } from '../src/settings/settings.service';
 import type { RollbackApp } from '../src/checks/argocd-rollback';
+import type { Text } from '../src/i18n/text';
+import type { ModuleView } from '../src/modules/types';
+import type { SettingsPatch, SettingsView } from '../src/settings/settings.service';
+import type { IssueView, Overview, Snapshot } from '../src/status/snapshot';
+import type { BackupRow, BackupsView, BackupTargetView } from '../src/views/backups';
+import type { EventView } from '../src/views/events';
+import type { HistoryView, Series } from '../src/views/history';
+import type { IncidentsView, IncidentView } from '../src/views/incidents';
+import type { NetworkView } from '../src/views/network';
+import type { NodeView } from '../src/views/nodes';
+import type { StorageView } from '../src/views/storage';
+import type { ContainerView, WorkloadView } from '../src/views/workloads';
 
 /** What JSON.stringify makes of a value after `localize`: every Text becomes a string. */
 type Wire<T> = T extends Text

@@ -44,14 +44,18 @@ export function evaluateRookCeph(clusters: CephCluster[], now: Date): Issue[] {
     const ceph = c.status?.ceph;
     if (ceph?.health === 'HEALTH_WARN' || ceph?.health === 'HEALTH_ERR') {
       // HEALTH_ERR checks first: they are why the cluster is in error.
-      const details = Object.entries(ceph.details ?? {}).sort(([, a], [, b]) => Number(b.severity === 'HEALTH_ERR') - Number(a.severity === 'HEALTH_ERR'));
+      const details = Object.entries(ceph.details ?? {}).sort(
+        ([, a], [, b]) => Number(b.severity === 'HEALTH_ERR') - Number(a.severity === 'HEALTH_ERR'),
+      );
       const messages = details.slice(0, MAX_DETAILS).map(([check, d]) => raw(`${check}: ${d.message ?? ''}`.trim()));
       issues.push({
         id: `${base}/health`,
         check: 'rook-ceph',
         severity: ceph.health === 'HEALTH_ERR' ? 'critical' : 'warning',
         title: t(ceph.health === 'HEALTH_ERR' ? 'rookCeph.health.errTitle' : 'rookCeph.health.warnTitle', { name }),
-        cause: messages.length ? t('rookCeph.health.cause', { details: messages, more: Math.max(0, details.length - MAX_DETAILS) }) : t('rookCeph.health.noDetails'),
+        cause: messages.length
+          ? t('rookCeph.health.cause', { details: messages, more: Math.max(0, details.length - MAX_DETAILS) })
+          : t('rookCeph.health.noDetails'),
         actions: [],
       });
     }
@@ -81,7 +85,14 @@ export function evaluateRookCeph(clusters: CephCluster[], now: Date): Issue[] {
     } else {
       const checked = Date.parse(ceph?.lastChecked ?? '');
       if (Number.isFinite(checked) && now.getTime() - checked > CEPH_STALE_MS) {
-        issues.push({ id: `${base}/operator`, check: 'rook-ceph', severity: 'warning', title: t('rookCeph.stale.title', { name }), cause: t('rookCeph.stale.cause'), actions: [] });
+        issues.push({
+          id: `${base}/operator`,
+          check: 'rook-ceph',
+          severity: 'warning',
+          title: t('rookCeph.stale.title', { name }),
+          cause: t('rookCeph.stale.cause'),
+          actions: [],
+        });
       }
     }
   }
@@ -90,7 +101,13 @@ export function evaluateRookCeph(clusters: CephCluster[], now: Date): Issue[] {
 
 export class RookCephIntegration extends Integration {
   readonly id = 'rook-ceph';
-  readonly reads = [{ group: 'ceph.rook.io', resource: 'cephclusters', why: 'Ceph health, its warnings and raw capacity per CephCluster' }];
+  readonly reads = [
+    {
+      group: 'ceph.rook.io',
+      resource: 'cephclusters',
+      why: 'Ceph health, its warnings and raw capacity per CephCluster',
+    },
+  ];
 
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
     const clusters = (await ctx.kube.list<CephCluster>('/apis/ceph.rook.io/v1/cephclusters')) ?? [];
@@ -98,7 +115,11 @@ export class RookCephIntegration extends Integration {
     const stats: Stat[] = [{ label: t('rookCeph.stat.clusters'), value: String(clusters.length) }];
     for (const c of clusters) {
       const health = c.status?.ceph?.health ?? '?';
-      stats.push({ label: raw(`${c.metadata.namespace ?? '-'}/${c.metadata.name}`), value: health, tone: health === 'HEALTH_OK' ? 'ok' : health === 'HEALTH_ERR' ? 'critical' : 'warning' });
+      stats.push({
+        label: raw(`${c.metadata.namespace ?? '-'}/${c.metadata.name}`),
+        value: health,
+        tone: health === 'HEALTH_OK' ? 'ok' : health === 'HEALTH_ERR' ? 'critical' : 'warning',
+      });
       const cap = c.status?.ceph?.capacity;
       if (cap?.bytesTotal) {
         const share = (cap.bytesUsed ?? 0) / cap.bytesTotal;

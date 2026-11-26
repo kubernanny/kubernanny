@@ -41,7 +41,12 @@ export function buildNodes(inv: Inventory, data: RunData): NodeView[] {
     const node = pod.spec!.nodeName!;
     const r = requested.get(node) ?? { res: NO_RESOURCES, count: 0, noCpuLimit: 0, noMemLimit: 0 };
     const own = podResources(pod);
-    requested.set(node, { res: addResources(r.res, own), count: r.count + 1, noCpuLimit: r.noCpuLimit + (own.cpuUnlimited > 0 ? 1 : 0), noMemLimit: r.noMemLimit + (own.memUnlimited > 0 ? 1 : 0) });
+    requested.set(node, {
+      res: addResources(r.res, own),
+      count: r.count + 1,
+      noCpuLimit: r.noCpuLimit + (own.cpuUnlimited > 0 ? 1 : 0),
+      noMemLimit: r.noMemLimit + (own.memUnlimited > 0 ? 1 : 0),
+    });
   }
   return inv.nodes
     .map((n) => {
@@ -65,14 +70,29 @@ export function buildNodes(inv: Inventory, data: RunData): NodeView[] {
         arch: info?.architecture,
         internalIp: n.status?.addresses?.find((a) => a.type === 'InternalIP')?.address,
         createdAt: n.metadata.creationTimestamp,
-        cpu: { allocatableMilli: cpuMilli(n.status?.allocatable?.cpu), requestedMilli: r.res.cpuRequestMilli, limitMilli: r.res.cpuLimitMilli, usedMilli: usage?.cpuMilli ?? null },
-        memory: { allocatable: parseQuantity(n.status?.allocatable?.memory), requested: r.res.memRequest, limit: r.res.memLimit, used: usage?.memBytes ?? null },
+        cpu: {
+          allocatableMilli: cpuMilli(n.status?.allocatable?.cpu),
+          requestedMilli: r.res.cpuRequestMilli,
+          limitMilli: r.res.cpuLimitMilli,
+          usedMilli: usage?.cpuMilli ?? null,
+        },
+        memory: {
+          allocatable: parseQuantity(n.status?.allocatable?.memory),
+          requested: r.res.memRequest,
+          limit: r.res.memLimit,
+          used: usage?.memBytes ?? null,
+        },
         disk: data.nodeDisk?.get(name) ?? null,
         pods: { count: r.count, capacity: Number(n.status?.allocatable?.pods ?? 0) },
         podsWithoutLimit: { cpu: r.noCpuLimit, memory: r.noMemLimit },
         conditions: (n.status?.conditions ?? [])
           .filter((c) => (c.type === 'Ready' ? c.status !== 'True' : c.status === 'True'))
-          .map((c) => ({ type: c.type, status: c.status, message: c.message, ...(c.lastTransitionTime ? { since: c.lastTransitionTime } : {}) })),
+          .map((c) => ({
+            type: c.type,
+            status: c.status,
+            message: c.message,
+            ...(c.lastTransitionTime ? { since: c.lastTransitionTime } : {}),
+          })),
         taints: (n.spec?.taints ?? []).map((t) => `${t.key}${t.value ? `=${t.value}` : ''}:${t.effect}`),
       };
     })

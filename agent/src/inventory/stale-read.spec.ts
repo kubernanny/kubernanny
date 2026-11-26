@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { Agent } from '../agent';
 import { DemoKubeClient, DemoScenario } from '../demo/demo-cluster';
 import { KubeError } from '../kube/kube-client';
@@ -13,13 +14,24 @@ class SlowKube extends DemoKubeClient {
   status = 500;
   override async list<T>(path: string): Promise<T[] | null> {
     if ([...this.failing].some((p) => path.startsWith(p))) {
-      throw new KubeError(this.status, `${this.status} on ${path}: the server is currently unable to handle the request`);
+      throw new KubeError(
+        this.status,
+        `${this.status} on ${path}: the server is currently unable to handle the request`,
+      );
     }
     return super.list<T>(path);
   }
 }
 
-const WORKLOAD_LISTS = ['/apis/apps/v1/deployments', '/apis/apps/v1/statefulsets', '/apis/apps/v1/daemonsets', '/apis/batch/v1/jobs', '/api/v1/services', '/api/v1/persistentvolumeclaims', '/apis/networking.k8s.io/v1/ingresses'];
+const WORKLOAD_LISTS = [
+  '/apis/apps/v1/deployments',
+  '/apis/apps/v1/statefulsets',
+  '/apis/apps/v1/daemonsets',
+  '/apis/batch/v1/jobs',
+  '/api/v1/services',
+  '/api/v1/persistentvolumeclaims',
+  '/apis/networking.k8s.io/v1/ingresses',
+];
 
 describe('a list that fails (review: optional() made it look empty)', () => {
   let agent: Agent | null = null;
@@ -32,7 +44,12 @@ describe('a list that fails (review: optional() made it look empty)', () => {
     process.env.CHECK_INTERVAL_SECONDS = '3600';
     const kube = new SlowKube(undefined, scenario);
     const pushed: Snapshot[] = [];
-    const notifier = { channels: ['ntfy'], update: async (s: Snapshot) => void pushed.push(s), securityAlert: async () => undefined, test: async () => [] };
+    const notifier = {
+      channels: ['ntfy'],
+      update: async (s: Snapshot) => void pushed.push(s),
+      securityAlert: async () => undefined,
+      test: async () => [],
+    };
     agent = new Agent({ kube, notifier: notifier as unknown as Notifier });
     await agent.status.refresh();
     return { kube, status: agent.status, pushed };
@@ -50,7 +67,15 @@ describe('a list that fails (review: optional() made it look empty)', () => {
     // Same issues, same first-seen times: the notifier sees nothing open or close.
     expect(after.issues.map((i) => [i.id, i.since])).toEqual(before.issues.map((i) => [i.id, i.since]));
     expect(status.state().detected.map((d) => d.entry.id)).toEqual(components);
-    expect(status.state().inv.stale.sort()).toEqual(['daemonsets', 'deployments', 'ingresses', 'jobs', 'pvcs', 'services', 'statefulsets']);
+    expect(status.state().inv.stale.sort()).toEqual([
+      'daemonsets',
+      'deployments',
+      'ingresses',
+      'jobs',
+      'pvcs',
+      'services',
+      'statefulsets',
+    ]);
     expect(pushed.at(-1)!.issues.map((i) => i.id)).toEqual(before.issues.map((i) => i.id));
   });
 

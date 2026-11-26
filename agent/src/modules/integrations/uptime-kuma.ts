@@ -25,7 +25,8 @@ export class UptimeKumaIntegration extends Integration {
       return {
         issues: [],
         stats: [{ label: t('uptimeKuma.stat.statusPage'), value: t('uptimeKuma.stat.notConfigured'), tone: 'muted' }],
-        summary: ready === total ? t('workloadHealth.ready', { n: ready }) : t('workloadHealth.partial', { ready, total }),
+        summary:
+          ready === total ? t('workloadHealth.ready', { n: ready }) : t('workloadHealth.partial', { ready, total }),
       };
     }
     const k = this.http(ctx, det, [3001, 'http']);
@@ -35,10 +36,20 @@ export class UptimeKumaIntegration extends Integration {
     let page: unknown;
     let beats: unknown;
     try {
-      [page, beats] = await Promise.all([k.get<unknown>(`/api/status-page/${slug}`), k.get<unknown>(`/api/status-page/heartbeat/${slug}`)]);
+      [page, beats] = await Promise.all([
+        k.get<unknown>(`/api/status-page/${slug}`),
+        k.get<unknown>(`/api/status-page/heartbeat/${slug}`),
+      ]);
     } catch (err) {
       if (isAuthError(err)) {
-        return { issues: [], stats: [{ label: t('uptimeKuma.stat.statusPage'), value: slug }, { label: t('uptime.stat.api'), value: t('gatus.protected'), tone: 'muted' }], summary: t('gatus.summary.protected') };
+        return {
+          issues: [],
+          stats: [
+            { label: t('uptimeKuma.stat.statusPage'), value: slug },
+            { label: t('uptime.stat.api'), value: t('gatus.protected'), tone: 'muted' },
+          ],
+          summary: t('gatus.summary.protected'),
+        };
       }
       throw err;
     }

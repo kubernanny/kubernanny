@@ -1,19 +1,21 @@
-import { describe, expect, it } from 'vitest';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { generateKeyPair, keyPairFromSecret } from '../src/noise.js';
-import { fromBase64Url } from '../src/keys.js';
+
 import { blake2b } from '@noble/hashes/blake2.js';
+import { describe, expect, it } from 'vitest';
+
+import { fromBase64Url } from '../src/keys.js';
+import { generateKeyPair, keyPairFromSecret } from '../src/noise.js';
 import {
-  FrameType,
-  RegistrationChallenge,
-  RelayFrameError,
   answerChallenge,
   decodeFrame,
   decodeReplyEnd,
   encodeFrame,
   encodeReply,
+  FrameType,
   isAgentId,
+  RegistrationChallenge,
   relayAgentId,
+  RelayFrameError,
   relayOrigin,
 } from '../src/relay.js';
 
@@ -51,7 +53,11 @@ describe('relay frames', () => {
   it('reads a frame at an offset inside a larger buffer', () => {
     const buffer = new Uint8Array(20);
     buffer.set(encodeFrame(FrameType.Cancel, 7), 10);
-    expect(decodeFrame(buffer.subarray(10, 15))).toEqual({ type: FrameType.Cancel, callId: 7, payload: new Uint8Array(0) });
+    expect(decodeFrame(buffer.subarray(10, 15))).toEqual({
+      type: FrameType.Cancel,
+      callId: 7,
+      payload: new Uint8Array(0),
+    });
   });
 
   it('refuses short frames and bad call ids', () => {
@@ -63,7 +69,12 @@ describe('relay frames', () => {
   it('splits a large reply into chunks and ends with the status', () => {
     const body = new Uint8Array(1000).map((_, i) => i & 0xff);
     const frames = encodeReply(9, 200, body, 300).map(decodeFrame);
-    expect(frames.map((f) => f.type)).toEqual([FrameType.ReplyChunk, FrameType.ReplyChunk, FrameType.ReplyChunk, FrameType.ReplyEnd]);
+    expect(frames.map((f) => f.type)).toEqual([
+      FrameType.ReplyChunk,
+      FrameType.ReplyChunk,
+      FrameType.ReplyChunk,
+      FrameType.ReplyEnd,
+    ]);
     expect(frames.every((f) => f.callId === 9)).toBe(true);
     const end = decodeReplyEnd(frames[3]!.payload);
     expect(end.status).toBe(200);
@@ -107,7 +118,9 @@ describe('registration proof', () => {
     const victim = generateKeyPair();
     const challenge = new RegistrationChallenge();
     const attacker = generateKeyPair();
-    const forged = decodeFrame(answerChallenge(attacker, decodeFrame(challenge.frame()).payload, ORIGIN)).payload.slice();
+    const forged = decodeFrame(
+      answerChallenge(attacker, decodeFrame(challenge.frame()).payload, ORIGIN),
+    ).payload.slice();
     forged.set(victim.publicKey, 0);
     expect(challenge.verify(forged, relayAgentId(victim.publicKey), ORIGIN)).toBe(false);
   });
@@ -123,7 +136,9 @@ describe('registration proof', () => {
     expect(fresh.verify(proof, id, ORIGIN)).toBe(false);
     // The genuine agent still gets in on the fresh challenge.
     const again = new RegistrationChallenge();
-    expect(again.verify(decodeFrame(answerChallenge(agent, decodeFrame(again.frame()).payload, ORIGIN)).payload, id, ORIGIN)).toBe(true);
+    expect(
+      again.verify(decodeFrame(answerChallenge(agent, decodeFrame(again.frame()).payload, ORIGIN)).payload, id, ORIGIN),
+    ).toBe(true);
   });
 
   it('verifies only once per challenge', () => {
@@ -164,15 +179,22 @@ describe('registration proof bound to the relay (review L3)', () => {
     const id = relayAgentId(agent.publicKey);
     // A hostile relay forwards relay B's challenge to an agent connected to it and passes the answer back to B.
     const atB = new RegistrationChallenge();
-    const proof = decodeFrame(answerChallenge(agent, decodeFrame(atB.frame()).payload, 'wss://hostile.example')).payload;
+    const proof = decodeFrame(
+      answerChallenge(agent, decodeFrame(atB.frame()).payload, 'wss://hostile.example'),
+    ).payload;
     expect(atB.verify(proof, id, 'https://relay-b.example')).toBe(false);
     const again = new RegistrationChallenge();
-    const honest = decodeFrame(answerChallenge(agent, decodeFrame(again.frame()).payload, 'wss://relay-b.example')).payload;
+    const honest = decodeFrame(
+      answerChallenge(agent, decodeFrame(again.frame()).payload, 'wss://relay-b.example'),
+    ).payload;
     expect(again.verify(honest, id, 'https://relay-b.example')).toBe(true);
   });
 
   it('reproduces the relay proof test vector (test/relay-vectors.json)', () => {
-    const vector = JSON.parse(readFileSync(new URL('./relay-vectors.json', import.meta.url), 'utf8')) as Record<string, string>;
+    const vector = JSON.parse(readFileSync(new URL('./relay-vectors.json', import.meta.url), 'utf8')) as Record<
+      string,
+      string
+    >;
     const hex = (t: string) => Uint8Array.from(Buffer.from(t, 'hex'));
     const agent = keyPairFromSecret(hex(vector['agentStaticSecret']!));
     const challenge = new RegistrationChallenge(hex(vector['nonce']!), hex(vector['relayEphemeralSecret']!));
@@ -185,6 +207,8 @@ describe('registration proof bound to the relay (review L3)', () => {
     }
     expect(Buffer.from(challengeFrame).toString('hex')).toBe(vector['challengeFrame']);
     expect(Buffer.from(proofFrame).toString('hex')).toBe(vector['proofFrame']);
-    expect(challenge.verify(decodeFrame(proofFrame).payload, relayAgentId(agent.publicKey), vector['relayPublicUrl']!)).toBe(true);
+    expect(
+      challenge.verify(decodeFrame(proofFrame).payload, relayAgentId(agent.publicKey), vector['relayPublicUrl']!),
+    ).toBe(true);
   });
 });

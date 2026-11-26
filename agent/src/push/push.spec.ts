@@ -1,27 +1,29 @@
 import { AddressInfo } from 'node:net';
+
 import {
-  FrameType,
-  PushRequest,
-  RegistrationChallenge,
   decodeFrame,
   decodePushContent,
   decodePushRequest,
   encodeFrame,
   encodePushResult,
+  FrameType,
   fromBase64Url,
   generateKeyPair,
   openPush,
   pushKeyId,
+  PushRequest,
+  RegistrationChallenge,
   toBase64Url,
 } from '@kubernanny/protocol';
-import { NotFoundError } from '../http/errors';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
+
 import { DevicesService, Principal } from '../auth/devices.service';
 import { IdentityService } from '../auth/identity.service';
 import { Config, loadConfig, parseAppPush } from '../config';
 import { DemoKubeClient } from '../demo/demo-cluster';
 import { E2eService } from '../e2e/e2e.service';
+import { NotFoundError } from '../http/errors';
 import { RelayClient } from '../relay/relay-client';
 import { AppPushService } from './app-push.service';
 import { PushApi } from './push.routes';
@@ -51,7 +53,8 @@ async function setup(overrides: Partial<Config> = {}, outcome?: Awaited<ReturnTy
   return { config, kube, devices, device, push, sent, transport };
 }
 
-const secretWrites = (kube: DemoKubeClient) => kube.writes.filter((w) => w.path.includes('/secrets/') || w.path.endsWith('/secrets'));
+const secretWrites = (kube: DemoKubeClient) =>
+  kube.writes.filter((w) => w.path.includes('/secrets/') || w.path.endsWith('/secrets'));
 const pushKey = generateKeyPair();
 const registration = { token: TOKEN, platform: 'ios', key: toBase64Url(pushKey.publicKey) };
 const message = { title: 'homelab: 1 problem', body: '🔴 default/api: CrashLoopBackOff', priority: 5 };
@@ -73,7 +76,12 @@ describe('push registration', () => {
     const listed = devices.list();
     expect(listed[0]!.push).toBe(true);
     expect(JSON.stringify(listed)).not.toContain(TOKEN);
-    expect(push.view(device)).toEqual({ state: 'on', relay: true, registered: true, deadman: { state: 'relay', grace: null } });
+    expect(push.view(device)).toEqual({
+      state: 'on',
+      relay: true,
+      registered: true,
+      deadman: { state: 'relay', grace: null },
+    });
 
     expect(await push.deliver(message)).toBe(true);
     expect(sent).toHaveLength(1);
@@ -86,13 +94,23 @@ describe('push registration', () => {
 
   it('refuses anything but a paired device, a malformed registration, and an agent without a relay', async () => {
     const { device, push } = await setup();
-    await expect(push.register({ kind: 'admin', id: 'admin', name: 'Admin' }, registration)).rejects.toMatchObject({ response: { code: 'PUSH_DEVICE_ONLY' } });
-    await expect(push.register(device, { ...registration, token: 'short' })).rejects.toMatchObject({ response: { code: 'PUSH_INVALID' } });
-    await expect(push.register(device, { ...registration, platform: 'web' })).rejects.toMatchObject({ response: { code: 'PUSH_INVALID' } });
-    await expect(push.register(device, { ...registration, key: 'nope' })).rejects.toMatchObject({ response: { code: 'PUSH_INVALID' } });
+    await expect(push.register({ kind: 'admin', id: 'admin', name: 'Admin' }, registration)).rejects.toMatchObject({
+      response: { code: 'PUSH_DEVICE_ONLY' },
+    });
+    await expect(push.register(device, { ...registration, token: 'short' })).rejects.toMatchObject({
+      response: { code: 'PUSH_INVALID' },
+    });
+    await expect(push.register(device, { ...registration, platform: 'web' })).rejects.toMatchObject({
+      response: { code: 'PUSH_INVALID' },
+    });
+    await expect(push.register(device, { ...registration, key: 'nope' })).rejects.toMatchObject({
+      response: { code: 'PUSH_INVALID' },
+    });
     const noRelay = await setup({ relayUrl: undefined });
     expect(noRelay.push.state()).toBe('no-relay');
-    await expect(noRelay.push.register(noRelay.device, registration)).rejects.toMatchObject({ response: { code: 'PUSH_NO_RELAY' } });
+    await expect(noRelay.push.register(noRelay.device, registration)).rejects.toMatchObject({
+      response: { code: 'PUSH_NO_RELAY' },
+    });
   });
 
   it('removes the token when the device turns push off, is revoked, or FCM no longer knows it', async () => {
@@ -129,7 +147,9 @@ describe('push registration', () => {
     await push.register(device, registration);
     const again = new DevicesService(config, kube);
     await again.onModuleInit();
-    expect(again.pushTargets()).toEqual([{ deviceId: device.id, push: expect.objectContaining({ token: TOKEN, platform: 'ios' }) }]);
+    expect(again.pushTargets()).toEqual([
+      { deviceId: device.id, push: expect.objectContaining({ token: TOKEN, platform: 'ios' }) },
+    ]);
   });
 });
 
@@ -144,7 +164,12 @@ describe('APP_PUSH=off: switched off for good, not just hidden', () => {
     await expect(api.test(device)).rejects.toBeInstanceOf(NotFoundError);
     expect(kube.writes.length).toBe(writes);
     expect(devices.pushTargets()).toEqual([]);
-    expect(api.view(device)).toEqual({ state: 'locked', relay: false, registered: false, deadman: { state: 'on', grace: null } });
+    expect(api.view(device)).toEqual({
+      state: 'locked',
+      relay: false,
+      registered: false,
+      deadman: { state: 'on', grace: null },
+    });
   });
 
   it('deletes tokens stored while it was on, at start', async () => {
@@ -198,7 +223,15 @@ describe('RelayClient as the push carrier', () => {
           }
           const frame = decodeFrame(new Uint8Array(data));
           if (frame.type === FrameType.Proof) {
-            ws.send(encodeFrame(FrameType.Ready, 0, new TextEncoder().encode(JSON.stringify({ push: offersPush, ...(offersStatusPush ? { statusPush: true } : {}) }))));
+            ws.send(
+              encodeFrame(
+                FrameType.Ready,
+                0,
+                new TextEncoder().encode(
+                  JSON.stringify({ push: offersPush, ...(offersStatusPush ? { statusPush: true } : {}) }),
+                ),
+              ),
+            );
             setTimeout(resolve, 20);
           } else if (frame.type === FrameType.Push) {
             pushes.push(decodePushRequest(frame.payload)!);
@@ -209,13 +242,23 @@ describe('RelayClient as the push carrier', () => {
       });
     });
     const transport = new PushTransport();
-    client = new RelayClient({ relayUrl: `ws://127.0.0.1:${port}`, appPush } as Config, identity, {} as E2eService, transport);
+    client = new RelayClient(
+      { relayUrl: `ws://127.0.0.1:${port}`, appPush } as Config,
+      identity,
+      {} as E2eService,
+      transport,
+    );
     client.onApplicationBootstrap();
     await ready;
     return { pushes, transport };
   }
 
-  const request: PushRequest = { token: TOKEN, platform: 'android', kid: 'AbCdEfGhIjKlMnOp', message: toBase64Url(new Uint8Array(80)) };
+  const request: PushRequest = {
+    token: TOKEN,
+    platform: 'android',
+    kid: 'AbCdEfGhIjKlMnOp',
+    message: toBase64Url(new Uint8Array(80)),
+  };
 
   it('sends a Push frame when the relay offers push, and returns its answer', async () => {
     const { pushes, transport } = await relay(true, true);

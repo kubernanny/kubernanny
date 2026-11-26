@@ -20,10 +20,70 @@
  * would be right one time in eight.
  */
 export const MARKER_POOL = [
-  '🦉', '🦊', '🐙', '🌵', '🍀', '🐝', '🌻', '⚓', '🦋', '🐢', '🦀', '🐳', '🦒', '🦔', '🦜', '🐌',
-  '🍄', '🌙', '⭐', '🔥', '🌈', '❄️', '🍋', '🍒', '🍉', '🥕', '🌽', '🍩', '🧀', '🥨', '🍕', '☕',
-  '🎈', '🎲', '🎸', '🎺', '🥁', '🪁', '🧩', '🪀', '🚲', '🛶', '🚀', '🛸', '⛵', '🏰', '🗿', '🌋',
-  '🔑', '🧭', '⏰', '🔭', '🧲', '💎', '🪴', '🕯️', '📎', '✂️', '🧵', '🪶', '🐚', '🍂', '🌊', '🧊',
+  '🦉',
+  '🦊',
+  '🐙',
+  '🌵',
+  '🍀',
+  '🐝',
+  '🌻',
+  '⚓',
+  '🦋',
+  '🐢',
+  '🦀',
+  '🐳',
+  '🦒',
+  '🦔',
+  '🦜',
+  '🐌',
+  '🍄',
+  '🌙',
+  '⭐',
+  '🔥',
+  '🌈',
+  '❄️',
+  '🍋',
+  '🍒',
+  '🍉',
+  '🥕',
+  '🌽',
+  '🍩',
+  '🧀',
+  '🥨',
+  '🍕',
+  '☕',
+  '🎈',
+  '🎲',
+  '🎸',
+  '🎺',
+  '🥁',
+  '🪁',
+  '🧩',
+  '🪀',
+  '🚲',
+  '🛶',
+  '🚀',
+  '🛸',
+  '⛵',
+  '🏰',
+  '🗿',
+  '🌋',
+  '🔑',
+  '🧭',
+  '⏰',
+  '🔭',
+  '🧲',
+  '💎',
+  '🪴',
+  '🕯️',
+  '📎',
+  '✂️',
+  '🧵',
+  '🪶',
+  '🐚',
+  '🍂',
+  '🌊',
+  '🧊',
 ] as const;
 
 /** How many emoji a suggestion has. */
@@ -61,7 +121,11 @@ function cryptoIndex(n: number): number {
 export function normalizeMarker(input: string): string | null {
   const trimmed = input.trim();
   // Checked before spaces are collapsed (\s also matches line separators). Zero width joiner stays: emoji sequences are built with it.
-  if (!trimmed || /[\p{Cc}\p{Zl}\p{Zp}]/u.test(trimmed) || /[\p{Cf}]/u.test(trimmed.replace(/‍/g, ''))) {
+  if (
+    !trimmed ||
+    /[\p{Cc}\p{Zl}\p{Zp}]/u.test(trimmed) ||
+    /[\p{Cf}]/u.test(trimmed.replace(/‍/g, ''))
+  ) {
     return null;
   }
   const marker = trimmed.replace(/\s+/g, ' ');

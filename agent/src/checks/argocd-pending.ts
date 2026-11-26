@@ -41,11 +41,21 @@ export interface PendingSync {
 }
 
 interface ArgoAppFull extends ArgoApplication {
-  spec?: ArgoApplication['spec'] & { project?: string; destination?: { namespace?: string; server?: string; name?: string } };
+  spec?: ArgoApplication['spec'] & {
+    project?: string;
+    destination?: { namespace?: string; server?: string; name?: string };
+  };
   status?: ArgoApplication['status'] & {
     operationState?: { phase?: string; finishedAt?: string; syncResult?: { revision?: string } };
     summary?: { images?: string[] };
-    resources?: { kind: string; name: string; namespace?: string; status?: string; requiresPruning?: boolean; health?: { status?: string } }[];
+    resources?: {
+      kind: string;
+      name: string;
+      namespace?: string;
+      status?: string;
+      requiresPruning?: boolean;
+      health?: { status?: string };
+    }[];
   };
 }
 
@@ -67,7 +77,9 @@ function splitImage(image: string): { repo: string; tag: string } | null {
 
 /** Images Git asks for: Helm `image.repository|name` + `image.tag` parameters (any prefix), Kustomize `images` overrides. */
 function desiredImages(app: ArgoApplication): string[] {
-  const sources = [app.spec?.source, ...(app.spec?.sources ?? [])].filter((s): s is SourceWithOverrides => s !== undefined);
+  const sources = [app.spec?.source, ...(app.spec?.sources ?? [])].filter(
+    (s): s is SourceWithOverrides => s !== undefined,
+  );
   const out: string[] = [];
   for (const s of sources) {
     const params = new Map((s.helm?.parameters ?? []).map((p) => [p.name, p.value ?? '']));
@@ -115,7 +127,14 @@ export function isReadyToSync(app: ArgoApplication, automated: boolean): boolean
   const a = app as ArgoAppFull;
   const health = a.status?.health?.status;
   const phase = a.status?.operationState?.phase;
-  return !automated && a.status?.sync?.status === 'OutOfSync' && health !== 'Degraded' && health !== 'Missing' && phase !== 'Failed' && phase !== 'Error';
+  return (
+    !automated &&
+    a.status?.sync?.status === 'OutOfSync' &&
+    health !== 'Degraded' &&
+    health !== 'Missing' &&
+    phase !== 'Failed' &&
+    phase !== 'Error'
+  );
 }
 
 export function pendingSync(app: ArgoApplication, canSync: boolean): PendingSync {

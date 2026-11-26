@@ -1,8 +1,9 @@
-import { Injectable, inject } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { Router } from '@angular/router';
 import { ToastController } from '@ionic/angular/standalone';
-import { LanguageService } from '../../i18n/language.service';
+
 import { TranslationKey } from '../../i18n/dictionary';
+import { LanguageService } from '../../i18n/language.service';
 import { PairingLinkParams, scannedPairingRoute } from '../pairing-link';
 import { QrScanner, ScanOutcome } from './qr-scanner.service';
 
@@ -41,7 +42,11 @@ export class ScanPairing {
 
   async start(): Promise<void> {
     const tr = this.language.translator();
-    const outcome = await this.scanner.scan({ title: tr.t('pair.scan.title'), hint: tr.t('pair.scan.hint'), cancel: tr.t('common.cancel') });
+    const outcome = await this.scanner.scan({
+      title: tr.t('pair.scan.title'),
+      hint: tr.t('pair.scan.hint'),
+      cancel: tr.t('common.cancel'),
+    });
     await this.follow(outcome);
   }
 
@@ -55,7 +60,11 @@ export class ScanPairing {
       await this.router.navigate(['/pair'], { queryParams: step.pair });
       return;
     }
-    const toast = await this.toasts.create({ message: this.language.translator().t(step.message), duration: 6000, position: 'bottom' });
+    const toast = await this.toasts.create({
+      message: this.language.translator().t(step.message),
+      duration: 6000,
+      position: 'bottom',
+    });
     await toast.present();
   }
 }

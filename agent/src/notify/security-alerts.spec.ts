@@ -1,19 +1,23 @@
 import { generateKeyPair } from '@kubernanny/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { DevicesService } from '../auth/devices.service';
 import { Config, loadConfig } from '../config';
 import { DemoKubeClient } from '../demo/demo-cluster';
 import { KubeClient } from '../kube/kube-client';
 import { SettingsService } from '../settings/settings.service';
 import { SilenceService } from '../silence/silence.service';
-import { Notifier, SecurityEvent, formatSecurityAlert } from './notifier';
+import { formatSecurityAlert, Notifier, SecurityEvent } from './notifier';
 
 const who = { kind: 'device' as const, id: 'd1', name: 'Nicos iPhone' };
 
 /** Records alerts, and how many cluster writes had happened when each arrived. */
 function recorder(kube: DemoKubeClient) {
   const alerts: { by: string; events: SecurityEvent[]; writesBefore: number }[] = [];
-  const notifier = { securityAlert: async (by: string, events: SecurityEvent[]) => void (events.length && alerts.push({ by, events, writesBefore: kube.writes.length })) } as unknown as Notifier;
+  const notifier = {
+    securityAlert: async (by: string, events: SecurityEvent[]) =>
+      void (events.length && alerts.push({ by, events, writesBefore: kube.writes.length })),
+  } as unknown as Notifier;
   return { alerts, notifier };
 }
 
@@ -21,12 +25,24 @@ describe('security notifications (review: a stolen device could blind the owner)
   afterEach(() => vi.unstubAllGlobals());
 
   it('names the device and the change, and nothing of either in minimal mode', () => {
-    const full = formatSecurityAlert('home', 'Nicos iPhone', [{ kind: 'notificationsOff' }, { kind: 'moduleOff', id: 'argocd' }], 'full', 'en');
+    const full = formatSecurityAlert(
+      'home',
+      'Nicos iPhone',
+      [{ kind: 'notificationsOff' }, { kind: 'moduleOff', id: 'argocd' }],
+      'full',
+      'en',
+    );
     expect(full.title).toBe('home: security-relevant change');
     expect(full.body).toContain('Nicos iPhone switched notifications off.');
     expect(full.body).toContain('Nicos iPhone switched the module argocd off.');
     expect(full.body).toContain('Remove that device from another paired device');
-    const minimal = formatSecurityAlert('home', 'Nicos iPhone', [{ kind: 'deviceRevoked', device: 'Laptop' }], 'minimal', 'de');
+    const minimal = formatSecurityAlert(
+      'home',
+      'Nicos iPhone',
+      [{ kind: 'deviceRevoked', device: 'Laptop' }],
+      'minimal',
+      'de',
+    );
     expect(minimal.body).not.toContain('Nicos');
     expect(minimal.body).not.toContain('Laptop');
   });
@@ -74,7 +90,9 @@ describe('security notifications (review: a stolen device could blind the owner)
     const en = formatSecurityAlert('home', 'Nicos iPhone', [{ kind: 'moduleOn', id: 'vulnerabilities' }], 'full', 'en');
     expect(en.body).toContain('Nicos iPhone switched the module vulnerabilities on. It sends data out of the cluster.');
     const de = formatSecurityAlert('home', 'Nicos iPhone', [{ kind: 'moduleOn', id: 'vulnerabilities' }], 'full', 'de');
-    expect(de.body).toContain('Nicos iPhone hat das Modul vulnerabilities eingeschaltet. Es sendet Daten aus dem Cluster.');
+    expect(de.body).toContain(
+      'Nicos iPhone hat das Modul vulnerabilities eingeschaltet. Es sendet Daten aus dem Cluster.',
+    );
     expect(`${en.body}${de.body}`).not.toMatch(/[\u2013\u2014]/);
   });
 
@@ -93,17 +111,32 @@ describe('security notifications (review: a stolen device could blind the owner)
       sent.push(init.body);
       return new Response(null, { status: 204 });
     });
-    const config: Config = { ...loadConfig(), clusterName: 'home', language: 'en', webhookUrl: 'https://hooks.example.org/k', webhookFormat: 'json' };
+    const config: Config = {
+      ...loadConfig(),
+      clusterName: 'home',
+      language: 'en',
+      webhookUrl: 'https://hooks.example.org/k',
+      webhookFormat: 'json',
+    };
     await new Notifier(config).securityAlert('Nicos iPhone', [{ kind: 'maintenance', hours: 1 }]);
-    expect(JSON.parse(sent.pop()!)).toMatchObject({ title: 'home: security-relevant change', body: expect.stringContaining('Nicos iPhone started a maintenance window of 1 hour.') });
-    await new Notifier({ ...config, disabledModules: ['notifications'] }).securityAlert('Nicos iPhone', [{ kind: 'notificationsOff' }]);
+    expect(JSON.parse(sent.pop()!)).toMatchObject({
+      title: 'home: security-relevant change',
+      body: expect.stringContaining('Nicos iPhone started a maintenance window of 1 hour.'),
+    });
+    await new Notifier({ ...config, disabledModules: ['notifications'] }).securityAlert('Nicos iPhone', [
+      { kind: 'notificationsOff' },
+    ]);
     expect(sent).toEqual([]);
   });
 
   it('announces a rollback with the app and both short revisions, in both languages', () => {
     const event: SecurityEvent = { kind: 'rolledBack', app: 'argocd/shop', from: 'c4d5e6f', to: '3f9c2a1' };
-    expect(formatSecurityAlert('home', 'Nicos iPhone', [event], 'full', 'en').body).toContain('Nicos iPhone rolled the Argo CD app argocd/shop back from c4d5e6f to 3f9c2a1.');
-    expect(formatSecurityAlert('home', 'Nicos iPhone', [event], 'full', 'de').body).toContain('Nicos iPhone hat die Argo-CD-App argocd/shop von c4d5e6f auf 3f9c2a1 zurückgerollt.');
+    expect(formatSecurityAlert('home', 'Nicos iPhone', [event], 'full', 'en').body).toContain(
+      'Nicos iPhone rolled the Argo CD app argocd/shop back from c4d5e6f to 3f9c2a1.',
+    );
+    expect(formatSecurityAlert('home', 'Nicos iPhone', [event], 'full', 'de').body).toContain(
+      'Nicos iPhone hat die Argo-CD-App argocd/shop von c4d5e6f auf 3f9c2a1 zurückgerollt.',
+    );
     expect(formatSecurityAlert('home', 'Nicos iPhone', [event], 'minimal', 'en').body).not.toContain('shop');
   });
 
@@ -113,7 +146,13 @@ describe('security notifications (review: a stolen device could blind the owner)
       sent.push(init.body);
       return new Response(null, { status: 204 });
     });
-    const config: Config = { ...loadConfig(), clusterName: 'home', language: 'en', webhookUrl: 'https://hooks.example.org/k', webhookFormat: 'json' };
+    const config: Config = {
+      ...loadConfig(),
+      clusterName: 'home',
+      language: 'en',
+      webhookUrl: 'https://hooks.example.org/k',
+      webhookFormat: 'json',
+    };
     const kube = new DemoKubeClient();
     const notifier = new Notifier(config);
     const settings = new SettingsService(config, kube, notifier);
@@ -123,7 +162,9 @@ describe('security notifications (review: a stolen device could blind the owner)
     await silences.onModuleInit();
     await silences.startMaintenance(4, who);
     sent.length = 0;
-    await notifier.securityAlert('Nicos iPhone', [{ kind: 'rolledBack', app: 'argocd/shop', from: 'c4d5e6f', to: '3f9c2a1' }]);
+    await notifier.securityAlert('Nicos iPhone', [
+      { kind: 'rolledBack', app: 'argocd/shop', from: 'c4d5e6f', to: '3f9c2a1' },
+    ]);
     expect(sent.map((b) => JSON.parse(b).body)).toEqual([expect.stringContaining('back from c4d5e6f to 3f9c2a1')]);
   });
 
@@ -154,18 +195,30 @@ describe('concurrent changes do not lose each other (review)', () => {
     const kube = new SlowKube();
     const settings = new SettingsService(loadConfig(), kube);
     await settings.onModuleInit();
-    await Promise.all([settings.update({ modules: { argocd: false } }, who), settings.update({ actions: { restart: false } }, who), settings.update({ notifications: false }, who)]);
+    await Promise.all([
+      settings.update({ modules: { argocd: false } }, who),
+      settings.update({ actions: { restart: false } }, who),
+      settings.update({ notifications: false }, who),
+    ]);
     expect(settings.moduleState('argocd')).toBe('off');
     expect(settings.actionState('restart')).toBe('off');
     expect(settings.notificationsOn()).toBe(false);
-    expect(JSON.parse(kube.data.settings as string)).toMatchObject({ disabledModules: ['argocd'], disabledActions: ['restart'], notificationsPaused: true });
+    expect(JSON.parse(kube.data.settings as string)).toMatchObject({
+      disabledModules: ['argocd'],
+      disabledActions: ['restart'],
+      notificationsPaused: true,
+    });
   });
 
   it('silences', async () => {
     const kube = new SlowKube();
     const silences = new SilenceService(loadConfig(), kube);
     await silences.onModuleInit();
-    await Promise.all([silences.silence('a/1', 8, who), silences.silence('b/2', 8, who), silences.startMaintenance(2, who)]);
+    await Promise.all([
+      silences.silence('a/1', 8, who),
+      silences.silence('b/2', 8, who),
+      silences.startMaintenance(2, who),
+    ]);
     expect(silences.silencedUntil('a/1')).not.toBeNull();
     expect(silences.silencedUntil('b/2')).not.toBeNull();
     expect(silences.maintenanceUntil()).not.toBeNull();
@@ -175,8 +228,17 @@ describe('concurrent changes do not lose each other (review)', () => {
     const kube = new SlowKube();
     const devices = new DevicesService(loadConfig(), kube);
     await devices.onModuleInit();
-    await Promise.all([devices.add('A', generateKeyPair().publicKey), devices.add('B', generateKeyPair().publicKey), devices.add('C', generateKeyPair().publicKey)]);
-    expect(devices.list().map((d) => d.name).sort()).toEqual(['A', 'B', 'C']);
+    await Promise.all([
+      devices.add('A', generateKeyPair().publicKey),
+      devices.add('B', generateKeyPair().publicKey),
+      devices.add('C', generateKeyPair().publicKey),
+    ]);
+    expect(
+      devices
+        .list()
+        .map((d) => d.name)
+        .sort(),
+    ).toEqual(['A', 'B', 'C']);
     await Promise.all(devices.list().map((d) => devices.revoke(d.id)));
     expect(devices.list()).toEqual([]);
   });

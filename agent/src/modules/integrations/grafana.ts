@@ -1,7 +1,7 @@
-import { Detected } from '../../discovery/discovery';
-import { Integration } from '../module';
 import { Issue } from '../../checks/types';
+import { Detected } from '../../discovery/discovery';
 import { t } from '../../i18n/text';
+import { Integration } from '../module';
 import { ModuleContext, ModuleResult } from '../types';
 import { record, str } from '../untrusted';
 

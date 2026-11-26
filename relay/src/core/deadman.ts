@@ -1,4 +1,12 @@
-import { DeadmanDeposit, DeadmanItem, DepositOutcome, PushOutcome, PushRequest, pushTokenDigest } from '@kubernanny/protocol';
+import {
+  DeadmanDeposit,
+  DeadmanItem,
+  DepositOutcome,
+  PushOutcome,
+  PushRequest,
+  pushTokenDigest,
+} from '@kubernanny/protocol';
+
 import { BucketState, TokenBucket } from './limits';
 
 /**
@@ -32,7 +40,12 @@ export interface DeadmanConfig {
   maxTotalBytes: number;
 }
 
-export const DEFAULT_DEADMAN = { maxItems: 8, maxMessageChars: 1024, depositsPerHour: 30, maxTotalBytes: 16 * 1024 * 1024 } as const;
+export const DEFAULT_DEADMAN = {
+  maxItems: 8,
+  maxMessageChars: 1024,
+  depositsPerHour: 30,
+  maxTotalBytes: 16 * 1024 * 1024,
+} as const;
 
 /** One deposited message as the relay keeps it. The token is needed to send it; it is never logged. */
 export interface HeldItem {
@@ -98,7 +111,12 @@ export function heldBytes(state: DeadmanState): number {
 }
 
 function bucketOf(state: DeadmanState, config: DeadmanConfig, now: number): TokenBucket {
-  return new TokenBucket(Math.max(1, Math.ceil(config.depositsPerHour / 3)), config.depositsPerHour / 3_600_000, now, state.bucket);
+  return new TokenBucket(
+    Math.max(1, Math.ceil(config.depositsPerHour / 3)),
+    config.depositsPerHour / 3_600_000,
+    now,
+    state.bucket,
+  );
 }
 
 /**
@@ -106,11 +124,22 @@ function bucketOf(state: DeadmanState, config: DeadmanConfig, now: number): Toke
  * relay may still hold beyond this agent's current deposit (Infinity on a
  * Worker). A refused deposit leaves the previous one in place.
  */
-export function depositInto(state: DeadmanState, deposit: DeadmanDeposit | null, config: DeadmanConfig, now: number, room = Infinity): { state: DeadmanState; outcome: DepositOutcome } {
+export function depositInto(
+  state: DeadmanState,
+  deposit: DeadmanDeposit | null,
+  config: DeadmanConfig,
+  now: number,
+  room = Infinity,
+): { state: DeadmanState; outcome: DepositOutcome } {
   if (!config.enabled) {
     return { state, outcome: 'disabled' };
   }
-  if (!deposit || deposit.items.length > config.maxItems || deposit.items.some((i) => i.message.length > config.maxMessageChars) || new Set(deposit.items.map((i) => i.kid)).size !== deposit.items.length) {
+  if (
+    !deposit ||
+    deposit.items.length > config.maxItems ||
+    deposit.items.some((i) => i.message.length > config.maxMessageChars) ||
+    new Set(deposit.items.map((i) => i.kid)).size !== deposit.items.length
+  ) {
     return { state, outcome: 'invalid' };
   }
   const bucket = bucketOf(state, config, now);
@@ -133,7 +162,14 @@ export function depositInto(state: DeadmanState, deposit: DeadmanDeposit | null,
 }
 
 function held(item: DeadmanItem): HeldItem {
-  return { token: item.token, platform: item.platform, kid: item.kid, message: item.message, ...(item.lang ? { lang: item.lang } : {}), graceMs: item.graceMinutes * 60_000 };
+  return {
+    token: item.token,
+    platform: item.platform,
+    kid: item.kid,
+    message: item.message,
+    ...(item.lang ? { lang: item.lang } : {}),
+    graceMs: item.graceMinutes * 60_000,
+  };
 }
 
 /** The agent's connection is gone, last heard at `heardAt`. A second report of the same absence keeps the first time. */
@@ -146,7 +182,10 @@ export function agentLost(state: DeadmanState, heardAt: number): DeadmanState {
  * out during the absence is handed to the Ready frame (once) as key ids and
  * how long the agent was away.
  */
-export function agentBack(state: DeadmanState, now: number): { state: DeadmanState; fired: { k: string[]; m: number } | null } {
+export function agentBack(
+  state: DeadmanState,
+  now: number,
+): { state: DeadmanState; fired: { k: string[]; m: number } | null } {
   const fired = state.fired ? { k: state.fired.kids, m: Math.max(0, now - state.fired.lostAt) } : null;
   return { state: { ...state, lostAt: null, sent: [], fired: null }, fired };
 }
@@ -167,12 +206,18 @@ export function markSent(state: DeadmanState, items: readonly HeldItem[]): Deadm
   }
   const kids = items.map((i) => i.kid);
   const firedKids = [...new Set([...(state.fired?.kids ?? []), ...kids])];
-  return { ...state, sent: [...state.sent, ...kids], fired: { kids: firedKids, lostAt: state.fired?.lostAt ?? state.lostAt } };
+  return {
+    ...state,
+    sent: [...state.sent, ...kids],
+    fired: { kids: firedKids, lostAt: state.fired?.lostAt ?? state.lostAt },
+  };
 }
 
 /** Forgets an expired deposit. */
 export function expire(state: DeadmanState, now: number): DeadmanState {
-  return state.items.length > 0 && now >= state.expiresAt ? { ...state, items: [], storedAt: 0, expiresAt: 0, holdUntil: 0 } : state;
+  return state.items.length > 0 && now >= state.expiresAt
+    ? { ...state, items: [], storedAt: 0, expiresAt: 0, holdUntil: 0 }
+    : state;
 }
 
 /** When something next has to happen: a message falls due, or the deposit expires; null for nothing. */
@@ -190,7 +235,11 @@ export function nextWake(state: DeadmanState): number | null {
 
 /** Whether a state has anything left to remember (a deposit, or a report for the next Ready, or an allowance in use). */
 export function isIdle(state: DeadmanState, config: DeadmanConfig, now: number): boolean {
-  return state.items.length === 0 && state.fired === null && (state.bucket === undefined || bucketOf(state, config, now).isFull(now));
+  return (
+    state.items.length === 0 &&
+    state.fired === null &&
+    (state.bucket === undefined || bucketOf(state, config, now).isFull(now))
+  );
 }
 
 /** What fires a deposited message: the same sender as a Push frame, with the agent's push allowance in front of it. */
@@ -216,7 +265,13 @@ export async function fireDue(items: readonly HeldItem[], fire: DeadmanFire, now
       }
       fire.charge?.(digest, now);
       try {
-        return await fire.send({ token: item.token, platform: item.platform, kid: item.kid, message: item.message, ...(item.lang ? { lang: item.lang } : {}) });
+        return await fire.send({
+          token: item.token,
+          platform: item.platform,
+          kid: item.kid,
+          message: item.message,
+          ...(item.lang ? { lang: item.lang } : {}),
+        });
       } catch {
         return 'failed' as const;
       }

@@ -3,7 +3,11 @@ import type { standardAlertsDe } from './standard-alerts.de';
 /** Texts of the standard alerts (`modules/core/standard-alerts`), spread into the English catalog. No em or en dashes. */
 const dec = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 1 });
 
-type Catalog = { [K in keyof typeof standardAlertsDe]: (typeof standardAlertsDe)[K] extends string ? string : (typeof standardAlertsDe)[K] };
+type Catalog = {
+  [K in keyof typeof standardAlertsDe]: (typeof standardAlertsDe)[K] extends string
+    ? string
+    : (typeof standardAlertsDe)[K];
+};
 
 export const standardAlertsEn: Catalog = {
   'module.standardAlerts.name': 'Standard alerts',
@@ -55,25 +59,29 @@ export const standardAlertsEn: Catalog = {
   'std.networkErrors.cause':
     'For an hour more than one packet in a hundred has been faulty. Usually hardware: cable, plug, switch port or the network card, less often a driver. ip -s link on the node shows the counters.',
   'std.fileDescriptors.title': (p) => `${p.node}: ${dec(p.pct)} % of file handles in use`,
-  'std.fileDescriptors.cause': 'At the limit processes can open no more files or sockets. Find what holds them or raise fs.file-max.',
+  'std.fileDescriptors.cause':
+    'At the limit processes can open no more files or sockets. Find what holds them or raise fs.file-max.',
   'std.raidDegraded.title': (p) => `${p.node}: RAID ${p.device} runs without ${p.n} disk(s)`,
   'std.raidDegraded.cause':
     'The array runs without redundancy: one more failed disk and the data is gone. Replace the failed disk and let the array rebuild (cat /proc/mdstat).',
   'std.raidDiskFailed.title': (p) => `${p.node}: disk in RAID ${p.device} failed`,
-  'std.raidDiskFailed.cause': 'mdadm has marked a disk as failed. Replace it before the next one goes (cat /proc/mdstat, mdadm --detail).',
+  'std.raidDiskFailed.cause':
+    'mdadm has marked a disk as failed. Replace it before the next one goes (cat /proc/mdstat, mdadm --detail).',
 
   'std.nodeFlapping.title': (p) => `Node ${p.node} keeps switching between ready and not ready`,
   'std.nodeFlapping.cause':
     'Its Ready state changed more than twice in every 15-minute span lately. Pods get evicted and moved around each time. Usually the node has network dropouts, or the kubelet stalls (memory, disk, container runtime).',
   'std.pvInodes.title': (p) => `Volume ${p.pvc}: only ${dec(p.free)} % inodes free`,
   'std.pvInodes.fullCause': 'Without free inodes the application can create no more files, however much space is left.',
-  'std.pvInodes.fillingCause': 'At the pace of the last 6 hours the inodes run out within 4 days; then no file can be created. Clean up old files or grow the volume.',
+  'std.pvInodes.fillingCause':
+    'At the pace of the last 6 hours the inodes run out within 4 days; then no file can be created. Clean up old files or grow the volume.',
   'std.pvErrors.title': (p) => `PersistentVolume ${p.pv}: ${p.phase}`,
   'std.pvErrors.failedCause':
     'Releasing the volume after its claim was deleted failed; its storage may still be in use. kubectl describe pv tells why; then remove the volume in the storage system by hand.',
   'std.pvErrors.pendingCause': 'The volume is not available for binding. kubectl describe pv shows what it waits for.',
   'std.quotaExceeded.title': (p) => `Quota ${p.quota}: ${p.resource} at ${p.pct} %`,
-  'std.quotaExceeded.cause': 'The namespace uses more than its ResourceQuota allows: new pods and objects are refused. Raise the quota or use less.',
+  'std.quotaExceeded.cause':
+    'The namespace uses more than its ResourceQuota allows: new pods and objects are refused. Raise the quota or use less.',
   'std.clientCertificate.title': (p) => `Client certificate presented to ${p.node} expires in ${p.days} days`,
   'std.clientCertificate.cause':
     'A client signs in with a certificate that expires soon; after that it is refused. The metric does not say which: usually a kubelet, a controller or a kubeconfig. RKE2 and k3s renew their certificates on restart when they expire within 90 days.',
@@ -111,9 +119,11 @@ export const standardAlertsEn: Catalog = {
   'std.overcommit.cause': (p) =>
     `Pods request ${p.pct} % of what the other nodes offer without the largest one. When it fails or reboots, not all of its pods find room elsewhere and they stay Pending. Lower requests nobody needs, or add a node.`,
   'std.tooManyPods.title': (p) => `${p.node}: ${p.n} of ${p.max} pods`,
-  'std.tooManyPods.cause': "The node is close to its pod limit (the kubelet's maxPods); more pods go to other nodes or stay Pending.",
+  'std.tooManyPods.cause':
+    "The node is close to its pod limit (the kubelet's maxPods); more pods go to other nodes or stay Pending.",
   'std.versionMismatch.title': (p) => `Different Kubernetes versions in the cluster (${p.versions})`,
-  'std.versionMismatch.cause': 'Normal during an upgrade. If it stays, an upgrade got stuck: bring every node to the same version.',
+  'std.versionMismatch.cause':
+    'Normal during an upgrade. If it stays, an upgrade got stuck: bring every node to the same version.',
 
   'std.reason.missing': 'metric missing',
   'std.reason.failed': 'query failed',

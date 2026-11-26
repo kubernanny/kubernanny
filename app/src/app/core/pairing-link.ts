@@ -18,19 +18,34 @@ export interface PairingLinkParams {
 export function pairingRoute(link: string): PairingLinkParams | null {
   try {
     const u = new URL(link);
-    if (u.protocol !== 'kubernanny:' || u.hostname !== 'pair' || (u.pathname !== '' && u.pathname !== '/')) {
+    if (
+      u.protocol !== 'kubernanny:' ||
+      u.hostname !== 'pair' ||
+      (u.pathname !== '' && u.pathname !== '/')
+    ) {
       return null;
     }
     const url = u.searchParams.get('url');
     const code = u.searchParams.get('code');
     const key = u.searchParams.get('key') ?? undefined;
-    if (!url || !code || !/^https?:\/\//.test(url) || (key !== undefined && !/^[A-Za-z0-9_-]{43}$/.test(key))) {
+    if (
+      !url ||
+      !code ||
+      !/^https?:\/\//.test(url) ||
+      (key !== undefined && !/^[A-Za-z0-9_-]{43}$/.test(key))
+    ) {
       return null;
     }
     // The relay only counts next to a key: without one the app fetches the key directly, never through a relay.
     const relay = u.searchParams.get('relay');
     const withRelay = key && relay && relayUrlAllowed(relay) ? { relay } : {};
-    return { url, code, name: u.searchParams.get('name') ?? undefined, ...(key ? { key } : {}), ...withRelay };
+    return {
+      url,
+      code,
+      name: u.searchParams.get('name') ?? undefined,
+      ...(key ? { key } : {}),
+      ...withRelay,
+    };
   } catch {
     return null;
   }

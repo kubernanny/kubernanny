@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+
 import { expectToast, openTab, visiblePage, watchErrors } from './helpers';
 
 const DEMO = 'http://127.0.0.1:4310';
@@ -54,11 +55,17 @@ test.describe('web demo (no agent, nothing leaves the browser)', () => {
     expect(errors).toEqual([]);
   });
 
-  test('offers the logs of a crash loop first and the restart second, and no restart after an OOMKill', async ({ page }) => {
+  test('offers the logs of a crash loop first and the restart second, and no restart after an OOMKill', async ({
+    page,
+  }) => {
     await page.goto(`${DEMO}/#/demo`);
     await page.locator('app-clusters a', { hasText: 'homelab' }).first().click();
     const cluster = visiblePage(page);
-    const card = (title: string) => cluster.locator('app-issue-list li').filter({ has: page.locator('.title', { hasText: title }) }).first();
+    const card = (title: string) =>
+      cluster
+        .locator('app-issue-list li')
+        .filter({ has: page.locator('.title', { hasText: title }) })
+        .first();
     const crash = card('default/social-importer: CrashLoopBackOff');
     await expect(crash.locator('.actions button.primary')).toHaveText(/Logs vor dem Absturz/);
     await expect(crash.locator('.second button.secondary')).toHaveText(/social-importer neu starten/);
@@ -67,7 +74,9 @@ test.describe('web demo (no agent, nothing leaves the browser)', () => {
     await expect(oom).toContainText('erhöhe das Memory-Limit');
     await expect(oom.locator('button', { hasText: 'neu starten' })).toHaveCount(0);
     // A ConfigMap of the environment changed: the restart is the fix, first and filled.
-    await expect(card('default/newsletter-worker').locator('.actions button.primary')).toHaveText(/newsletter-worker neu starten/);
+    await expect(card('default/newsletter-worker').locator('.actions button.primary')).toHaveText(
+      /newsletter-worker neu starten/,
+    );
     // A forgotten cordon: confirmed with what exactly happens.
     await card('Node rke2-node-4').locator('button', { hasText: 'Wieder freigeben' }).click();
     await expect(page.locator('ion-alert')).toContainText('spec.unschedulable auf false, wie kubectl uncordon');
@@ -80,7 +89,11 @@ test.describe('web demo (no agent, nothing leaves the browser)', () => {
     await page.locator('app-clusters a', { hasText: 'homelab' }).first().click();
     const cluster = visiblePage(page);
     await openTab(page, 'Dienste');
-    await cluster.locator('app-services-tab button').filter({ has: page.locator('strong', { hasText: /^Argo CD$/ }) }).first().click();
+    await cluster
+      .locator('app-services-tab button')
+      .filter({ has: page.locator('strong', { hasText: /^Argo CD$/ }) })
+      .first()
+      .click();
     const sheet = page.locator('app-module-sheet');
     await expect(sheet.getByRole('heading', { name: 'Zurückrollen' })).toBeVisible();
     const row = sheet.locator('.rollbacks li', { hasText: 'shop-web-app-chart' });
@@ -158,7 +171,9 @@ test.describe('web demo (no agent, nothing leaves the browser)', () => {
     await expect(tab.getByRole('heading', { name: /CloudNativePG/ })).toBeVisible();
     await expect(tab.getByRole('heading', { name: /Velero/ })).toBeVisible();
     await expect(tab.locator('li.tone-warning', { hasText: 'shop-api-pg' })).toContainText(/zuletzt vor \d+ h/);
-    await expect(tab.locator('li', { hasText: 'shop-api-pg' }).first()).toContainText('S3, s3://shop-backups/cnpg/shop-api-pg');
+    await expect(tab.locator('li', { hasText: 'shop-api-pg' }).first()).toContainText(
+      'S3, s3://shop-backups/cnpg/shop-api-pg',
+    );
     await expect(tab.getByRole('heading', { name: /Ohne Backup/ })).toBeVisible();
     await expect(tab).toContainText('monitoring/data-loki-0');
     await expect(tab).toContainText('Erreichbar');
@@ -196,7 +211,9 @@ test.describe('web demo (no agent, nothing leaves the browser)', () => {
     await expectToast(page, /^Wartungsfenster bis /);
     await expect(settings.locator('.maintenance-active .pill')).toHaveText(/^Aktiv bis (\S+, )?\d{2}:\d{2}$/);
     await page.goto(`${DEMO}/#/c/demo-healthy`);
-    await expect(visiblePage(page).locator('app-overview-tab .maintenance')).toHaveText(/^Wartung bis (\S+, )?\d{2}:\d{2}: keine Benachrichtigungen$/);
+    await expect(visiblePage(page).locator('app-overview-tab .maintenance')).toHaveText(
+      /^Wartung bis (\S+, )?\d{2}:\d{2}: keine Benachrichtigungen$/,
+    );
     await page.goto(`${DEMO}/#/cluster/demo-healthy`);
     await visiblePage(page).getByRole('button', { name: 'Jetzt beenden' }).click();
     await expectToast(page, 'Wartungsfenster beendet.');

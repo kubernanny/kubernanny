@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 import { IonIcon } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
+
 import { HISTORY_PREVIEW, HistoryVM } from './history-view';
 
 /**
@@ -22,7 +23,12 @@ import { HISTORY_PREVIEW, HistoryVM } from './history-view';
         </div>
         <ol class="strip" [attr.aria-label]="t('history.strip')">
           @for (d of vm().days; track d.key) {
-            <li [class]="'tone-' + d.tone" [class.today]="d.today" [attr.title]="d.title" [attr.aria-label]="d.title">
+            <li
+              [class]="'tone-' + d.tone"
+              [class.today]="d.today"
+              [attr.title]="d.title"
+              [attr.aria-label]="d.title"
+            >
               <span class="cell" aria-hidden="true">
                 @if (d.count > 0) {
                   {{ d.count }}
@@ -47,7 +53,11 @@ import { HISTORY_PREVIEW, HistoryVM } from './history-view';
                     <span>
                       {{ r.meta }}
                       @if (r.silenced) {
-                        <span class="silenced"><ion-icon name="notifications-off-outline" aria-hidden="true" />{{ t('history.silenced') }}</span>
+                        <span class="silenced"
+                          ><ion-icon name="notifications-off-outline" aria-hidden="true" />{{
+                            t('history.silenced')
+                          }}</span
+                        >
                       }
                     </span>
                     <span class="duration">{{ r.duration }}</span>
@@ -58,7 +68,12 @@ import { HISTORY_PREVIEW, HistoryVM } from './history-view';
           </ul>
         }
         @if (vm().total > preview) {
-          <button type="button" class="more" [attr.aria-expanded]="expanded()" (click)="expanded.set(!expanded())">
+          <button
+            type="button"
+            class="more"
+            [attr.aria-expanded]="expanded()"
+            (click)="expanded.set(!expanded())"
+          >
             {{ expanded() ? t('history.showLess') : t('history.showAll', { count: vm().total }) }}
             <ion-icon [name]="expanded() ? 'chevron-up' : 'chevron-down'" aria-hidden="true" />
           </button>

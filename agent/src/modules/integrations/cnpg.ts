@@ -1,16 +1,24 @@
-import { Integration } from '../module';
 import { CnpgCluster, evaluateCnpg } from '../../checks/cnpg.check';
 import { ageText } from '../../checks/types';
-import {ModuleContext, ModuleResult, Stat } from '../types';
 import { t } from '../../i18n/text';
-import { CnpgScheduledBackup, cnpgDetails } from '../details';
+import { cnpgDetails, CnpgScheduledBackup } from '../details';
+import { Integration } from '../module';
+import { ModuleContext, ModuleResult, Stat } from '../types';
 
 export class CnpgIntegration extends Integration {
   readonly id = 'cnpg';
   override readonly actions = ['cnpg-backup', 'logs'] as const;
   readonly reads = [
-    { group: 'postgresql.cnpg.io', resource: 'clusters', why: 'instances, failover state and last backup per database cluster' },
-    { group: 'postgresql.cnpg.io', resource: 'scheduledbackups', why: 'schedule and last and next run of every scheduled backup, for the sheet' },
+    {
+      group: 'postgresql.cnpg.io',
+      resource: 'clusters',
+      why: 'instances, failover state and last backup per database cluster',
+    },
+    {
+      group: 'postgresql.cnpg.io',
+      resource: 'scheduledbackups',
+      why: 'schedule and last and next run of every scheduled backup, for the sheet',
+    },
   ];
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
     const [clusters, scheduled] = await Promise.all([
@@ -25,12 +33,25 @@ export class CnpgIntegration extends Integration {
     const oldest = backups.length ? Math.min(...backups) : null;
     const stats: Stat[] = [
       { label: t('cnpg.stat.clusters'), value: String(clusters.length) },
-      { label: t('cnpg.stat.instancesReady'), value: `${ready}/${instances}`, tone: ready === instances ? 'ok' : 'warning' },
+      {
+        label: t('cnpg.stat.instancesReady'),
+        value: `${ready}/${instances}`,
+        tone: ready === instances ? 'ok' : 'warning',
+      },
     ];
     if (oldest !== null) {
-      stats.push({ label: t('cnpg.stat.oldestBackup'), value: t('common.ago', { age: ageText(ctx.now.getTime() - oldest) }), tone: ctx.now.getTime() - oldest > ctx.config.backupMaxAgeHours * 3_600_000 ? 'warning' : 'ok' });
+      stats.push({
+        label: t('cnpg.stat.oldestBackup'),
+        value: t('common.ago', { age: ageText(ctx.now.getTime() - oldest) }),
+        tone: ctx.now.getTime() - oldest > ctx.config.backupMaxAgeHours * 3_600_000 ? 'warning' : 'ok',
+      });
     }
     const details = cnpgDetails(clusters, ctx.now, ctx.config.backupMaxAgeHours, scheduled ?? []);
-    return { issues, stats, details, summary: issues.length === 0 ? t('cnpg.summary.ok', { n: clusters.length }) : issues[0].title };
+    return {
+      issues,
+      stats,
+      details,
+      summary: issues.length === 0 ? t('cnpg.summary.ok', { n: clusters.length }) : issues[0].title,
+    };
   }
 }

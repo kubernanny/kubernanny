@@ -1,13 +1,13 @@
-import { Logger } from '../logger';
 import type { Config } from '../config';
 import { render, t } from '../i18n/text';
-import type { Snapshot } from '../status/status.service';
 import { IncidentsService } from '../incidents/incidents.service';
+import { Logger } from '../logger';
 import { AppPushService } from '../push/app-push.service';
 import type { DeadmanService } from '../push/deadman.service';
 import { pushStatus } from '../push/push-status';
+import type { Snapshot } from '../status/status.service';
 import { digestDue, formatDigest, weekKey } from './digest';
-import { NotifyPlan, Push, Pushed, SecurityEvent, formatPush, formatSecurityAlert, planNotifications } from './format';
+import { formatPush, formatSecurityAlert, NotifyPlan, planNotifications, Push, Pushed, SecurityEvent } from './format';
 import { NotifiedStore } from './notified-store';
 import { detectFormat, webhookBody } from './webhook';
 
@@ -104,7 +104,14 @@ export class Notifier {
     if (this.digestSentFor === week) {
       return;
     }
-    const push = formatDigest(cluster, this.incidents.lastWeek(now.getTime()), now.getTime(), this.incidents.since, this.config.notifyDetail, this.config.language);
+    const push = formatDigest(
+      cluster,
+      this.incidents.lastWeek(now.getTime()),
+      now.getTime(),
+      this.incidents.since,
+      this.config.notifyDetail,
+      this.config.language,
+    );
     const delivered = await this.deliver(cluster, push, EMPTY_PLAN);
     if (delivered) {
       this.digestSentFor = week;
@@ -124,7 +131,10 @@ export class Notifier {
     if (webhookUrl) {
       const format = detectFormat(webhookUrl, this.config.webhookFormat);
       const body = format === 'json' && this.config.notifyDetail === 'minimal' ? 'json-minimal' : format;
-      out.push({ channel: format, send: () => this.post(webhookUrl, webhookBody(body, cluster, push, plan, this.config.language)) });
+      out.push({
+        channel: format,
+        send: () => this.post(webhookUrl, webhookBody(body, cluster, push, plan, this.config.language)),
+      });
     }
     const appPush = this.appPush;
     if (appPush?.hasTargets()) {
@@ -167,7 +177,13 @@ export class Notifier {
     if (events.length === 0 || this.channels.length === 0) {
       return;
     }
-    const push = formatSecurityAlert(this.config.clusterName, by, events, this.config.notifyDetail, this.config.language);
+    const push = formatSecurityAlert(
+      this.config.clusterName,
+      by,
+      events,
+      this.config.notifyDetail,
+      this.config.language,
+    );
     try {
       await this.deliver(this.config.clusterName, push, EMPTY_PLAN);
     } catch (err) {
@@ -222,7 +238,12 @@ export class Notifier {
    */
   async test(cluster: string): Promise<string[]> {
     const lang = this.config.language;
-    const push = { title: render(t('push.test.title', { cluster }), lang), body: render(t('push.test.body'), lang), priority: 3, tags: 'white_check_mark' };
+    const push = {
+      title: render(t('push.test.title', { cluster }), lang),
+      body: render(t('push.test.body'), lang),
+      priority: 3,
+      tags: 'white_check_mark',
+    };
     const { done, failed } = await this.sendAll(cluster, push, EMPTY_PLAN);
     if (failed.length > 0) {
       throw new Error(failed.join('; '));
@@ -256,7 +277,13 @@ export class Notifier {
     if (this.config.ntfyToken) {
       headers.authorization = `Bearer ${this.config.ntfyToken}`;
     }
-    const res = await fetch(url, { method: 'POST', headers, body: push.body, redirect: 'error', signal: AbortSignal.timeout(10_000) });
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: push.body,
+      redirect: 'error',
+      signal: AbortSignal.timeout(10_000),
+    });
     if (!res.ok) {
       throw new Error(`ntfy answered ${res.status}`);
     }

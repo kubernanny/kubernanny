@@ -1,4 +1,4 @@
-import { Lang, Text, render, t } from '../i18n/text';
+import { Lang, render, t, Text } from '../i18n/text';
 import type { IssueView } from '../status/snapshot';
 
 export interface NotifyPlan {
@@ -70,7 +70,9 @@ export function formatPush(
       plan.resolved.length ? t('push.minimal.resolved', { n: plan.resolved.length }) : null,
     ].filter((p) => p !== null);
     return {
-      title: s(bad.length === 0 ? t('push.minimal.titleResolved', { cluster }) : t('push.minimal.titleNew', { cluster })),
+      title: s(
+        bad.length === 0 ? t('push.minimal.titleResolved', { cluster }) : t('push.minimal.titleNew', { cluster }),
+      ),
       body: s(t('push.minimal.body', { parts })),
       priority: critical ? 5 : bad.length > 0 ? 3 : 2,
       tags: critical ? 'rotating_light' : bad.length > 0 ? 'warning' : 'white_check_mark',
@@ -121,19 +123,31 @@ const SECURITY_LINE: { [K in SecurityEvent['kind']]: (by: string, e: Extract<Sec
   maintenance: (by, e) => t('push.security.maintenance', { by, hours: e.hours }),
   deviceRevoked: (by, e) => t('push.security.deviceRevoked', { by, device: e.device }),
   devicePaired: (by) => t('push.security.devicePaired', { by }),
-  advisoryAccepted: (by, e) => t('push.security.advisoryAccepted', { by, advisory: e.advisory, component: e.component, days: e.days }),
+  advisoryAccepted: (by, e) =>
+    t('push.security.advisoryAccepted', { by, advisory: e.advisory, component: e.component, days: e.days }),
   silenced: (by, e) => t('push.security.silenced', { by, issue: e.issue, hours: e.hours }),
   rolledBack: (by, e) => t('push.security.rolledBack', { by, app: e.app, from: e.from, to: e.to }),
 };
 
 /** One short message naming the device (`by`) and what it changed; `minimal` names neither. */
-export function formatSecurityAlert(cluster: string, by: string, events: SecurityEvent[], detail: 'full' | 'minimal', lang: Lang): Push {
+export function formatSecurityAlert(
+  cluster: string,
+  by: string,
+  events: SecurityEvent[],
+  detail: 'full' | 'minimal',
+  lang: Lang,
+): Push {
   const s = (text: Text) => render(text, lang);
   const lines =
     detail === 'minimal'
       ? [s(t('push.security.minimal'))]
       : events.map((e) => s((SECURITY_LINE[e.kind] as (by: string, e: SecurityEvent) => Text)(by, e)));
-  return { title: s(t('push.security.title', { cluster })), body: [...lines, s(t('push.security.advice'))].join('\n'), priority: 4, tags: 'lock' };
+  return {
+    title: s(t('push.security.title', { cluster })),
+    body: [...lines, s(t('push.security.advice'))].join('\n'),
+    priority: 4,
+    tags: 'lock',
+  };
 }
 
 /** One message as every channel sends it. */

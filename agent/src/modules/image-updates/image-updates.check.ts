@@ -1,5 +1,5 @@
-import { TextError, t } from '../../i18n/text';
 import { Detected } from '../../discovery/discovery';
+import { t, TextError } from '../../i18n/text';
 import { KubeClient } from '../../kube/kube-client';
 import { CoreCheck } from '../module';
 import { ModuleContext, ModuleResult } from '../types';
@@ -67,7 +67,13 @@ export class ImageUpdatesCheck extends CoreCheck {
     if (targets.length > 0 && failed === targets.length) {
       throw new TextError(t('imageUpdates.unreachable'));
     }
-    const issues = targets.map((x, i) => (answers[i] ? imageUpdateIssue({ key: x.key, name: x.name, tag: x.ref.tag }, availableUpdates(x.ref.tag, answers[i]!)) : null)).filter((i) => i !== null);
+    const issues = targets
+      .map((x, i) =>
+        answers[i]
+          ? imageUpdateIssue({ key: x.key, name: x.name, tag: x.ref.tag }, availableUpdates(x.ref.tag, answers[i]!))
+          : null,
+      )
+      .filter((i) => i !== null);
     return {
       issues,
       stats: [
@@ -76,7 +82,9 @@ export class ImageUpdatesCheck extends CoreCheck {
         { label: t('imageUpdates.stat.skipped'), value: String(skipped), tone: 'muted' },
         ...(failed ? [{ label: t('imageUpdates.stat.failed'), value: String(failed), tone: 'warning' as const }] : []),
       ],
-      summary: issues.length ? t('imageUpdates.summary.newer', { n: issues.length }) : t('imageUpdates.summary.none', { n: targets.length - failed }),
+      summary: issues.length
+        ? t('imageUpdates.summary.newer', { n: issues.length })
+        : t('imageUpdates.summary.none', { n: targets.length - failed }),
     };
   }
 }

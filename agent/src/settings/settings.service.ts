@@ -1,18 +1,18 @@
-import { BadRequestError, ForbiddenError } from '../http/errors';
-import { Logger } from '../logger';
 import type { Principal } from '../auth/devices.service';
 import { ActionType, OPT_IN_ACTIONS } from '../checks/types';
 import type { Config } from '../config';
 import { DemoKubeClient } from '../demo/demo-cluster';
 import { CATALOG, CatalogEntry, Category } from '../discovery/catalog';
 import { customEntries } from '../discovery/discovery';
-import { Text, raw, t } from '../i18n/text';
+import { BadRequestError, ForbiddenError } from '../http/errors';
+import { raw, t, Text } from '../i18n/text';
+import { upsertConfigMapData } from '../kube/configmap';
 import { KubeClient } from '../kube/kube-client';
+import { Logger } from '../logger';
 import { CORE_CHECKS } from '../modules/core';
 import { INTEGRATIONS } from '../modules/integrations';
 import { Notifier, SecurityEvent } from '../notify/notifier';
 import { Serial } from '../util/serial';
-import { upsertConfigMapData } from '../kube/configmap';
 import { NotLoadedError, readAtStartup } from '../util/startup-read';
 
 export const SETTINGS_CONFIGMAP = 'kubernanny-settings';
@@ -29,7 +29,13 @@ const action = (type: ActionType, write: boolean) => ({
 });
 
 /** `effect`: what the action may change in the cluster, in one line (docs/PERMISSIONS.md has the details). */
-export const ACTION_TYPES: readonly { type: ActionType; label: Text; description: Text; effect: Text; write: boolean }[] = [
+export const ACTION_TYPES: readonly {
+  type: ActionType;
+  label: Text;
+  description: Text;
+  effect: Text;
+  write: boolean;
+}[] = [
   action('restart', true),
   action('argocd-sync', true),
   action('argocd-refresh', true),
@@ -130,10 +136,17 @@ export class SettingsService {
   /** Reads the stored switches, retrying transient errors; throws when they stay unreadable, so the process ends and restarts. */
   async onModuleInit(delaysMs?: readonly number[]): Promise<void> {
     const log = new Logger(SettingsService.name);
-    const cm = await readAtStartup(`ConfigMap ${SETTINGS_CONFIGMAP}`, () => this.kube.get<{ data?: { settings?: string } }>(`${this.path}/${SETTINGS_CONFIGMAP}`), {
-      onRetry: (err, attempt) => log.warn(`cannot read ConfigMap ${SETTINGS_CONFIGMAP} (${err instanceof Error ? err.message : err}), attempt ${attempt}; retrying`),
-      ...(delaysMs ? { delaysMs } : {}),
-    });
+    const cm = await readAtStartup(
+      `ConfigMap ${SETTINGS_CONFIGMAP}`,
+      () => this.kube.get<{ data?: { settings?: string } }>(`${this.path}/${SETTINGS_CONFIGMAP}`),
+      {
+        onRetry: (err, attempt) =>
+          log.warn(
+            `cannot read ConfigMap ${SETTINGS_CONFIGMAP} (${err instanceof Error ? err.message : err}), attempt ${attempt}; retrying`,
+          ),
+        ...(delaysMs ? { delaysMs } : {}),
+      },
+    );
     this.stored = parseStored(cm?.data?.settings);
     this.loaded = true;
   }
@@ -146,7 +159,6 @@ export class SettingsService {
   reload(): Promise<void> {
     return this.onModuleInit([]);
   }
-
 
   /** Called after every change, e.g. to start a new run. */
   onChange(listener: () => void): void {
@@ -162,7 +174,11 @@ export class SettingsService {
     }
     if (DEFAULT_OFF.has(id)) {
       // On when the app switched it on, or the deployment did (Helm, ENABLED_MODULES). The demo shows everything.
-      return stored.enabledModules.includes(id) || this.config.enabledModules.includes(id) || this.kube instanceof DemoKubeClient ? 'on' : 'off';
+      return stored.enabledModules.includes(id) ||
+        this.config.enabledModules.includes(id) ||
+        this.kube instanceof DemoKubeClient
+        ? 'on'
+        : 'off';
     }
     return 'on';
   }
@@ -195,7 +211,14 @@ export class SettingsService {
   /** Every module the app can show a switch for: core checks, every integration, and recognised components. */
   view(detectedIds: readonly string[]): SettingsView {
     const detected = new Set(detectedIds);
-    const ids = [...new Set([...INTEGRATIONS.map((i) => i.id), ...detectedIds, ...this.stored.disabledModules.filter((id) => !id.startsWith('custom:')), ...this.config.disabledModules])];
+    const ids = [
+      ...new Set([
+        ...INTEGRATIONS.map((i) => i.id),
+        ...detectedIds,
+        ...this.stored.disabledModules.filter((id) => !id.startsWith('custom:')),
+        ...this.config.disabledModules,
+      ]),
+    ];
     const entries = [...CATALOG, ...customEntries(this.config.customComponents)];
     const components = ids
       .map((id) => entries.find((e) => e.id === id))
@@ -205,8 +228,18 @@ export class SettingsService {
       .map((entry) => this.componentModuleSetting(entry, detected.has(entry.id)));
     return {
       modules: [...CORE_CHECKS.map((c) => this.coreModuleSetting(c)), ...components],
-      actions: ACTION_TYPES.map((a) => ({ type: a.type, label: a.label, description: a.description, effect: a.effect, state: this.actionState(a.type) })),
-      notifications: this.config.disabledModules.includes('notifications') ? 'locked' : this.stored.notificationsPaused ? 'off' : 'on',
+      actions: ACTION_TYPES.map((a) => ({
+        type: a.type,
+        label: a.label,
+        description: a.description,
+        effect: a.effect,
+        state: this.actionState(a.type),
+      })),
+      notifications: this.config.disabledModules.includes('notifications')
+        ? 'locked'
+        : this.stored.notificationsPaused
+          ? 'off'
+          : 'on',
     };
   }
 
@@ -251,7 +284,11 @@ export class SettingsService {
       disabledActions: [...this.stored.disabledActions],
       notificationsPaused: this.stored.notificationsPaused,
     };
-    const known = new Set([...CORE_CHECKS.map((c) => c.id), ...CATALOG.map((e) => e.id), ...this.config.customComponents.map((c) => c.id)]);
+    const known = new Set([
+      ...CORE_CHECKS.map((c) => c.id),
+      ...CATALOG.map((e) => e.id),
+      ...this.config.customComponents.map((c) => c.id),
+    ]);
     for (const [id, on] of Object.entries(patch.modules ?? {})) {
       if (!known.has(id) || typeof on !== 'boolean') {
         throw new BadRequestError({ code: 'SETTING_UNKNOWN', message: t('error.moduleUnknown', { id }) });
@@ -332,8 +369,14 @@ function toggle(list: string[], id: string, present: boolean): string[] {
 function parseStored(text: string | undefined): Stored {
   try {
     const raw = JSON.parse(text ?? '{}') as Partial<Stored>;
-    const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(0, 500) : []);
-    return { disabledModules: strings(raw.disabledModules), enabledModules: strings(raw.enabledModules), disabledActions: strings(raw.disabledActions), notificationsPaused: raw.notificationsPaused === true };
+    const strings = (v: unknown) =>
+      Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(0, 500) : [];
+    return {
+      disabledModules: strings(raw.disabledModules),
+      enabledModules: strings(raw.enabledModules),
+      disabledActions: strings(raw.disabledActions),
+      notificationsPaused: raw.notificationsPaused === true,
+    };
   } catch {
     return { disabledModules: [], enabledModules: [], disabledActions: [], notificationsPaused: false };
   }

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { de } from '../testing/i18n';
+
 import { Agent } from '../agent';
 import { StatusService } from '../status/status.service';
+import { de } from '../testing/i18n';
 import { DemoKubeClient, DemoScenario } from './demo-cluster';
 
 async function run(scenario: DemoScenario) {
@@ -19,7 +20,9 @@ describe('module sheets of the demo clusters', () => {
   for (const scenario of ['broken', 'warning', 'healthy'] as const) {
     it(`${scenario}: no module has more than four key figures, and lists come as details`, async () => {
       const s = await run(scenario);
-      const crowded = s.modules.filter((m) => m.stats.length > 4).map((m) => `${m.id}: ${m.stats.map((x) => x.label).join(', ')}`);
+      const crowded = s.modules
+        .filter((m) => m.stats.length > 4)
+        .map((m) => `${m.id}: ${m.stats.map((x) => x.label).join(', ')}`);
       expect(crowded).toEqual([]);
       for (const m of s.modules) {
         for (const d of m.details ?? []) {

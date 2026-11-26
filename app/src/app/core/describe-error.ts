@@ -1,5 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ProtocolError } from '@kubernanny/protocol';
+
 import { TranslationKey } from '../i18n/dictionary';
 import { Translator } from '../i18n/translator';
 import { AgentError, InsecureTransportError } from './agent-error';
@@ -22,7 +23,10 @@ const RELAY_MESSAGES: Record<string, TranslationKey> = {
 /** The code of a plain (unauthenticated) refusal of /api/e2e, if any. */
 function plainCode(err: HttpErrorResponse): string | undefined {
   try {
-    const body = err.error instanceof ArrayBuffer ? JSON.parse(new TextDecoder().decode(err.error)) : err.error;
+    const body =
+      err.error instanceof ArrayBuffer
+        ? JSON.parse(new TextDecoder().decode(err.error))
+        : err.error;
     return (body as { code?: string } | null)?.code;
   } catch {
     return undefined;
@@ -41,7 +45,14 @@ export function isTransient(err: unknown): boolean {
   }
   if (err instanceof HttpErrorResponse) {
     const code = plainCode(err);
-    return err.status === 0 || err.status === 502 || err.status === 503 || err.status === 504 || code === 'RELAY_AGENT_OFFLINE' || code === 'RELAY_TIMEOUT';
+    return (
+      err.status === 0 ||
+      err.status === 502 ||
+      err.status === 503 ||
+      err.status === 504 ||
+      code === 'RELAY_AGENT_OFFLINE' ||
+      code === 'RELAY_TIMEOUT'
+    );
   }
   return err instanceof Error && err.name === 'TimeoutError';
 }

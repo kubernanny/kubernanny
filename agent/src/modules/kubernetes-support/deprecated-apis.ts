@@ -15,12 +15,18 @@ export interface DeprecatedApi {
  * API asked for since its start), as Prometheus scrapes it from every
  * kube-prometheus-stack. It does not say who asked; the audit log does.
  */
-export const DEPRECATED_APIS_QUERY = 'max by (group, version, resource, removed_release) (apiserver_requested_deprecated_apis)';
+export const DEPRECATED_APIS_QUERY =
+  'max by (group, version, resource, removed_release) (apiserver_requested_deprecated_apis)';
 
 /** Prometheus samples to APIs; anything without a readable removal release is dropped. */
 export function deprecatedApisFrom(samples: { metric: Record<string, string> }[]): DeprecatedApi[] {
   return samples
-    .map((s) => ({ group: s.metric['group'] ?? '', version: s.metric['version'] ?? '', resource: s.metric['resource'] ?? '', removedRelease: s.metric['removed_release'] ?? '' }))
+    .map((s) => ({
+      group: s.metric['group'] ?? '',
+      version: s.metric['version'] ?? '',
+      resource: s.metric['resource'] ?? '',
+      removedRelease: s.metric['removed_release'] ?? '',
+    }))
     .filter((a) => /^1\.\d+$/.test(a.removedRelease) && a.version !== '' && a.resource !== '');
 }
 
@@ -52,7 +58,10 @@ export function evaluateDeprecatedApis(apis: DeprecatedApi[], minor: string | nu
         check: 'kubernetes-support',
         severity: minorOf(release) === current + 1 ? 'warning' : 'info',
         title: t('kubernetesSupport.deprecated.title', { n: names.length, release }),
-        cause: t('kubernetesSupport.deprecated.cause', { apis: names.slice(0, 6).join(', ') + (names.length > 6 ? ', …' : ''), release }),
+        cause: t('kubernetesSupport.deprecated.cause', {
+          apis: names.slice(0, 6).join(', ') + (names.length > 6 ? ', …' : ''),
+          release,
+        }),
         actions: [],
       };
     });

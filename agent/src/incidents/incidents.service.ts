@@ -1,9 +1,9 @@
 import { DemoKubeClient } from '../demo/demo-cluster';
 import { demoIncidents } from '../demo/demo-incidents';
 import { KubeClient } from '../kube/kube-client';
-import { EpisodeLog, Episode } from '../notify/digest';
+import { Episode, EpisodeLog } from '../notify/digest';
 import type { IssueView } from '../status/status.service';
-import { IncidentsView, buildIncidents } from '../views/incidents';
+import { buildIncidents, IncidentsView } from '../views/incidents';
 
 /**
  * Owns the episode log: the run loop records every run into it, the
@@ -17,7 +17,8 @@ export class IncidentsService {
   constructor(kube?: KubeClient) {
     const now = Date.now();
     // The demo pretends to have watched for a week, so the app has a timeline to show.
-    this.log = kube instanceof DemoKubeClient ? new EpisodeLog(now, demoIncidents(now, kube.scenario)) : new EpisodeLog(now);
+    this.log =
+      kube instanceof DemoKubeClient ? new EpisodeLog(now, demoIncidents(now, kube.scenario)) : new EpisodeLog(now);
   }
 
   get since(): number {

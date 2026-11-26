@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, Component, inject, input, signal } from '@angular/core';
 import { IonButton, ToastController } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
-import { AgentClient, describeError } from '../core/agent-client.service';
+
 import { ClusterConfig } from '../core/agent.model';
+import { AgentClient, describeError } from '../core/agent-client.service';
 import { externalUrl } from '../core/external-url';
 import { pairingRoute } from '../core/pairing-link';
 import { LanguageService } from '../i18n/language.service';
@@ -57,7 +58,9 @@ export class PairingSectionComponent {
   private readonly toasts = inject(ToastController);
   private readonly language = inject(LanguageService);
 
-  readonly pairing = signal<{ display: string; app: string | null; web: string | null } | null>(null);
+  readonly pairing = signal<{ display: string; app: string | null; web: string | null } | null>(
+    null,
+  );
 
   async newCode(): Promise<void> {
     const cluster = this.cluster();
@@ -67,9 +70,17 @@ export class PairingSectionComponent {
     try {
       const { code, app, web } = await this.client.newPairingCode(cluster);
       // Links from the agent: only a real pairing link and a web address are offered.
-      this.pairing.set({ display: `${code.slice(0, 5)}-${code.slice(5)}`, app: pairingRoute(app) ? app : null, web: externalUrl(web) });
+      this.pairing.set({
+        display: `${code.slice(0, 5)}-${code.slice(5)}`,
+        app: pairingRoute(app) ? app : null,
+        web: externalUrl(web),
+      });
     } catch (err) {
-      const toast = await this.toasts.create({ message: describeError(err, this.language.translator()), duration: 3000, position: 'bottom' });
+      const toast = await this.toasts.create({
+        message: describeError(err, this.language.translator()),
+        duration: 3000,
+        position: 'bottom',
+      });
       await toast.present();
     }
   }

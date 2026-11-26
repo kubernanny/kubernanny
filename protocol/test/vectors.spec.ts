@@ -1,6 +1,8 @@
-import { createRequire } from 'node:module';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+
 import { describe, expect, it } from 'vitest';
+
 import { openRequest, sealRequest } from '../src/envelope.js';
 import { keyPairFromSecret } from '../src/noise.js';
 
@@ -38,15 +40,30 @@ function build(name: string, request: Vector['request'], response: Vector['respo
     response,
   };
   const agent = keyPairFromSecret(bytes(v.agentStaticSecret));
-  const sealed = sealRequest(keyPairFromSecret(bytes(v.deviceStaticSecret)), agent.publicKey, request, keyPairFromSecret(bytes(v.deviceEphemeralSecret)));
+  const sealed = sealRequest(
+    keyPairFromSecret(bytes(v.deviceStaticSecret)),
+    agent.publicKey,
+    request,
+    keyPairFromSecret(bytes(v.deviceEphemeralSecret)),
+  );
   const opened = openRequest(agent, sealed.body, keyPairFromSecret(bytes(v.agentEphemeralSecret)));
   const responseBody = opened.respond(response.status, new TextEncoder().encode(response.body), response.time);
   return { ...v, requestBody: hex(sealed.body), responseBody: hex(responseBody) };
 }
 
 const expected: Vector[] = [
-  build('GET /status', { method: 'GET', path: '/status', time: 1795000000000 }, { status: 200, time: 1795000000150, body: '{"light":"green"}' }, 0x01),
-  build('POST /pair', { method: 'POST', path: '/pair', body: { code: 'K7QM2XRT9C', name: 'iPhone, Safari' }, time: 1795000060000 }, { status: 201, time: 1795000060020, body: '{"deviceId":"3f1c","cluster":"homelab"}' }, 0x11),
+  build(
+    'GET /status',
+    { method: 'GET', path: '/status', time: 1795000000000 },
+    { status: 200, time: 1795000000150, body: '{"light":"green"}' },
+    0x01,
+  ),
+  build(
+    'POST /pair',
+    { method: 'POST', path: '/pair', body: { code: 'K7QM2XRT9C', name: 'iPhone, Safari' }, time: 1795000060000 },
+    { status: 201, time: 1795000060020, body: '{"deviceId":"3f1c","cluster":"homelab"}' },
+    0x11,
+  ),
 ];
 
 if (process.env['UPDATE_VECTORS']) {
@@ -75,7 +92,11 @@ describe('test vectors', () => {
       const message1 = Buffer.from(vector.requestBody, 'hex').subarray(1);
       const payload = Buffer.alloc(message1.length);
       noise.readMessage(responder, message1, payload);
-      const wire = JSON.parse(payload.subarray(0, noise.readMessage.bytes).toString()) as { m: string; p: string; t: number };
+      const wire = JSON.parse(payload.subarray(0, noise.readMessage.bytes).toString()) as {
+        m: string;
+        p: string;
+        t: number;
+      };
       expect(wire.m).toBe(vector.request.method);
       expect(wire.p).toBe(vector.request.path);
       expect(wire.t).toBe(vector.request.time);

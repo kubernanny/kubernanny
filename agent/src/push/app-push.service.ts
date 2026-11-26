@@ -1,10 +1,24 @@
-import { BadRequestError, ConflictError, NotFoundError } from '../http/errors';
-import { Logger } from '../logger';
-import { DEADMAN_GRACE_MINUTES, PUSH_PLATFORMS, PushContent, PushOutcome, PushPlatform, PushStatus, encodePushContent, isPushToken, parsePublicKey, sealPush, statusPushContent, toBase64Url } from '@kubernanny/protocol';
+import {
+  DEADMAN_GRACE_MINUTES,
+  encodePushContent,
+  isPushToken,
+  parsePublicKey,
+  PUSH_PLATFORMS,
+  PushContent,
+  PushOutcome,
+  PushPlatform,
+  PushStatus,
+  sealPush,
+  statusPushContent,
+  toBase64Url,
+} from '@kubernanny/protocol';
+
 import { DevicesService, Principal, PushTarget, validKey } from '../auth/devices.service';
 import { IdentityService } from '../auth/identity.service';
 import type { Config } from '../config';
+import { BadRequestError, ConflictError, NotFoundError } from '../http/errors';
 import { t } from '../i18n/text';
+import { Logger } from '../logger';
 import { UnregisteredStrikes } from '../relay/unregistered-strikes';
 import { PushTransport } from './push-transport';
 
@@ -87,7 +101,9 @@ export class AppPushService {
         this.logger.log(`APP_PUSH is off: removed the push registration of ${removed} device(s)`);
       }
     } catch (err) {
-      this.logger.warn(`APP_PUSH is off, but stored push registrations could not be removed (${err instanceof Error ? err.message : err}); none is used`);
+      this.logger.warn(
+        `APP_PUSH is off, but stored push registrations could not be removed (${err instanceof Error ? err.message : err}); none is used`,
+      );
     }
   }
 
@@ -102,8 +118,14 @@ export class AppPushService {
     const state = this.state();
     const relay = state === 'on' && this.transport.available();
     const own = who.kind === 'device' ? this.devices.pushTargets().find((t) => t.deviceId === who.id) : undefined;
-    const deadmanState = this.config.deadman === false ? 'locked' : relay && !this.transport.deadmanAvailable() ? 'relay' : 'on';
-    return { state, relay, registered: state !== 'locked' && own !== undefined, deadman: { state: deadmanState, grace: own?.push.deadman ?? null } };
+    const deadmanState =
+      this.config.deadman === false ? 'locked' : relay && !this.transport.deadmanAvailable() ? 'relay' : 'on';
+    return {
+      state,
+      relay,
+      registered: state !== 'locked' && own !== undefined,
+      deadman: { state: deadmanState, grace: own?.push.deadman ?? null },
+    };
   }
 
   /** The routes call this first: with APP_PUSH off nothing past it runs. */
@@ -121,17 +143,42 @@ export class AppPushService {
     if (!this.config.relayUrl) {
       throw new ConflictError({ code: 'PUSH_NO_RELAY', message: t('error.pushNoRelay') });
     }
-    const { token, platform, key, widget, deadman } = (body ?? {}) as { token?: unknown; platform?: unknown; key?: unknown; widget?: unknown; deadman?: unknown };
+    const { token, platform, key, widget, deadman } = (body ?? {}) as {
+      token?: unknown;
+      platform?: unknown;
+      key?: unknown;
+      widget?: unknown;
+      deadman?: unknown;
+    };
     // `widget` and `deadman` are optional (apps before them never send them); anything else of the wrong type is a malformed call.
-    const deadmanOk = deadman === undefined || deadman === false || (typeof deadman === 'number' && DEADMAN_GRACE_MINUTES.includes(deadman));
-    if (!isPushToken(token) || !PUSH_PLATFORMS.includes(platform as PushPlatform) || !validKey(key) || (widget !== undefined && typeof widget !== 'boolean') || !deadmanOk) {
+    const deadmanOk =
+      deadman === undefined ||
+      deadman === false ||
+      (typeof deadman === 'number' && DEADMAN_GRACE_MINUTES.includes(deadman));
+    if (
+      !isPushToken(token) ||
+      !PUSH_PLATFORMS.includes(platform as PushPlatform) ||
+      !validKey(key) ||
+      (widget !== undefined && typeof widget !== 'boolean') ||
+      !deadmanOk
+    ) {
       throw new BadRequestError({ code: 'PUSH_INVALID', message: t('error.pushInvalid') });
     }
     const grace = typeof deadman === 'number' ? deadman : undefined;
-    if (!(await this.devices.setPush(who.id, { token, platform: platform as PushPlatform, key, widget: widget === true, ...(grace ? { deadman: grace } : {}) }))) {
+    if (
+      !(await this.devices.setPush(who.id, {
+        token,
+        platform: platform as PushPlatform,
+        key,
+        widget: widget === true,
+        ...(grace ? { deadman: grace } : {}),
+      }))
+    ) {
       throw new NotFoundError({ code: 'DEVICE_UNKNOWN', message: t('error.pushDeviceOnly') });
     }
-    this.audit.log(`push registered for "${who.name}" (${who.id}), ${platform}${widget === true ? ', with a widget' : ''}${grace ? `, dead man's switch after ${grace} min` : ''}`);
+    this.audit.log(
+      `push registered for "${who.name}" (${who.id}), ${platform}${widget === true ? ', with a widget' : ''}${grace ? `, dead man's switch after ${grace} min` : ''}`,
+    );
     this.onChange?.();
   }
 
@@ -189,7 +236,12 @@ export class AppPushService {
     const interval = minutes * 60_000;
     const due = this.devices
       .pushTargets()
-      .filter((target) => target.push.widget === true && now - Math.max(this.startedAt, this.lastSent.get(target.deviceId) ?? 0) >= interval && now >= (this.retryAt.get(target.deviceId) ?? 0));
+      .filter(
+        (target) =>
+          target.push.widget === true &&
+          now - Math.max(this.startedAt, this.lastSent.get(target.deviceId) ?? 0) >= interval &&
+          now >= (this.retryAt.get(target.deviceId) ?? 0),
+      );
     if (due.length === 0) {
       return { due: 0, sent: 0 };
     }
@@ -208,7 +260,10 @@ export class AppPushService {
 
   /** One message to the given devices only (the dead man's switch's "reachable again"); the outcomes in their order. */
   async deliverTo(deviceIds: readonly string[], message: AppPushMessage): Promise<PushOutcome[]> {
-    return this.sendTo(this.config.appPush ? this.devices.pushTargets().filter((t) => deviceIds.includes(t.deviceId)) : [], message);
+    return this.sendTo(
+      this.config.appPush ? this.devices.pushTargets().filter((t) => deviceIds.includes(t.deviceId)) : [],
+      message,
+    );
   }
 
   /** Status pushes by outcome since start (metrics). */
@@ -216,16 +271,37 @@ export class AppPushService {
     return this.widgetOutcomes;
   }
 
-  private async sendTo(targets: PushTarget[], message: AppPushMessage | PushContent, silent = false): Promise<PushOutcome[]> {
+  private async sendTo(
+    targets: PushTarget[],
+    message: AppPushMessage | PushContent,
+    silent = false,
+  ): Promise<PushOutcome[]> {
     if (targets.length === 0) {
       return [];
     }
-    const content = encodePushContent('t' in message ? message : { t: message.title, b: message.body, p: message.priority, s: this.now(), ...(message.status ? { w: message.status } : {}) });
+    const content = encodePushContent(
+      't' in message
+        ? message
+        : {
+            t: message.title,
+            b: message.body,
+            p: message.priority,
+            s: this.now(),
+            ...(message.status ? { w: message.status } : {}),
+          },
+    );
     const outcomes = await Promise.all(
       targets.map(async ({ push }) => {
         try {
           const sealed = sealPush(this.identity.keyPair, parsePublicKey(push.key), content);
-          return await this.transport.send({ token: push.token, platform: push.platform, kid: push.kid, message: toBase64Url(sealed), lang: this.config.language, ...(silent ? { silent: true } : {}) });
+          return await this.transport.send({
+            token: push.token,
+            platform: push.platform,
+            kid: push.kid,
+            message: toBase64Url(sealed),
+            lang: this.config.language,
+            ...(silent ? { silent: true } : {}),
+          });
         } catch {
           return 'failed' as const;
         }
@@ -237,7 +313,9 @@ export class AppPushService {
         this.lastSent.set(target.deviceId, now);
       }
     });
-    const gone = targets.filter((target, i) => this.unregistered.record(target.push.token, outcomes[i]!, now)).map((target) => target.deviceId);
+    const gone = targets
+      .filter((target, i) => this.unregistered.record(target.push.token, outcomes[i]!, now))
+      .map((target) => target.deviceId);
     if (gone.length > 0) {
       await this.devices.clearPush(gone).catch(() => undefined);
       this.logger.log(`forgot the push token of ${gone.length} device(s): FCM no longer knows it`);
@@ -245,9 +323,10 @@ export class AppPushService {
     const failed = outcomes.filter((o) => o !== 'sent');
     if (failed.length > 0) {
       // Outcomes only: never a token or a device's key.
-      this.logger.warn(`app push: ${outcomes.length - failed.length} of ${outcomes.length} delivered (${[...new Set(failed)].join(', ')})`);
+      this.logger.warn(
+        `app push: ${outcomes.length - failed.length} of ${outcomes.length} delivered (${[...new Set(failed)].join(', ')})`,
+      );
     }
     return outcomes;
   }
 }
-

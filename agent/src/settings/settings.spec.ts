@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { de } from '../testing/i18n';
+
 import { loadConfig } from '../config';
 import { DemoKubeClient } from '../demo/demo-cluster';
 import { KubeClient, KubeError } from '../kube/kube-client';
+import { de } from '../testing/i18n';
 import { SettingsService } from './settings.service';
 
 const who = { kind: 'device' as const, id: 'd1', name: 'Test' };
@@ -31,12 +32,18 @@ describe('settings', () => {
 
   it('keeps argocd-rollback locked until ENABLED_ACTIONS names it; DISABLED_ACTIONS wins; the demo shows it', async () => {
     expect((await service({})).actionState('argocd-rollback')).toBe('locked');
-    await expect((await service({})).update({ actions: { 'argocd-rollback': true } }, who)).rejects.toMatchObject({ status: 403 });
+    await expect((await service({})).update({ actions: { 'argocd-rollback': true } }, who)).rejects.toMatchObject({
+      status: 403,
+    });
     const on = await service({ ENABLED_ACTIONS: 'argocd-rollback' });
     expect(on.actionState('argocd-rollback')).toBe('on');
     await on.update({ actions: { 'argocd-rollback': false } }, who);
     expect(on.actionState('argocd-rollback')).toBe('off');
-    expect((await service({ ENABLED_ACTIONS: 'argocd-rollback', DISABLED_ACTIONS: 'argocd-rollback' })).actionState('argocd-rollback')).toBe('locked');
+    expect(
+      (await service({ ENABLED_ACTIONS: 'argocd-rollback', DISABLED_ACTIONS: 'argocd-rollback' })).actionState(
+        'argocd-rollback',
+      ),
+    ).toBe('locked');
     expect((await service({ DEMO: 'broken' })).actionState('argocd-rollback')).toBe('on');
     // The other action types are not opt-in.
     expect((await service({})).actionState('argocd-sync')).toBe('on');
@@ -100,7 +107,12 @@ describe('modules that are off by default', () => {
     expect(s.moduleState('vulnerabilities')).toBe('off');
     expect(s.moduleOn('security')).toBe(true);
     const row = de(s.view([])).modules.find((m) => m.id === 'vulnerabilities')!;
-    expect(row).toMatchObject({ state: 'off', defaultOff: true, privacy: 'Schickt Namen und Versionen der Komponenten an api.osv.dev (Google). Keine Clusterdaten, keine Namen von Workloads.' });
+    expect(row).toMatchObject({
+      state: 'off',
+      defaultOff: true,
+      privacy:
+        'Schickt Namen und Versionen der Komponenten an api.osv.dev (Google). Keine Clusterdaten, keine Namen von Workloads.',
+    });
     expect(s.view([]).modules.find((m) => m.id === 'security')).not.toHaveProperty('privacy');
   });
 
@@ -141,7 +153,13 @@ describe('modules that are off by default', () => {
   });
 
   it('accepts only https or in-cluster http for a self-hosted database', () => {
-    expect(() => withEnv({ VULN_DB_URL: 'http://osv.example.org' }, new ConfigMapKube())).toThrow('VULN_DB_URL must use https');
-    expect(de(withEnv({ VULN_DB_URL: 'http://osv-mirror.osv.svc:8080/' }, new ConfigMapKube()).view([])).modules.find((m) => m.id === 'vulnerabilities')?.privacy).toContain('an osv-mirror.osv.svc:8080.');
+    expect(() => withEnv({ VULN_DB_URL: 'http://osv.example.org' }, new ConfigMapKube())).toThrow(
+      'VULN_DB_URL must use https',
+    );
+    expect(
+      de(withEnv({ VULN_DB_URL: 'http://osv-mirror.osv.svc:8080/' }, new ConfigMapKube()).view([])).modules.find(
+        (m) => m.id === 'vulnerabilities',
+      )?.privacy,
+    ).toContain('an osv-mirror.osv.svc:8080.');
   });
 });

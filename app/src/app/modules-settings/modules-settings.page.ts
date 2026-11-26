@@ -1,8 +1,34 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
-import { IonBackButton, IonButtons, IonContent, IonHeader, IonIcon, IonSpinner, IonTitle, IonToggle, IonToolbar, ToastController } from '@ionic/angular/standalone';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  OnInit,
+  signal,
+} from '@angular/core';
+import {
+  IonBackButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonIcon,
+  IonSpinner,
+  IonTitle,
+  IonToggle,
+  IonToolbar,
+  ToastController,
+} from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
+
+import {
+  ClusterConfig,
+  ModuleSetting,
+  SettingsPatch,
+  SettingsView,
+  ToggleState,
+} from '../core/agent.model';
 import { AgentClient, describeError } from '../core/agent-client.service';
-import { ClusterConfig, ModuleSetting, SettingsPatch, SettingsView, ToggleState } from '../core/agent.model';
 import { ClusterStore } from '../core/cluster-store.service';
 import { StatusStore } from '../core/status-store.service';
 import { LanguageService } from '../i18n/language.service';
@@ -31,11 +57,23 @@ function moduleRow(m: ModuleSetting, tr: Translator): Row {
         : m.deep
           ? m.description
           : tr.t('modules.podsOnly', { description: m.description });
-  return { key: `m:${m.id}`, icon: m.icon, title: m.name, note, privacy: m.privacy, on: m.state === 'on', locked: m.state === 'locked', patch: (on) => ({ modules: { [m.id]: on } }) };
+  return {
+    key: `m:${m.id}`,
+    icon: m.icon,
+    title: m.name,
+    note,
+    privacy: m.privacy,
+    on: m.state === 'on',
+    locked: m.state === 'locked',
+    patch: (on) => ({ modules: { [m.id]: on } }),
+  };
 }
 
 /** Builds the sections once per answer; the template only reads plain properties. */
-export function settingsSections(view: SettingsView, tr: Translator): { title: string; hint: string; rows: Row[] }[] {
+export function settingsSections(
+  view: SettingsView,
+  tr: Translator,
+): { title: string; hint: string; rows: Row[] }[] {
   const core = view.modules.filter((m) => m.category === 'core');
   const found = view.modules.filter((m) => m.category !== 'core' && m.detected);
   const missing = view.modules.filter((m) => m.category !== 'core' && !m.detected);
@@ -65,20 +103,42 @@ export function settingsSections(view: SettingsView, tr: Translator): { title: s
           key: 'n',
           icon: 'notifications-outline',
           title: tr.t('modules.sendNotifications'),
-          note: view.notifications === 'locked' ? tr.t('modules.locked') : tr.t('modules.sendNotificationsNote'),
+          note:
+            view.notifications === 'locked'
+              ? tr.t('modules.locked')
+              : tr.t('modules.sendNotificationsNote'),
           ...state(view.notifications),
           patch: (on: boolean) => ({ notifications: on }),
         },
       ],
     },
-    ...(missing.length ? [{ title: tr.t('modules.missingTitle'), hint: tr.t('modules.missingHint'), rows: missing.map(row) }] : []),
+    ...(missing.length
+      ? [
+          {
+            title: tr.t('modules.missingTitle'),
+            hint: tr.t('modules.missingHint'),
+            rows: missing.map(row),
+          },
+        ]
+      : []),
   ];
 }
 
 @Component({
   selector: 'app-modules-settings',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, IonHeader, IonToolbar, IonTitle, IonButtons, IonBackButton, IonContent, IonToggle, IonIcon, IonSpinner],
+  imports: [
+    TranslocoDirective,
+    IonHeader,
+    IonToolbar,
+    IonTitle,
+    IonButtons,
+    IonBackButton,
+    IonContent,
+    IonToggle,
+    IonIcon,
+    IonSpinner,
+  ],
   template: `
     <ng-container *transloco="let t">
       <ion-header class="ion-no-border">
@@ -107,13 +167,24 @@ export function settingsSections(view: SettingsView, tr: Translator): { title: s
                         <strong>{{ r.title }}</strong>
                         <span class="hint">{{ r.note }}</span>
                         @if (r.privacy) {
-                          <span class="privacy"><ion-icon name="cloud-upload-outline" aria-hidden="true" />{{ r.privacy }}</span>
+                          <span class="privacy"
+                            ><ion-icon name="cloud-upload-outline" aria-hidden="true" />{{
+                              r.privacy
+                            }}</span
+                          >
                         }
                         @if (r.effect) {
-                          <span class="privacy"><ion-icon name="key-outline" aria-hidden="true" />{{ r.effect }}</span>
+                          <span class="privacy"
+                            ><ion-icon name="key-outline" aria-hidden="true" />{{ r.effect }}</span
+                          >
                         }
                       </div>
-                      <ion-toggle [checked]="r.on" [disabled]="r.locked || saving()" (ionChange)="toggle(r, $event.detail.checked)" [attr.aria-label]="r.title" />
+                      <ion-toggle
+                        [checked]="r.on"
+                        [disabled]="r.locked || saving()"
+                        (ionChange)="toggle(r, $event.detail.checked)"
+                        [attr.aria-label]="r.title"
+                      />
                     </li>
                   }
                 </ul>
@@ -248,7 +319,11 @@ export class ModulesSettingsPage implements OnInit {
     } catch (err) {
       // Re-render from the last known state, so the toggle springs back.
       this.view.set(this.view() ? { ...this.view()! } : null);
-      const toast = await this.toasts.create({ message: describeError(err, this.language.translator()), duration: 3000, position: 'bottom' });
+      const toast = await this.toasts.create({
+        message: describeError(err, this.language.translator()),
+        duration: 3000,
+        position: 'bottom',
+      });
       await toast.present();
     } finally {
       this.saving.set(false);

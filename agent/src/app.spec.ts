@@ -1,19 +1,21 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { generateKeyPair, toBase64Url } from '@kubernanny/protocol';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+
 import { Agent } from './agent';
 import { IdentityService } from './auth/identity.service';
 import { DemoKubeClient } from './demo/demo-cluster';
-import { call } from './e2e/internal-server';
 import { CLOCK_WINDOW_MS } from './e2e/e2e.service';
-import { CONTENT_SECURITY_POLICY } from './security/http-security';
+import { call } from './e2e/internal-server';
 import { renderMetrics } from './metrics/exporter';
-import { StatusService } from './status/status.service';
-import { PairingService } from './pairing/pairing';
 import { Notifier } from './notify/notifier';
+import { PairingService } from './pairing/pairing';
+import { CONTENT_SECURITY_POLICY } from './security/http-security';
+import { StatusService } from './status/status.service';
 import { E2eClient } from './testing/e2e-client';
 
 describe('agent against the demo cluster', () => {
@@ -159,7 +161,11 @@ describe('agent against the demo cluster', () => {
   });
 
   it('sends security headers, and no-store for the API', async () => {
-    const res = await request(app.getHttpServer()).post('/api/e2e').set('content-type', 'application/octet-stream').send(Buffer.from(phone.seal('GET', '/status').body)).expect(200);
+    const res = await request(app.getHttpServer())
+      .post('/api/e2e')
+      .set('content-type', 'application/octet-stream')
+      .send(Buffer.from(phone.seal('GET', '/status').body))
+      .expect(200);
     expect(res.headers['content-security-policy']).toBe(CONTENT_SECURITY_POLICY);
     expect(res.headers['content-security-policy']).not.toContain("script-src 'self' 'unsafe-inline'");
     expect(res.headers['x-frame-options']).toBe('DENY');
@@ -173,7 +179,11 @@ describe('agent against the demo cluster', () => {
   });
 
   it('refuses oversized bodies', async () => {
-    await request(app.getHttpServer()).post('/api/e2e').set('content-type', 'application/octet-stream').send(Buffer.alloc(70_000, 1)).expect(413);
+    await request(app.getHttpServer())
+      .post('/api/e2e')
+      .set('content-type', 'application/octet-stream')
+      .send(Buffer.alloc(70_000, 1))
+      .expect(413);
     const huge = await phone.post('/notify/test', { pad: 'y'.repeat(10_000) });
     expect(huge.status).toBe(413);
   });
@@ -232,7 +242,9 @@ describe('agent against the demo cluster', () => {
     expect(byId.grafana.links).toEqual([{ label: 'monitoring.home.example', url: 'https://monitoring.home.example' }]);
     expect(byId.grafana.version).toBe('12.1.0');
     expect(byId.argocd.stats).toEqual(expect.arrayContaining([{ label: 'Apps', value: '14' }]));
-    expect(byId.longhorn.stats.find((s: { label: string }) => s.label === 'Platte frei').value).toBe('271 GiB von 640 GiB');
+    expect(byId.longhorn.stats.find((s: { label: string }) => s.label === 'Platte frei').value).toBe(
+      '271 GiB von 640 GiB',
+    );
     expect(byId.prometheus.summary).toBe('Scrape-Ziel blackbox down (1)');
     expect(byId.kured.summary).toBe('kured-Sperre hängt seit 3 h');
   });
@@ -250,7 +262,15 @@ describe('agent against the demo cluster', () => {
         'prometheus/down/blackbox',
       ]),
     );
-    expect(ids).toEqual(expect.arrayContaining(['argocd/argocd/weblate-chart/sync', 'cnpg/default/shop-api-pg/backup', 'certificates/weblate/weblate-tls', 'alertmanager/BlackboxProbeFailed', 'kured/lock']));
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        'argocd/argocd/weblate-chart/sync',
+        'cnpg/default/shop-api-pg/backup',
+        'certificates/weblate/weblate-tls',
+        'alertmanager/BlackboxProbeFailed',
+        'kured/lock',
+      ]),
+    );
     // Kubernetes 1.33 ended in June 2026, Gatus sees the forum down, Velero's nightly run partly failed.
     expect(ids).toEqual(expect.arrayContaining(['kubernetes-support/1.33', 'gatus/group/shop', 'velero/daily-apps']));
     // One case for each issue action: OOM, a changed ConfigMap, a forgotten cordon, a pod on a lost node, evicted pods, a hanging sync, a full volume, a failed secret sync.
@@ -276,7 +296,12 @@ describe('agent against the demo cluster', () => {
   it('serves the detail views', async () => {
     const nodes = (await phone.get('/nodes', 200)).body;
     expect(nodes).toHaveLength(3);
-    expect(nodes[2]).toMatchObject({ name: 'rke2-node-5', rebooting: true, disk: 0.88, roles: ['control-plane', 'etcd', 'master'] });
+    expect(nodes[2]).toMatchObject({
+      name: 'rke2-node-5',
+      rebooting: true,
+      disk: 0.88,
+      roles: ['control-plane', 'etcd', 'master'],
+    });
     expect(nodes[0].cpu.usedMilli).toBe(1730);
 
     const workloads = (await phone.get('/workloads', 200)).body;
@@ -285,7 +310,10 @@ describe('agent against the demo cluster', () => {
     expect(workloads.find((w: { name: string }) => w.name === 'monitoring-chart-grafana').component).toBe('Grafana');
 
     const storage = (await phone.get('/storage', 200)).body;
-    expect(storage.classes.find((c: { name: string }) => c.name === 'longhorn')).toMatchObject({ isDefault: true, expansion: true });
+    expect(storage.classes.find((c: { name: string }) => c.name === 'longhorn')).toMatchObject({
+      isDefault: true,
+      expansion: true,
+    });
     const prom = storage.volumes.find((v: { name: string }) => v.name.startsWith('data-prometheus'));
     expect(prom.used).toBeGreaterThan(40 * 2 ** 30);
     expect(prom.longhorn).toMatchObject({ robustness: 'healthy', replicas: 3 });
@@ -301,13 +329,24 @@ describe('agent against the demo cluster', () => {
     const history = (await phone.get('/history?hours=6', 200)).body;
     expect(history.source).toBe('prometheus');
     expect(history.series.map((s: { id: string }) => s.id)).toEqual(
-      expect.arrayContaining(['cpu', 'memory', 'net-in', 'net-out', 'restarts', 'etcd-fsync', 'node-cpu:rke2-node-1', 'node-memory:rke2-node-5']),
+      expect.arrayContaining([
+        'cpu',
+        'memory',
+        'net-in',
+        'net-out',
+        'restarts',
+        'etcd-fsync',
+        'node-cpu:rke2-node-1',
+        'node-memory:rke2-node-5',
+      ]),
     );
   });
 
   it('groups repeated warnings about one object in the events view', async () => {
     const events = (await phone.get('/events', 200)).body;
-    const scheduling = events.filter((e: { reason: string; name: string }) => e.reason === 'FailedScheduling' && e.name === 'discourse');
+    const scheduling = events.filter(
+      (e: { reason: string; name: string }) => e.reason === 'FailedScheduling' && e.name === 'discourse',
+    );
     expect(scheduling).toHaveLength(1);
     expect(scheduling[0]).toMatchObject({ count: 35, events: 2 });
     expect(Date.parse(scheduling[0].firstSeen)).toBeLessThan(Date.parse(scheduling[0].time));
@@ -319,8 +358,12 @@ describe('agent against the demo cluster', () => {
     expect(body.days).toBe(7);
     const resolved = body.incidents.filter((i: { end: string | null }) => i.end !== null);
     expect(resolved.length).toBeGreaterThanOrEqual(7);
-    expect(body.incidents.find((i: { issueId: string }) => i.issueId === 'pods/default/Deployment/social-importer')).toMatchObject({ end: null, severity: 'critical', module: 'pods' });
-    expect(resolved.find((i: { issueId: string }) => i.issueId === 'nodes/rke2-node-5/not-ready').title).toBe('Node rke2-node-5 NotReady');
+    expect(
+      body.incidents.find((i: { issueId: string }) => i.issueId === 'pods/default/Deployment/social-importer'),
+    ).toMatchObject({ end: null, severity: 'critical', module: 'pods' });
+    expect(resolved.find((i: { issueId: string }) => i.issueId === 'nodes/rke2-node-5/not-ready').title).toBe(
+      'Node rke2-node-5 NotReady',
+    );
     const starts = body.incidents.map((i: { start: string }) => i.start);
     expect(starts).toEqual([...starts].sort().reverse());
     // Only seven days are kept; anything larger is the week, anything smaller at least one day.
@@ -331,20 +374,43 @@ describe('agent against the demo cluster', () => {
   it('serves the backups of every kind the modules read, worst first', async () => {
     const { body } = await phone.get('/backups', 200);
     expect(body.maxAgeHours).toBe(26);
-    expect(new Set(body.rows.map((r: { kind: string }) => r.kind))).toEqual(new Set(['cnpg', 'longhorn', 'etcd', 'velero']));
+    expect(new Set(body.rows.map((r: { kind: string }) => r.kind))).toEqual(
+      new Set(['cnpg', 'longhorn', 'etcd', 'velero']),
+    );
     expect(body.rows[0].state).not.toBe('ok');
-    expect(body.rows.find((r: { id: string }) => r.id === 'cnpg/default/shop-api-pg')).toMatchObject({ state: 'warning', note: 'Älter als 26 h', target: { type: 's3' } });
-    expect(body.rows.find((r: { id: string }) => r.id === 'velero/daily-apps')).toMatchObject({ state: 'warning', count: 3 });
+    expect(body.rows.find((r: { id: string }) => r.id === 'cnpg/default/shop-api-pg')).toMatchObject({
+      state: 'warning',
+      note: 'Älter als 26 h',
+      target: { type: 's3' },
+    });
+    expect(body.rows.find((r: { id: string }) => r.id === 'velero/daily-apps')).toMatchObject({
+      state: 'warning',
+      count: 3,
+    });
     expect(body.rows.find((r: { id: string }) => r.id === 'etcd')).toMatchObject({ state: 'ok', count: 7 });
-    expect(body.targets).toEqual([{ kind: 'longhorn', name: 'default', type: 's3', location: 's3://shop-backups@eu-central-2/longhorn-backups', available: true }]);
-    expect(body.unprotected.map((u: { name: string }) => u.name)).toEqual(['data-prometheus-monitoring-chart-kube-prom-prometheus-0', 'data-loki-0']);
+    expect(body.targets).toEqual([
+      {
+        kind: 'longhorn',
+        name: 'default',
+        type: 's3',
+        location: 's3://shop-backups@eu-central-2/longhorn-backups',
+        available: true,
+      },
+    ]);
+    expect(body.unprotected.map((u: { name: string }) => u.name)).toEqual([
+      'data-prometheus-monitoring-chart-kube-prom-prometheus-0',
+      'data-loki-0',
+    ]);
   });
 
   it('restarts the workload the issue names and serves logs of the crashed run', async () => {
     const issue = 'pods/default/Deployment/social-importer';
     const { body } = await phone.post(`/actions/restart?${new URLSearchParams({ issue })}`, undefined, 200);
     expect(body.done).toContain('social-importer');
-    expect(kube.writes.at(-1)).toMatchObject({ method: 'PATCH', path: '/apis/apps/v1/namespaces/default/deployments/social-importer' });
+    expect(kube.writes.at(-1)).toMatchObject({
+      method: 'PATCH',
+      path: '/apis/apps/v1/namespaces/default/deployments/social-importer',
+    });
 
     const logs = (await phone.get(`/logs?${new URLSearchParams({ issue })}`, 200)).body;
     expect(logs).toMatchObject({ container: 'social', previous: true });
@@ -352,8 +418,15 @@ describe('agent against the demo cluster', () => {
   });
 
   it('starts a CNPG backup from the backup issue', async () => {
-    await phone.post(`/actions/cnpg-backup?${new URLSearchParams({ issue: 'cnpg/default/shop-api-pg/backup' })}`, undefined, 200);
-    expect(kube.writes.at(-1)).toMatchObject({ method: 'POST', path: '/apis/postgresql.cnpg.io/v1/namespaces/default/backups' });
+    await phone.post(
+      `/actions/cnpg-backup?${new URLSearchParams({ issue: 'cnpg/default/shop-api-pg/backup' })}`,
+      undefined,
+      200,
+    );
+    expect(kube.writes.at(-1)).toMatchObject({
+      method: 'POST',
+      path: '/apis/postgresql.cnpg.io/v1/namespaces/default/backups',
+    });
   });
 
   it('runs the default-on issue actions through the route, each on the object its issue names', async () => {
@@ -363,21 +436,46 @@ describe('agent against the demo cluster', () => {
       await tablet.post(`/actions/${type}?${new URLSearchParams({ issue })}`, undefined, 200);
       return kube.writes.at(-1)!;
     };
-    expect(await run('uncordon', 'nodes/rke2-node-4/cordoned')).toMatchObject({ method: 'PATCH', path: '/api/v1/nodes/rke2-node-4', body: { spec: { unschedulable: false } } });
-    expect(await run('cleanup-pods', 'pods/finished/default')).toMatchObject({ method: 'DELETE', path: '/api/v1/namespaces/default/pods/shop-web-app-chart-6b8f9c7d4-x8m4d' });
-    expect(await run('reconcile-now', 'certificates/weblate/weblate-tls')).toMatchObject({ method: 'PATCH', path: '/apis/cert-manager.io/v1/namespaces/weblate/certificates/weblate-tls/status' });
+    expect(await run('uncordon', 'nodes/rke2-node-4/cordoned')).toMatchObject({
+      method: 'PATCH',
+      path: '/api/v1/nodes/rke2-node-4',
+      body: { spec: { unschedulable: false } },
+    });
+    expect(await run('cleanup-pods', 'pods/finished/default')).toMatchObject({
+      method: 'DELETE',
+      path: '/api/v1/namespaces/default/pods/shop-web-app-chart-6b8f9c7d4-x8m4d',
+    });
+    expect(await run('reconcile-now', 'certificates/weblate/weblate-tls')).toMatchObject({
+      method: 'PATCH',
+      path: '/apis/cert-manager.io/v1/namespaces/weblate/certificates/weblate-tls/status',
+    });
     expect(await run('reconcile-now', 'infisical/InfisicalStaticSecret/default/cloudflare-api-token')).toMatchObject({
       method: 'PATCH',
       path: '/apis/secrets.infisical.com/v1beta1/namespaces/default/infisicalstaticsecrets/cloudflare-api-token',
     });
-    expect(await run('velero-backup', 'velero/daily-apps')).toMatchObject({ method: 'POST', path: '/apis/velero.io/v1/namespaces/velero/backups' });
-    expect(await run('longhorn-backup', 'longhorn/backup/' + (await tablet.get('/status', 200)).body.issues.find((i: { id: string }) => i.id.startsWith('longhorn/backup/')).id.split('/')[2])).toMatchObject({
+    expect(await run('velero-backup', 'velero/daily-apps')).toMatchObject({
+      method: 'POST',
+      path: '/apis/velero.io/v1/namespaces/velero/backups',
+    });
+    expect(
+      await run(
+        'longhorn-backup',
+        'longhorn/backup/' +
+          (await tablet.get('/status', 200)).body.issues
+            .find((i: { id: string }) => i.id.startsWith('longhorn/backup/'))
+            .id.split('/')[2],
+      ),
+    ).toMatchObject({
       method: 'POST',
       path: '/apis/longhorn.io/v1beta2/namespaces/longhorn-system/backups',
     });
     // Without the opt-in config-change-hint no ConfigMap is read: the crash loop offers logs first, the restart second.
     const status = (await tablet.get('/status', 200)).body;
-    expect(status.issues.find((i: { id: string }) => i.id === 'pods/default/Deployment/newsletter-worker').actions.map((a: { type: string; secondary?: boolean }) => [a.type, a.secondary ?? false])).toEqual([
+    expect(
+      status.issues
+        .find((i: { id: string }) => i.id === 'pods/default/Deployment/newsletter-worker')
+        .actions.map((a: { type: string; secondary?: boolean }) => [a.type, a.secondary ?? false]),
+    ).toEqual([
       ['logs', false],
       ['restart', true],
     ]);
@@ -385,22 +483,41 @@ describe('agent against the demo cluster', () => {
     const offered = status.issues.flatMap((i: { actions: { type: string }[] }) => i.actions.map((a) => a.type));
     for (const type of ['job-rerun', 'force-delete-terminating', 'argocd-terminate-op', 'pvc-expand']) {
       expect(offered).not.toContain(type);
-      await tablet.post(`/actions/${type}?${new URLSearchParams({ issue: 'jobs/default/appstore-metrics-reviews' })}`, undefined, 403);
+      await tablet.post(
+        `/actions/${type}?${new URLSearchParams({ issue: 'jobs/default/appstore-metrics-reviews' })}`,
+        undefined,
+        403,
+      );
     }
   });
 
   it('refuses actions an issue does not offer, and issues that are gone', async () => {
     const before = kube.writes.length;
-    await phone.post(`/actions/cnpg-backup?${new URLSearchParams({ issue: 'pods/default/Deployment/social-importer' })}`, undefined, 404);
-    await phone.post(`/actions/restart?${new URLSearchParams({ issue: 'pods/kube-system/Deployment/coredns' })}`, undefined, 409);
+    await phone.post(
+      `/actions/cnpg-backup?${new URLSearchParams({ issue: 'pods/default/Deployment/social-importer' })}`,
+      undefined,
+      404,
+    );
+    await phone.post(
+      `/actions/restart?${new URLSearchParams({ issue: 'pods/kube-system/Deployment/coredns' })}`,
+      undefined,
+      409,
+    );
     await phone.post(`/actions/delete-everything?${new URLSearchParams({ issue: 'x' })}`, undefined, 400);
     expect(kube.writes).toHaveLength(before);
   });
 
   it('switches modules, actions and notifications from the app, stored in a ConfigMap', async () => {
     const before = (await phone.get('/settings', 200)).body;
-    expect(before.modules.find((m: { id: string }) => m.id === 'argocd')).toMatchObject({ state: 'on', detected: true, deep: true });
-    expect(before.modules.find((m: { id: string }) => m.id === 'nodes')).toMatchObject({ category: 'core', state: 'on' });
+    expect(before.modules.find((m: { id: string }) => m.id === 'argocd')).toMatchObject({
+      state: 'on',
+      detected: true,
+      deep: true,
+    });
+    expect(before.modules.find((m: { id: string }) => m.id === 'nodes')).toMatchObject({
+      category: 'core',
+      state: 'on',
+    });
     expect(before.actions.map((a: { type: string }) => a.type)).toEqual([
       'restart',
       'argocd-sync',
@@ -431,10 +548,17 @@ describe('agent against the demo cluster', () => {
     expect(kube.lists.some((p) => p.includes('argoproj.io'))).toBe(false);
     const status = (await phone.get('/status', 200)).body;
     expect(status.modules.map((m: { id: string }) => m.id)).not.toContain('argocd');
-    expect(status.issues.flatMap((i: { actions: { type: string }[] }) => i.actions.map((a) => a.type))).not.toContain('restart');
-    const refused = await phone.post(`/actions/restart?${new URLSearchParams({ issue: 'pods/default/Deployment/social-importer' })}`, undefined);
+    expect(status.issues.flatMap((i: { actions: { type: string }[] }) => i.actions.map((a) => a.type))).not.toContain(
+      'restart',
+    );
+    const refused = await phone.post(
+      `/actions/restart?${new URLSearchParams({ issue: 'pods/default/Deployment/social-importer' })}`,
+      undefined,
+    );
     expect([403, 404]).toContain(refused.status);
-    expect(kube.writes.some((w) => w.path.endsWith('/configmaps') && JSON.stringify(w.body).includes('kubernanny-settings'))).toBe(true);
+    expect(
+      kube.writes.some((w) => w.path.endsWith('/configmaps') && JSON.stringify(w.body).includes('kubernanny-settings')),
+    ).toBe(true);
 
     const back = (await phone.post('/settings', { modules: { argocd: true }, actions: { restart: true } }, 200)).body;
     expect(back.modules.find((m: { id: string }) => m.id === 'argocd').state).toBe('on');
@@ -452,7 +576,9 @@ describe('agent against the demo cluster', () => {
     expect(after.issues.filter((i: { silencedUntil?: string }) => i.silencedUntil)).toHaveLength(critical.length);
     expect(after.light).not.toBe('red');
     expect(after.score).toBeGreaterThan(before.score);
-    expect((await phone.post(`/issues/silence?${new URLSearchParams({ issue: critical[0].id, hours: '5' })}`)).status).toBe(400);
+    expect(
+      (await phone.post(`/issues/silence?${new URLSearchParams({ issue: critical[0].id, hours: '5' })}`)).status,
+    ).toBe(400);
     for (const issue of critical) {
       await phone.post(`/issues/unsilence?${new URLSearchParams({ issue: issue.id })}`, undefined, 204);
     }
@@ -488,44 +614,83 @@ describe('agent against the demo cluster', () => {
       const byId = Object.fromEntries(body.modules.map((m: { id: string }) => [m.id, m]));
       expect(byId.prometheus.summary).toBe('Scrape target blackbox down (1)');
       expect(byId.kured.summary).toBe('kured lock held for 3 h');
-      expect(byId.nodes).toMatchObject({ name: 'Nodes', description: 'Reachability, pressure and load of the machines.' });
-      expect(byId.longhorn.stats.find((s: { label: string }) => s.label === 'Disk free').value).toBe('271 GiB of 640 GiB');
+      expect(byId.nodes).toMatchObject({
+        name: 'Nodes',
+        description: 'Reachability, pressure and load of the machines.',
+      });
+      expect(byId.longhorn.stats.find((s: { label: string }) => s.label === 'Disk free').value).toBe(
+        '271 GiB of 640 GiB',
+      );
       const titles = Object.fromEntries(body.issues.map((i: { id: string; title: string }) => [i.id, i.title]));
       expect(titles['volumes/discourse/uploads']).toMatch(/^PVC discourse\/uploads pending for \d+ (min|h|days?)$/);
       expect(titles['argocd/argocd/weblate-chart/sync']).toBe('Argo CD app weblate-chart: change waiting for sync');
       // Ids and machine fields do not change with the language.
       const german = (await phone.get('/status', 200)).body;
-      expect(body.issues.map((i: { id: string; severity: string }) => [i.id, i.severity])).toEqual(german.issues.map((i: { id: string; severity: string }) => [i.id, i.severity]));
-      expect(german.modules.find((m: { id: string }) => m.id === 'prometheus').summary).toBe('Scrape-Ziel blackbox down (1)');
+      expect(body.issues.map((i: { id: string; severity: string }) => [i.id, i.severity])).toEqual(
+        german.issues.map((i: { id: string; severity: string }) => [i.id, i.severity]),
+      );
+      expect(german.modules.find((m: { id: string }) => m.id === 'prometheus').summary).toBe(
+        'Scrape-Ziel blackbox down (1)',
+      );
     });
 
     it('renders settings, history, action errors and channel errors in the request language', async () => {
       const english = new E2eClient(app.getHttpServer(), app.get(IdentityService).publicKey, phone.device, 'en');
       const settings = (await english.get('/settings', 200)).body;
-      expect(settings.actions.find((a: { type: string }) => a.type === 'logs')).toMatchObject({ label: 'Read logs', description: 'Show the last lines of a crashed pod.' });
-      expect(settings.modules.find((m: { id: string }) => m.id === 'longhorn')).toMatchObject({ name: 'Longhorn', description: 'Replicated block storage across all nodes.' });
+      expect(settings.actions.find((a: { type: string }) => a.type === 'logs')).toMatchObject({
+        label: 'Read logs',
+        description: 'Show the last lines of a crashed pod.',
+      });
+      expect(settings.modules.find((m: { id: string }) => m.id === 'longhorn')).toMatchObject({
+        name: 'Longhorn',
+        description: 'Replicated block storage across all nodes.',
+      });
       const history = (await english.get('/history?hours=1', 200)).body;
       expect(history.series.every((s: { label: unknown }) => typeof s.label === 'string')).toBe(true);
-      expect((await english.post('/actions/restart?issue=nope', undefined, 409)).body).toEqual({ code: 'ISSUE_GONE', message: 'The problem no longer exists.' });
-      expect((await phone.post('/actions/restart?issue=nope', undefined, 409)).body).toEqual({ code: 'ISSUE_GONE', message: 'Das Problem besteht nicht mehr.' });
-      expect((await english.post('/settings', { modules: { nope: true } }, 400)).body).toEqual({ code: 'SETTING_UNKNOWN', message: 'Unknown module nope.' });
+      expect((await english.post('/actions/restart?issue=nope', undefined, 409)).body).toEqual({
+        code: 'ISSUE_GONE',
+        message: 'The problem no longer exists.',
+      });
+      expect((await phone.post('/actions/restart?issue=nope', undefined, 409)).body).toEqual({
+        code: 'ISSUE_GONE',
+        message: 'Das Problem besteht nicht mehr.',
+      });
+      expect((await english.post('/settings', { modules: { nope: true } }, 400)).body).toEqual({
+        code: 'SETTING_UNKNOWN',
+        message: 'Unknown module nope.',
+      });
     });
 
     it('never leaves an unrendered text in a response', async () => {
       const english = new E2eClient(app.getHttpServer(), app.get(IdentityService).publicKey, phone.device, 'en');
-      for (const path of ['/status', '/settings', '/nodes', '/workloads', '/storage', '/network', '/events', '/history']) {
+      for (const path of [
+        '/status',
+        '/settings',
+        '/nodes',
+        '/workloads',
+        '/storage',
+        '/network',
+        '/events',
+        '/history',
+      ]) {
         expect(JSON.stringify((await english.get(path, 200)).body), path).not.toContain('"$t"');
       }
     });
 
     it('answers errors before the dispatch (unknown device) in the request language too', async () => {
       const stranger = new E2eClient(app.getHttpServer(), app.get(IdentityService).publicKey, undefined, 'en');
-      expect((await stranger.get('/status', 401)).body).toEqual({ code: 'DEVICE_UNKNOWN', message: 'This device is not paired (any more).' });
+      expect((await stranger.get('/status', 401)).body).toEqual({
+        code: 'DEVICE_UNKNOWN',
+        message: 'This device is not paired (any more).',
+      });
     });
 
     it('ignores the language header on the public port, like the principal header', async () => {
       const res = await request(app.getHttpServer()).get('/api/status').set('x-kubernanny-language', 'en').expect(401);
-      expect(res.body).toEqual({ code: 'E2E_REQUIRED', message: 'Nur über den verschlüsselten Kanal (POST /api/e2e).' });
+      expect(res.body).toEqual({
+        code: 'E2E_REQUIRED',
+        message: 'Nur über den verschlüsselten Kanal (POST /api/e2e).',
+      });
     });
   });
 });

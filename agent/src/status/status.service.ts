@@ -1,27 +1,36 @@
-import { Logger } from '../logger';
 import { Issue } from '../checks/types';
 import type { Config } from '../config';
 import { Detected, discover, distribution } from '../discovery/discovery';
-import { ClusterCache } from '../inventory/cluster-cache';
-import { Inventory, emptyInventory, gatherInventory } from '../inventory/inventory';
 import { errorText, raw, t } from '../i18n/text';
 import { IncidentsService } from '../incidents/incidents.service';
+import { ClusterCache } from '../inventory/cluster-cache';
+import { emptyInventory, gatherInventory, Inventory } from '../inventory/inventory';
 import { KubeClient } from '../kube/kube-client';
+import { Logger } from '../logger';
 import { CORE_CHECKS } from '../modules/core';
-import { INTEGRATIONS, findPrometheus } from '../modules/integrations';
+import { dedupeAlerts } from '../modules/core/standard-alerts/alertmanager-dedupe';
+import { findPrometheus, INTEGRATIONS } from '../modules/integrations';
 import { Prometheus } from '../modules/service-proxy';
 import { ModuleContext, RunData } from '../modules/types';
+import { AcceptanceService } from '../modules/vulnerabilities/acceptance.service';
 import { VulnDb } from '../modules/vulnerabilities/osv-client';
 import { vulnDbFor } from '../modules/vulnerabilities/vuln-db';
-import { AcceptanceService } from '../modules/vulnerabilities/acceptance.service';
 import { Notifier } from '../notify/notifier';
 import { SettingsService } from '../settings/settings.service';
 import { SilenceService } from '../silence/silence.service';
 import { AGENT_BUILD, AGENT_COMMIT, AGENT_VERSION } from '../version';
-import { runTiming } from './run-timing';
 import { mergeIssues, runComponent, runCoreCheck } from './run-modules';
-import { dedupeAlerts } from '../modules/core/standard-alerts/alertmanager-dedupe';
-import { buildOverview, HistoryPoint, IssueView, lightFor, Overview, scoreFor, SEVERITY_RANK, Snapshot } from './snapshot';
+import { runTiming } from './run-timing';
+import {
+  buildOverview,
+  HistoryPoint,
+  IssueView,
+  lightFor,
+  Overview,
+  scoreFor,
+  SEVERITY_RANK,
+  Snapshot,
+} from './snapshot';
 
 // The types and rules of a snapshot live in snapshot.ts; existing imports keep working through here.
 export * from './snapshot';
@@ -181,9 +190,18 @@ export class StatusService {
    * from the request.
    */
   private pendingSyncIssue(id: string): Issue | undefined {
-    const pending = this.snapshotValue.modules.flatMap((m) => m.pendingSyncs ?? []).find((p) => p.id === id && p.canSync);
+    const pending = this.snapshotValue.modules
+      .flatMap((m) => m.pendingSyncs ?? [])
+      .find((p) => p.id === id && p.canSync);
     return pending
-      ? { id, check: 'argocd', severity: 'info', title: raw(pending.app), cause: raw(''), actions: [{ type: 'argocd-sync', namespace: pending.namespace, app: pending.app }] }
+      ? {
+          id,
+          check: 'argocd',
+          severity: 'info',
+          title: raw(pending.app),
+          cause: raw(''),
+          actions: [{ type: 'argocd-sync', namespace: pending.namespace, app: pending.app }],
+        }
       : undefined;
   }
 
@@ -211,7 +229,10 @@ export class StatusService {
     this.lastRunStarted = started;
     let inv: Inventory;
     try {
-      inv = await gatherInventory(this.kube, now, { cache: this.cache, previous: this.snapshotValue.checkedAt ? this.inventory : null });
+      inv = await gatherInventory(this.kube, now, {
+        cache: this.cache,
+        previous: this.snapshotValue.checkedAt ? this.inventory : null,
+      });
     } catch (err) {
       await this.publish(this.failedSnapshot(err, now), now);
       return;
@@ -227,7 +248,16 @@ export class StatusService {
     const data: RunData = {};
     const base = { inv, kube: this.kube, config: this.config, now, data };
     const prom = findPrometheus(base, detected);
-    const ctx: ModuleContext = { ...base, prom, detected, vulnDb: this.vulnDb, vulnAcceptance: this.acceptance?.state(now.getTime()), rollbackOn: this.settings.actionOn('argocd-rollback'), syncOn: this.settings.actionOn('argocd-sync'), restartOn: this.settings.actionOn('restart') && this.settings.actionOn('config-change-hint') };
+    const ctx: ModuleContext = {
+      ...base,
+      prom,
+      detected,
+      vulnDb: this.vulnDb,
+      vulnAcceptance: this.acceptance?.state(now.getTime()),
+      rollbackOn: this.settings.actionOn('argocd-rollback'),
+      syncOn: this.settings.actionOn('argocd-sync'),
+      restartOn: this.settings.actionOn('restart') && this.settings.actionOn('config-change-hint'),
+    };
     const allowed = this.settings.actionOn;
 
     // Components first: some fill RunData the core checks read (kured lock, certificates).
@@ -244,21 +274,46 @@ export class StatusService {
     const components = await Promise.all(
       detected
         .filter((d) => this.settings.moduleOn(d.entry.id))
-        .map((d) => timed(d.entry.id, () => runComponent(ctx, d, INTEGRATIONS.find((i) => i.id === d.entry.id), allowed))),
+        .map((d) =>
+          timed(d.entry.id, () =>
+            runComponent(
+              ctx,
+              d,
+              INTEGRATIONS.find((i) => i.id === d.entry.id),
+              allowed,
+            ),
+          ),
+        ),
     );
     const t1 = Date.now();
-    const core = await Promise.all(CORE_CHECKS.filter((m) => this.settings.moduleOn(m.id)).map((m) => timed(m.id, () => runCoreCheck(ctx, m, allowed))));
+    const core = await Promise.all(
+      CORE_CHECKS.filter((m) => this.settings.moduleOn(m.id)).map((m) =>
+        timed(m.id, () => runCoreCheck(ctx, m, allowed)),
+      ),
+    );
     const t2 = Date.now();
     const byId = mergeIssues(core, components);
     // An Alertmanager alert that is the same as a built-in issue shows once, as the built-in one.
-    dedupeAlerts(byId, [...core, ...components].map((o) => o.view), data, inv);
+    dedupeAlerts(
+      byId,
+      [...core, ...components].map((o) => o.view),
+      data,
+      inv,
+    );
     const issues = this.withHistory([...byId.values()], now);
     const modules = [...core, ...components].map((a) => a.view);
     // How this run spent its time, on Kubernanny's own sheet: why a run takes a second on a real cluster.
     const own = modules.find((m) => m.id === 'kubernanny');
     if (own) {
       own.details = [
-        ...runTiming({ inventoryMs, componentsMs: t1 - t0, coreMs: t2 - t1, totalMs: Date.now() - started, moduleMs, prometheus: prom?.timings ?? null }),
+        ...runTiming({
+          inventoryMs,
+          componentsMs: t1 - t0,
+          coreMs: t2 - t1,
+          totalMs: Date.now() - started,
+          moduleMs,
+          prometheus: prom?.timings ?? null,
+        }),
         ...(own.details ?? []),
       ];
     }
@@ -404,7 +459,12 @@ export class StatusService {
  * `since` plus whole intervals), or a pending early run when that is sooner.
  * Null before the timer runs and without an early run.
  */
-export function nextRunAt(now: number, since: number | null, intervalMs: number, earlyAt: number | null): number | null {
+export function nextRunAt(
+  now: number,
+  since: number | null,
+  intervalMs: number,
+  earlyAt: number | null,
+): number | null {
   if (since === null) {
     return earlyAt;
   }

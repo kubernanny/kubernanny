@@ -1,9 +1,9 @@
-import { Logger } from '../logger';
 import type { Config } from '../config';
-import { Text, reviveText } from '../i18n/text';
-import { KubeClient, KubeError } from '../kube/kube-client';
-import { Serial } from '../util/serial';
+import { reviveText, Text } from '../i18n/text';
 import { upsertConfigMapData } from '../kube/configmap';
+import { KubeClient, KubeError } from '../kube/kube-client';
+import { Logger } from '../logger';
+import { Serial } from '../util/serial';
 import type { Pushed } from './notifier';
 
 /** SETTINGS_CONFIGMAP of settings.service, spelled out: importing it would close a cycle through the notifier (checked in the spec). */
@@ -29,7 +29,12 @@ interface Stored {
 export function serializeNotified(pushed: ReadonlyMap<string, Pushed>): string {
   let entries = [...pushed].slice(-MAX_NOTIFIED);
   for (;;) {
-    const stored: Stored = { v: 1, issues: Object.fromEntries(entries.map(([id, p]) => [id, { s: p.severity === 'critical' ? 'c' : 'w', t: p.title }])) };
+    const stored: Stored = {
+      v: 1,
+      issues: Object.fromEntries(
+        entries.map(([id, p]) => [id, { s: p.severity === 'critical' ? 'c' : 'w', t: p.title }]),
+      ),
+    };
     const text = JSON.stringify(stored);
     if (text.length <= MAX_NOTIFIED_BYTES || entries.length === 0) {
       return text;
@@ -85,7 +90,9 @@ export class NotifiedStore {
       return parseNotified(cm.data?.[NOTIFIED_KEY]);
     } catch (err) {
       if (!(err instanceof KubeError && err.status === 404)) {
-        this.logger.warn(`cannot read what was already sent (${err instanceof Error ? err.message : err}); a restart may repeat a message`);
+        this.logger.warn(
+          `cannot read what was already sent (${err instanceof Error ? err.message : err}); a restart may repeat a message`,
+        );
       }
       return new Map();
     }

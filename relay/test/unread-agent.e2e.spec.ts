@@ -1,6 +1,14 @@
-import { FrameType, answerChallenge, decodeFrame, encodeReplyEnd, generateKeyPair, relayAgentId } from '@kubernanny/protocol';
+import {
+  answerChallenge,
+  decodeFrame,
+  encodeReplyEnd,
+  FrameType,
+  generateKeyPair,
+  relayAgentId,
+} from '@kubernanny/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
+
 import { RunningRelay, startRelay } from '../src/bootstrap';
 
 /**
@@ -26,7 +34,11 @@ describe('an agent that never reads (review H1)', () => {
 
   it('bounds what the relay queues for it and gets no blind answer through', async () => {
     // Fast call limits only to make the test short; the byte limits stay at their defaults.
-    Object.assign(process.env, { RELAY_CALLS_PER_MINUTE: '100000', RELAY_CALL_BURST: '100000', RELAY_CALL_TIMEOUT_MS: '300' });
+    Object.assign(process.env, {
+      RELAY_CALLS_PER_MINUTE: '100000',
+      RELAY_CALL_BURST: '100000',
+      RELAY_CALL_TIMEOUT_MS: '300',
+    });
     relay = await startRelay({ port: 0, metricsPort: 0, logger: false });
     const keys = generateKeyPair();
     const id = relayAgentId(keys.publicKey);
@@ -75,6 +87,8 @@ describe('an agent that never reads (review H1)', () => {
 
 /** The bytes the relay's WebSocket for the (only) agent still holds unsent. */
 async function queuedBytes(relay: RunningRelay): Promise<number> {
-  const hub = relay.app.get((await import('../src/agent-hub.service')).AgentHub) as unknown as { agents: Map<string, { socket: WebSocket }> };
+  const hub = relay.app.get((await import('../src/agent-hub.service')).AgentHub) as unknown as {
+    agents: Map<string, { socket: WebSocket }>;
+  };
   return [...hub.agents.values()].reduce((n, c) => n + c.socket.bufferedAmount, 0);
 }

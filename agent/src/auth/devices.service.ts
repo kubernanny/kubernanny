@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { Logger } from '../logger';
-import { PushPlatform, parsePublicKey, pushKeyId, toBase64Url } from '@kubernanny/protocol';
+
+import { parsePublicKey, pushKeyId, PushPlatform, toBase64Url } from '@kubernanny/protocol';
+
 import type { Config } from '../config';
 import { KubeClient, KubeError } from '../kube/kube-client';
+import { Logger } from '../logger';
 import { Serial } from '../util/serial';
 import { NotLoadedError, readAtStartup } from '../util/startup-read';
 
@@ -95,13 +97,22 @@ export class DevicesService {
 
   /** Reads the paired devices, retrying transient errors; throws when they stay unreadable, so the process ends and restarts. */
   async onModuleInit(delaysMs?: readonly number[]): Promise<void> {
-    const secret = await readAtStartup(`Secret ${DEVICES_SECRET}`, () => this.kube.get<{ data?: { devices?: string } }>(`${this.path}/${DEVICES_SECRET}`), {
-      onRetry: (err, attempt) => this.logger.warn(`cannot read Secret ${DEVICES_SECRET} (${err instanceof Error ? err.message : err}), attempt ${attempt}; retrying`),
-      ...(delaysMs ? { delaysMs } : {}),
-    });
+    const secret = await readAtStartup(
+      `Secret ${DEVICES_SECRET}`,
+      () => this.kube.get<{ data?: { devices?: string } }>(`${this.path}/${DEVICES_SECRET}`),
+      {
+        onRetry: (err, attempt) =>
+          this.logger.warn(
+            `cannot read Secret ${DEVICES_SECRET} (${err instanceof Error ? err.message : err}), attempt ${attempt}; retrying`,
+          ),
+        ...(delaysMs ? { delaysMs } : {}),
+      },
+    );
     let parsed: Device[] = [];
     try {
-      parsed = secret ? (JSON.parse(Buffer.from(secret.data?.devices ?? '', 'base64').toString('utf8') || '[]') as Device[]) : [];
+      parsed = secret
+        ? (JSON.parse(Buffer.from(secret.data?.devices ?? '', 'base64').toString('utf8') || '[]') as Device[])
+        : [];
     } catch {
       // Not overwritten with an empty list: someone may still repair it by hand.
       throw new Error(`Secret ${DEVICES_SECRET} holds no readable device list; fix or delete its key "devices"`);
@@ -109,7 +120,9 @@ export class DevicesService {
     if (!Array.isArray(parsed)) {
       throw new Error(`Secret ${DEVICES_SECRET} holds no readable device list; fix or delete its key "devices"`);
     }
-    this.devices = parsed.filter((d) => typeof d.id === 'string' && validKey(d.publicKey)).map((d) => (d.push && !validPush(d.push) ? withoutPush(d) : d));
+    this.devices = parsed
+      .filter((d) => typeof d.id === 'string' && validKey(d.publicKey))
+      .map((d) => (d.push && !validPush(d.push) ? withoutPush(d) : d));
     this.loaded = true;
   }
   /**
@@ -121,7 +134,6 @@ export class DevicesService {
   reload(): Promise<void> {
     return this.onModuleInit([]);
   }
-
 
   /** False until the stored list was read: pairing then fails instead of pairing devices over a list it never saw. */
   get persistent(): boolean {
@@ -192,11 +204,24 @@ export class DevicesService {
       const kid = pushKeyId(parsePublicKey(push.key));
       const before = device.push;
       // The app says again when only its widget changed: an unchanged registration is not written again.
-      if (before && before.token === push.token && before.platform === push.platform && before.key === push.key && (before.widget === true) === (push.widget === true) && before.deadman === push.deadman) {
+      if (
+        before &&
+        before.token === push.token &&
+        before.platform === push.platform &&
+        before.key === push.key &&
+        (before.widget === true) === (push.widget === true) &&
+        before.deadman === push.deadman
+      ) {
         return true;
       }
       const { widget, deadman, ...rest } = push;
-      const entry: DevicePush = { ...rest, kid, since: new Date().toISOString(), ...(widget ? { widget: true } : {}), ...(deadman ? { deadman } : {}) };
+      const entry: DevicePush = {
+        ...rest,
+        kid,
+        since: new Date().toISOString(),
+        ...(widget ? { widget: true } : {}),
+        ...(deadman ? { deadman } : {}),
+      };
       await this.save(this.devices.map((d) => (d.id === id ? { ...d, push: entry } : d)));
       return true;
     });
@@ -214,7 +239,9 @@ export class DevicesService {
   }
 
   pushTargets(): PushTarget[] {
-    return this.devices.filter((d): d is Device & { push: DevicePush } => d.push !== undefined).map((d) => ({ deviceId: d.id, push: d.push }));
+    return this.devices
+      .filter((d): d is Device & { push: DevicePush } => d.push !== undefined)
+      .map((d) => ({ deviceId: d.id, push: d.push }));
   }
 
   hasPush(id: string): boolean {
@@ -222,7 +249,13 @@ export class DevicesService {
   }
 
   private view(d: Device): DeviceView {
-    return { id: d.id, name: d.name, createdAt: d.createdAt, lastSeenAt: this.lastSeen.get(d.id)?.toISOString() ?? null, push: d.push !== undefined };
+    return {
+      id: d.id,
+      name: d.name,
+      createdAt: d.createdAt,
+      lastSeenAt: this.lastSeen.get(d.id)?.toISOString() ?? null,
+      push: d.push !== undefined,
+    };
   }
 
   private async save(next: Device[]): Promise<void> {
@@ -255,7 +288,12 @@ function withoutPush(device: Device): Device {
 }
 
 function validPush(push: DevicePush): boolean {
-  return typeof push.token === 'string' && (push.platform === 'ios' || push.platform === 'android') && validKey(push.key) && typeof push.kid === 'string';
+  return (
+    typeof push.token === 'string' &&
+    (push.platform === 'ios' || push.platform === 'android') &&
+    validKey(push.key) &&
+    typeof push.kid === 'string'
+  );
 }
 
 /** A base64url X25519 public key: device keys and push keys alike. */

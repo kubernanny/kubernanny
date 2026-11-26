@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { DemoKubeClient } from '../../demo/demo-cluster';
 import { Detected } from '../../discovery/discovery';
 import { emptyInventory } from '../../inventory/inventory';
@@ -35,7 +36,13 @@ class Refusing extends KubeClient {
 
 describe('Gatus and Uptime Kuma integrations', () => {
   it('Gatus: reads the statuses over the service and reports the down endpoint without actions', async () => {
-    const r = en(await new GatusIntegration().run(ctx(new DemoKubeClient(undefined, 'broken')), det('gatus', 'gatus', 8080), () => true));
+    const r = en(
+      await new GatusIntegration().run(
+        ctx(new DemoKubeClient(undefined, 'broken')),
+        det('gatus', 'gatus', 8080),
+        () => true,
+      ),
+    );
     expect(r.issues).toMatchObject([{ id: 'gatus/group/shop', severity: 'warning', actions: [] }]);
     expect(r.stats.map((s) => [s.label, s.value])).toEqual([
       ['Up', '4'],
@@ -49,12 +56,28 @@ describe('Gatus and Uptime Kuma integrations', () => {
   });
 
   it('Uptime Kuma without a status page: only the pods, and how to set one up', async () => {
-    const r = en(await new UptimeKumaIntegration().run(ctx(new DemoKubeClient(undefined, 'broken')), det('uptime-kuma', 'uptime-kuma', 3001), () => true));
-    expect(r).toMatchObject({ issues: [], summary: '1 pod ready', stats: [{ label: 'Status page', value: 'not set up (UPTIME_KUMA_STATUS_PAGE)' }] });
+    const r = en(
+      await new UptimeKumaIntegration().run(
+        ctx(new DemoKubeClient(undefined, 'broken')),
+        det('uptime-kuma', 'uptime-kuma', 3001),
+        () => true,
+      ),
+    );
+    expect(r).toMatchObject({
+      issues: [],
+      summary: '1 pod ready',
+      stats: [{ label: 'Status page', value: 'not set up (UPTIME_KUMA_STATUS_PAGE)' }],
+    });
   });
 
   it('Uptime Kuma with a status page: counts its monitors', async () => {
-    const r = en(await new UptimeKumaIntegration().run(ctx(new DemoKubeClient(undefined, 'broken'), 'homelab'), det('uptime-kuma', 'uptime-kuma', 3001), () => true));
+    const r = en(
+      await new UptimeKumaIntegration().run(
+        ctx(new DemoKubeClient(undefined, 'broken'), 'homelab'),
+        det('uptime-kuma', 'uptime-kuma', 3001),
+        () => true,
+      ),
+    );
     expect(r.issues).toEqual([]);
     expect(r.stats.map((s) => [s.label, s.value])).toEqual([
       ['Status page', 'homelab'],

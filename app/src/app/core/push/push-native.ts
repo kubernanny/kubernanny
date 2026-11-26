@@ -20,13 +20,22 @@ interface KubernannyPushPlugin {
   isAvailable(): Promise<{ available: boolean; platform: PushPlatform }>;
   requestPermission(): Promise<{ granted: boolean }>;
   getToken(): Promise<{ token: string }>;
-  storeKey(options: { kid: string; secretKey: string; publicKey: string; agentKey: string; clusterId: string }): Promise<void>;
+  storeKey(options: {
+    kid: string;
+    secretKey: string;
+    publicKey: string;
+    agentKey: string;
+    clusterId: string;
+  }): Promise<void>;
   removeKey(options: { kid: string }): Promise<void>;
   /** The authenticity marker (push-marker.ts), kept next to the push keys and nowhere else. */
   getMarker(): Promise<{ marker: string | null }>;
   setMarker(options: { marker: string }): Promise<void>;
   /** iOS: a tap on a push, with the key id it carried (Android opens kubernanny://cluster?id=… instead). */
-  addListener(event: 'pushTapped', listener: (tap: { kid?: unknown }) => void): Promise<PluginListenerHandle>;
+  addListener(
+    event: 'pushTapped',
+    listener: (tap: { kid?: unknown }) => void,
+  ): Promise<PluginListenerHandle>;
 }
 
 const native = registerPlugin<KubernannyPushPlugin>('KubernannyPush');
@@ -58,7 +67,13 @@ export class PushNative {
     return (await native.getToken()).token;
   }
 
-  storeKey(options: { kid: string; secretKey: string; publicKey: string; agentKey: string; clusterId: string }): Promise<void> {
+  storeKey(options: {
+    kid: string;
+    secretKey: string;
+    publicKey: string;
+    agentKey: string;
+    clusterId: string;
+  }): Promise<void> {
     return native.storeKey(options);
   }
 

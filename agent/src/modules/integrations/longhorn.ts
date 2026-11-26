@@ -1,11 +1,17 @@
-import { Integration } from '../module';
-import { LonghornVolume, evaluateLonghorn } from '../../checks/longhorn.check';
-import { LonghornBackup, LonghornBackupTarget, evaluateLonghornBackups, groupLonghornBackups, longhornBackupTime } from '../../checks/maintenance.check';
+import { evaluateLonghorn, LonghornVolume } from '../../checks/longhorn.check';
+import {
+  evaluateLonghornBackups,
+  groupLonghornBackups,
+  LonghornBackup,
+  LonghornBackupTarget,
+  longhornBackupTime,
+} from '../../checks/maintenance.check';
 import { ageText } from '../../checks/types';
-import { bytes, pct } from '../format';
 import { rawOr, t } from '../../i18n/text';
+import { longhornDetails, LonghornReplica } from '../details';
+import { bytes, pct } from '../format';
+import { Integration } from '../module';
 import { LonghornNode, ModuleContext, ModuleResult, Stat } from '../types';
-import { LonghornReplica, longhornDetails } from '../details';
 
 export class LonghornIntegration extends Integration {
   readonly id = 'longhorn';
@@ -15,7 +21,11 @@ export class LonghornIntegration extends Integration {
     { group: 'longhorn.io', resource: 'nodes', why: 'disk space and schedulability per storage node' },
     { group: 'longhorn.io', resource: 'backups', why: 'age of the newest backup per volume' },
     { group: 'longhorn.io', resource: 'backuptargets', why: 'whether the backup target is reachable' },
-    { group: 'longhorn.io', resource: 'replicas', why: 'where each volume\'s replicas run and which failed, for the sheet' },
+    {
+      group: 'longhorn.io',
+      resource: 'replicas',
+      why: "where each volume's replicas run and which failed, for the sheet",
+    },
   ];
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
     const [volumes, nodes, backups, targets, replicas] = await Promise.all([
@@ -29,7 +39,10 @@ export class LonghornIntegration extends Integration {
     ctx.data.longhornNodes = nodes ?? [];
     ctx.data.longhornBackups = backups ?? [];
     ctx.data.longhornBackupTargets = targets ?? [];
-    const issues = [...evaluateLonghorn(volumes ?? []), ...evaluateLonghornBackups(targets ?? [], backups ?? [], volumes ?? [], ctx.now, ctx.config.backupMaxAgeHours)];
+    const issues = [
+      ...evaluateLonghorn(volumes ?? []),
+      ...evaluateLonghornBackups(targets ?? [], backups ?? [], volumes ?? [], ctx.now, ctx.config.backupMaxAgeHours),
+    ];
     let available = 0;
     let maximum = 0;
     let scheduled = 0;
@@ -65,12 +78,20 @@ export class LonghornIntegration extends Integration {
     const healthy = all.filter((v) => v.status?.robustness === 'healthy').length;
     const attached = all.filter((v) => v.status?.state === 'attached').length;
     const stats: Stat[] = [
-      { label: t('longhorn.stat.healthy'), value: `${healthy}/${attached}`, tone: healthy === attached ? 'ok' : 'warning' },
+      {
+        label: t('longhorn.stat.healthy'),
+        value: `${healthy}/${attached}`,
+        tone: healthy === attached ? 'ok' : 'warning',
+      },
       { label: t('longhorn.stat.total'), value: String(all.length) },
     ];
     if (maximum > 0) {
       stats.push(
-        { label: t('longhorn.stat.diskFree'), value: t('common.ofTotal', { part: bytes(available), total: bytes(maximum) }), tone: available / maximum < 0.15 ? 'warning' : 'ok' },
+        {
+          label: t('longhorn.stat.diskFree'),
+          value: t('common.ofTotal', { part: bytes(available), total: bytes(maximum) }),
+          tone: available / maximum < 0.15 ? 'warning' : 'ok',
+        },
         { label: t('longhorn.stat.scheduled'), value: `${pct(scheduled, maximum)} %` },
       );
     }
@@ -79,13 +100,22 @@ export class LonghornIntegration extends Integration {
       // Backups of deleted volumes stay in the target; they protect nothing, so the stats count only the others.
       const { byVolume, orphaned } = groupLonghornBackups(all, backups);
       const current = [...byVolume.values()].flat();
-      const completed = current.filter((b) => b.status?.state === 'Completed').map(longhornBackupTime).filter(Number.isFinite);
+      const completed = current
+        .filter((b) => b.status?.state === 'Completed')
+        .map(longhornBackupTime)
+        .filter(Number.isFinite);
       stats.push({ label: t('stat.backups'), value: String(current.length) });
       if (completed.length) {
-        stats.push({ label: t('stat.lastBackup'), value: t('common.ago', { age: ageText(ctx.now.getTime() - Math.max(...completed)) }) });
+        stats.push({
+          label: t('stat.lastBackup'),
+          value: t('common.ago', { age: ageText(ctx.now.getTime() - Math.max(...completed)) }),
+        });
       }
       if (orphaned.backups > 0) {
-        stats.push({ label: t('longhorn.stat.orphaned'), value: t('longhorn.orphaned.value', { backups: orphaned.backups, volumes: orphaned.volumes }) });
+        stats.push({
+          label: t('longhorn.stat.orphaned'),
+          value: t('longhorn.orphaned.value', { backups: orphaned.backups, volumes: orphaned.volumes }),
+        });
       }
     }
     for (const target of targets ?? []) {

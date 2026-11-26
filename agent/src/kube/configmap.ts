@@ -7,7 +7,12 @@ import { KubeClient, KubeError } from './kube-client';
  * can lose the race to another one (409): the patch then goes to the
  * ConfigMap that one created. Merge patch: only the given keys change.
  */
-export async function upsertConfigMapData(kube: KubeClient, namespace: string, name: string, data: Record<string, string>): Promise<void> {
+export async function upsertConfigMapData(
+  kube: KubeClient,
+  namespace: string,
+  name: string,
+  data: Record<string, string>,
+): Promise<void> {
   const collection = `/api/v1/namespaces/${encodeURIComponent(namespace)}/configmaps`;
   const path = `${collection}/${encodeURIComponent(name)}`;
   try {
@@ -19,7 +24,12 @@ export async function upsertConfigMapData(kube: KubeClient, namespace: string, n
     }
   }
   try {
-    await kube.create(collection, { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name, labels: { 'app.kubernetes.io/name': 'kubernanny' } }, data });
+    await kube.create(collection, {
+      apiVersion: 'v1',
+      kind: 'ConfigMap',
+      metadata: { name, labels: { 'app.kubernetes.io/name': 'kubernanny' } },
+      data,
+    });
   } catch (err) {
     if (!(err instanceof KubeError && err.status === 409)) {
       throw err;

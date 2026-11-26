@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Prometheus, PROM_CONCURRENCY } from './service-proxy';
+
+import { PROM_CONCURRENCY, Prometheus } from './service-proxy';
 
 describe('Prometheus queries of one run', () => {
   it('run at most PROM_CONCURRENCY at a time and are timed', async () => {

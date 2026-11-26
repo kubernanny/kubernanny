@@ -22,10 +22,18 @@ const NODES = [
 /** The slow pair of `warning` and `broken`: etcd on rke2-node-1 to the member on rke2-node-5. */
 export const DEMO_SLOW_PEER = { instance: '10.0.0.1:2381', To: NODES[2]!.member };
 
-const MISSING = new Set(['node_md_disks', 'node_md_disks_required', 'kubelet_certificate_manager_client_ttl_seconds', 'kubelet_certificate_manager_server_ttl_seconds', 'kube_resourcequota']);
+const MISSING = new Set([
+  'node_md_disks',
+  'node_md_disks_required',
+  'kubelet_certificate_manager_client_ttl_seconds',
+  'kubelet_certificate_manager_server_ttl_seconds',
+  'kube_resourcequota',
+]);
 
-const etcd = (value: (n: (typeof NODES)[number]) => number): Sample[] => NODES.map((n) => ({ metric: { instance: `${n.ip}:2381` }, value: value(n) }));
-const exporter = (labels: Record<string, string>, value: number): Sample[] => NODES.map((n) => ({ metric: { instance: `${n.ip}:9100`, ...labels }, value }));
+const etcd = (value: (n: (typeof NODES)[number]) => number): Sample[] =>
+  NODES.map((n) => ({ metric: { instance: `${n.ip}:2381` }, value: value(n) }));
+const exporter = (labels: Record<string, string>, value: number): Sample[] =>
+  NODES.map((n) => ({ metric: { instance: `${n.ip}:9100`, ...labels }, value }));
 
 function answers(scenario: Scenario): Record<string, Sample[] | Record<string, Sample[]>> {
   const slow = scenario !== 'healthy';
@@ -33,10 +41,18 @@ function answers(scenario: Scenario): Record<string, Sample[] | Record<string, S
     NODES.flatMap((from, i) =>
       NODES.filter((to) => to !== from).map((to, j) => {
         const isSlow = slow && from.name === 'rke2-node-1' && to.name === 'rke2-node-5';
-        return { metric: { instance: `${from.ip}:2381`, To: to.member }, value: isSlow ? (now ? 0.243 : 0.212) : 0.004 + (i + j) * 0.0017 };
+        return {
+          metric: { instance: `${from.ip}:2381`, To: to.member },
+          value: isSlow ? (now ? 0.243 : 0.212) : 0.004 + (i + j) * 0.0017,
+        };
       }),
     );
-  const pvcs = ['monitoring/data-prometheus-monitoring-chart-kube-prom-prometheus-0', 'monitoring/data-loki-0', 'default/shop-api-pg-1', 'weblate/data-weblate-0'].map((k) => {
+  const pvcs = [
+    'monitoring/data-prometheus-monitoring-chart-kube-prom-prometheus-0',
+    'monitoring/data-loki-0',
+    'default/shop-api-pg-1',
+    'weblate/data-weblate-0',
+  ].map((k) => {
     const [namespace, persistentvolumeclaim] = k.split('/');
     return { namespace: namespace!, persistentvolumeclaim: persistentvolumeclaim! };
   });
@@ -57,15 +73,32 @@ function answers(scenario: Scenario): Record<string, Sample[] | Record<string, S
       in4h: exporter({ mountpoint: '/boot' }, 7.2e8),
       readonly: exporter({ mountpoint: '/boot' }, 0),
     },
-    inodes: { main: [...exporter({ mountpoint: '/' }, 0.94), ...exporter({ mountpoint: '/boot' }, 0.99)], readonly: exporter({ mountpoint: '/' }, 0) },
+    inodes: {
+      main: [...exporter({ mountpoint: '/' }, 0.94), ...exporter({ mountpoint: '/boot' }, 0.99)],
+      readonly: exporter({ mountpoint: '/' }, 0),
+    },
     conntrack: exporter({}, 0.031),
     'network-errors': [],
     'file-descriptors': exporter({}, 0.004),
     'node-flapping': NODES.map((n) => ({ metric: { node: n.name }, value: 0 })),
-    'pv-inodes': { main: pvcs.map((metric) => ({ metric, value: 0.97 })), now: pvcs.map((metric) => ({ metric, value: 0.97 })), in4d: pvcs.map((metric) => ({ metric, value: 3e6 })) },
+    'pv-inodes': {
+      main: pvcs.map((metric) => ({ metric, value: 0.97 })),
+      now: pvcs.map((metric) => ({ metric, value: 0.97 })),
+      in4d: pvcs.map((metric) => ({ metric, value: 3e6 })),
+    },
     'pv-errors': [],
-    'client-certificate': NODES.map((n) => ({ metric: { job: 'apiserver', instance: `${n.ip}:6443` }, value: 287 * 86_400 })),
-    'api-errors': { main: [{ metric: {}, value: 0.0004 }], m5: [{ metric: {}, value: 0 }], m30: [{ metric: {}, value: 0.0003 }], h2: [{ metric: {}, value: 0.0004 }], h6: [{ metric: {}, value: 0.0004 }], d1: [{ metric: {}, value: 0.0005 }] },
+    'client-certificate': NODES.map((n) => ({
+      metric: { job: 'apiserver', instance: `${n.ip}:6443` },
+      value: 287 * 86_400,
+    })),
+    'api-errors': {
+      main: [{ metric: {}, value: 0.0004 }],
+      m5: [{ metric: {}, value: 0 }],
+      m30: [{ metric: {}, value: 0.0003 }],
+      h2: [{ metric: {}, value: 0.0004 }],
+      h6: [{ metric: {}, value: 0.0004 }],
+      d1: [{ metric: {}, value: 0.0005 }],
+    },
     'dns-errors': [{ metric: { job: 'coredns' }, value: dnsErrors }],
     'dns-latency': [{ metric: { server: 'dns://:53', zone: '.' }, value: 0.0041 }],
     'dns-forward-broken': [{ metric: {}, value: 0 }],
@@ -83,7 +116,10 @@ export function standardAlertsAnswer(query: string, scenario: Scenario): Sample[
     return names.filter((n) => !MISSING.has(n)).map((n) => ({ metric: { __name__: n }, value: 1 }));
   }
   if (query === 'max by (server_id, instance, pod) (etcd_server_id)') {
-    return NODES.map((n) => ({ metric: { server_id: n.member, instance: `${n.ip}:2381`, pod: `etcd-${n.name}` }, value: 1 }));
+    return NODES.map((n) => ({
+      metric: { server_id: n.member, instance: `${n.ip}:2381`, pod: `etcd-${n.name}` },
+      value: 1,
+    }));
   }
   for (const rule of PROM_RULES) {
     const extra = Object.entries(rule.extra ?? {}).find(([, q]) => q === query)?.[0];

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { STRIKE_GAP_MS, UnregisteredStrikes } from './unregistered-strikes';
 
 const TOKEN = 'cXVpdGUtYS10b2tlbg:APA91bHPRgkF-test_token';

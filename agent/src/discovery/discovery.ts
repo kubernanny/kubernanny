@@ -1,7 +1,7 @@
 import { WorkloadKind } from '../checks/types';
 import type { CustomComponent } from '../config';
-import { CronJob, Ingress, Inventory, Service, Workload } from '../inventory/inventory';
 import { raw, t } from '../i18n/text';
+import { CronJob, Ingress, Inventory, Service, Workload } from '../inventory/inventory';
 import { CATALOG, CatalogEntry, Category } from './catalog';
 
 export interface WorkloadRef {
@@ -84,7 +84,11 @@ function selects(selector: Record<string, string> | undefined, labels: Record<st
 }
 
 /** Services in the workload's namespace that route to its pods. */
-export function servicesOf(inv: Inventory, namespace: string, podLabels: Record<string, string> | undefined): Service[] {
+export function servicesOf(
+  inv: Inventory,
+  namespace: string,
+  podLabels: Record<string, string> | undefined,
+): Service[] {
   return inv.services.filter((s) => s.metadata.namespace === namespace && selects(s.spec?.selector, podLabels));
 }
 
@@ -110,7 +114,9 @@ export function ingressUrls(inv: Inventory, services: Service[]): Link[] {
   // Gateway API: no TLS info on the route itself; the listener has it, so assume https.
   for (const route of inv.httpRoutes) {
     const ns = route.metadata.namespace;
-    const backends = (route.spec?.rules ?? []).flatMap((r) => r.backendRefs ?? []).filter((b) => !b.kind || b.kind === 'Service');
+    const backends = (route.spec?.rules ?? [])
+      .flatMap((r) => r.backendRefs ?? [])
+      .filter((b) => !b.kind || b.kind === 'Service');
     if (backends.some((b) => keys.has(`${b.namespace ?? ns}/${b.name}`))) {
       for (const host of route.spec?.hostnames ?? []) {
         add(`https://${host}`, host);
@@ -120,7 +126,9 @@ export function ingressUrls(inv: Inventory, services: Service[]): Link[] {
   for (const route of inv.ingressRoutes) {
     const ns = route.metadata.namespace;
     for (const r of route.spec?.routes ?? []) {
-      if ((r.services ?? []).some((s) => (!s.kind || s.kind === 'Service') && keys.has(`${s.namespace ?? ns}/${s.name}`))) {
+      if (
+        (r.services ?? []).some((s) => (!s.kind || s.kind === 'Service') && keys.has(`${s.namespace ?? ns}/${s.name}`))
+      ) {
         for (const host of hostsInMatch(r.match)) {
           add(`${route.spec?.tls ? 'https' : 'http'}://${host}`, host);
         }
@@ -170,7 +178,9 @@ export function customEntries(custom: CustomComponent[]): CatalogEntry[] {
     custom: true,
     // The prefix must end at a boundary: "…/shop-api" matches "…/shop-api:1.2" and "…/shop-api@sha256:…",
     // never "…/shop-api-evil". A prefix ending in "/" matches a whole registry path.
-    images: c.images.map((prefix) => new RegExp(prefix.endsWith('/') ? `^${escapeRe(prefix)}` : `^${escapeRe(prefix)}(?=[:@]|$)`)),
+    images: c.images.map(
+      (prefix) => new RegExp(prefix.endsWith('/') ? `^${escapeRe(prefix)}` : `^${escapeRe(prefix)}(?=[:@]|$)`),
+    ),
   }));
 }
 
@@ -184,8 +194,16 @@ export function discover(inv: Inventory, custom: CustomComponent[] = []): Detect
   const catalog = [...customEntries(custom), ...CATALOG];
   const found = new Map<string, Detected>();
   const match = (images: string[]) => catalog.find((e) => images.some((i) => e.images.some((re) => re.test(i))));
-  const record = (entry: CatalogEntry, namespace: string, images: string[], ref: WorkloadRef, podLabels: Record<string, string> | undefined) => {
-    const det = found.get(entry.id) ?? ({ entry, namespace, workloads: [], services: [], links: [], instances: [] } satisfies Detected);
+  const record = (
+    entry: CatalogEntry,
+    namespace: string,
+    images: string[],
+    ref: WorkloadRef,
+    podLabels: Record<string, string> | undefined,
+  ) => {
+    const det =
+      found.get(entry.id) ??
+      ({ entry, namespace, workloads: [], services: [], links: [], instances: [] } satisfies Detected);
     const image = images.find((i) => entry.images.some((re) => re.test(i)));
     if (det.version === undefined && image) {
       det.version = imageVersion(image);
@@ -200,7 +218,13 @@ export function discover(inv: Inventory, custom: CustomComponent[] = []): Detect
       instance.version ??= image ? imageVersion(image) : undefined;
     } else {
       const version = image ? imageVersion(image) : undefined;
-      instances.push({ namespace, name: ref.name, ...(version ? { version } : {}), ready: Math.min(ref.ready, ref.desired), desired: ref.desired });
+      instances.push({
+        namespace,
+        name: ref.name,
+        ...(version ? { version } : {}),
+        ready: Math.min(ref.ready, ref.desired),
+        desired: ref.desired,
+      });
     }
     det.services.push(...servicesOf(inv, namespace, podLabels));
     found.set(entry.id, det);
@@ -210,7 +234,13 @@ export function discover(inv: Inventory, custom: CustomComponent[] = []): Detect
     const entry = match(images);
     if (entry) {
       const namespace = w.metadata.namespace ?? 'default';
-      record(entry, namespace, images, { kind, namespace, name: w.metadata.name, ...readiness(kind, w) }, w.spec?.template?.metadata?.labels);
+      record(
+        entry,
+        namespace,
+        images,
+        { kind, namespace, name: w.metadata.name, ...readiness(kind, w) },
+        w.spec?.template?.metadata?.labels,
+      );
     }
   }
   // Components that only run on a schedule (Descheduler, backup jobs, reports).
@@ -219,7 +249,13 @@ export function discover(inv: Inventory, custom: CustomComponent[] = []): Detect
     const entry = match(images);
     if (entry) {
       const namespace = c.metadata.namespace ?? 'default';
-      record(entry, namespace, images, { kind: 'CronJob', namespace, name: c.metadata.name, ready: 0, desired: 0 }, undefined);
+      record(
+        entry,
+        namespace,
+        images,
+        { kind: 'CronJob', namespace, name: c.metadata.name, ready: 0, desired: 0 },
+        undefined,
+      );
     }
   }
   for (const det of found.values()) {
@@ -247,7 +283,13 @@ export function distribution(inv: Inventory): string {
   if (inv.nodes.some((n) => n.metadata.labels?.['node.kubernetes.io/instance-type']?.startsWith('Standard_'))) {
     return 'AKS';
   }
-  if (inv.nodes.some((n) => n.metadata.labels?.['node-role.kubernetes.io/control-plane'] !== undefined && n.metadata.name.startsWith('talos'))) {
+  if (
+    inv.nodes.some(
+      (n) =>
+        n.metadata.labels?.['node-role.kubernetes.io/control-plane'] !== undefined &&
+        n.metadata.name.startsWith('talos'),
+    )
+  ) {
     return 'Talos';
   }
   return 'Kubernetes';

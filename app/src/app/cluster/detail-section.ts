@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { TranslocoDirective } from '@jsverse/transloco';
+
 import { SheetSection } from './module-sheet-view';
 
 /** One structured part of a module sheet: its objects as a list (problems first, healthy rows folded) or a short table. */
@@ -11,7 +12,9 @@ import { SheetSection } from './module-sheet-view';
     <ng-container *transloco="let t">
       @if (section(); as s) {
         <section class="detail">
-          <h2>{{ s.title }} <span class="count">{{ s.count }}</span></h2>
+          <h2>
+            {{ s.title }} <span class="count">{{ s.count }}</span>
+          </h2>
           @if (s.kind === 'list') {
             <ul class="rows">
               @for (r of s.rows; track r.key) {
@@ -25,7 +28,11 @@ import { SheetSection } from './module-sheet-view';
                     @if (r.meta.length > 0) {
                       <span class="rmeta">
                         @for (m of r.meta; track $index) {
-                          <span [class]="'chip tone-' + (m.tone ?? 'muted')" [class.flag]="m.tone === 'warning' || m.tone === 'critical'">{{ m.text }}</span>
+                          <span
+                            [class]="'chip tone-' + (m.tone ?? 'muted')"
+                            [class.flag]="m.tone === 'warning' || m.tone === 'critical'"
+                            >{{ m.text }}</span
+                          >
                         }
                       </span>
                     }
@@ -46,7 +53,11 @@ import { SheetSection } from './module-sheet-view';
                             @if (c.meta.length > 0) {
                               <span class="rmeta">
                                 @for (m of c.meta; track $index) {
-                                  <span [class]="'chip tone-' + (m.tone ?? 'muted')" [class.flag]="m.tone === 'warning' || m.tone === 'critical'">{{ m.text }}</span>
+                                  <span
+                                    [class]="'chip tone-' + (m.tone ?? 'muted')"
+                                    [class.flag]="m.tone === 'warning' || m.tone === 'critical'"
+                                    >{{ m.text }}</span
+                                  >
                                 }
                               </span>
                             }
@@ -62,9 +73,13 @@ import { SheetSection } from './module-sheet-view';
               }
             </ul>
             @if (s.folded > 0) {
-              <button type="button" class="more" (click)="toggle.emit()">{{ s.expandLabel }}</button>
+              <button type="button" class="more" (click)="toggle.emit()">
+                {{ s.expandLabel }}
+              </button>
             } @else if (expanded()) {
-              <button type="button" class="more" (click)="toggle.emit()">{{ t('module.showLess') }}</button>
+              <button type="button" class="more" (click)="toggle.emit()">
+                {{ t('module.showLess') }}
+              </button>
             }
           } @else {
             <table class="grid">

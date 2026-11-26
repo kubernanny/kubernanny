@@ -9,7 +9,7 @@
  * minute, asks at most twice a day per version. When the database cannot be
  * reached, answers up to 7 days old are used and marked stale.
  */
-import { TextError, errorText, t as msg } from '../../i18n/text';
+import { errorText, t as msg, TextError } from '../../i18n/text';
 import { readCapped } from '../../util/read-capped';
 
 export interface OsvQuery {
@@ -98,8 +98,14 @@ export class OsvClient implements VulnDb {
           const answers = await this.batch(due);
           due.forEach((q, i) => this.queries.set(keyOf(q), { at: t, ids: answers[i] }));
         }
-        const ids = [...new Set(queries.flatMap((q) => this.queries.get(keyOf(q))!.ids))].slice(0, OSV_MAX_IDS_PER_LOOKUP);
-        await this.details(ids.filter((id) => !this.vulns.has(id) || t - this.vulns.get(id)!.at >= OSV_TTL_MS), t);
+        const ids = [...new Set(queries.flatMap((q) => this.queries.get(keyOf(q))!.ids))].slice(
+          0,
+          OSV_MAX_IDS_PER_LOOKUP,
+        );
+        await this.details(
+          ids.filter((id) => !this.vulns.has(id) || t - this.vulns.get(id)!.at >= OSV_TTL_MS),
+          t,
+        );
         this.failure = null;
       } catch (err) {
         this.failure = { at: t, error: err };
@@ -109,7 +115,10 @@ export class OsvClient implements VulnDb {
     } catch (err) {
       const cached = queries.map((q) => this.queries.get(keyOf(q)));
       if (cached.every((c) => c && t - c.at < STALE_MAX_MS && c.ids.every((id) => this.vulns.has(id)))) {
-        return { results: cached.map((c) => this.resolve(c!.ids)), staleSince: new Date(Math.min(...cached.map((c) => c!.at))) };
+        return {
+          results: cached.map((c) => this.resolve(c!.ids)),
+          staleSince: new Date(Math.min(...cached.map((c) => c!.at))),
+        };
       }
       throw new TextError(msg('vulnerabilities.unreachable', { host: this.host, message: errorText(err) }));
     }
@@ -133,8 +142,14 @@ export class OsvClient implements VulnDb {
   }
 
   private async batch(queries: OsvQuery[]): Promise<string[][]> {
-    const body = { queries: queries.map((q) => ({ package: { ecosystem: q.ecosystem, name: q.name }, version: q.version })) };
-    const res = await this.request(`${this.baseUrl}/v1/querybatch`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const body = {
+      queries: queries.map((q) => ({ package: { ecosystem: q.ecosystem, name: q.name }, version: q.version })),
+    };
+    const res = await this.request(`${this.baseUrl}/v1/querybatch`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
     const results = (res as { results?: { vulns?: { id?: unknown }[] }[] }).results;
     if (!Array.isArray(results) || results.length !== queries.length) {
       throw new TextError(msg('vulnerabilities.unexpectedAnswer'));
@@ -152,7 +167,10 @@ export class OsvClient implements VulnDb {
     for (let i = 0; i < ids.length; i += 8) {
       await Promise.all(
         ids.slice(i, i + 8).map(async (id) => {
-          const vuln = sanitize(await this.request(`${this.baseUrl}/v1/vulns/${encodeURIComponent(id)}`, { method: 'GET' }), id);
+          const vuln = sanitize(
+            await this.request(`${this.baseUrl}/v1/vulns/${encodeURIComponent(id)}`, { method: 'GET' }),
+            id,
+          );
           this.vulns.set(id, { at: t, vuln });
         }),
       );
@@ -185,7 +203,10 @@ export function sanitize(raw: unknown, id: string): OsvVuln {
   const s = (v: unknown, max: number): string | undefined => (typeof v === 'string' ? v.slice(0, max) : undefined);
   const strings = (v: unknown) => arr(v, 20).filter((x): x is string => typeof x === 'string');
   const severity = arr(r['severity'], 10)
-    .filter((x): x is { type: string; score: string } => typeof (x as { type?: unknown })?.type === 'string' && typeof (x as { score?: unknown })?.score === 'string')
+    .filter(
+      (x): x is { type: string; score: string } =>
+        typeof (x as { type?: unknown })?.type === 'string' && typeof (x as { score?: unknown })?.score === 'string',
+    )
     .map((x) => ({ type: x.type.slice(0, 40), score: x.score.slice(0, 200) }));
   const dbSeverity = s((r['database_specific'] as { severity?: unknown } | undefined)?.severity, 40);
   const affected = arr(r['affected'], 50) as NonNullable<OsvVuln['affected']>;

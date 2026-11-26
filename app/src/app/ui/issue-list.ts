@@ -1,13 +1,21 @@
 import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
-import { ActionSheetController, AlertController, IonIcon, IonSpinner, ModalController, ToastController } from '@ionic/angular/standalone';
+import {
+  ActionSheetController,
+  AlertController,
+  IonIcon,
+  IonSpinner,
+  ModalController,
+  ToastController,
+} from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
+
 import { ActionButton, IssueCard } from '../cluster/cluster-view';
-import { AgentClient, describeError } from '../core/agent-client.service';
+import { ACCEPT_CHOICES } from '../cluster/vulnerability-acceptance';
 import { ClusterConfig } from '../core/agent.model';
+import { AgentClient, describeError } from '../core/agent-client.service';
 import { TranslationKey } from '../i18n/dictionary';
 import { LanguageService } from '../i18n/language.service';
 import { LogsModal } from './logs-modal';
-import { ACCEPT_CHOICES } from '../cluster/vulnerability-acceptance';
 
 export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[] = [
   { hours: 1, label: 'issues.hour' },
@@ -34,9 +42,17 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
                 <ul class="advisories" [attr.aria-label]="t('issues.advisories')">
                   @for (a of item.advisoryLinks; track a.id) {
                     <li>
-                      <a [href]="a.url" target="_blank" rel="noopener noreferrer">{{ a.id }}<ion-icon name="open-outline" aria-hidden="true" /></a>
+                      <a [href]="a.url" target="_blank" rel="noopener noreferrer"
+                        >{{ a.id }}<ion-icon name="open-outline" aria-hidden="true"
+                      /></a>
                       @if (item.acceptComponent) {
-                        <button type="button" class="accept" [disabled]="busy() !== null" [attr.aria-label]="t('issues.acceptLabel', { id: a.id })" (click)="accept(item, a.id)">
+                        <button
+                          type="button"
+                          class="accept"
+                          [disabled]="busy() !== null"
+                          [attr.aria-label]="t('issues.acceptLabel', { id: a.id })"
+                          (click)="accept(item, a.id)"
+                        >
                           {{ t('issues.accept') }}
                         </button>
                       }
@@ -48,12 +64,23 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
                 <span>
                   {{ item.area }}, {{ item.sinceText }}
                   @if (item.silencedText) {
-                    <span class="silenced"><ion-icon name="notifications-off-outline" aria-hidden="true" />{{ item.silencedText }}</span>
+                    <span class="silenced"
+                      ><ion-icon name="notifications-off-outline" aria-hidden="true" />{{
+                        item.silencedText
+                      }}</span
+                    >
                   }
                 </span>
                 @if (item.buttons.length === 0 && item.canSilence) {
                   <!-- Nothing to fix from here: the mute icon sits on this row instead of a row of its own. -->
-                  <button type="button" class="quiet icon-only inline" [disabled]="busy() !== null" (click)="silence(item)" [attr.aria-label]="t('issues.silence')" [title]="t('issues.silence')">
+                  <button
+                    type="button"
+                    class="quiet icon-only inline"
+                    [disabled]="busy() !== null"
+                    (click)="silence(item)"
+                    [attr.aria-label]="t('issues.silence')"
+                    [title]="t('issues.silence')"
+                  >
                     <ion-icon name="notifications-off-outline" aria-hidden="true" />
                   </button>
                 }
@@ -62,22 +89,39 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
                 <div class="actions">
                   @for (button of item.buttons; track button.type + button.index) {
                     @if (button.emphasis !== 'secondary') {
-                    <button type="button" [class]="button.emphasis" [disabled]="busy() !== null" (click)="run(item, button)">
-                      @if (busy() === item.issue.id + button.type + button.index) {
-                        <ion-spinner name="crescent" />
-                      } @else {
-                        <ion-icon [name]="button.icon" aria-hidden="true" />
-                      }
-                      {{ button.label }}
-                    </button>
+                      <button
+                        type="button"
+                        [class]="button.emphasis"
+                        [disabled]="busy() !== null"
+                        (click)="run(item, button)"
+                      >
+                        @if (busy() === item.issue.id + button.type + button.index) {
+                          <ion-spinner name="crescent" />
+                        } @else {
+                          <ion-icon [name]="button.icon" aria-hidden="true" />
+                        }
+                        {{ button.label }}
+                      </button>
                     }
                   }
                   @if (item.canSilence) {
-                    <button type="button" class="quiet icon-only" [disabled]="busy() !== null" (click)="silence(item)" [attr.aria-label]="t('issues.silence')" [title]="t('issues.silence')">
+                    <button
+                      type="button"
+                      class="quiet icon-only"
+                      [disabled]="busy() !== null"
+                      (click)="silence(item)"
+                      [attr.aria-label]="t('issues.silence')"
+                      [title]="t('issues.silence')"
+                    >
                       <ion-icon name="notifications-off-outline" aria-hidden="true" />
                     </button>
                   } @else if (item.silencedText) {
-                    <button type="button" class="quiet" [disabled]="busy() !== null" (click)="unsilence(item)">
+                    <button
+                      type="button"
+                      class="quiet"
+                      [disabled]="busy() !== null"
+                      (click)="unsilence(item)"
+                    >
                       <ion-icon name="notifications-outline" aria-hidden="true" />
                       {{ t('issues.unsilence') }}
                     </button>
@@ -87,7 +131,12 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
                 @for (button of item.buttons; track button.type + button.index) {
                   @if (button.emphasis === 'secondary') {
                     <div class="second">
-                      <button type="button" class="secondary" [disabled]="busy() !== null" (click)="run(item, button)">
+                      <button
+                        type="button"
+                        class="secondary"
+                        [disabled]="busy() !== null"
+                        (click)="run(item, button)"
+                      >
                         @if (busy() === item.issue.id + button.type + button.index) {
                           <ion-spinner name="crescent" />
                         } @else {
@@ -272,7 +321,12 @@ export class IssueList {
     if (button.type === 'logs') {
       const modal = await this.modals.create({
         component: LogsModal,
-        componentProps: { cluster: this.cluster(), issueId: item.issue.id, index: button.index, title: item.issue.title },
+        componentProps: {
+          cluster: this.cluster(),
+          issueId: item.issue.id,
+          index: button.index,
+          title: item.issue.title,
+        },
       });
       await modal.present();
       return;
@@ -282,7 +336,12 @@ export class IssueList {
     }
     this.busy.set(item.issue.id + button.type + button.index);
     try {
-      const { done } = await this.client.runAction(this.cluster(), item.issue.id, button.type, button.index);
+      const { done } = await this.client.runAction(
+        this.cluster(),
+        item.issue.id,
+        button.type,
+        button.index,
+      );
       await this.toast(done, 'success');
     } catch (err) {
       await this.toast(describeError(err, this.language.translator()), 'danger');
@@ -298,7 +357,10 @@ export class IssueList {
     const sheet = await this.sheets.create({
       header: tr.t('issues.silenceHeader'),
       subHeader: tr.t('issues.silenceText'),
-      buttons: [...SILENCE_CHOICES.map((c) => ({ text: tr.t(c.label), data: c.hours })), { text: tr.t('common.cancel'), role: 'cancel' }],
+      buttons: [
+        ...SILENCE_CHOICES.map((c) => ({ text: tr.t(c.label), data: c.hours })),
+        { text: tr.t('common.cancel'), role: 'cancel' },
+      ],
     });
     await sheet.present();
     const { data } = await sheet.onDidDismiss<number>();
@@ -321,7 +383,10 @@ export class IssueList {
     const sheet = await this.sheets.create({
       header: tr.t('issues.acceptHeader', { id: advisory }),
       subHeader: tr.t('issues.acceptText'),
-      buttons: [...ACCEPT_CHOICES.map((c) => ({ text: tr.t(c.label), data: c.days })), { text: tr.t('common.cancel'), role: 'cancel' }],
+      buttons: [
+        ...ACCEPT_CHOICES.map((c) => ({ text: tr.t(c.label), data: c.days })),
+        { text: tr.t('common.cancel'), role: 'cancel' },
+      ],
     });
     await sheet.present();
     const { data: days } = await sheet.onDidDismiss<number>();
@@ -330,7 +395,14 @@ export class IssueList {
     }
     const alert = await this.alerts.create({
       header: tr.t('issues.acceptReasonHeader'),
-      inputs: [{ name: 'reason', type: 'text', placeholder: tr.t('issues.acceptReasonPlaceholder'), attributes: { maxlength: 200 } }],
+      inputs: [
+        {
+          name: 'reason',
+          type: 'text',
+          placeholder: tr.t('issues.acceptReasonPlaceholder'),
+          attributes: { maxlength: 200 },
+        },
+      ],
       buttons: [
         { text: tr.t('common.cancel'), role: 'cancel' },
         { text: tr.t('issues.acceptConfirm'), role: 'confirm' },

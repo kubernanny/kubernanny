@@ -1,7 +1,13 @@
 import { provideHttpClient } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
-import { ActionSheetController, AlertController, ModalController, ToastController } from '@ionic/angular/standalone';
+import {
+  ActionSheetController,
+  AlertController,
+  ModalController,
+  ToastController,
+} from '@ionic/angular/standalone';
 import { describe, expect, it } from 'vitest';
+
 import { advisoryLinks, issueCards } from '../cluster/cluster-view';
 import { ClusterConfig, Issue, ModuleView } from '../core/agent.model';
 import { provideI18nTesting } from '../i18n/provide-i18n';
@@ -35,13 +41,23 @@ describe('advisory links', () => {
   });
 
   it('builds the URL itself and drops anything that is not an advisory id', () => {
-    expect(advisoryLinks(['https://evil.example/x', '../../etc', 'javascript:alert(1)?', ''])).toEqual([]);
+    expect(
+      advisoryLinks(['https://evil.example/x', '../../etc', 'javascript:alert(1)?', '']),
+    ).toEqual([]);
     expect(advisoryLinks(undefined)).toEqual([]);
   });
 
   it('is part of the issue card, and empty for ordinary issues', () => {
-    const [withLinks, plain] = issueCards([vuln, { ...vuln, id: 'pods/x', advisories: undefined }], modules, NOW, de);
-    expect(withLinks.advisoryLinks.map((l) => l.id)).toEqual(['GHSA-423p-g724-fr39', 'GO-2026-5106']);
+    const [withLinks, plain] = issueCards(
+      [vuln, { ...vuln, id: 'pods/x', advisories: undefined }],
+      modules,
+      NOW,
+      de,
+    );
+    expect(withLinks.advisoryLinks.map((l) => l.id)).toEqual([
+      'GHSA-423p-g724-fr39',
+      'GO-2026-5106',
+    ]);
     expect(plain.advisoryLinks).toEqual([]);
   });
 });
@@ -49,18 +65,43 @@ describe('advisory links', () => {
 describe('issue list', () => {
   it('renders advisories as links that open in the system browser', async () => {
     // The overlays only open on a tap; rendering needs none of them.
-    const overlays = [ModalController, AlertController, ToastController, ActionSheetController].map((provide) => ({ provide, useValue: {} }));
-    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideI18nTesting('de'), ...overlays] });
+    const overlays = [ModalController, AlertController, ToastController, ActionSheetController].map(
+      (provide) => ({ provide, useValue: {} }),
+    );
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideI18nTesting('de'), ...overlays],
+    });
     const fixture = TestBed.createComponent(IssueList);
     fixture.componentRef.setInput('cards', issueCards([vuln], modules, NOW, de));
-    fixture.componentRef.setInput('cluster', { id: 'c1', name: 'home', url: 'http://agent', agentKey: 'k', deviceKey: 'd', deviceId: 'x' } satisfies ClusterConfig);
+    fixture.componentRef.setInput('cluster', {
+      id: 'c1',
+      name: 'home',
+      url: 'http://agent',
+      agentKey: 'k',
+      deviceKey: 'd',
+      deviceId: 'x',
+    } satisfies ClusterConfig);
     await fixture.whenStable();
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('.advisories')?.getAttribute('aria-label')).toBe('Schwachstellen bei osv.dev');
+    expect(el.querySelector('.advisories')?.getAttribute('aria-label')).toBe(
+      'Schwachstellen bei osv.dev',
+    );
     const links = [...el.querySelectorAll<HTMLAnchorElement>('.advisories a')];
-    expect(links.map((a) => [a.textContent?.trim(), a.getAttribute('href'), a.target, a.rel])).toEqual([
-      ['GHSA-423p-g724-fr39', 'https://osv.dev/vulnerability/GHSA-423p-g724-fr39', '_blank', 'noopener noreferrer'],
-      ['GO-2026-5106', 'https://osv.dev/vulnerability/GO-2026-5106', '_blank', 'noopener noreferrer'],
+    expect(
+      links.map((a) => [a.textContent?.trim(), a.getAttribute('href'), a.target, a.rel]),
+    ).toEqual([
+      [
+        'GHSA-423p-g724-fr39',
+        'https://osv.dev/vulnerability/GHSA-423p-g724-fr39',
+        '_blank',
+        'noopener noreferrer',
+      ],
+      [
+        'GO-2026-5106',
+        'https://osv.dev/vulnerability/GO-2026-5106',
+        '_blank',
+        'noopener noreferrer',
+      ],
     ]);
     expect(el.querySelector('.title')?.textContent).toContain('CloudNativePG 1.26.1');
     // The agent offers no action for a vulnerability: nothing to run from the app.
@@ -70,15 +111,28 @@ describe('issue list', () => {
 
 describe('issue list in English', () => {
   it('labels its buttons and lists in the UI language', async () => {
-    const overlays = [ModalController, AlertController, ToastController, ActionSheetController].map((provide) => ({ provide, useValue: {} }));
+    const overlays = [ModalController, AlertController, ToastController, ActionSheetController].map(
+      (provide) => ({ provide, useValue: {} }),
+    );
     TestBed.resetTestingModule();
-    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideI18nTesting('en'), ...overlays] });
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideI18nTesting('en'), ...overlays],
+    });
     const fixture = TestBed.createComponent(IssueList);
     fixture.componentRef.setInput('cards', issueCards([vuln], modules, NOW, translatorFor('en')));
-    fixture.componentRef.setInput('cluster', { id: 'c1', name: 'home', url: 'http://agent', agentKey: 'k', deviceKey: 'd', deviceId: 'x' } satisfies ClusterConfig);
+    fixture.componentRef.setInput('cluster', {
+      id: 'c1',
+      name: 'home',
+      url: 'http://agent',
+      agentKey: 'k',
+      deviceKey: 'd',
+      deviceId: 'x',
+    } satisfies ClusterConfig);
     await fixture.whenStable();
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('.advisories')?.getAttribute('aria-label')).toBe('Vulnerabilities on osv.dev');
+    expect(el.querySelector('.advisories')?.getAttribute('aria-label')).toBe(
+      'Vulnerabilities on osv.dev',
+    );
     expect(el.querySelector('button.icon-only')?.getAttribute('aria-label')).toBe('Silence');
     expect(el.querySelector('.meta')?.textContent).toContain('for 1 h');
   });

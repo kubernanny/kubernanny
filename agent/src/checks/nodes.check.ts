@@ -1,8 +1,15 @@
 import { rawOr, t } from '../i18n/text';
-import { Issue, ObjectMeta, Condition, ageText, condition } from './types';
+import { ageText, Condition, condition, Issue, ObjectMeta } from './types';
 
 export interface Node {
-  metadata: ObjectMeta & { managedFields?: { manager?: string; operation?: string; time?: string; fieldsV1?: { 'f:spec'?: { 'f:unschedulable'?: unknown } } }[] };
+  metadata: ObjectMeta & {
+    managedFields?: {
+      manager?: string;
+      operation?: string;
+      time?: string;
+      fieldsV1?: { 'f:spec'?: { 'f:unschedulable'?: unknown } };
+    }[];
+  };
   spec?: { unschedulable?: boolean };
   status?: { conditions?: Condition[] };
 }
@@ -17,7 +24,9 @@ const CORDONED_AFTER_MS = 30 * 60_000;
  */
 export function cordonedSince(node: Node, firstSeen: number | undefined): number | undefined {
   // The inventory keeps only the owners of the field, without fieldsV1; a full object (no watch cache) still has them.
-  const owners = (node.metadata.managedFields ?? []).filter((m) => m.fieldsV1 === undefined || m.fieldsV1['f:spec']?.['f:unschedulable'] !== undefined);
+  const owners = (node.metadata.managedFields ?? []).filter(
+    (m) => m.fieldsV1 === undefined || m.fieldsV1['f:spec']?.['f:unschedulable'] !== undefined,
+  );
   const times = owners.map((m) => Date.parse(m.time ?? '')).filter(Number.isFinite);
   return times.length ? Math.max(...times) : firstSeen;
 }
@@ -35,11 +44,18 @@ export function evaluateCordoned(
   firstSeen: ReadonlyMap<string, number>,
   now: Date,
 ): Issue[] {
-  const draining = new Set(pods.filter((p) => p.metadata.deletionTimestamp && p.spec?.nodeName).map((p) => p.spec!.nodeName!));
+  const draining = new Set(
+    pods.filter((p) => p.metadata.deletionTimestamp && p.spec?.nodeName).map((p) => p.spec!.nodeName!),
+  );
   const issues: Issue[] = [];
   for (const node of nodes) {
     const name = node.metadata.name;
-    if (node.spec?.unschedulable !== true || condition(node.status?.conditions, 'Ready')?.status !== 'True' || kuredHolders.has(name) || draining.has(name)) {
+    if (
+      node.spec?.unschedulable !== true ||
+      condition(node.status?.conditions, 'Ready')?.status !== 'True' ||
+      kuredHolders.has(name) ||
+      draining.has(name)
+    ) {
       continue;
     }
     const since = cordonedSince(node, firstSeen.get(name));
@@ -103,7 +119,9 @@ export function evaluateNodes(nodes: Node[]): Issue[] {
         check: 'nodes',
         severity: cordoned ? 'warning' : 'critical',
         title: t('nodes.notReady.title', { node: name }),
-        cause: cordoned ? t('nodes.notReady.cordoned', { message: ready?.message }) : rawOr(ready?.message, t('nodes.notReady.silent')),
+        cause: cordoned
+          ? t('nodes.notReady.cordoned', { message: ready?.message })
+          : rawOr(ready?.message, t('nodes.notReady.silent')),
         actions: [],
       });
       continue;

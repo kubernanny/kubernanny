@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { TranslocoDirective } from '@jsverse/transloco';
+
 import { Unit } from '../core/agent.model';
-import { NO_VALUE, clockTime, formatValue } from '../core/format';
+import { clockTime, formatValue, NO_VALUE } from '../core/format';
 import { LanguageService } from '../i18n/language.service';
 
 const W = 320;
@@ -27,7 +28,9 @@ export function chartGeometry(points: [number, number][], unit: Unit): Geometry 
   const max = unit === 'ratio' ? Math.max(1, peak) : peak > 0 ? peak * 1.15 : 1;
   const xs = points.map(([t]) => ((t - t0) / Math.max(1, t1 - t0)) * W);
   const ys = points.map(([, v]) => PAD_TOP + (1 - v / max) * (H - PAD_TOP));
-  const line = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
+  const line = xs
+    .map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i].toFixed(1)}`)
+    .join(' ');
   return { line, area: `${line} L${W},${H} L0,${H} Z`, xs, ys, max };
 }
 
@@ -51,8 +54,20 @@ export function chartGeometry(points: [number, number][], unit: Unit): Geometry 
         }
       </div>
       @for (g of drawn(); track g) {
-        <div class="plot" [class.loading]="loading()" [attr.aria-busy]="loading()" (pointermove)="track($event)" (pointerleave)="hover.set(null)" (pointerdown)="track($event)">
-          <svg [attr.viewBox]="viewBox" preserveAspectRatio="none" role="img" [attr.aria-label]="ariaLabel()">
+        <div
+          class="plot"
+          [class.loading]="loading()"
+          [attr.aria-busy]="loading()"
+          (pointermove)="track($event)"
+          (pointerleave)="hover.set(null)"
+          (pointerdown)="track($event)"
+        >
+          <svg
+            [attr.viewBox]="viewBox"
+            preserveAspectRatio="none"
+            role="img"
+            [attr.aria-label]="ariaLabel()"
+          >
             <defs>
               <linearGradient [attr.id]="gradientId" x1="0" x2="0" y1="0" y2="1">
                 <stop offset="0" stop-color="currentColor" stop-opacity="0.28" />
@@ -145,7 +160,12 @@ export function chartGeometry(points: [number, number][], unit: Unit): Geometry 
       position: absolute;
       inset: 0;
       border-radius: var(--radius-s);
-      background: linear-gradient(100deg, transparent 20%, color-mix(in srgb, var(--ink) 9%, transparent) 50%, transparent 80%);
+      background: linear-gradient(
+        100deg,
+        transparent 20%,
+        color-mix(in srgb, var(--ink) 9%, transparent) 50%,
+        transparent 80%
+      );
       background-size: 200% 100%;
       animation: sheen 1.2s linear infinite;
     }
@@ -272,8 +292,17 @@ export class AreaChart {
     const g = this.geometry();
     const tr = this.language.translator();
     const hours = pts.length > 1 ? Math.round((pts[pts.length - 1][0] - pts[0][0]) / 3_600_000) : 0;
-    const max = g ? formatValue(this.unit() === 'ratio' ? Math.max(...pts.map((p) => p[1])) : g.max / 1.15, this.unit(), tr.lang) : null;
-    return { start: hours >= 1 ? tr.t('chart.hoursAgo', { count: hours }) : '', max: max ? tr.t('chart.max', { value: max }) : '' };
+    const max = g
+      ? formatValue(
+          this.unit() === 'ratio' ? Math.max(...pts.map((p) => p[1])) : g.max / 1.15,
+          this.unit(),
+          tr.lang,
+        )
+      : null;
+    return {
+      start: hours >= 1 ? tr.t('chart.hoursAgo', { count: hours }) : '',
+      max: max ? tr.t('chart.max', { value: max }) : '',
+    };
   });
 
   readonly cursor = computed(() => {
@@ -292,7 +321,11 @@ export class AreaChart {
     };
   });
 
-  readonly ariaLabel = computed(() => this.language.translator().t('chart.label', { title: this.title(), value: this.shown().value, max: this.axis().max }));
+  readonly ariaLabel = computed(() =>
+    this.language
+      .translator()
+      .t('chart.label', { title: this.title(), value: this.shown().value, max: this.axis().max }),
+  );
 
   track(event: PointerEvent): void {
     const g = this.geometry();

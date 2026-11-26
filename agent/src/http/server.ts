@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 import { createReadStream, statSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { extname, join, normalize, sep } from 'node:path';
+
 import { MAX_SEALED_REQUEST } from '@kubernanny/protocol';
+
 import type { Principal } from '../auth/devices.service';
 import { INTERNAL, InternalRequest } from '../auth/principal';
 import { requestLang } from '../i18n/localize';
@@ -146,7 +148,10 @@ class BodyError extends Error {
 }
 
 function hasBody(req: IncomingMessage): boolean {
-  return req.headers['transfer-encoding'] !== undefined || (req.headers['content-length'] !== undefined && req.headers['content-length'] !== '0');
+  return (
+    req.headers['transfer-encoding'] !== undefined ||
+    (req.headers['content-length'] !== undefined && req.headers['content-length'] !== '0')
+  );
 }
 
 function readBody(req: IncomingMessage, limit: number): Promise<Buffer> {
@@ -206,7 +211,13 @@ function fresh(req: IncomingMessage, etag: string | undefined, lastModified?: st
   return false;
 }
 
-function send(req: IncomingMessage, res: ServerResponse, status: number, body: Buffer | undefined, contentType?: string): void {
+function send(
+  req: IncomingMessage,
+  res: ServerResponse,
+  status: number,
+  body: Buffer | undefined,
+  contentType?: string,
+): void {
   if (status === 204 || status === 304) {
     res.statusCode = status;
     res.end();
@@ -224,7 +235,11 @@ function send(req: IncomingMessage, res: ServerResponse, status: number, body: B
   res.setHeader('Content-Length', String(body.length));
   const etag = etagOf(body);
   res.setHeader('ETag', etag);
-  if ((req.method === 'GET' || req.method === 'HEAD') && ((status >= 200 && status < 300) || status === 304) && fresh(req, etag)) {
+  if (
+    (req.method === 'GET' || req.method === 'HEAD') &&
+    ((status >= 200 && status < 300) || status === 304) &&
+    fresh(req, etag)
+  ) {
     res.removeHeader('Content-Type');
     res.removeHeader('Content-Length');
     res.statusCode = 304;
@@ -237,11 +252,21 @@ function send(req: IncomingMessage, res: ServerResponse, status: number, body: B
 const sendJson = (req: IncomingMessage, res: ServerResponse, status: number, value: unknown) =>
   send(req, res, status, Buffer.from(JSON.stringify(value) ?? ''), 'application/json; charset=utf-8');
 
-const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+const escapeHtml = (s: string) =>
+  s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 /** The plain error page outside /api (what Express' final handler sent). */
-function htmlPage(req: IncomingMessage, res: ServerResponse, status: number, title: string, text: string, extra: Record<string, string> = {}): void {
-  const body = Buffer.from(`<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>${title}</title>\n</head>\n<body>\n<pre>${escapeHtml(text)}</pre>\n</body>\n</html>\n`);
+function htmlPage(
+  req: IncomingMessage,
+  res: ServerResponse,
+  status: number,
+  title: string,
+  text: string,
+  extra: Record<string, string> = {},
+): void {
+  const body = Buffer.from(
+    `<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>${title}</title>\n</head>\n<body>\n<pre>${escapeHtml(text)}</pre>\n</body>\n</html>\n`,
+  );
   res.setHeader('Content-Security-Policy', "default-src 'none'");
   res.setHeader('X-Content-Type-Options', 'nosniff');
   for (const [k, v] of Object.entries(extra)) {
@@ -285,7 +310,13 @@ const MIME: Record<string, string> = {
  * on to the routes (as serve-static with `fallthrough` did): a path outside
  * the root, a dotfile or a missing file all end up as an ordinary 404.
  */
-function serveStatic(root: string, req: IncomingMessage, res: ServerResponse, pathname: string, search: string): boolean {
+function serveStatic(
+  root: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+  pathname: string,
+  search: string,
+): boolean {
   let decoded: string;
   try {
     decoded = decodeURIComponent(pathname);
@@ -455,7 +486,13 @@ export function createHttpHandler(options: HttpOptions): Handler {
       };
       const result = await route.handle(call);
       if (result instanceof Reply) {
-        send(req, res, result.status, Buffer.isBuffer(result.body) ? result.body : Buffer.from(result.body), result.contentType);
+        send(
+          req,
+          res,
+          result.status,
+          Buffer.isBuffer(result.body) ? result.body : Buffer.from(result.body),
+          result.contentType,
+        );
         return;
       }
       const status = route.status ?? 200;

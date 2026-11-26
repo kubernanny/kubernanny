@@ -9,10 +9,10 @@ import { type ArgoApplication, isAutomated } from '../checks/argocd.check';
 import type { Certificate } from '../checks/certificates.check';
 import type { CnpgCluster } from '../checks/cnpg.check';
 import type { LonghornVolume } from '../checks/longhorn.check';
-import { Condition, ageText, condition } from '../checks/types';
+import { ageText, Condition, condition } from '../checks/types';
 import { MessageKey, raw, t, Text } from '../i18n/text';
-import { bytes, cronText, pct } from './format';
 import { parseQuantity } from '../inventory/inventory';
+import { bytes, cronText, pct } from './format';
 import type { DetailMeta, DetailRow, DetailSection, LonghornNode, Stat, Tone } from './types';
 
 /** Rows one section carries at most; the app folds healthy rows anyway. */
@@ -49,7 +49,10 @@ function backupMeta(at: number, now: Date, maxAgeHours: number): DetailMeta {
     return { text: t('detail.noBackup'), tone: 'warning' };
   }
   const age = now.getTime() - at;
-  return { text: t('detail.backupAgo', { age: ageText(age) }), ...(age > maxAgeHours * 3_600_000 ? { tone: 'warning' as const } : {}) };
+  return {
+    text: t('detail.backupAgo', { age: ageText(age) }),
+    ...(age > maxAgeHours * 3_600_000 ? { tone: 'warning' as const } : {}),
+  };
 }
 
 /** CloudNativePG: one row per cluster with instances, primary, last backup and WAL archiving. */
@@ -65,7 +68,12 @@ interface CnpgClusterDetail {
   status?: { pgDataImageInfo?: { majorVersion?: number } };
 }
 
-export function cnpgDetails(clusters: CnpgCluster[], now: Date, maxAgeHours: number, scheduled: CnpgScheduledBackup[] = []): DetailSection[] {
+export function cnpgDetails(
+  clusters: CnpgCluster[],
+  now: Date,
+  maxAgeHours: number,
+  scheduled: CnpgScheduledBackup[] = [],
+): DetailSection[] {
   const rows = clusters.map((c): DetailRow => {
     const want = c.spec?.instances ?? 0;
     const ready = c.status?.readyInstances ?? 0;
@@ -77,7 +85,11 @@ export function cnpgDetails(clusters: CnpgCluster[], now: Date, maxAgeHours: num
       meta.push(backupMeta(Date.parse(c.status?.lastSuccessfulBackup ?? ''), now, maxAgeHours));
     }
     if (archiving) {
-      meta.push(archiving.status === 'True' ? { text: t('detail.cnpg.walOk') } : { text: t('detail.cnpg.walFailing'), tone: 'critical' });
+      meta.push(
+        archiving.status === 'True'
+          ? { text: t('detail.cnpg.walOk') }
+          : { text: t('detail.cnpg.walFailing'), tone: 'critical' },
+      );
     }
     if (!healthy && c.status?.currentPrimary && c.status.phase) {
       meta.unshift({ text: t('state.cnpgPhase', { s: c.status.phase }), tone: 'warning' });
@@ -91,9 +103,18 @@ export function cnpgDetails(clusters: CnpgCluster[], now: Date, maxAgeHours: num
     }
     return {
       name: nsName(c.metadata),
-      sub: c.status?.currentPrimary ? t('detail.cnpg.primary', { pod: c.status.currentPrimary }) : t('state.cnpgPhase', { s: c.status?.phase ?? '?' }),
+      sub: c.status?.currentPrimary
+        ? t('detail.cnpg.primary', { pod: c.status.currentPrimary })
+        : t('state.cnpgPhase', { s: c.status?.phase ?? '?' }),
       value: `${ready}/${want}`,
-      tone: ready === 0 && want > 0 ? 'critical' : archiving?.status === 'False' ? 'critical' : !healthy || ready < want ? 'warning' : 'ok',
+      tone:
+        ready === 0 && want > 0
+          ? 'critical'
+          : archiving?.status === 'False'
+            ? 'critical'
+            : !healthy || ready < want
+              ? 'warning'
+              : 'ok',
       ...(meta.length ? { meta } : {}),
     };
   });
@@ -110,7 +131,11 @@ export function cnpgDetails(clusters: CnpgCluster[], now: Date, maxAgeHours: num
     return {
       name: nsName(b.metadata),
       sub: b.spec?.schedule ? cronText(b.spec.schedule) : raw('?'),
-      value: b.spec?.suspend ? t('detail.cnpg.suspended') : Number.isFinite(next) ? t('detail.cert.left', { age: ageText(Math.max(60_000, next - now.getTime())) }) : t('detail.unknown'),
+      value: b.spec?.suspend
+        ? t('detail.cnpg.suspended')
+        : Number.isFinite(next)
+          ? t('detail.cert.left', { age: ageText(Math.max(60_000, next - now.getTime())) })
+          : t('detail.unknown'),
       tone: b.spec?.suspend ? 'warning' : 'ok',
       ...(meta.length ? { meta } : {}),
     };
@@ -136,7 +161,13 @@ export interface LonghornReplica {
   status?: { currentState?: string };
 }
 
-export function longhornDetails(volumes: LonghornVolume[], nodes: LonghornNode[], now: Date, maxAgeHours: number, replicas: LonghornReplica[] = []): DetailSection[] {
+export function longhornDetails(
+  volumes: LonghornVolume[],
+  nodes: LonghornNode[],
+  now: Date,
+  maxAgeHours: number,
+  replicas: LonghornReplica[] = [],
+): DetailSection[] {
   const byVolume = new Map<string, LonghornReplica[]>();
   for (const r of replicas) {
     const v = r.spec?.volumeName;
@@ -155,19 +186,36 @@ export function longhornDetails(volumes: LonghornVolume[], nodes: LonghornNode[]
     }
     const own = byVolume.get(v.metadata.name) ?? [];
     if (own.length > 0) {
-      const failed = own.filter((r) => r.spec?.failedAt || (r.status?.currentState && r.status.currentState !== 'running' && attached));
+      const failed = own.filter(
+        (r) => r.spec?.failedAt || (r.status?.currentState && r.status.currentState !== 'running' && attached),
+      );
       const where = [...new Set(own.map((r) => r.spec?.nodeID).filter((n): n is string => Boolean(n)))].sort();
-      meta.push({ text: t('detail.longhorn.replicasOn', { n: own.length - failed.length, total: v.spec?.numberOfReplicas ?? own.length, nodes: where.join(', ') }), ...(failed.length ? { tone: 'warning' as const } : {}) });
+      meta.push({
+        text: t('detail.longhorn.replicasOn', {
+          n: own.length - failed.length,
+          total: v.spec?.numberOfReplicas ?? own.length,
+          nodes: where.join(', '),
+        }),
+        ...(failed.length ? { tone: 'warning' as const } : {}),
+      });
     } else if (v.spec?.numberOfReplicas) {
       meta.push({ text: t('detail.longhorn.replicas', { n: v.spec.numberOfReplicas }) });
     }
     if (extra.status?.lastBackupAt !== undefined) {
-      meta.push(extra.status.lastBackupAt ? backupMeta(Date.parse(extra.status.lastBackupAt), now, maxAgeHours) : { text: t('detail.noBackup') });
+      meta.push(
+        extra.status.lastBackupAt
+          ? backupMeta(Date.parse(extra.status.lastBackupAt), now, maxAgeHours)
+          : { text: t('detail.noBackup') },
+      );
     }
     const size = Number(extra.spec?.size ?? NaN);
     return {
       name: k8s?.pvcName ? `${k8s.namespace ?? '?'}/${k8s.pvcName}` : v.metadata.name,
-      sub: attached ? (extra.status?.currentNodeID ? t('detail.longhorn.attachedTo', { node: extra.status.currentNodeID }) : t('detail.longhorn.attached')) : t('detail.longhorn.detached'),
+      sub: attached
+        ? extra.status?.currentNodeID
+          ? t('detail.longhorn.attachedTo', { node: extra.status.currentNodeID })
+          : t('detail.longhorn.attached')
+        : t('detail.longhorn.detached'),
       ...(Number.isFinite(size) && size > 0 ? { value: bytes(size) } : {}),
       tone: attached ? (robust?.tone ?? 'muted') : 'muted',
       ...(meta.length ? { meta } : {}),
@@ -183,15 +231,25 @@ export function longhornDetails(volumes: LonghornVolume[], nodes: LonghornNode[]
       scheduled += d.storageScheduled ?? 0;
     }
     const ready = n.status?.conditions?.find((c) => c.type === 'Ready');
-    const tone: Tone = ready && ready.status !== 'True' ? 'warning' : maximum > 0 && available / maximum < 0.15 ? 'warning' : 'ok';
+    const tone: Tone =
+      ready && ready.status !== 'True' ? 'warning' : maximum > 0 && available / maximum < 0.15 ? 'warning' : 'ok';
     return {
       name: n.metadata.name,
       tone,
-      cells: [n.metadata.name, maximum > 0 ? t('common.ofTotal', { part: bytes(available), total: bytes(maximum) }) : '?', maximum > 0 ? `${pct(scheduled, maximum)} %` : '?'] as (string | Text)[],
+      cells: [
+        n.metadata.name,
+        maximum > 0 ? t('common.ofTotal', { part: bytes(available), total: bytes(maximum) }) : '?',
+        maximum > 0 ? `${pct(scheduled, maximum)} %` : '?',
+      ] as (string | Text)[],
     };
   });
   const nodeSection: DetailSection | null = nodeRows.length
-    ? { title: t('detail.longhorn.nodes'), kind: 'table', columns: [t('detail.col.node'), t('detail.col.free'), t('detail.col.scheduled')], rows: problemsFirst(nodeRows, (r) => r.name).map(({ tone, cells }) => ({ tone, cells })) }
+    ? {
+        title: t('detail.longhorn.nodes'),
+        kind: 'table',
+        columns: [t('detail.col.node'), t('detail.col.free'), t('detail.col.scheduled')],
+        rows: problemsFirst(nodeRows, (r) => r.name).map(({ tone, cells }) => ({ tone, cells })),
+      }
     : null;
   return sections(listSection(t('detail.longhorn.volumes'), rows), nodeSection);
 }
@@ -206,17 +264,40 @@ export function argoDetails(apps: ArgoApplication[], now: Date = new Date()): De
     const synced = Date.parse(op?.finishedAt ?? '');
     const revision = a.status?.sync?.revision;
     const tone: Tone =
-      health === 'Degraded' || health === 'Missing' ? 'critical' : sync === 'OutOfSync' && auto ? 'warning' : health === 'Progressing' || health === 'Suspended' || sync === 'OutOfSync' ? 'muted' : health === 'Healthy' ? 'ok' : 'muted';
+      health === 'Degraded' || health === 'Missing'
+        ? 'critical'
+        : sync === 'OutOfSync' && auto
+          ? 'warning'
+          : health === 'Progressing' || health === 'Suspended' || sync === 'OutOfSync'
+            ? 'muted'
+            : health === 'Healthy'
+              ? 'ok'
+              : 'muted';
     return {
       name: a.metadata.name,
-      ...(a.spec?.destination?.namespace ? { sub: t('detail.argocd.into', { namespace: a.spec.destination.namespace }) } : {}),
+      ...(a.spec?.destination?.namespace
+        ? { sub: t('detail.argocd.into', { namespace: a.spec.destination.namespace }) }
+        : {}),
       value: t('state.argoHealth', { s: health }),
       tone,
       meta: [
-        { text: t('state.argoSync', { s: sync }), ...(sync === 'OutOfSync' ? { tone: auto ? ('warning' as const) : ('muted' as const) } : {}) },
+        {
+          text: t('state.argoSync', { s: sync }),
+          ...(sync === 'OutOfSync' ? { tone: auto ? ('warning' as const) : ('muted' as const) } : {}),
+        },
         { text: auto ? t('detail.argocd.auto') : t('detail.argocd.manual') },
         ...(Number.isFinite(synced)
-          ? [{ text: t('detail.argocd.lastSync', { phase: op?.phase ?? '?', age: ageText(Math.max(0, now.getTime() - synced)) }), ...(op?.phase && op.phase !== 'Succeeded' && op.phase !== 'Running' ? { tone: 'warning' as const } : {}) }]
+          ? [
+              {
+                text: t('detail.argocd.lastSync', {
+                  phase: op?.phase ?? '?',
+                  age: ageText(Math.max(0, now.getTime() - synced)),
+                }),
+                ...(op?.phase && op.phase !== 'Succeeded' && op.phase !== 'Running'
+                  ? { tone: 'warning' as const }
+                  : {}),
+              },
+            ]
           : []),
         ...(revision && /^[0-9a-f]{40}$/.test(revision) ? [{ text: raw(revision.slice(0, 7)) }] : []),
       ],
@@ -247,7 +328,15 @@ export function certificateDetails(
     .map(({ c, at }): DetailRow => {
       const ready = condition(c.status?.conditions, 'Ready')?.status === 'True';
       const left = at - now.getTime();
-      const tone: Tone = !Number.isFinite(at) ? (ready ? 'muted' : 'warning') : left <= 0 || left < criticalDays * 86_400_000 ? 'critical' : left < warnDays * 86_400_000 || !ready ? 'warning' : 'ok';
+      const tone: Tone = !Number.isFinite(at)
+        ? ready
+          ? 'muted'
+          : 'warning'
+        : left <= 0 || left < criticalDays * 86_400_000
+          ? 'critical'
+          : left < warnDays * 86_400_000 || !ready
+            ? 'warning'
+            : 'ok';
       const hosts = c.spec?.dnsNames ?? [];
       const issuer = (c.spec as { issuerRef?: { name?: string } } | undefined)?.issuerRef?.name;
       const renewal = Date.parse(c.status?.renewalTime ?? '');
@@ -260,19 +349,33 @@ export function certificateDetails(
       }
       if (Number.isFinite(renewal)) {
         // cert-manager moves renewalTime forward once it renewed; one in the past means the renewal has not worked yet.
-        meta.push(renewal > now.getTime() ? { text: t('detail.cert.renews', { age: ageText(renewal - now.getTime()) }) } : { text: t('detail.cert.renewalOverdue', { age: ageText(now.getTime() - renewal) }), tone: 'warning' });
+        meta.push(
+          renewal > now.getTime()
+            ? { text: t('detail.cert.renews', { age: ageText(renewal - now.getTime()) }) }
+            : { text: t('detail.cert.renewalOverdue', { age: ageText(now.getTime() - renewal) }), tone: 'warning' },
+        );
       }
       return {
         name: nsName(c.metadata),
-        ...(hosts.length ? { sub: hosts.length > 1 ? t('detail.cert.hosts', { host: hosts[0]!, n: hosts.length - 1 }) : hosts[0]! } : {}),
-        value: !Number.isFinite(at) ? t('detail.notReady') : left <= 0 ? t('detail.cert.expired') : t('detail.cert.left', { age: ageText(left) }),
+        ...(hosts.length
+          ? { sub: hosts.length > 1 ? t('detail.cert.hosts', { host: hosts[0]!, n: hosts.length - 1 }) : hosts[0]! }
+          : {}),
+        value: !Number.isFinite(at)
+          ? t('detail.notReady')
+          : left <= 0
+            ? t('detail.cert.expired')
+            : t('detail.cert.left', { age: ageText(left) }),
         tone,
         ...(meta.length ? { meta } : {}),
       };
     });
   const issuerRows = issuers.map((i): DetailRow => {
     const ready = condition(i.status?.conditions, 'Ready');
-    return { name: i.metadata.name, value: ready?.status === 'True' ? t('detail.ready') : t('detail.notReady'), tone: ready && ready.status !== 'True' ? 'critical' : 'ok' };
+    return {
+      name: i.metadata.name,
+      value: ready?.status === 'True' ? t('detail.ready') : t('detail.notReady'),
+      tone: ready && ready.status !== 'True' ? 'critical' : 'ok',
+    };
   });
   const challengeRows = challenges.map((ch): DetailRow => ({
     name: nsName(ch.metadata),
@@ -281,22 +384,40 @@ export function certificateDetails(
     tone: ch.status?.state === 'invalid' || ch.status?.state === 'errored' ? 'critical' : 'warning',
     ...(ch.status?.reason ? { meta: [{ text: raw(ch.status.reason) }] } : {}),
   }));
-  return sections(listSection(t('detail.cert.challenges'), challengeRows), listSection(t('detail.cert.certificates'), rows, false), listSection(t('detail.cert.issuers'), issuerRows));
+  return sections(
+    listSection(t('detail.cert.challenges'), challengeRows),
+    listSection(t('detail.cert.certificates'), rows, false),
+    listSection(t('detail.cert.issuers'), issuerRows),
+  );
 }
 
 /** Prometheus: targets up and down per job, jobs with targets down first. */
-export function prometheusDetails(jobs: { job: string; total: number }[], down: Map<string, string[]>): DetailSection[] {
+export function prometheusDetails(
+  jobs: { job: string; total: number }[],
+  down: Map<string, string[]>,
+): DetailSection[] {
   if (jobs.length === 0) {
     return [];
   }
   const rows = problemsFirst(
     jobs.map((j) => {
       const d = down.get(j.job)?.length ?? 0;
-      return { job: j.job, tone: (d === 0 ? 'ok' : d >= j.total ? 'critical' : 'warning') as Tone, cells: [j.job, String(j.total - d), String(d)] };
+      return {
+        job: j.job,
+        tone: (d === 0 ? 'ok' : d >= j.total ? 'critical' : 'warning') as Tone,
+        cells: [j.job, String(j.total - d), String(d)],
+      };
     }),
     (r) => r.job,
   );
-  return [{ title: t('detail.prometheus.targets'), kind: 'table', columns: [t('detail.col.job'), t('detail.col.up'), t('detail.col.down')], rows: rows.slice(0, MAX_ROWS).map(({ tone, cells }) => ({ tone, cells })) }];
+  return [
+    {
+      title: t('detail.prometheus.targets'),
+      kind: 'table',
+      columns: [t('detail.col.job'), t('detail.col.up'), t('detail.col.down')],
+      rows: rows.slice(0, MAX_ROWS).map(({ tone, cells }) => ({ tone, cells })),
+    },
+  ];
 }
 
 /**
@@ -317,7 +438,12 @@ function reconcileState(conditions: Condition[] | undefined, type = 'Ready'): { 
  * `ReadyConditionIntegration`.
  */
 export function readyDetails(
-  lists: { kind: string; conditionType?: string; failureWhenTrue?: boolean; items: { metadata: { name: string; namespace?: string }; status?: { conditions?: Condition[] } }[] }[],
+  lists: {
+    kind: string;
+    conditionType?: string;
+    failureWhenTrue?: boolean;
+    items: { metadata: { name: string; namespace?: string }; status?: { conditions?: Condition[] } }[];
+  }[],
   now: Date,
 ): DetailSection[] {
   return sections(
@@ -333,7 +459,9 @@ export function readyDetails(
             ...(decided && !ok && state?.message ? { sub: raw(state.message) } : {}),
             value: ok ? t('detail.ready') : decided ? t('detail.notReady') : t('detail.unknown'),
             tone: ok ? 'ok' : decided ? 'warning' : 'muted',
-            ...(Number.isFinite(lastAt) ? { meta: [{ text: t('detail.reconciled', { age: ageText(Math.max(0, now.getTime() - lastAt)) }) }] } : {}),
+            ...(Number.isFinite(lastAt)
+              ? { meta: [{ text: t('detail.reconciled', { age: ageText(Math.max(0, now.getTime() - lastAt)) }) }] }
+              : {}),
           };
         }),
       ),
@@ -342,7 +470,10 @@ export function readyDetails(
 }
 
 /** Ingress controllers: routes with failing requests first, then the busiest. */
-export function routeDetails(routes: { route: string; requests: number; errors: number }[], failing: Map<string, 'critical' | 'warning'>): DetailSection[] {
+export function routeDetails(
+  routes: { route: string; requests: number; errors: number }[],
+  failing: Map<string, 'critical' | 'warning'>,
+): DetailSection[] {
   const rows = [...routes]
     .sort((a, b) => b.errors / Math.max(1, b.requests) - a.errors / Math.max(1, a.requests) || b.requests - a.requests)
     .map((r): DetailRow => {
@@ -362,7 +493,11 @@ export function routeDetails(routes: { route: string; requests: number; errors: 
  * At most four key figures: the stats named in `keys`, in that order; the
  * other facts move into a plain list under `title`, in their order.
  */
-export function keyFigures(stats: Stat[], keys: MessageKey[], title: Text): { stats: Stat[]; details: DetailSection[] } {
+export function keyFigures(
+  stats: Stat[],
+  keys: MessageKey[],
+  title: Text,
+): { stats: Stat[]; details: DetailSection[] } {
   const figures = keys.flatMap((k) => stats.filter((s) => s.label.$t === k)).slice(0, 4);
   const rest = stats.filter((s) => !figures.includes(s));
   const rows: DetailRow[] = rest.map((s) => ({ name: s.label, value: s.value, tone: s.tone ?? 'muted' }));

@@ -20,7 +20,13 @@ export class DeviceKeyVault {
 
   async set(clusterId: string, privateKey: string): Promise<void> {
     await this.ready;
-    await SecureStorage.set(this.key(clusterId), privateKey, false, false, KeychainAccess.whenUnlockedThisDeviceOnly);
+    await SecureStorage.set(
+      this.key(clusterId),
+      privateKey,
+      false,
+      false,
+      KeychainAccess.whenUnlockedThisDeviceOnly,
+    );
   }
 
   async remove(clusterId: string): Promise<void> {

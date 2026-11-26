@@ -117,10 +117,23 @@ export function rbacExport(): {
   const actions = Object.fromEntries(
     (Object.keys(ACTION_PERMISSIONS) as ActionType[]).map((type) => [
       type,
-      { modules: all.filter((m) => m.actions.includes(type)).map((m) => m.id).sort(), rules: ACTION_PERMISSIONS[type] },
+      {
+        modules: all
+          .filter((m) => m.actions.includes(type))
+          .map((m) => m.id)
+          .sort(),
+        rules: ACTION_PERMISSIONS[type],
+      },
     ]),
   );
-  return { modules: sortKeys(modules), actions: sortKeys(actions), writeActions: WRITE_ACTIONS, knownModules: knownModuleIds(), actionTypes: Object.keys(ACTION_PERMISSIONS).sort(), optInActions: [...OPT_IN_ACTIONS].sort() };
+  return {
+    modules: sortKeys(modules),
+    actions: sortKeys(actions),
+    writeActions: WRITE_ACTIONS,
+    knownModules: knownModuleIds(),
+    actionTypes: Object.keys(ACTION_PERMISSIONS).sort(),
+    optInActions: [...OPT_IN_ACTIONS].sort(),
+  };
 }
 
 function sortKeys<T>(o: Record<string, T>): Record<string, T> {

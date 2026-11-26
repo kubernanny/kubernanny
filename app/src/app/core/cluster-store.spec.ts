@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { Preferences } from '@capacitor/preferences';
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import { ClusterStore } from './cluster-store.service';
 import { DeviceKeyVault } from './device-key-vault';
 
@@ -18,7 +19,13 @@ class FakeVault {
   }
 }
 
-const cluster = { name: 'home', url: 'https://k.example/', agentKey: 'A'.repeat(43), deviceKey: 'secret-key', deviceId: 'd1' };
+const cluster = {
+  name: 'home',
+  url: 'https://k.example/',
+  agentKey: 'A'.repeat(43),
+  deviceKey: 'secret-key',
+  deviceId: 'd1',
+};
 const storedList = async () => (await Preferences.get({ key: 'clusters' })).value ?? '';
 
 describe('ClusterStore', () => {
@@ -60,13 +67,20 @@ describe('ClusterStore', () => {
   it('never swaps the keys of an existing cluster without the confirmed pairing flow', async () => {
     const store = await open();
     const saved = await store.save(cluster);
-    await expect(store.save({ ...saved, agentKey: 'B'.repeat(43) })).rejects.toThrow(/without confirmation/);
-    await expect(store.save({ ...saved, deviceKey: 'attacker-key' })).rejects.toThrow(/without confirmation/);
+    await expect(store.save({ ...saved, agentKey: 'B'.repeat(43) })).rejects.toThrow(
+      /without confirmation/,
+    );
+    await expect(store.save({ ...saved, deviceKey: 'attacker-key' })).rejects.toThrow(
+      /without confirmation/,
+    );
     expect(vault.keys.get(saved.id)).toBe('secret-key');
     expect(store.find(saved.id)?.agentKey).toBe('A'.repeat(43));
     // Renaming keeps working, and the confirmed replacement goes through.
     await store.save({ ...saved, name: 'lab' });
-    await store.save({ ...saved, agentKey: 'B'.repeat(43), deviceKey: 'new-key' }, { replaceKeys: true });
+    await store.save(
+      { ...saved, agentKey: 'B'.repeat(43), deviceKey: 'new-key' },
+      { replaceKeys: true },
+    );
     expect(vault.keys.get(saved.id)).toBe('new-key');
   });
 });

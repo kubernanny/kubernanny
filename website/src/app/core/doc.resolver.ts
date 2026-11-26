@@ -1,6 +1,7 @@
 import { inject } from '@angular/core';
-import { RedirectCommand, Router, type ResolveFn } from '@angular/router';
+import { RedirectCommand, type ResolveFn, Router } from '@angular/router';
 import { loadDoc } from 'virtual:kubernanny-docs';
+
 import type { DocPage } from './docs.types';
 
 /** `/docs/decisions/0001-x#y` -> `decisions/0001-x`. */

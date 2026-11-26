@@ -1,9 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { Agent } from '../agent';
 import { DemoKubeClient, DemoScenario } from '../demo/demo-cluster';
 import { de } from '../testing/i18n';
 import { buildEvents, buildNetwork, buildNodes, buildStorage, buildWorkloads } from '../views/views';
-import { stripCronJob, stripEvent, stripJob, stripNode, stripPlain, stripPod, stripService, stripWorkload } from './strip';
+import {
+  stripCronJob,
+  stripEvent,
+  stripJob,
+  stripNode,
+  stripPlain,
+  stripPod,
+  stripService,
+  stripWorkload,
+} from './strip';
 
 const STRIPS: [string, (o: unknown) => unknown][] = [
   ['/api/v1/nodes', stripNode],
@@ -34,7 +44,13 @@ async function run(kube: DemoKubeClient) {
   await agent.status.refresh();
   const { inv, data, detected } = agent.status.state();
   const snapshot = de(agent.status.snapshot());
-  const views = de({ nodes: buildNodes(inv, data), workloads: buildWorkloads(inv, detected), storage: buildStorage(inv, data), network: buildNetwork(inv, data, detected), events: buildEvents(inv) });
+  const views = de({
+    nodes: buildNodes(inv, data),
+    workloads: buildWorkloads(inv, detected),
+    storage: buildStorage(inv, data),
+    network: buildNetwork(inv, data, detected),
+    events: buildEvents(inv),
+  });
   await agent.close();
   return { snapshot, views, inv };
 }
@@ -52,7 +68,12 @@ describe('stripped objects', () => {
     it(`give every check the same result as the full objects (${scenario})`, async () => {
       const full = await run(new DemoKubeClient(undefined, scenario));
       const stripped = await run(new StrippedKube(undefined, scenario));
-      const comparable = (s: typeof full.snapshot) => ({ ...s, checkedAt: null, durationMs: null, issues: s.issues.map((i) => ({ ...i, since: null })) });
+      const comparable = (s: typeof full.snapshot) => ({
+        ...s,
+        checkedAt: null,
+        durationMs: null,
+        issues: s.issues.map((i) => ({ ...i, since: null })),
+      });
       expect(comparable(stripped.snapshot)).toEqual(comparable(full.snapshot));
       expect(stripped.views).toEqual(full.views);
     });

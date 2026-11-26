@@ -1,6 +1,8 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
+
 import { de } from './de';
 import { flatten } from './dictionary';
 import { en } from './en';
@@ -9,7 +11,8 @@ import { interpolate, translatorFor } from './translator';
 
 const flatDe = flatten(de);
 const flatEn = flatten(en);
-const placeholders = (text: string) => [...text.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]).sort();
+const placeholders = (text: string) =>
+  [...text.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]).sort();
 
 /** Every .ts and .html file under src/app, without the specs. */
 function sources(dir = join(process.cwd(), 'src/app')): string[] {
@@ -28,12 +31,16 @@ describe('translations', () => {
   });
 
   it('have the same placeholders in both languages', () => {
-    const differing = Object.keys(flatDe).filter((key) => placeholders(flatDe[key]).join() !== placeholders(flatEn[key] ?? '').join());
+    const differing = Object.keys(flatDe).filter(
+      (key) => placeholders(flatDe[key]).join() !== placeholders(flatEn[key] ?? '').join(),
+    );
     expect(differing).toEqual([]);
   });
 
   it('have no empty text and no em or en dash in the copy', () => {
-    const bad = Object.entries({ ...prefixed('de', flatDe), ...prefixed('en', flatEn) }).filter(([, text]) => !text.trim() || /[–—]/.test(text));
+    const bad = Object.entries({ ...prefixed('de', flatDe), ...prefixed('en', flatEn) }).filter(
+      ([, text]) => !text.trim() || /[–—]/.test(text),
+    );
     expect(bad).toEqual([]);
   });
 
@@ -45,11 +52,14 @@ describe('translations', () => {
       for (const m of text.matchAll(/\b[tn]\(\s*'([a-zA-Z0-9_.]+)'/g)) {
         used.add(m[1]);
       }
-      for (const m of text.matchAll(/'((?:app|common|language|clusters|cluster|categories|status|actions|overview|services|nodes|workloads|storage|network|events|issues|logs|module|chart|pair|form|modules|errors|demo)\.[a-zA-Z0-9_.]+)'/g)) {
+      for (const m of text.matchAll(
+        /'((?:app|common|language|clusters|cluster|categories|status|actions|overview|services|nodes|workloads|storage|network|events|issues|logs|module|chart|pair|form|modules|errors|demo)\.[a-zA-Z0-9_.]+)'/g,
+      )) {
         used.add(m[1]);
       }
     }
-    const known = (key: string) => key in flatDe || (`${key}.one` in flatDe && `${key}.other` in flatDe);
+    const known = (key: string) =>
+      key in flatDe || (`${key}.one` in flatDe && `${key}.other` in flatDe);
     expect([...used].filter((key) => !known(key))).toEqual([]);
     expect(used.size).toBeGreaterThan(200);
   });
@@ -57,7 +67,9 @@ describe('translations', () => {
 
 describe('translator', () => {
   it('fills in parameters like Transloco does', () => {
-    expect(interpolate('Agent {{agent}} ist älter als {{ app }}', { agent: '0.2.0', app: '0.3.0' })).toBe('Agent 0.2.0 ist älter als 0.3.0');
+    expect(
+      interpolate('Agent {{agent}} ist älter als {{ app }}', { agent: '0.2.0', app: '0.3.0' }),
+    ).toBe('Agent 0.2.0 ist älter als 0.3.0');
     expect(interpolate('{{missing}} bleibt', {})).toBe('{{missing}} bleibt');
   });
 

@@ -1,5 +1,5 @@
 import { raw, t } from '../i18n/text';
-import { Condition, Issue, IssueAction, ObjectMeta, ageText, condition } from './types';
+import { ageText, Condition, condition, Issue, IssueAction, ObjectMeta } from './types';
 
 export interface Certificate {
   metadata: ObjectMeta;
@@ -23,7 +23,10 @@ export function evaluateCertificates(certs: Certificate[], now: Date, opts: Cert
     const notAfter = Date.parse(cert.status?.notAfter ?? '');
     const left = notAfter - now.getTime();
     // Renew (what `cmctl renew` does), unless cert-manager is issuing right now anyway.
-    const renew: IssueAction[] = condition(cert.status?.conditions, 'Issuing')?.status === 'True' ? [] : [{ type: 'reconcile-now', kind: 'Certificate', namespace: ns, name }];
+    const renew: IssueAction[] =
+      condition(cert.status?.conditions, 'Issuing')?.status === 'True'
+        ? []
+        : [{ type: 'reconcile-now', kind: 'Certificate', namespace: ns, name }];
 
     if (Number.isFinite(notAfter) && left <= 0) {
       issues.push({
@@ -31,7 +34,10 @@ export function evaluateCertificates(certs: Certificate[], now: Date, opts: Cert
         check: 'certificates',
         severity: 'critical',
         title: t('certificates.expired.title', { host }),
-        cause: t('certificates.expired.cause', { age: ageText(-left), message: condition(cert.status?.conditions, 'Ready')?.message }),
+        cause: t('certificates.expired.cause', {
+          age: ageText(-left),
+          message: condition(cert.status?.conditions, 'Ready')?.message,
+        }),
         actions: renew,
       });
       continue;
@@ -40,7 +46,9 @@ export function evaluateCertificates(certs: Certificate[], now: Date, opts: Cert
     const ready = condition(cert.status?.conditions, 'Ready');
     if (ready && ready.status !== 'True') {
       const issuing = condition(cert.status?.conditions, 'Issuing');
-      const message = [ready.message, issuing?.status === 'True' ? issuing.message : undefined].filter(Boolean).join(' ');
+      const message = [ready.message, issuing?.status === 'True' ? issuing.message : undefined]
+        .filter(Boolean)
+        .join(' ');
       issues.push({
         id,
         check: 'certificates',

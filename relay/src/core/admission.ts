@@ -1,4 +1,4 @@
-import { ByteBudget, RelayLimits, TokenBucket, shareBytes } from './limits';
+import { ByteBudget, RelayLimits, shareBytes, TokenBucket } from './limits';
 import { PushConfig } from './push';
 import { AgentPushPolicy } from './push-policy';
 
@@ -27,7 +27,9 @@ export class Admission<T> {
   ) {
     this.budget = new ByteBudget(limits.maxInflightBytes);
     // A sixth of the hour as burst, like the per-token limit.
-    this.relayPushes = push ? new TokenBucket(Math.max(1, Math.ceil(push.relayPerHour / 6)), push.relayPerHour / 3_600_000, now) : null;
+    this.relayPushes = push
+      ? new TokenBucket(Math.max(1, Math.ceil(push.relayPerHour / 6)), push.relayPerHour / 3_600_000, now)
+      : null;
   }
 
   /** Why a new connection from `address` is refused at the upgrade, or null. `registered` is the relay's agent count. */
@@ -61,7 +63,13 @@ export class Admission<T> {
   join(address: string, connection: T): ByteBudget {
     let entry = this.addresses.get(address);
     if (!entry) {
-      const pushes = this.push ? new TokenBucket(Math.max(1, Math.ceil(this.push.addressPerHour / 6)), this.push.addressPerHour / 3_600_000, Date.now()) : null;
+      const pushes = this.push
+        ? new TokenBucket(
+            Math.max(1, Math.ceil(this.push.addressPerHour / 6)),
+            this.push.addressPerHour / 3_600_000,
+            Date.now(),
+          )
+        : null;
       entry = { agents: new Set(), budget: new ByteBudget(shareBytes(this.limits), this.budget), pushes };
       this.addresses.set(address, entry);
     }
@@ -91,7 +99,8 @@ export class Admission<T> {
   /** The push gate for agents of `address`: its own bucket and the relay's, both asked before either is charged. */
   pushGate(address: string): { allows(now: number): boolean; charge(now: number): void } {
     return {
-      allows: (now) => (this.addresses.get(address)?.pushes?.has(1, now) ?? true) && (this.relayPushes?.has(1, now) ?? true),
+      allows: (now) =>
+        (this.addresses.get(address)?.pushes?.has(1, now) ?? true) && (this.relayPushes?.has(1, now) ?? true),
       charge: (now) => {
         this.addresses.get(address)?.pushes?.takeExact(1, now);
         this.relayPushes?.takeExact(1, now);
@@ -106,7 +115,13 @@ export class Admission<T> {
     }
     let entry = this.pushPolicies.get(agentId);
     if (!entry) {
-      entry = { policy: new AgentPushPolicy({ burst: this.push.agentBurst, perHour: this.push.agentPerHour, tokensPerDay: this.push.tokensPerDay }, now), leftAt: null };
+      entry = {
+        policy: new AgentPushPolicy(
+          { burst: this.push.agentBurst, perHour: this.push.agentPerHour, tokensPerDay: this.push.tokensPerDay },
+          now,
+        ),
+        leftAt: null,
+      };
       this.pushPolicies.set(agentId, entry);
       this.capPushPolicies();
     }

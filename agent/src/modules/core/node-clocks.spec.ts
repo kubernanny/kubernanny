@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { de } from '../../testing/i18n';
+
 import { emptyInventory } from '../../inventory/inventory';
+import { de } from '../../testing/i18n';
 import { Prometheus, PromSample } from '../service-proxy';
 import { ModuleContext } from '../types';
 import { evaluateNodeClocks, NodeClocksCheck } from './node-clocks';
@@ -20,15 +21,22 @@ describe('evaluateNodeClocks', () => {
   });
 
   it('warns about a clock the kernel no longer synchronises', () => {
-    expect(evaluateNodeClocks([{ node: 'a', offset: 0.01, synchronised: false }]).map((i) => i.severity)).toEqual(['warning']);
+    expect(evaluateNodeClocks([{ node: 'a', offset: 0.01, synchronised: false }]).map((i) => i.severity)).toEqual([
+      'warning',
+    ]);
   });
 });
 
 describe('NodeClocksCheck', () => {
   const inv = emptyInventory(new Date());
-  inv.nodes = [{ metadata: { name: 'n1' }, status: { addresses: [{ type: 'InternalIP', address: '10.0.0.1' }] } }, { metadata: { name: 'n2' } }] as typeof inv.nodes;
+  inv.nodes = [
+    { metadata: { name: 'n1' }, status: { addresses: [{ type: 'InternalIP', address: '10.0.0.1' }] } },
+    { metadata: { name: 'n2' } },
+  ] as typeof inv.nodes;
   const prom = (answers: Record<string, PromSample[]>) =>
-    ({ query: async (expr: string) => Object.entries(answers).find(([needle]) => expr.includes(needle))?.[1] ?? [] }) as unknown as Prometheus;
+    ({
+      query: async (expr: string) => Object.entries(answers).find(([needle]) => expr.includes(needle))?.[1] ?? [],
+    }) as unknown as Prometheus;
 
   it('maps node-exporter instances to nodes and prefers timex over the ntp collector', async () => {
     const r = await new NodeClocksCheck().run(
@@ -36,7 +44,10 @@ describe('NodeClocksCheck', () => {
         inv,
         prom: prom({
           node_timex_offset_seconds: [{ metric: { instance: '10.0.0.1:9100' }, value: 0.9 }],
-          node_ntp_offset_seconds: [{ metric: { instance: '10.0.0.1:9100' }, value: 0.001 }, { metric: { nodename: 'n2' }, value: 7 }],
+          node_ntp_offset_seconds: [
+            { metric: { instance: '10.0.0.1:9100' }, value: 0.001 },
+            { metric: { nodename: 'n2' }, value: 7 },
+          ],
           node_timex_sync_status: [{ metric: { instance: '10.0.0.1:9100' }, value: 1 }],
         }),
       } as unknown as ModuleContext,
@@ -49,15 +60,24 @@ describe('NodeClocksCheck', () => {
   });
 
   // Real shape: chrony on all three nodes, node-exporter's timex offset is exactly 0 everywhere.
-  it('does not take chrony\'s zero timex offset for a measurement', async () => {
+  it("does not take chrony's zero timex offset for a measurement", async () => {
     const r = await new NodeClocksCheck().run(
       {
         inv,
         prom: prom({
-          node_timex_offset_seconds: [{ metric: { instance: '10.0.0.1:9100' }, value: 0 }, { metric: { nodename: 'n2' }, value: 0 }],
-          node_timex_sync_status: [{ metric: { instance: '10.0.0.1:9100' }, value: 1 }, { metric: { nodename: 'n2' }, value: 1 }],
+          node_timex_offset_seconds: [
+            { metric: { instance: '10.0.0.1:9100' }, value: 0 },
+            { metric: { nodename: 'n2' }, value: 0 },
+          ],
+          node_timex_sync_status: [
+            { metric: { instance: '10.0.0.1:9100' }, value: 1 },
+            { metric: { nodename: 'n2' }, value: 1 },
+          ],
           node_timex_maxerror_seconds: [{ metric: { instance: '10.0.0.1:9100' }, value: 0.210436 }],
-          node_timex_estimated_error_seconds: [{ metric: { instance: '10.0.0.1:9100' }, value: 0.000071 }, { metric: { nodename: 'n2' }, value: 0.000409 }],
+          node_timex_estimated_error_seconds: [
+            { metric: { instance: '10.0.0.1:9100' }, value: 0.000071 },
+            { metric: { nodename: 'n2' }, value: 0.000409 },
+          ],
         }),
       } as unknown as ModuleContext,
       () => true,

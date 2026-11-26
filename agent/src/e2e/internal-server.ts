@@ -1,6 +1,8 @@
 import { chmodSync, existsSync, unlinkSync } from 'node:fs';
-import { IncomingMessage, Server, ServerResponse, createServer, request } from 'node:http';
+import { createServer, IncomingMessage, request, Server, ServerResponse } from 'node:http';
+
 import type { Language } from '@kubernanny/protocol';
+
 import { INTERNAL, LANGUAGE_HEADER, PRINCIPAL_HEADER } from '../auth/principal';
 import type { Config } from '../config';
 import { Logger } from '../logger';
@@ -70,7 +72,13 @@ export class InternalServer {
   }
 
   /** One API call as `principal` ("admin", "demo" or a device id), answered in `language`. `path` is below /api and already validated. */
-  async dispatch(principal: string, method: string, path: string, body?: unknown, language?: Language): Promise<InternalResponse> {
+  async dispatch(
+    principal: string,
+    method: string,
+    path: string,
+    body?: unknown,
+    language?: Language,
+  ): Promise<InternalResponse> {
     if (this.inFlight >= MAX_DISPATCH_IN_FLIGHT) {
       throw new DispatchBusyError();
     }
@@ -84,7 +92,14 @@ export class InternalServer {
 }
 
 /** Also used by the CLI, which runs in a separate process in the same pod. */
-export function call(socketPath: string, principal: string, method: string, path: string, body?: unknown, language?: Language): Promise<InternalResponse> {
+export function call(
+  socketPath: string,
+  principal: string,
+  method: string,
+  path: string,
+  body?: unknown,
+  language?: Language,
+): Promise<InternalResponse> {
   const payload = body === undefined ? undefined : Buffer.from(JSON.stringify(body));
   return new Promise((resolve, reject) => {
     const req = request(

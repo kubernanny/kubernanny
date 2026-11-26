@@ -36,7 +36,13 @@ export function overcommit(inv: Inventory): Overcommit[] {
         requested += parseQuantity(c.resources?.requests?.[resource]);
       }
     }
-    return { resource, requested, allocatable: capacities.reduce((a, b) => a + b, 0), largest: Math.max(0, ...capacities), nodes: capacities.length };
+    return {
+      resource,
+      requested,
+      allocatable: capacities.reduce((a, b) => a + b, 0),
+      largest: Math.max(0, ...capacities),
+      nodes: capacities.length,
+    };
   });
 }
 
@@ -67,7 +73,11 @@ export function evaluateOvercommit(values: Overcommit[]): { issues: Issue[]; mat
       cause: t('std.overcommit.cause', { pct }),
       actions: [],
     });
-    matches.push({ issueId: id, alerts: [o.resource === 'cpu' ? 'KubeCPUOvercommit' : 'KubeMemoryOvercommit'], labels: {} });
+    matches.push({
+      issueId: id,
+      alerts: [o.resource === 'cpu' ? 'KubeCPUOvercommit' : 'KubeMemoryOvercommit'],
+      labels: {},
+    });
   }
   return { issues, matches };
 }
@@ -81,10 +91,19 @@ export function evaluatePodCapacity(inv: Inventory): { issues: Issue[]; matches:
     if (capacity <= 1) {
       continue;
     }
-    const running = inv.pods.filter((p) => p.spec?.nodeName === n.metadata.name && holdsResources(p.status?.phase)).length;
+    const running = inv.pods.filter(
+      (p) => p.spec?.nodeName === n.metadata.name && holdsResources(p.status?.phase),
+    ).length;
     if (running / capacity > 0.95) {
       const id = `${ID}/too-many-pods/${n.metadata.name}`;
-      issues.push({ id, check: ID, severity: 'info', title: t('std.tooManyPods.title', { node: n.metadata.name, n: running, max: capacity }), cause: t('std.tooManyPods.cause'), actions: [] });
+      issues.push({
+        id,
+        check: ID,
+        severity: 'info',
+        title: t('std.tooManyPods.title', { node: n.metadata.name, n: running, max: capacity }),
+        cause: t('std.tooManyPods.cause'),
+        actions: [],
+      });
       matches.push({ issueId: id, alerts: ['KubeletTooManyPods'], labels: { node: n.metadata.name } });
     }
   }
@@ -99,14 +118,27 @@ const minor = (v: string | undefined) => /^v?(\d+\.\d+)/.exec(v ?? '')?.[1];
  * A hint here: every rolling upgrade passes through it, and it only matters when it stays.
  */
 export function evaluateVersions(inv: Inventory): { issues: Issue[]; matches: AlertMatch[] } {
-  const versions = new Set([minor(inv.version?.gitVersion), ...inv.nodes.map((n) => minor(n.status?.nodeInfo?.kubeletVersion))].filter((v): v is string => !!v));
+  const versions = new Set(
+    [minor(inv.version?.gitVersion), ...inv.nodes.map((n) => minor(n.status?.nodeInfo?.kubeletVersion))].filter(
+      (v): v is string => !!v,
+    ),
+  );
   if (versions.size <= 1) {
     return { issues: [], matches: [] };
   }
   const id = `${ID}/version-mismatch`;
   const list = [...versions].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
   return {
-    issues: [{ id, check: ID, severity: 'info', title: t('std.versionMismatch.title', { versions: list.join(', ') }), cause: t('std.versionMismatch.cause'), actions: [] }],
+    issues: [
+      {
+        id,
+        check: ID,
+        severity: 'info',
+        title: t('std.versionMismatch.title', { versions: list.join(', ') }),
+        cause: t('std.versionMismatch.cause'),
+        actions: [],
+      },
+    ],
     matches: [{ issueId: id, alerts: ['KubeVersionMismatch'], labels: {} }],
   };
 }

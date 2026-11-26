@@ -3,9 +3,10 @@
  * `/dir/` -> `dir/index.html`, anything else -> `404.html` with status 404.
  * `npm run preview`; also used by the screenshot script.
  */
-import { createServer, type Server } from 'node:http';
 import { existsSync, readFileSync, statSync } from 'node:fs';
+import { createServer, type Server } from 'node:http';
 import { extname, join, normalize } from 'node:path';
+
 import { OUT_DIR } from './postbuild.ts';
 
 const TYPES: Record<string, string> = {

@@ -84,11 +84,29 @@ export function pod(name: string, rv: string, extra: Record<string, unknown> = {
       namespace: 'default',
       resourceVersion: rv,
       managedFields: [{ manager: 'kubectl', fieldsV1: { 'f:spec': {} } }],
-      annotations: { 'kubectl.kubernetes.io/last-applied-configuration': '{"huge":true}', 'weave.works/kured-node-lock': 'x' },
+      annotations: {
+        'kubectl.kubernetes.io/last-applied-configuration': '{"huge":true}',
+        'weave.works/kured-node-lock': 'x',
+      },
       labels: { app: name },
     },
-    spec: { nodeName: 'n1', containers: [{ name: 'c', image: 'nginx:1', env: [{ name: 'SECRET_LOOKING', value: 'x'.repeat(1000) }], resources: { limits: { memory: '1Gi' } }, livenessProbe: { httpGet: { path: '/' } } }] },
-    status: { phase: 'Running', conditions: [{ type: 'Ready', status: 'True' }], containerStatuses: [{ name: 'c', ready: true, restartCount: 0, state: { running: {} } }] },
+    spec: {
+      nodeName: 'n1',
+      containers: [
+        {
+          name: 'c',
+          image: 'nginx:1',
+          env: [{ name: 'SECRET_LOOKING', value: 'x'.repeat(1000) }],
+          resources: { limits: { memory: '1Gi' } },
+          livenessProbe: { httpGet: { path: '/' } },
+        },
+      ],
+    },
+    status: {
+      phase: 'Running',
+      conditions: [{ type: 'Ready', status: 'True' }],
+      containerStatuses: [{ name: 'c', ready: true, restartCount: 0, state: { running: {} } }],
+    },
     ...extra,
   };
 }

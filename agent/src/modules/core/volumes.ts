@@ -1,6 +1,6 @@
 import { ageText, Issue, IssueAction } from '../../checks/types';
 import { t } from '../../i18n/text';
-import { Inventory, Pvc, parseQuantity } from '../../inventory/inventory';
+import { Inventory, parseQuantity, Pvc } from '../../inventory/inventory';
 import { bytes } from '../format';
 import { CoreCheck } from '../module';
 import { ModuleContext, ModuleResult } from '../types';
@@ -27,7 +27,9 @@ export function grownSize(current: string): string | null {
 function expansion(inv: Inventory, pvc: Pvc): { actions: IssueAction[]; cnpg?: string } {
   const ns = pvc.metadata.namespace ?? 'default';
   const name = pvc.metadata.name;
-  const cnpg = pvc.metadata.ownerReferences?.find((o) => o.kind === 'Cluster' && (o.apiVersion ?? '').startsWith('postgresql.cnpg.io/'));
+  const cnpg = pvc.metadata.ownerReferences?.find(
+    (o) => o.kind === 'Cluster' && (o.apiVersion ?? '').startsWith('postgresql.cnpg.io/'),
+  );
   if (cnpg) {
     return { actions: [], cnpg: cnpg.name };
   }
@@ -40,15 +42,25 @@ function expansion(inv: Inventory, pvc: Pvc): { actions: IssueAction[]; cnpg?: s
   const template = inv.statefulsets.find(
     (s) =>
       s.metadata.namespace === ns &&
-      ((s.spec as { volumeClaimTemplates?: { metadata?: { name?: string } }[] } | undefined)?.volumeClaimTemplates ?? []).some((v) => {
+      (
+        (s.spec as { volumeClaimTemplates?: { metadata?: { name?: string } }[] } | undefined)?.volumeClaimTemplates ??
+        []
+      ).some((v) => {
         const prefix = `${v.metadata?.name}-${s.metadata.name}-`;
         return v.metadata?.name !== undefined && name.startsWith(prefix) && /^\d+$/.test(name.slice(prefix.length));
       }),
   );
-  return { actions: [{ type: 'pvc-expand', namespace: ns, name, from, to, ...(template ? { template: template.metadata.name } : {}) }] };
+  return {
+    actions: [
+      { type: 'pvc-expand', namespace: ns, name, from, to, ...(template ? { template: template.metadata.name } : {}) },
+    ],
+  };
 }
 
-export function evaluateVolumes(inv: Inventory, usage: Map<string, { used: number; capacity: number }> | undefined): Issue[] {
+export function evaluateVolumes(
+  inv: Inventory,
+  usage: Map<string, { used: number; capacity: number }> | undefined,
+): Issue[] {
   const issues: Issue[] = [];
   for (const pvc of inv.pvcs) {
     const ns = pvc.metadata.namespace ?? 'default';
@@ -56,7 +68,14 @@ export function evaluateVolumes(inv: Inventory, usage: Map<string, { used: numbe
     const phase = pvc.status?.phase;
     const created = Date.parse(pvc.metadata.creationTimestamp ?? '');
     if (phase === 'Lost') {
-      issues.push({ id: `volumes/${key}`, check: 'longhorn', severity: 'critical', title: t('volumes.lost.title', { pvc: key }), cause: t('volumes.lost.cause'), actions: [] });
+      issues.push({
+        id: `volumes/${key}`,
+        check: 'longhorn',
+        severity: 'critical',
+        title: t('volumes.lost.title', { pvc: key }),
+        cause: t('volumes.lost.cause'),
+        actions: [],
+      });
     } else if (phase === 'Pending' && Number.isFinite(created) && inv.at.getTime() - created > 5 * 60_000) {
       issues.push({
         id: `volumes/${key}`,
@@ -76,7 +95,9 @@ export function evaluateVolumes(inv: Inventory, usage: Map<string, { used: numbe
         check: 'longhorn',
         severity: share >= 0.95 ? 'critical' : 'warning',
         title: t('volumes.full.title', { volume: key, pct: Math.round(share * 100) }),
-        cause: grow.cnpg ? t('volumes.full.cnpg', { used: bytes(u.used), total: bytes(u.capacity), cluster: grow.cnpg }) : t('volumes.full.cause', { used: bytes(u.used), total: bytes(u.capacity) }),
+        cause: grow.cnpg
+          ? t('volumes.full.cnpg', { used: bytes(u.used), total: bytes(u.capacity), cluster: grow.cnpg })
+          : t('volumes.full.cause', { used: bytes(u.used), total: bytes(u.capacity) }),
         actions: grow.actions,
       });
     }
@@ -99,15 +120,25 @@ export class VolumesCheck extends CoreCheck {
     }
     const issues = evaluateVolumes(ctx.inv, ctx.data.volumeUsage);
     const bound = ctx.inv.pvcs.filter((p) => p.status?.phase === 'Bound').length;
-    const total = ctx.inv.pvcs.reduce((sum, p) => sum + parseQuantity(p.status?.capacity?.storage ?? p.spec?.resources?.requests?.storage), 0);
+    const total = ctx.inv.pvcs.reduce(
+      (sum, p) => sum + parseQuantity(p.status?.capacity?.storage ?? p.spec?.resources?.requests?.storage),
+      0,
+    );
     return {
       issues,
       stats: [
-        { label: t('volumes.stat.bound'), value: `${bound}/${ctx.inv.pvcs.length}`, tone: bound === ctx.inv.pvcs.length ? 'ok' : 'warning' },
+        {
+          label: t('volumes.stat.bound'),
+          value: `${bound}/${ctx.inv.pvcs.length}`,
+          tone: bound === ctx.inv.pvcs.length ? 'ok' : 'warning',
+        },
         { label: t('volumes.stat.reserved'), value: bytes(total) },
         { label: t('volumes.stat.storageClasses'), value: String(ctx.inv.storageClasses.length) },
       ],
-      summary: issues.length === 0 ? t('volumes.summary.ok', { n: ctx.inv.pvcs.length }) : t('volumes.summary.problems', { n: issues.length }),
+      summary:
+        issues.length === 0
+          ? t('volumes.summary.ok', { n: ctx.inv.pvcs.length })
+          : t('volumes.summary.problems', { n: issues.length }),
     };
   }
 }

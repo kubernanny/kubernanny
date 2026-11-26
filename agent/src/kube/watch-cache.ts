@@ -248,7 +248,9 @@ export class WatchCache<T extends Keyed> {
     let token: string | undefined;
     let version: string | undefined;
     do {
-      const page = await this.api.get<ListBody>(`${this.options.path}${sep}limit=${limit}${token ? `&continue=${encodeURIComponent(token)}` : ''}`);
+      const page = await this.api.get<ListBody>(
+        `${this.options.path}${sep}limit=${limit}${token ? `&continue=${encodeURIComponent(token)}` : ''}`,
+      );
       for (const raw of page.items ?? []) {
         items.push(this.options.strip(raw));
       }
@@ -315,7 +317,10 @@ export class WatchCache<T extends Keyed> {
     const timeout = this.options.watchTimeoutSeconds ?? 240 + Math.floor(Math.random() * 120);
     const rv = this.resourceVersion ? `&resourceVersion=${encodeURIComponent(this.resourceVersion)}` : '';
     try {
-      const res = await this.api.watch(`${this.options.path}${sep}watch=1&allowWatchBookmarks=true&timeoutSeconds=${timeout}${rv}`, abort.signal);
+      const res = await this.api.watch(
+        `${this.options.path}${sep}watch=1&allowWatchBookmarks=true&timeoutSeconds=${timeout}${rv}`,
+        abort.signal,
+      );
       if (res.status === 410) {
         throw new Gone('410 Gone');
       }
@@ -358,7 +363,8 @@ export class WatchCache<T extends Keyed> {
 
   private apply(event: { type: string; object: unknown }): void {
     this.stats.events++;
-    const object = event.object as { metadata?: { resourceVersion?: string }; code?: number; message?: string } | undefined;
+    const object = event.object as
+      { metadata?: { resourceVersion?: string }; code?: number; message?: string } | undefined;
     if (event.type === 'ERROR') {
       if (object?.code === 410) {
         throw new Gone(object.message ?? '410 Gone');

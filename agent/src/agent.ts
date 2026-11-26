@@ -1,4 +1,5 @@
-import { Server, createServer } from 'node:http';
+import { createServer, Server } from 'node:http';
+
 import { ActionsService } from './actions/actions.service';
 import { RollbackApi, rollbackRoutes } from './actions/rollback.routes';
 import { RollbackService } from './actions/rollback.service';
@@ -12,19 +13,19 @@ import { E2eApi, e2eRoutes } from './e2e/e2e.routes';
 import { E2eService } from './e2e/e2e.service';
 import { InternalServer } from './e2e/internal-server';
 import { HttpError } from './http/errors';
-import { Reply, Route, createHttpHandler } from './http/server';
+import { createHttpHandler, Reply, Route } from './http/server';
 import { t } from './i18n/text';
-import { Leader, LeaderElection, SoleLeader } from './lease/leader';
-import { DeadmanService } from './push/deadman.service';
-import { Logger } from './logger';
 import { IncidentsService } from './incidents/incidents.service';
 import { KubeClient } from './kube/kube-client';
+import { Leader, LeaderElection, SoleLeader } from './lease/leader';
+import { Logger } from './logger';
 import { AcceptanceApi, acceptanceRoutes } from './modules/vulnerabilities/acceptance.routes';
 import { AcceptanceService } from './modules/vulnerabilities/acceptance.service';
 import { NotifiedStore } from './notify/notified-store';
 import { Notifier } from './notify/notifier';
 import { PairingService } from './pairing/pairing';
 import { AppPushService } from './push/app-push.service';
+import { DeadmanService } from './push/deadman.service';
 import { PushApi, pushRoutes } from './push/push.routes';
 import { PushTransport } from './push/push-transport';
 import { RelayClient } from './relay/relay-client';
@@ -96,7 +97,15 @@ export class Agent {
     // DEMO=1 (or broken | warning | healthy): a built-in made-up cluster, for trying Kubernanny without one.
     const kube = options.kube ?? (config.demo ? new DemoKubeClient(undefined, config.demo) : new KubeClient());
     this.kube = kube;
-    this.leader = options.leader ?? (config.podName && !config.demo ? new LeaderElection(kube, { namespace: config.namespace, name: config.leaseName ?? 'kubernanny', identity: config.podName }) : new SoleLeader());
+    this.leader =
+      options.leader ??
+      (config.podName && !config.demo
+        ? new LeaderElection(kube, {
+            namespace: config.namespace,
+            name: config.leaseName ?? 'kubernanny',
+            identity: config.podName,
+          })
+        : new SoleLeader());
     // In charge: holds the lease AND has read the stored state since taking it (fail closed after a handover).
     const isLeader = () => this.inCharge();
     this.identity = new IdentityService(config, kube);
@@ -114,17 +123,55 @@ export class Agent {
     this.silences = new SilenceService(config, kube, this.notifier);
     this.acceptance = new AcceptanceService(config, kube, this.settings, this.notifier);
     this.pairing = new PairingService(config, this.identity);
-    this.e2e = new E2eService(this.identity, this.devices, this.pairing, this.internal, config, this.notifier, isLeader);
+    this.e2e = new E2eService(
+      this.identity,
+      this.devices,
+      this.pairing,
+      this.internal,
+      config,
+      this.notifier,
+      isLeader,
+    );
     this.relay = new RelayClient(config, this.identity, this.e2e, this.pushTransport);
-    this.status = new StatusService(kube, config, this.notifier, this.settings, this.silences, this.incidents, this.acceptance);
+    this.status = new StatusService(
+      kube,
+      config,
+      this.notifier,
+      this.settings,
+      this.silences,
+      this.incidents,
+      this.acceptance,
+    );
     this.actions = new ActionsService(kube, this.status, this.settings);
     this.rollbacks = new RollbackService(kube, this.settings, this.status, this.notifier);
     this.status.notifies = isLeader;
 
     this.routes = [
       // Readiness, no data: ready once the first run is in memory (or READY_TIMEOUT_SECONDS passed), unready again on SIGTERM.
-      { method: 'GET', path: '/readyz', public: true, handle: () => (this.ready() ? { ok: true } : new Reply(503, JSON.stringify({ ok: false }), 'application/json; charset=utf-8')) },
-      ...appRoutes(new AppApi(this.status, this.actions, this.notifier, this.devices, this.identity, config, this.pairing, this.settings, this.relay, this.silences, this.incidents)),
+      {
+        method: 'GET',
+        path: '/readyz',
+        public: true,
+        handle: () =>
+          this.ready()
+            ? { ok: true }
+            : new Reply(503, JSON.stringify({ ok: false }), 'application/json; charset=utf-8'),
+      },
+      ...appRoutes(
+        new AppApi(
+          this.status,
+          this.actions,
+          this.notifier,
+          this.devices,
+          this.identity,
+          config,
+          this.pairing,
+          this.settings,
+          this.relay,
+          this.silences,
+          this.incidents,
+        ),
+      ),
       ...e2eRoutes(new E2eApi(this.e2e, this.identity)),
       ...acceptanceRoutes(new AcceptanceApi(this.acceptance, this.status)),
       ...pushRoutes(new PushApi(this.appPush, config)),
@@ -214,7 +261,13 @@ export class Agent {
   }
 
   private async loadState(): Promise<void> {
-    await Promise.all([this.identity.onModuleInit(), this.devices.onModuleInit(), this.settings.onModuleInit(), this.silences.onModuleInit(), this.acceptance.onModuleInit()]);
+    await Promise.all([
+      this.identity.onModuleInit(),
+      this.devices.onModuleInit(),
+      this.settings.onModuleInit(),
+      this.silences.onModuleInit(),
+      this.acceptance.onModuleInit(),
+    ]);
   }
 
   /**
@@ -239,7 +292,9 @@ export class Agent {
           await Promise.all([this.silences.onModuleInit(), this.acceptance.onModuleInit()]);
           break;
         } catch (err) {
-          this.logger.warn(`reloading devices and switches failed, not acting yet: ${err instanceof Error ? err.message : String(err)}`);
+          this.logger.warn(
+            `reloading devices and switches failed, not acting yet: ${err instanceof Error ? err.message : String(err)}`,
+          );
           await new Promise((resolve) => setTimeout(resolve, 2000).unref());
         }
       }

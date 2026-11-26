@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { Config, loadConfig } from '../../config';
 import { DemoKubeClient } from '../../demo/demo-cluster';
 import { Notifier } from '../../notify/notifier';
 import { SettingsService } from '../../settings/settings.service';
-import { DAY, cleanReason, parseAccepted } from './acceptance';
+import { cleanReason, DAY, parseAccepted } from './acceptance';
 import { AcceptanceService } from './acceptance.service';
-import { ComponentFindings, applyAcceptance, vulnerabilityIssue } from './evaluate';
+import { applyAcceptance, ComponentFindings, vulnerabilityIssue } from './evaluate';
 
 const who = { kind: 'device' as const, id: 'd1', name: 'Test' };
 
@@ -31,7 +32,9 @@ describe('accepting an advisory', () => {
     await service.onModuleInit();
     const until = await service.accept('cnpg', 'GHSA-423p-g724-fr39', 90, '  only the\noperator, not exposed ', who, 0);
     expect(until).toBe(new Date(90 * DAY).toISOString());
-    expect(securityAlert).toHaveBeenCalledWith('Test', [{ kind: 'advisoryAccepted', component: 'cnpg', advisory: 'GHSA-423p-g724-fr39', days: 90 }]);
+    expect(securityAlert).toHaveBeenCalledWith('Test', [
+      { kind: 'advisoryAccepted', component: 'cnpg', advisory: 'GHSA-423p-g724-fr39', days: 90 },
+    ]);
     expect(JSON.stringify(kube.writes.at(-1))).toContain('accepted');
 
     const restarted = new AcceptanceService(cfg, kube, new SettingsService(cfg, kube));
@@ -48,7 +51,9 @@ describe('accepting an advisory', () => {
     const { service } = setup();
     await expect(service.accept('cnpg', 'GHSA-1', 7, undefined, who)).rejects.toMatchObject({ status: 400 });
     await expect(service.accept('../x', 'GHSA-1', 30, undefined, who)).rejects.toMatchObject({ status: 400 });
-    await expect(service.accept('cnpg', 'javascript:alert(1)?', 30, undefined, who)).rejects.toMatchObject({ status: 400 });
+    await expect(service.accept('cnpg', 'javascript:alert(1)?', 30, undefined, who)).rejects.toMatchObject({
+      status: 400,
+    });
     await expect(service.accept('cnpg', 'GHSA-1', 30, { evil: true }, who)).rejects.toMatchObject({ status: 400 });
   });
 
@@ -63,7 +68,10 @@ describe('accepting an advisory', () => {
     const get = vi.spyOn(kube, 'get');
     await locked.service.onModuleInit();
     expect(get).not.toHaveBeenCalled();
-    await expect(locked.service.accept('cnpg', 'GHSA-2', 30, undefined, who)).rejects.toMatchObject({ status: 403, response: { code: 'ACCEPT_LOCKED' } });
+    await expect(locked.service.accept('cnpg', 'GHSA-2', 30, undefined, who)).rejects.toMatchObject({
+      status: 403,
+      response: { code: 'ACCEPT_LOCKED' },
+    });
     await expect(locked.service.unaccept('cnpg', 'GHSA-1', who)).rejects.toMatchObject({ status: 403 });
     expect(kube.writes.length).toBe(writes);
     expect(locked.securityAlert).not.toHaveBeenCalled();
@@ -73,14 +81,19 @@ describe('accepting an advisory', () => {
   it('is refused while both the built-in lookup and the Trivy integration are locked off in Helm', async () => {
     const { service } = setup({ disabledModules: ['vulnerabilities', 'trivy'] });
     expect(service.allowed()).toBe(false);
-    await expect(service.accept('cnpg', 'GHSA-1', 30, undefined, who)).rejects.toMatchObject({ status: 403, response: { code: 'MODULE_OFF' } });
+    await expect(service.accept('cnpg', 'GHSA-1', 30, undefined, who)).rejects.toMatchObject({
+      status: 403,
+      response: { code: 'MODULE_OFF' },
+    });
   });
 
   it('cleans reasons and stored data', () => {
     expect(cleanReason('a‮b\u0000c   d')).toBe('a b c d');
     expect(cleanReason('x'.repeat(500))).toHaveLength(200);
     expect(cleanReason('   ')).toBeUndefined();
-    expect(parseAccepted('{"a|b":{"until":1,"at":0,"by":"x"},"c|d":{"until":"soon"}}')).toEqual(new Map([['a|b', { until: 1, at: 0, by: 'x' }]]));
+    expect(parseAccepted('{"a|b":{"until":1,"at":0,"by":"x"},"c|d":{"until":"soon"}}')).toEqual(
+      new Map([['a|b', { until: 1, at: 0, by: 'x' }]]),
+    );
     expect(parseAccepted('not json')).toEqual(new Map());
   });
 });
@@ -90,7 +103,16 @@ describe('accepted advisories in the check', () => {
     const accepted = new Map([['cnpg|GHSA-a', { until: 10 * DAY, at: 0, by: 'Test', reason: 'not used' }]]);
     const { components, accepted: list } = applyAcceptance([component(['GHSA-a', 'GHSA-b'])], accepted);
     expect(components[0]!.findings.map((f) => f.id)).toEqual(['GHSA-b']);
-    expect(list).toEqual([{ component: 'cnpg', name: 'CloudNativePG', advisory: 'GHSA-a', until: new Date(10 * DAY).toISOString(), by: 'Test', reason: 'not used' }]);
+    expect(list).toEqual([
+      {
+        component: 'cnpg',
+        name: 'CloudNativePG',
+        advisory: 'GHSA-a',
+        until: new Date(10 * DAY).toISOString(),
+        by: 'Test',
+        reason: 'not used',
+      },
+    ]);
     const issue = vulnerabilityIssue(components[0]!)!;
     expect(issue.advisories).toEqual(['GHSA-b']);
     expect(JSON.stringify(issue.cause)).toContain('vulnerabilities.acceptedNote');

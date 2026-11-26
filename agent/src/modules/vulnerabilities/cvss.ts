@@ -27,14 +27,28 @@ export function cvss3Score(vector: string): number | null {
     return null;
   }
   // A Map, not an object: a metric value like "constructor" must not find Object.prototype.
-  const m = new Map(vector.split('/').slice(1).map((p) => p.split(':') as [string, string]));
+  const m = new Map(
+    vector
+      .split('/')
+      .slice(1)
+      .map((p) => p.split(':') as [string, string]),
+  );
   const scope = m.get('S');
   const av = weight(W.AV, m.get('AV'));
   const ac = weight(W.AC, m.get('AC'));
   const ui = weight(W.UI, m.get('UI'));
   const pr = weight({ N: 0.85, L: scope === 'C' ? 0.68 : 0.62, H: scope === 'C' ? 0.5 : 0.27 }, m.get('PR'));
   const [c, i, a] = ['C', 'I', 'A'].map((k) => weight(W.CIA, m.get(k)));
-  if (av === undefined || ac === undefined || ui === undefined || pr === undefined || c === undefined || i === undefined || a === undefined || (scope !== 'U' && scope !== 'C')) {
+  if (
+    av === undefined ||
+    ac === undefined ||
+    ui === undefined ||
+    pr === undefined ||
+    c === undefined ||
+    i === undefined ||
+    a === undefined ||
+    (scope !== 'U' && scope !== 'C')
+  ) {
     return null;
   }
   const iss = 1 - (1 - c) * (1 - i) * (1 - a);

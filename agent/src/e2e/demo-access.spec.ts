@@ -1,7 +1,9 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
 import { Agent } from '../agent';
 import { IdentityService } from '../auth/identity.service';
 import { E2eClient } from '../testing/e2e-client';

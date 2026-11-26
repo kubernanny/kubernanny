@@ -15,9 +15,10 @@
 import { x25519 } from '@noble/curves/ed25519.js';
 import { blake2b } from '@noble/hashes/blake2.js';
 import { hmac } from '@noble/hashes/hmac.js';
+
 import { constantTimeEqual, randomBytes } from './bytes.js';
 import { toBase64Url } from './keys.js';
-import { KeyPair, concat } from './noise.js';
+import { concat, KeyPair } from './noise.js';
 import { isPushToken } from './push.js';
 
 export const FrameType = {
@@ -145,12 +146,33 @@ export interface PushRequest {
  * failed: anything else. disabled: this relay has no push.
  */
 export type PushOutcome = 'sent' | 'unregistered' | 'rate_limited' | 'unavailable' | 'invalid' | 'failed' | 'disabled';
-export const PUSH_OUTCOMES: readonly PushOutcome[] = ['sent', 'unregistered', 'rate_limited', 'unavailable', 'invalid', 'failed', 'disabled'];
+export const PUSH_OUTCOMES: readonly PushOutcome[] = [
+  'sent',
+  'unregistered',
+  'rate_limited',
+  'unavailable',
+  'invalid',
+  'failed',
+  'disabled',
+];
 /** The largest Push frame payload either side accepts: a token, a sealed MAX_PUSH_PLAINTEXT in base64url and the JSON around it. */
 export const MAX_PUSH_FRAME = 8 * 1024;
 
 export function encodePushRequest(id: number, push: PushRequest): Uint8Array {
-  return encodeFrame(FrameType.Push, id, encoder.encode(JSON.stringify({ t: push.token, o: push.platform, k: push.kid, m: push.message, ...(push.lang ? { l: push.lang } : {}), ...(push.silent ? { q: 1 } : {}) })));
+  return encodeFrame(
+    FrameType.Push,
+    id,
+    encoder.encode(
+      JSON.stringify({
+        t: push.token,
+        o: push.platform,
+        k: push.kid,
+        m: push.message,
+        ...(push.lang ? { l: push.lang } : {}),
+        ...(push.silent ? { q: 1 } : {}),
+      }),
+    ),
+  );
 }
 
 /** The relay's side: the request, or null when it is not one (the relay then answers `invalid`). */
@@ -172,7 +194,14 @@ export function decodePushRequest(payload: Uint8Array): PushRequest | null {
     ) {
       return null;
     }
-    return { token: t, platform: o, kid: k, message: m, ...(l === 'de' || l === 'en' ? { lang: l } : {}), ...(q === 1 ? { silent: true } : {}) };
+    return {
+      token: t,
+      platform: o,
+      kid: k,
+      message: m,
+      ...(l === 'de' || l === 'en' ? { lang: l } : {}),
+      ...(q === 1 ? { silent: true } : {}),
+    };
   } catch {
     return null;
   }
@@ -229,8 +258,19 @@ export const MAX_DEPOSIT_VALIDITY_SECONDS = 27 * 3600;
 const GRACES = [10, 15, 30, 60];
 
 export function encodeDeposit(id: number, deposit: DeadmanDeposit): Uint8Array {
-  const items = deposit.items.map((i) => ({ t: i.token, o: i.platform, k: i.kid, m: i.message, ...(i.lang ? { l: i.lang } : {}), g: i.graceMinutes }));
-  return encodeFrame(FrameType.Deposit, id, encoder.encode(JSON.stringify({ x: deposit.validitySeconds, h: deposit.holdSeconds, d: items })));
+  const items = deposit.items.map((i) => ({
+    t: i.token,
+    o: i.platform,
+    k: i.kid,
+    m: i.message,
+    ...(i.lang ? { l: i.lang } : {}),
+    g: i.graceMinutes,
+  }));
+  return encodeFrame(
+    FrameType.Deposit,
+    id,
+    encoder.encode(JSON.stringify({ x: deposit.validitySeconds, h: deposit.holdSeconds, d: items })),
+  );
 }
 
 /** The relay's side: the deposit, or null when it is not one (the relay then answers `invalid`). */
@@ -241,8 +281,15 @@ export function decodeDeposit(payload: Uint8Array): DeadmanDeposit | null {
   try {
     const raw = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(payload)) as Record<string, unknown> | null;
     const { x, h, d } = raw ?? {};
-    const whole = (n: unknown, max: number): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= max;
-    if (!whole(x, MAX_DEPOSIT_VALIDITY_SECONDS) || x === 0 || !whole(h, MAX_DEPOSIT_VALIDITY_SECONDS) || h >= x || !Array.isArray(d)) {
+    const whole = (n: unknown, max: number): n is number =>
+      typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= max;
+    if (
+      !whole(x, MAX_DEPOSIT_VALIDITY_SECONDS) ||
+      x === 0 ||
+      !whole(h, MAX_DEPOSIT_VALIDITY_SECONDS) ||
+      h >= x ||
+      !Array.isArray(d)
+    ) {
       return null;
     }
     const items: DeadmanItem[] = [];
@@ -260,7 +307,14 @@ export function decodeDeposit(payload: Uint8Array): DeadmanDeposit | null {
       ) {
         return null;
       }
-      items.push({ token: t, platform: o, kid: k, message: m, ...(l === 'de' || l === 'en' ? { lang: l } : {}), graceMinutes: g });
+      items.push({
+        token: t,
+        platform: o,
+        kid: k,
+        message: m,
+        ...(l === 'de' || l === 'en' ? { lang: l } : {}),
+        graceMinutes: g,
+      });
     }
     return { validitySeconds: x, holdSeconds: h, items };
   } catch {
@@ -370,7 +424,10 @@ export function relayOrigin(url: string): string {
   if (!scheme || !parsed.hostname) {
     throw new Error('a relay URL is http(s) or ws(s) with a host');
   }
-  const port = parsed.port && !((scheme === 'http:' && parsed.port === '80') || (scheme === 'https:' && parsed.port === '443')) ? `:${parsed.port}` : '';
+  const port =
+    parsed.port && !((scheme === 'http:' && parsed.port === '80') || (scheme === 'https:' && parsed.port === '443'))
+      ? `:${parsed.port}`
+      : '';
   return `${scheme}//${parsed.hostname.toLowerCase()}${port}`;
 }
 
@@ -387,7 +444,17 @@ function proofKey(shared: Uint8Array, relayEphemeral: Uint8Array, agentPublic: U
   if (originBytes.length > 0xffff) {
     throw new Error('relay origin too long');
   }
-  return blake2b(concat(encoder.encode(RELAY_LABEL), Uint8Array.of(originBytes.length >> 8, originBytes.length & 0xff), originBytes, shared, relayEphemeral, agentPublic), { dkLen: 32 });
+  return blake2b(
+    concat(
+      encoder.encode(RELAY_LABEL),
+      Uint8Array.of(originBytes.length >> 8, originBytes.length & 0xff),
+      originBytes,
+      shared,
+      relayEphemeral,
+      agentPublic,
+    ),
+    { dkLen: 32 },
+  );
 }
 
 function proofMac(key: Uint8Array, nonce: Uint8Array): Uint8Array {

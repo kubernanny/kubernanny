@@ -1,7 +1,19 @@
-import { FrameType, RelayClose, answerChallenge, decodeFrame, encodeReply, generateKeyPair, parsePublicKey, relayAgentId, sealRequest } from '@kubernanny/protocol';
 import { connect } from 'node:net';
+
+import {
+  answerChallenge,
+  decodeFrame,
+  encodeReply,
+  FrameType,
+  generateKeyPair,
+  parsePublicKey,
+  relayAgentId,
+  RelayClose,
+  sealRequest,
+} from '@kubernanny/protocol';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
+
 import { DemoAgent, startDemoAgent } from '../../agent/src/testing/demo-agent';
 import { RunningRelay, startRelay } from '../src/bootstrap';
 
@@ -28,11 +40,19 @@ describe('relay and agent end to end', () => {
   }
 
   function call(body: Uint8Array, id = agentId) {
-    return fetch(`${base}/v1/agents/${id}/e2e`, { method: 'POST', body: Buffer.from(body), headers: { 'content-type': 'application/octet-stream', origin: 'capacitor://localhost' } });
+    return fetch(`${base}/v1/agents/${id}/e2e`, {
+      method: 'POST',
+      body: Buffer.from(body),
+      headers: { 'content-type': 'application/octet-stream', origin: 'capacitor://localhost' },
+    });
   }
 
   async function status() {
-    const sealed = sealRequest(device, parsePublicKey(agent.publicKey), { method: 'GET', path: '/status', time: Date.now() });
+    const sealed = sealRequest(device, parsePublicKey(agent.publicKey), {
+      method: 'GET',
+      path: '/status',
+      time: Date.now(),
+    });
     const res = await call(sealed.body);
     expect(res.status).toBe(200);
     const answer = sealed.open(new Uint8Array(await res.arrayBuffer()));
@@ -66,7 +86,11 @@ describe('relay and agent end to end', () => {
   });
 
   it('passes the agent plain refusals through unchanged (a replay here)', async () => {
-    const sealed = sealRequest(device, parsePublicKey(agent.publicKey), { method: 'GET', path: '/info', time: Date.now() });
+    const sealed = sealRequest(device, parsePublicKey(agent.publicKey), {
+      method: 'GET',
+      path: '/info',
+      time: Date.now(),
+    });
     expect((await call(sealed.body)).status).toBe(200);
     const replay = await call(sealed.body);
     expect(replay.status).toBe(400);
@@ -84,7 +108,10 @@ describe('relay and agent end to end', () => {
     expect(await large.json()).toEqual({ code: 'RELAY_TOO_LARGE' });
     expect((await call(new Uint8Array(0))).status).toBe(400);
     expect((await fetch(`${base}/v1/agents/nope/e2e`, { method: 'POST', body: 'x' })).status).toBe(404);
-    const preflight = await fetch(`${base}/v1/agents/${agentId}/e2e`, { method: 'OPTIONS', headers: { origin: 'https://k.example', 'access-control-request-method': 'POST' } });
+    const preflight = await fetch(`${base}/v1/agents/${agentId}/e2e`, {
+      method: 'OPTIONS',
+      headers: { origin: 'https://k.example', 'access-control-request-method': 'POST' },
+    });
     expect(preflight.status).toBe(204);
     expect(preflight.headers.get('access-control-allow-headers')).toBe('content-type');
     expect((await fetch(`${base}/healthz`)).status).toBe(200);
@@ -108,14 +135,18 @@ describe('relay and agent end to end', () => {
 
   it('closes a connection that never proves anything', async () => {
     const ws = new WebSocket(`ws://127.0.0.1:${relay.port}/v1/agents/${relayAgentId(generateKeyPair().publicKey)}/ws`);
-    expect(await new Promise<number>((resolve) => ws.on('close', (c) => resolve(c)))).toBe(RelayClose.RegistrationTimeout);
+    expect(await new Promise<number>((resolve) => ws.on('close', (c) => resolve(c)))).toBe(
+      RelayClose.RegistrationTimeout,
+    );
   });
 
   it('answers the heartbeat', async () => {
     const ws = new WebSocket(`ws://127.0.0.1:${relay.port}/v1/agents/${relayAgentId(generateKeyPair().publicKey)}/ws`);
     await new Promise((resolve) => ws.on('open', resolve));
     ws.send('ping');
-    const pong = await new Promise<string>((resolve) => ws.on('message', (data: Buffer, binary: boolean) => !binary && resolve(data.toString())));
+    const pong = await new Promise<string>((resolve) =>
+      ws.on('message', (data: Buffer, binary: boolean) => !binary && resolve(data.toString())),
+    );
     expect(pong).toBe('pong');
     ws.close();
   });
@@ -138,7 +169,9 @@ describe('relay and agent end to end', () => {
   /** A fresh, well-behaved agent: 'registered' or what stopped it. */
   function legitimate(forwardedFor: string): Promise<string> {
     const keys = generateKeyPair();
-    const ws = new WebSocket(`ws://127.0.0.1:${relay.port}/v1/agents/${relayAgentId(keys.publicKey)}/ws`, { headers: { 'x-forwarded-for': forwardedFor } });
+    const ws = new WebSocket(`ws://127.0.0.1:${relay.port}/v1/agents/${relayAgentId(keys.publicKey)}/ws`, {
+      headers: { 'x-forwarded-for': forwardedFor },
+    });
     return new Promise((resolve) => {
       ws.on('unexpected-response', (_req, res) => resolve(`refused ${res.statusCode}`));
       ws.on('message', (data: Buffer) => {
@@ -158,7 +191,9 @@ describe('relay and agent end to end', () => {
     for (const target of ['http://[', 'http://a:99999/v1', 'http://%/']) {
       await new Promise<void>((resolve) => {
         const socket = connect(relay.port, '127.0.0.1', () =>
-          socket.write(`GET ${target} HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n`),
+          socket.write(
+            `GET ${target} HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n`,
+          ),
         );
         socket.on('data', () => socket.destroy());
         socket.on('close', () => resolve());

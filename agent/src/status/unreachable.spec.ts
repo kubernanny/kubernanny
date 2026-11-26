@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { ADMIN } from '../auth/devices.service';
+
 import { Agent } from '../agent';
+import { ADMIN } from '../auth/devices.service';
 import { DemoKubeClient } from '../demo/demo-cluster';
 import { KubeError } from '../kube/kube-client';
 import { renderMetrics } from '../metrics/exporter';
 import { Notifier } from '../notify/notifier';
 import { SilenceService } from '../silence/silence.service';
 import { en } from '../testing/i18n';
-import { StatusService, Snapshot, UNREACHABLE_AFTER_RUNS, UNREACHABLE_ISSUE_ID } from './status.service';
+import { Snapshot, StatusService, UNREACHABLE_AFTER_RUNS, UNREACHABLE_ISSUE_ID } from './status.service';
 
 /** The demo cluster, with an API server that can stop answering. */
 class FlakyKube extends DemoKubeClient {
@@ -30,7 +31,12 @@ describe('API server unreachable (review: was silent)', () => {
     process.env.CHECK_INTERVAL_SECONDS = '3600';
     const kube = new FlakyKube(undefined, scenario);
     const pushed: Snapshot[] = [];
-    const notifier = { channels: ['ntfy'], update: async (s: Snapshot) => void pushed.push(s), securityAlert: async () => undefined, test: async () => [] };
+    const notifier = {
+      channels: ['ntfy'],
+      update: async (s: Snapshot) => void pushed.push(s),
+      securityAlert: async () => undefined,
+      test: async () => [],
+    };
     moduleRef = new Agent({ kube: kube, notifier: notifier as unknown as Notifier });
     const status = moduleRef.get(StatusService);
     await status.refresh();
@@ -59,12 +65,18 @@ describe('API server unreachable (review: was silent)', () => {
     expect(down.checkedAt).toBe(good.checkedAt);
     expect(down.failingSince).toBe(blip.failingSince);
     const issue = down.issues.find((i) => i.id === UNREACHABLE_ISSUE_ID)!;
-    expect(issue).toMatchObject({ severity: 'critical', title: 'Kubernanny cannot read the cluster', since: blip.failingSince });
+    expect(issue).toMatchObject({
+      severity: 'critical',
+      title: 'Kubernanny cannot read the cluster',
+      since: blip.failingSince,
+    });
     expect(issue.cause).toContain('ECONNREFUSED');
     // It goes to the notifier like any issue (which waits NOTIFY_AFTER_SECONDS before pushing).
     expect(pushed.at(-1)!.issues.map((i) => i.id)).toContain(UNREACHABLE_ISSUE_ID);
     // The metrics keep the time of the last run that read the cluster: staleness shows there too.
-    expect(renderMetrics(status.snapshot())).toContain(`kubernanny_last_run_timestamp_seconds ${Math.floor(Date.parse(good.checkedAt!) / 1000)}`);
+    expect(renderMetrics(status.snapshot())).toContain(
+      `kubernanny_last_run_timestamp_seconds ${Math.floor(Date.parse(good.checkedAt!) / 1000)}`,
+    );
 
     kube.down = false;
     await status.refresh();

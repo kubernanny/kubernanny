@@ -1,7 +1,9 @@
-import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 import { parseAllDocuments } from 'yaml';
+
 import { CORE_CHECKS } from './modules/core';
 import { INTEGRATIONS } from './modules/integrations';
 import { rbacExport } from './rbac/rules';
@@ -24,7 +26,9 @@ function calledResources(): Set<string> {
       } else if (name.endsWith('.ts') && !name.endsWith('.spec.ts')) {
         // Gatus' own API (`/api/v1/endpoints/statuses`) looks like the core `endpoints` resource; it is plain HTTP to Gatus.
         const text = readFileSync(path, 'utf8').replaceAll("'/api/v1/endpoints/statuses'", '');
-        for (const m of text.matchAll(/['`]\/apis\/([a-z0-9.-]+)\/v[0-9a-z]+\/(?:namespaces\/\$\{[^}]+\}\/)?([a-z]+)/g)) {
+        for (const m of text.matchAll(
+          /['`]\/apis\/([a-z0-9.-]+)\/v[0-9a-z]+\/(?:namespaces\/\$\{[^}]+\}\/)?([a-z]+)/g,
+        )) {
           // A resource chosen at runtime (`…/namespaces/${ns}/${kind}`) shows up as "namespaces"; the workload kinds are asserted below.
           if (m[2] !== 'namespaces') {
             found.add(`${m[1]}/${m[2]}`);
@@ -32,7 +36,10 @@ function calledResources(): Set<string> {
         }
         for (const m of text.matchAll(/['`]\/api\/v1\/(?:namespaces\/[^/'`]+\/)?([a-z]+)[?/'`]/g)) {
           // Prometheus and Alertmanager paths look like core API paths.
-          if (!['query', 'alerts', 'silences', 'targets'].includes(m[1]) && (m[1] !== 'namespaces' || /\/api\/v1\/namespaces['`?]/.test(m[0]))) {
+          if (
+            !['query', 'alerts', 'silences', 'targets'].includes(m[1]) &&
+            (m[1] !== 'namespaces' || /\/api\/v1\/namespaces['`?]/.test(m[0]))
+          ) {
             found.add(`/${m[1]}`);
           }
         }
@@ -105,7 +112,9 @@ describe('declared reads of the modules', () => {
   });
 
   it('are granted by install.yaml and by the Helm chart', () => {
-    const declared = [...INTEGRATIONS.flatMap((i) => i.reads), ...CORE_CHECKS.flatMap((m) => m.reads)].map((r) => `${r.group}/${r.resource}`);
+    const declared = [...INTEGRATIONS.flatMap((i) => i.reads), ...CORE_CHECKS.flatMap((m) => m.reads)].map(
+      (r) => `${r.group}/${r.resource}`,
+    );
     expect(declared.length).toBeGreaterThan(10);
     const install = granted(join(__dirname, '../../deploy/install.yaml'));
     const chart = chartRules();
@@ -120,7 +129,9 @@ describe('declared reads of the modules', () => {
     // install.yaml has the chart's defaults: a resource only an opt-in action touches is not in it.
     const generated = rbacExport();
     const optInOnly = new Set(
-      generated.optInActions.flatMap((type) => generated.actions[type]!.rules.flatMap((r) => r.resources.map((x) => `${r.group}/${x}`))).filter((r) => !install.has(r)),
+      generated.optInActions
+        .flatMap((type) => generated.actions[type]!.rules.flatMap((r) => r.resources.map((x) => `${r.group}/${x}`)))
+        .filter((r) => !install.has(r)),
     );
     expect([...optInOnly]).toEqual(['/configmaps']);
     expect([...chart].filter((r) => !install.has(r) && !optInOnly.has(r))).toEqual([]);
@@ -148,13 +159,32 @@ describe('declared reads of the modules', () => {
     ]);
     // The rollback shares the sync's verb; what it adds is an admission branch, and only on opt-in.
     expect(generated.actions['argocd-rollback']!.rules).toEqual(generated.actions['argocd-sync']!.rules);
-    expect(generated.optInActions).toEqual(['argocd-rollback', 'argocd-terminate-op', 'config-change-hint', 'force-delete-terminating', 'job-rerun', 'pvc-expand']);
+    expect(generated.optInActions).toEqual([
+      'argocd-rollback',
+      'argocd-terminate-op',
+      'config-change-hint',
+      'force-delete-terminating',
+      'job-rerun',
+      'pvc-expand',
+    ]);
     // The restart itself reads nothing beyond the inventory: ConfigMaps only with the opt-in hint.
-    expect(generated.actions['restart']!.rules.flatMap((r) => r.resources)).toEqual(['deployments', 'statefulsets', 'daemonsets']);
-    expect(generated.actions['config-change-hint']).toEqual({ modules: ['pods'], rules: [{ group: '', resources: ['configmaps'], verbs: ['get'] }] });
+    expect(generated.actions['restart']!.rules.flatMap((r) => r.resources)).toEqual([
+      'deployments',
+      'statefulsets',
+      'daemonsets',
+    ]);
+    expect(generated.actions['config-change-hint']).toEqual({
+      modules: ['pods'],
+      rules: [{ group: '', resources: ['configmaps'], verbs: ['get'] }],
+    });
     expect(generated.actions['argocd-terminate-op']!.rules).toEqual(generated.actions['argocd-sync']!.rules);
     expect(generated.actions['uncordon']!.modules).toEqual(['nodes']);
-    expect(generated.actions['reconcile-now']!.modules).toEqual(['cert-manager', 'external-secrets', 'flux', 'infisical']);
+    expect(generated.actions['reconcile-now']!.modules).toEqual([
+      'cert-manager',
+      'external-secrets',
+      'flux',
+      'infisical',
+    ]);
     expect(generated.actions['pvc-expand']!.modules).toEqual(['volumes']);
     expect(generated.actions['longhorn-backup']!.modules).toEqual(['longhorn']);
     expect(generated.actions['velero-backup']!.modules).toEqual(['velero']);
@@ -196,9 +226,13 @@ describe('RBAC of the install manifest', () => {
   });
 
   it('lets the agent touch only its own two Secrets and its settings ConfigMap by name, and nothing else in its namespace', () => {
-    const docs = parseAllDocuments(readFileSync(join(__dirname, '../../deploy/install.yaml'), 'utf8')).map((d) => d.toJS());
+    const docs = parseAllDocuments(readFileSync(join(__dirname, '../../deploy/install.yaml'), 'utf8')).map((d) =>
+      d.toJS(),
+    );
     const role = docs.find((d) => d?.kind === 'Role');
-    const secretRules = (role.rules as { resources: string[]; verbs: string[]; resourceNames?: string[] }[]).filter((r) => r.resources.includes('secrets'));
+    const secretRules = (role.rules as { resources: string[]; verbs: string[]; resourceNames?: string[] }[]).filter(
+      (r) => r.resources.includes('secrets'),
+    );
     for (const rule of secretRules) {
       if (rule.verbs.some((v) => v !== 'create')) {
         expect(rule.resourceNames).toBeDefined();
@@ -206,12 +240,16 @@ describe('RBAC of the install manifest', () => {
       }
     }
     expect(secretRules.flatMap((r) => r.verbs)).not.toContain('list');
-    const configMapRules = (role.rules as { resources: string[]; verbs: string[]; resourceNames?: string[] }[]).filter((r) => r.resources.includes('configmaps') && r.verbs.some((v) => v !== 'create'));
+    const configMapRules = (role.rules as { resources: string[]; verbs: string[]; resourceNames?: string[] }[]).filter(
+      (r) => r.resources.includes('configmaps') && r.verbs.some((v) => v !== 'create'),
+    );
     expect(configMapRules.flatMap((r) => r.resourceNames ?? ['*'])).toEqual(['kubernanny-settings']);
     expect(secretRules.flatMap((r) => r.verbs)).not.toContain('delete');
     const clusterRole = docs.find((d) => d?.kind === 'ClusterRole');
     // No cluster-wide access to core Secrets (CRDs named *secrets* are fine).
-    const coreSecrets = (clusterRole.rules as { apiGroups: string[]; resources: string[] }[]).filter((r) => r.apiGroups.includes('') && r.resources.includes('secrets'));
+    const coreSecrets = (clusterRole.rules as { apiGroups: string[]; resources: string[] }[]).filter(
+      (r) => r.apiGroups.includes('') && r.resources.includes('secrets'),
+    );
     expect(coreSecrets).toEqual([]);
   });
 
@@ -219,7 +257,15 @@ describe('RBAC of the install manifest', () => {
     const rules = granted(join(__dirname, '../../deploy/install.yaml'));
     // The agent reaches services over cluster DNS; a services/proxy grant would reach every internal service.
     expect(rules.has('/services/proxy')).toBe(false);
-    for (const r of ['apps/deployments', 'apps/statefulsets', 'apps/daemonsets', 'argoproj.io/applications', 'postgresql.cnpg.io/backups', '/secrets', '/pods/log']) {
+    for (const r of [
+      'apps/deployments',
+      'apps/statefulsets',
+      'apps/daemonsets',
+      'argoproj.io/applications',
+      'postgresql.cnpg.io/backups',
+      '/secrets',
+      '/pods/log',
+    ]) {
       expect(rules.has(r), r).toBe(true);
     }
   });

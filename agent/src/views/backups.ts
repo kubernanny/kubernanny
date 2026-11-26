@@ -6,10 +6,16 @@
  */
 import { CnpgCluster, hasBackup } from '../checks/cnpg.check';
 import { LonghornVolume } from '../checks/longhorn.check';
-import { EtcdSnapshot, LonghornBackup, LonghornBackupTarget, groupLonghornBackups, longhornBackupTime } from '../checks/maintenance.check';
+import {
+  EtcdSnapshot,
+  groupLonghornBackups,
+  LonghornBackup,
+  LonghornBackupTarget,
+  longhornBackupTime,
+} from '../checks/maintenance.check';
 import { condition } from '../checks/types';
-import { Text, raw, t } from '../i18n/text';
-import { MANUAL, VeleroBackup, newestBySchedule } from '../modules/integrations/velero';
+import { raw, t, Text } from '../i18n/text';
+import { MANUAL, newestBySchedule, VeleroBackup } from '../modules/integrations/velero';
 import { RunData } from '../modules/types';
 
 export type BackupKind = 'cnpg' | 'longhorn' | 'etcd' | 'velero';
@@ -113,7 +119,11 @@ export function targetFromUrl(url: string | undefined): BackupTarget | null {
 
 const worse = (a: BackupState, b: BackupState): BackupState => (RANK[a] <= RANK[b] ? a : b);
 
-function cnpgRows(clusters: CnpgCluster[], now: number, maxAgeHours: number): { rows: BackupRow[]; unprotected: UnprotectedView[] } {
+function cnpgRows(
+  clusters: CnpgCluster[],
+  now: number,
+  maxAgeHours: number,
+): { rows: BackupRow[]; unprotected: UnprotectedView[] } {
   const rows: BackupRow[] = [];
   const unprotected: UnprotectedView[] = [];
   for (const c of clusters) {
@@ -125,7 +135,12 @@ function cnpgRows(clusters: CnpgCluster[], now: number, maxAgeHours: number): { 
     const lastOk = Date.parse(c.status?.lastSuccessfulBackup ?? '');
     const ageMs = Number.isFinite(lastOk) ? now - lastOk : null;
     let state = ageState(ageMs, maxAgeHours, 'warning');
-    let note: Text | undefined = ageMs === null ? t('backups.note.none') : state !== 'ok' ? t('backups.note.overdue', { hours: maxAgeHours }) : undefined;
+    let note: Text | undefined =
+      ageMs === null
+        ? t('backups.note.none')
+        : state !== 'ok'
+          ? t('backups.note.overdue', { hours: maxAgeHours })
+          : undefined;
     // Without WAL archiving a restore loses everything since the last base backup: the check calls it critical.
     if (condition(c.status?.conditions, 'ContinuousArchiving')?.status === 'False') {
       state = 'critical';
@@ -141,7 +156,9 @@ function cnpgRows(clusters: CnpgCluster[], now: number, maxAgeHours: number): { 
       state,
       ...(note ? { note } : {}),
       // The barman-cloud plugin keeps its destination in an ObjectStore resource the agent does not read.
-      target: targetFromUrl(c.spec?.backup?.barmanObjectStore?.destinationPath) ?? (c.spec?.plugins?.length ? { type: 'unknown' } : null),
+      target:
+        targetFromUrl(c.spec?.backup?.barmanObjectStore?.destinationPath) ??
+        (c.spec?.plugins?.length ? { type: 'unknown' } : null),
       count: null,
     });
   }
@@ -154,10 +171,21 @@ function longhornRows(
   volumes: LonghornVolume[],
   now: number,
   maxAgeHours: number,
-): { rows: BackupRow[]; targets: BackupTargetView[]; unprotected: UnprotectedView[]; orphaned: { volumes: number; backups: number } } {
+): {
+  rows: BackupRow[];
+  targets: BackupTargetView[];
+  unprotected: UnprotectedView[];
+  orphaned: { volumes: number; backups: number };
+} {
   const targetViews: BackupTargetView[] = targets
     .filter((x) => x.spec?.backupTargetURL)
-    .map((x) => ({ kind: 'longhorn', name: x.metadata.name, type: targetFromUrl(x.spec!.backupTargetURL)!.type, location: targetFromUrl(x.spec!.backupTargetURL)!.location!, available: x.status?.available ?? null }));
+    .map((x) => ({
+      kind: 'longhorn',
+      name: x.metadata.name,
+      type: targetFromUrl(x.spec!.backupTargetURL)!.type,
+      location: targetFromUrl(x.spec!.backupTargetURL)!.location!,
+      available: x.status?.available ?? null,
+    }));
   const main = targetViews.find((x) => x.name === 'default') ?? targetViews[0];
   const unreachable = targetViews.some((x) => x.available === false);
   const time = longhornBackupTime;
@@ -210,7 +238,11 @@ function longhornRows(
   // Only volumes a workload uses: detached leftovers are not worth a line.
   const unprotected: UnprotectedView[] = volumes
     .filter((v) => !byVolume.has(v.metadata.name) && v.status?.state === 'attached')
-    .map((v) => ({ kind: 'longhorn', name: v.status?.kubernetesStatus?.pvcName ?? v.metadata.name, ...(v.status?.kubernetesStatus?.namespace ? { namespace: v.status.kubernetesStatus.namespace } : {}) }));
+    .map((v) => ({
+      kind: 'longhorn',
+      name: v.status?.kubernetesStatus?.pvcName ?? v.metadata.name,
+      ...(v.status?.kubernetesStatus?.namespace ? { namespace: v.status.kubernetesStatus.namespace } : {}),
+    }));
   return { rows, targets: targetViews, unprotected, orphaned };
 }
 
@@ -221,7 +253,12 @@ function etcdRow(snapshots: EtcdSnapshot[], now: number, maxAgeHours: number): B
   const ageMs = lastGood ? now - time(lastGood) : null;
   // No snapshot at all is a warning in the check (snapshots may be off), none usable among several critical.
   let state = ageState(ageMs, maxAgeHours, snapshots.length === 0 ? 'warning' : 'critical');
-  let note: Text | undefined = ageMs === null ? t('backups.note.none') : state !== 'ok' ? t('backups.note.overdue', { hours: maxAgeHours }) : undefined;
+  let note: Text | undefined =
+    ageMs === null
+      ? t('backups.note.none')
+      : state !== 'ok'
+        ? t('backups.note.overdue', { hours: maxAgeHours })
+        : undefined;
   if (sorted[0]?.status?.error) {
     state = worse(state, 'warning');
     note = t('backups.note.lastFailed');
@@ -247,7 +284,8 @@ function etcdRow(snapshots: EtcdSnapshot[], now: number, maxAgeHours: number): B
 
 function veleroRows(backups: VeleroBackup[], now: number, maxAgeHours: number): BackupRow[] {
   const rows: BackupRow[] = [];
-  const completedAt = (b: VeleroBackup) => Date.parse(b.status?.completionTimestamp ?? b.metadata.creationTimestamp ?? '');
+  const completedAt = (b: VeleroBackup) =>
+    Date.parse(b.status?.completionTimestamp ?? b.metadata.creationTimestamp ?? '');
   for (const [schedule, newest] of newestBySchedule(backups)) {
     const own = backups.filter((b) => (b.metadata.labels?.['velero.io/schedule-name'] ?? MANUAL) === schedule);
     const lastOk = own
@@ -286,7 +324,13 @@ function veleroRows(backups: VeleroBackup[], now: number, maxAgeHours: number): 
 export function buildBackups(data: RunData, now: Date, maxAgeHours: number): BackupsView {
   const at = now.getTime();
   const cnpg = cnpgRows(data.cnpgClusters ?? [], at, maxAgeHours);
-  const longhorn = longhornRows(data.longhornBackups ?? [], data.longhornBackupTargets ?? [], data.longhornVolumes ?? [], at, maxAgeHours);
+  const longhorn = longhornRows(
+    data.longhornBackups ?? [],
+    data.longhornBackupTargets ?? [],
+    data.longhornVolumes ?? [],
+    at,
+    maxAgeHours,
+  );
   // An install without RKE2/k3s snapshots (or with the etcd check off) has no etcd row at all.
   const etcd = data.etcdSnapshots ? [etcdRow(data.etcdSnapshots, at, maxAgeHours)] : [];
   const order: Record<BackupKind, number> = { cnpg: 0, longhorn: 1, etcd: 2, velero: 3 };

@@ -1,8 +1,18 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  OnInit,
+  output,
+  signal,
+} from '@angular/core';
 import { AlertController, IonButton, ToastController } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
-import { AgentClient, DeviceView, describeError } from '../core/agent-client.service';
+
 import { ClusterConfig } from '../core/agent.model';
+import { AgentClient, describeError, DeviceView } from '../core/agent-client.service';
 import { LanguageService } from '../i18n/language.service';
 import { deviceRows } from './devices-view';
 
@@ -27,7 +37,13 @@ import { deviceRows } from './devices-view';
                   }
                   <span class="hint">{{ d.meta }}</span>
                 </div>
-                <ion-button fill="clear" color="danger" size="small" (click)="revoke(d.id, d.name, d.current)">{{ t('common.remove') }}</ion-button>
+                <ion-button
+                  fill="clear"
+                  color="danger"
+                  size="small"
+                  (click)="revoke(d.id, d.name, d.current)"
+                  >{{ t('common.remove') }}</ion-button
+                >
               </li>
             }
           </ul>
@@ -79,7 +95,9 @@ export class DevicesSectionComponent implements OnInit {
   private readonly language = inject(LanguageService);
 
   private readonly list = signal<DeviceView[]>([]);
-  readonly devices = computed(() => deviceRows(this.list(), new Date(), this.language.translator()));
+  readonly devices = computed(() =>
+    deviceRows(this.list(), new Date(), this.language.translator()),
+  );
 
   ngOnInit(): void {
     void this.load();
@@ -118,7 +136,11 @@ export class DevicesSectionComponent implements OnInit {
     try {
       await this.client.revokeDevice(cluster, id);
     } catch (err) {
-      const toast = await this.toasts.create({ message: describeError(err, this.language.translator()), duration: 3000, position: 'bottom' });
+      const toast = await this.toasts.create({
+        message: describeError(err, this.language.translator()),
+        duration: 3000,
+        position: 'bottom',
+      });
       await toast.present();
       return;
     }

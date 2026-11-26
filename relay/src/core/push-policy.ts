@@ -1,4 +1,5 @@
 import { PushOutcome } from '@kubernanny/protocol';
+
 import { BucketState, TokenBucket } from './limits';
 
 /**
@@ -98,7 +99,11 @@ export class AgentPushPolicy {
   }
 
   state(): PushPolicyState {
-    return { bucket: this.bucket.state(), blocked: Object.fromEntries(this.blocked), seen: Object.fromEntries(this.seen) };
+    return {
+      bucket: this.bucket.state(),
+      blocked: Object.fromEntries(this.blocked),
+      seen: Object.fromEntries(this.seen),
+    };
   }
 
   private expire(now: number): void {

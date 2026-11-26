@@ -1,9 +1,13 @@
 import { rawOr, t } from '../i18n/text';
-import { Condition, Issue, IssueAction, ObjectMeta, ageText, condition } from './types';
+import { ageText, Condition, condition, Issue, IssueAction, ObjectMeta } from './types';
 
 export interface CnpgCluster {
   metadata: ObjectMeta;
-  spec?: { instances?: number; backup?: { barmanObjectStore?: { destinationPath?: string } } | null; plugins?: { name: string }[] };
+  spec?: {
+    instances?: number;
+    backup?: { barmanObjectStore?: { destinationPath?: string } } | null;
+    plugins?: { name: string }[];
+  };
   status?: {
     phase?: string;
     instances?: number;
@@ -102,7 +106,11 @@ export function evaluateCnpg(clusters: CnpgCluster[], now: Date, opts: CnpgOptio
           : t('cnpg.oldBackup.expected', { hours: opts.backupMaxAgeHours }),
         actions: [backupAction],
       });
-    } else if (condition(c.status?.conditions, 'LastBackupSucceeded')?.status === 'False' && Number.isFinite(lastFailed) && lastFailed > lastOk) {
+    } else if (
+      condition(c.status?.conditions, 'LastBackupSucceeded')?.status === 'False' &&
+      Number.isFinite(lastFailed) &&
+      lastFailed > lastOk
+    ) {
       // The newest run failed while the last good one is still young: the
       // same warning Longhorn and etcd get, before the age limit is reached.
       const failed = condition(c.status?.conditions, 'LastBackupSucceeded')!;
@@ -111,7 +119,10 @@ export function evaluateCnpg(clusters: CnpgCluster[], now: Date, opts: CnpgOptio
         check: 'cnpg',
         severity: 'warning',
         title: t('cnpg.backupFailed.title', { cluster: `${ns}/${name}` }),
-        cause: rawOr(failed.message, t('cnpg.oldBackup.failing', { at: c.status?.lastFailedBackup?.slice(0, 16).replace('T', ' ') ?? '' })),
+        cause: rawOr(
+          failed.message,
+          t('cnpg.oldBackup.failing', { at: c.status?.lastFailedBackup?.slice(0, 16).replace('T', ' ') ?? '' }),
+        ),
         actions: [backupAction],
       });
     }

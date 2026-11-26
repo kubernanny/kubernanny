@@ -1,9 +1,33 @@
-import { Logger } from '../logger';
 import { Keyed, WatchApi, WatchCache, WatchEventType } from '../kube/watch-cache';
-import { eventTime, stripCronJob, stripEvent, stripJob, stripNode, stripPlain, stripPod, stripService, stripWorkload } from './strip';
+import { Logger } from '../logger';
+import {
+  eventTime,
+  stripCronJob,
+  stripEvent,
+  stripJob,
+  stripNode,
+  stripPlain,
+  stripPod,
+  stripService,
+  stripWorkload,
+} from './strip';
 
 /** The inventory kinds kept by watches. */
-export const WATCHED_KINDS = ['nodes', 'pods', 'namespaces', 'deployments', 'statefulsets', 'daemonsets', 'jobs', 'cronjobs', 'services', 'ingresses', 'pvcs', 'storageClasses', 'events'] as const;
+export const WATCHED_KINDS = [
+  'nodes',
+  'pods',
+  'namespaces',
+  'deployments',
+  'statefulsets',
+  'daemonsets',
+  'jobs',
+  'cronjobs',
+  'services',
+  'ingresses',
+  'pvcs',
+  'storageClasses',
+  'events',
+] as const;
 export type WatchedKind = (typeof WATCHED_KINDS)[number];
 
 /** Warning events kept: the newest this many, none older than EVENT_MAX_AGE_MS (Kubernetes itself keeps them an hour by default). */
@@ -22,13 +46,27 @@ const SPECS: Record<WatchedKind, { path: string; strip(o: unknown): Keyed }> = {
   services: { path: '/api/v1/services', strip: stripService as unknown as (o: unknown) => Keyed },
   ingresses: { path: '/apis/networking.k8s.io/v1/ingresses', strip: stripPlain as unknown as (o: unknown) => Keyed },
   pvcs: { path: '/api/v1/persistentvolumeclaims', strip: stripPlain as unknown as (o: unknown) => Keyed },
-  storageClasses: { path: '/apis/storage.k8s.io/v1/storageclasses', strip: stripPlain as unknown as (o: unknown) => Keyed },
-  events: { path: '/api/v1/events?fieldSelector=type%3DWarning', strip: stripEvent as unknown as (o: unknown) => Keyed },
+  storageClasses: {
+    path: '/apis/storage.k8s.io/v1/storageclasses',
+    strip: stripPlain as unknown as (o: unknown) => Keyed,
+  },
+  events: {
+    path: '/api/v1/events?fieldSelector=type%3DWarning',
+    strip: stripEvent as unknown as (o: unknown) => Keyed,
+  },
 };
 
 type AnyObj = Keyed & Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-const BAD_WAITING = new Set(['CrashLoopBackOff', 'ImagePullBackOff', 'ErrImagePull', 'CreateContainerConfigError', 'CreateContainerError', 'InvalidImageName', 'RunContainerError']);
+const BAD_WAITING = new Set([
+  'CrashLoopBackOff',
+  'ImagePullBackOff',
+  'ErrImagePull',
+  'CreateContainerConfigError',
+  'CreateContainerError',
+  'InvalidImageName',
+  'RunContainerError',
+]);
 
 /** What about a pod the checks judge: ready, phase, why a container waits or died. */
 function podSignature(p: AnyObj | undefined): string {
@@ -71,7 +109,12 @@ function workloadSignature(w: AnyObj | undefined): string {
  * failing. Ordinary churn (a pod restarting its timer, status heartbeats,
  * new events) is not.
  */
-export function isRelevantChange(kind: WatchedKind, type: WatchEventType, prev: AnyObj | undefined, next: AnyObj | undefined): boolean {
+export function isRelevantChange(
+  kind: WatchedKind,
+  type: WatchEventType,
+  prev: AnyObj | undefined,
+  next: AnyObj | undefined,
+): boolean {
   switch (kind) {
     case 'pods':
       // A pod appearing healthy or vanishing changes nothing a check reports on its own; its workload does.
@@ -88,7 +131,8 @@ export function isRelevantChange(kind: WatchedKind, type: WatchEventType, prev: 
     case 'pvcs':
       return type === 'MODIFIED' && prev?.status?.phase !== next?.status?.phase;
     case 'jobs': {
-      const failed = (j: AnyObj | undefined) => ((j?.status?.conditions ?? []) as AnyObj[]).some((c) => c.type === 'Failed' && c.status === 'True');
+      const failed = (j: AnyObj | undefined) =>
+        ((j?.status?.conditions ?? []) as AnyObj[]).some((c) => c.type === 'Failed' && c.status === 'True');
       return failed(prev) !== failed(next);
     }
     default:
@@ -164,7 +208,10 @@ export class ClusterCache {
   /** Resolves once every first list has finished (successfully or not), or after `timeoutMs`. */
   async ready(timeoutMs = 20_000): Promise<void> {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    await Promise.race([Promise.all([...this.caches.values()].map((c) => c.ready())), new Promise<void>((resolve) => (timer = setTimeout(resolve, timeoutMs)))]);
+    await Promise.race([
+      Promise.all([...this.caches.values()].map((c) => c.ready())),
+      new Promise<void>((resolve) => (timer = setTimeout(resolve, timeoutMs))),
+    ]);
     clearTimeout(timer);
   }
 

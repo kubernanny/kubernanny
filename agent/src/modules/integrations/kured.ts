@@ -1,9 +1,9 @@
+import { ageText, Issue } from '../../checks/types';
 import { Detected } from '../../discovery/discovery';
-import { Integration } from '../module';
-import { Issue, ageText } from '../../checks/types';
 import { t } from '../../i18n/text';
-import { DetailRow, ModuleContext, ModuleResult, Stat } from '../types';
 import { listSection, sections } from '../details';
+import { Integration } from '../module';
+import { DetailRow, ModuleContext, ModuleResult, Stat } from '../types';
 import { record, str } from '../untrusted';
 
 export class KuredIntegration extends Integration {
@@ -11,7 +11,9 @@ export class KuredIntegration extends Integration {
   readonly reads = [];
   override readonly untrusted = true;
   protected async inspect(ctx: ModuleContext, det: Detected): Promise<ModuleResult> {
-    const ds = ctx.inv.daemonsets.find((d) => d.metadata.name === det.workloads[0]?.name && d.metadata.namespace === det.namespace);
+    const ds = ctx.inv.daemonsets.find(
+      (d) => d.metadata.name === det.workloads[0]?.name && d.metadata.namespace === det.namespace,
+    );
     const lockRaw = ds?.metadata.annotations?.['weave.works/kured-node-lock'];
     let lock: { nodeID?: string; created?: string } | null = null;
     try {
@@ -19,7 +21,10 @@ export class KuredIntegration extends Integration {
       const parsed = record(lockRaw ? JSON.parse(lockRaw) : null);
       // kured with --concurrency > 1 writes {"maxOwners": n, "locks": [{nodeID, created}, …]}; take the oldest holder.
       const holders = Array.isArray(parsed.locks) ? parsed.locks.map((l) => record(l)) : [parsed];
-      const first = holders.filter((h) => str(h.nodeID, 253)).sort((a, b) => String(a.created).localeCompare(String(b.created)))[0] ?? {};
+      const first =
+        holders
+          .filter((h) => str(h.nodeID, 253))
+          .sort((a, b) => String(a.created).localeCompare(String(b.created)))[0] ?? {};
       lock = { nodeID: str(first.nodeID, 253), created: str(first.created, 64) };
     } catch {
       lock = null;
@@ -48,8 +53,15 @@ export class KuredIntegration extends Integration {
       const series = await ctx.prom.query('kured_reboot_required').catch(() => []);
       if (series.length > 0) {
         pendingKnown = true;
-        pendingNodes = series.filter((p) => p.value === 1).map((p) => p.metric.node ?? p.metric.instance).filter(Boolean);
-        stats.push({ label: t('stat.rebootPending'), value: String(pendingNodes.length), tone: pendingNodes.length ? 'muted' : 'ok' });
+        pendingNodes = series
+          .filter((p) => p.value === 1)
+          .map((p) => p.metric.node ?? p.metric.instance)
+          .filter(Boolean);
+        stats.push({
+          label: t('stat.rebootPending'),
+          value: String(pendingNodes.length),
+          tone: pendingNodes.length ? 'muted' : 'ok',
+        });
       }
     }
     const rows: DetailRow[] = [...new Set([...(lock?.nodeID ? [lock.nodeID] : []), ...pendingNodes])].map((node) => ({
@@ -57,7 +69,11 @@ export class KuredIntegration extends Integration {
       value: node === lock?.nodeID ? t('detail.kured.rebooting') : t('detail.kured.required'),
       tone: 'muted',
     }));
-    return { issues, stats, details: sections(listSection(t('detail.kured.waiting'), rows)), summary: lock?.nodeID
+    return {
+      issues,
+      stats,
+      details: sections(listSection(t('detail.kured.waiting'), rows)),
+      summary: lock?.nodeID
         ? t('kured.summary.rebooting', { node: lock.nodeID })
         : pendingNodes.length
           ? t('kured.summary.waiting', { n: pendingNodes.length })

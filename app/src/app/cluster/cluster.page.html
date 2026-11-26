@@ -2,15 +2,28 @@
   <ion-header class="ion-no-border">
     <ion-toolbar>
       <ion-buttons slot="start">
-        <ion-button routerLink="/clusters" [attr.aria-label]="multiple() ? t('cluster.allClusters') : t('cluster.manageClusters')">
+        <ion-button
+          routerLink="/clusters"
+          [attr.aria-label]="multiple() ? t('cluster.allClusters') : t('cluster.manageClusters')"
+        >
           <ion-icon slot="icon-only" [name]="multiple() ? 'chevron-back' : 'layers-outline'" />
         </ion-button>
       </ion-buttons>
       <ion-buttons slot="end">
-        <ion-button class="share" (click)="share()" [disabled]="!canShare()" [attr.aria-label]="t('cluster.share')" [title]="t('cluster.share')">
+        <ion-button
+          class="share"
+          (click)="share()"
+          [disabled]="!canShare()"
+          [attr.aria-label]="t('cluster.share')"
+          [title]="t('cluster.share')"
+        >
           <ion-icon slot="icon-only" name="share-outline" />
         </ion-button>
-        <ion-button (click)="refresh()" [disabled]="loading()" [attr.aria-label]="t('cluster.checkNow')">
+        <ion-button
+          (click)="refresh()"
+          [disabled]="loading()"
+          [attr.aria-label]="t('cluster.checkNow')"
+        >
           <ion-icon slot="icon-only" name="refresh-outline" [class.spin]="loading()" />
         </ion-button>
         @if (cluster(); as c) {
@@ -28,7 +41,11 @@
     </ion-refresher>
 
     <div class="layout">
-      <header [class]="'hero tone-' + view().tone" [class.stale]="view().stale" [class.compact]="tab() !== 'lage'">
+      <header
+        [class]="'hero tone-' + view().tone"
+        [class.stale]="view().stale"
+        [class.compact]="tab() !== 'lage'"
+      >
         <h1 class="name">
           {{ cluster()?.name }}
           @if (cluster()?.demo) {
@@ -42,13 +59,31 @@
           <p class="via-relay" [title]="t('cluster.viaRelayTitle')">{{ t('cluster.viaRelay') }}</p>
         }
         <div class="state">
-          <button type="button" class="eye-button" (click)="refresh()" [disabled]="loading()" [attr.aria-label]="countdown()?.label ?? t('cluster.checkNow')" [title]="countdown()?.label ?? t('cluster.checkNow')">
-            <app-nanny-eye [light]="view().light" [label]="stateLabel()" [checking]="loading()" [progress]="countdown()?.progress ?? null" />
+          <button
+            type="button"
+            class="eye-button"
+            (click)="refresh()"
+            [disabled]="loading()"
+            [attr.aria-label]="countdown()?.label ?? t('cluster.checkNow')"
+            [title]="countdown()?.label ?? t('cluster.checkNow')"
+          >
+            <app-nanny-eye
+              [light]="view().light"
+              [label]="stateLabel()"
+              [checking]="loading()"
+              [progress]="countdown()?.progress ?? null"
+            />
           </button>
           <p class="headline display">{{ view().headline }}</p>
         </div>
         @if (countdown(); as c) {
-          <button type="button" class="checked as-link" (click)="refresh()" [disabled]="loading()" [title]="view().checked">
+          <button
+            type="button"
+            class="checked as-link"
+            (click)="refresh()"
+            [disabled]="loading()"
+            [title]="view().checked"
+          >
             <span aria-hidden="true">{{ c.text }}</span>
             <span class="sr-only">{{ c.label }}</span>
           </button>
@@ -57,7 +92,12 @@
         }
         @if (view().kpis.length > 0) {
           @if (view().pendingLabel) {
-            <app-pending-sync-card class="rail-pending" [label]="view().pendingLabel" [hint]="t('pendingSync.cardHint')" (open)="openPending()" />
+            <app-pending-sync-card
+              class="rail-pending"
+              [label]="view().pendingLabel"
+              [hint]="t('pendingSync.cardHint')"
+              (open)="openPending()"
+            />
           }
           <app-resource-rail class="vitals" [rail]="view().rail" />
         }

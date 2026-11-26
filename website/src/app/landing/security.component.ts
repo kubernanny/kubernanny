@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+
 import { IconComponent, type IconName } from '../components/icon.component';
 import { HARD_SWITCHES, REMOVED_LABEL } from './hard-switches';
 
@@ -67,9 +68,9 @@ const PILLARS: Pillar[] = [
           <header class="switches-head">
             <h3 id="switches-title">Off means gone.</h3>
             <p>
-              Every feature that reads, writes or talks to the outside can be switched off on its own in the Helm values.
-              Off is not hidden: the permission leaves the RBAC, the route refuses, the connection is never opened, and
-              the app cannot switch it back on.
+              Every feature that reads, writes or talks to the outside can be switched off on its own in the Helm
+              values. Off is not hidden: the permission leaves the RBAC, the route refuses, the connection is never
+              opened, and the app cannot switch it back on.
             </p>
           </header>
           <ul class="switch-list">
@@ -88,7 +89,9 @@ const PILLARS: Pillar[] = [
               </li>
             }
           </ul>
-          <a routerLink="/docs/permissions" class="matrix-link">Every permission, what it is for and how to remove it <kn-icon name="arrowRight" /></a>
+          <a routerLink="/docs/permissions" class="matrix-link"
+            >Every permission, what it is for and how to remove it <kn-icon name="arrowRight"
+          /></a>
         </div>
       </div>
     </section>
@@ -101,9 +104,7 @@ const PILLARS: Pillar[] = [
     .security {
       position: relative;
       padding: 96px 0;
-      background:
-        radial-gradient(50rem 26rem at 85% 0%, var(--glow-1), transparent 70%),
-        var(--ground-deep);
+      background: radial-gradient(50rem 26rem at 85% 0%, var(--glow-1), transparent 70%), var(--ground-deep);
       border-top: 1px solid var(--line);
       border-bottom: 1px solid var(--line);
     }

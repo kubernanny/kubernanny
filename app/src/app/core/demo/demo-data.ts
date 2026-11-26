@@ -1,4 +1,17 @@
-import { AgentInfo, BackupsView, EventView, HistoryView, IncidentsView, Logs, NetworkView, NodeView, SettingsView, Snapshot, StorageView, WorkloadView } from '../agent.model';
+import {
+  AgentInfo,
+  BackupsView,
+  EventView,
+  HistoryView,
+  IncidentsView,
+  Logs,
+  NetworkView,
+  NodeView,
+  SettingsView,
+  Snapshot,
+  StorageView,
+  WorkloadView,
+} from '../agent.model';
 
 export type DemoScenario = 'broken' | 'warning' | 'healthy';
 export const DEMO_SCENARIOS: readonly DemoScenario[] = ['broken', 'warning', 'healthy'];
@@ -42,13 +55,20 @@ export function shiftTimes<T>(value: T, delta: number): T {
     return (ISO.test(value) ? new Date(Date.parse(value) + delta).toISOString() : value) as T;
   }
   if (Array.isArray(value)) {
-    if (value.length === 2 && typeof value[0] === 'number' && typeof value[1] !== 'string' && value[0] > MS_AFTER_2020) {
+    if (
+      value.length === 2 &&
+      typeof value[0] === 'number' &&
+      typeof value[1] !== 'string' &&
+      value[0] > MS_AFTER_2020
+    ) {
       return [value[0] + delta, value[1]] as T;
     }
     return value.map((v) => shiftTimes(v, delta)) as T;
   }
   if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, shiftTimes(v, delta)])) as T;
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, shiftTimes(v, delta)]),
+    ) as T;
   }
   return value;
 }

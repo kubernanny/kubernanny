@@ -2,8 +2,8 @@
 import { podOwner, podReady } from '../checks/pods.check';
 import { allWorkloads, Detected, imagesOf, readiness } from '../discovery/discovery';
 import { FullPod, Inventory, parseQuantity } from '../inventory/inventory';
-import { addResources, holdsResources, NO_RESOURCES, podResources } from './resources';
 import { Health } from './health';
+import { addResources, holdsResources, NO_RESOURCES, podResources } from './resources';
 
 export interface WorkloadView {
   kind: string;
@@ -19,10 +19,24 @@ export interface WorkloadView {
   cpuMilli: number | null;
   memBytes: number | null;
   /** Requests and limits of the pods that hold resources; a limit is null when no container sets one. */
-  resources: { cpuRequestMilli: number; cpuLimitMilli: number | null; memRequest: number; memLimit: number | null; cpuUnlimited: number; memUnlimited: number };
+  resources: {
+    cpuRequestMilli: number;
+    cpuLimitMilli: number | null;
+    memRequest: number;
+    memLimit: number | null;
+    cpuUnlimited: number;
+    memUnlimited: number;
+  };
   /** The most recent restart of any of its containers, with why it ended. */
   lastRestart?: Termination & { pod: string; container: string };
-  pods: { name: string; node?: string; phase?: string; ready: boolean; restarts: number; containers: ContainerView[] }[];
+  pods: {
+    name: string;
+    node?: string;
+    phase?: string;
+    ready: boolean;
+    restarts: number;
+    containers: ContainerView[];
+  }[];
 }
 
 /** How a container's previous run ended (`lastState.terminated`). */
@@ -105,7 +119,10 @@ export function buildWorkloads(inv: Inventory, detected: Detected[]): WorkloadVi
           mem += u.memBytes;
         }
       }
-      const restarts = pods.reduce((s, p) => s + (p.status?.containerStatuses ?? []).reduce((x, c) => x + c.restartCount, 0), 0);
+      const restarts = pods.reduce(
+        (s, p) => s + (p.status?.containerStatuses ?? []).reduce((x, c) => x + c.restartCount, 0),
+        0,
+      );
       const res = pods.filter(holdsResources).map(podResources).reduce(addResources, NO_RESOURCES);
       const podViews = pods.map((p) => ({
         name: p.metadata.name,

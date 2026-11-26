@@ -1,7 +1,8 @@
-import type { Route } from '../http/server';
 import type { PushOutcome } from '@kubernanny/protocol';
+
 import type { Principal } from '../auth/devices.service';
 import type { Config } from '../config';
+import type { Route } from '../http/server';
 import { render, t } from '../i18n/text';
 import { AppPushService, AppPushView } from './app-push.service';
 
@@ -36,7 +37,11 @@ export class PushApi {
   async test(who: Principal): Promise<{ outcome: PushOutcome }> {
     this.push.assertEnabled();
     const lang = this.config.language;
-    const message = { title: render(t('push.test.title', { cluster: this.config.clusterName }), lang), body: render(t('push.test.body'), lang), priority: 3 };
+    const message = {
+      title: render(t('push.test.title', { cluster: this.config.clusterName }), lang),
+      body: render(t('push.test.body'), lang),
+      priority: 3,
+    };
     return { outcome: await this.push.test(who, message) };
   }
 }
@@ -44,8 +49,20 @@ export class PushApi {
 export function pushRoutes(c: PushApi): Route[] {
   return [
     { method: 'GET', path: '/api/push', handle: (r) => c.view(r.principal) },
-    { method: 'POST', write: true, path: '/api/push/register', status: 204, handle: (r) => c.register(r.principal, r.body) },
-    { method: 'DELETE', write: true, path: '/api/push/register', status: 204, handle: (r) => c.unregister(r.principal) },
+    {
+      method: 'POST',
+      write: true,
+      path: '/api/push/register',
+      status: 204,
+      handle: (r) => c.register(r.principal, r.body),
+    },
+    {
+      method: 'DELETE',
+      write: true,
+      path: '/api/push/register',
+      status: 204,
+      handle: (r) => c.unregister(r.principal),
+    },
     { method: 'POST', write: true, path: '/api/push/test', handle: (r) => c.test(r.principal) },
   ];
 }

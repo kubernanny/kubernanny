@@ -26,10 +26,11 @@
 import { chacha20poly1305 } from '@noble/ciphers/chacha.js';
 import { x25519 } from '@noble/curves/ed25519.js';
 import { blake2b } from '@noble/hashes/blake2.js';
-import { extract, expand } from '@noble/hashes/hkdf.js';
+import { expand, extract } from '@noble/hashes/hkdf.js';
 import { sha256 } from '@noble/hashes/sha2.js';
+
 import { toBase64Url } from './keys.js';
-import { KeyPair, concat, generateKeyPair } from './noise.js';
+import { concat, generateKeyPair, KeyPair } from './noise.js';
 
 export const PUSH_VERSION = 1;
 /** HPKE `info`: binds every push to this protocol and version, apart from the Noise calls and the relay proof. */
@@ -55,7 +56,13 @@ function labeledExtract(suite: Uint8Array, salt: Uint8Array, label: string, ikm:
   return extract(sha256, concat(HPKE_V1, suite, encoder.encode(label), ikm), salt);
 }
 
-function labeledExpand(suite: Uint8Array, prk: Uint8Array, label: string, info: Uint8Array, length: number): Uint8Array {
+function labeledExpand(
+  suite: Uint8Array,
+  prk: Uint8Array,
+  label: string,
+  info: Uint8Array,
+  length: number,
+): Uint8Array {
   return expand(sha256, prk, concat(i2osp2(length), HPKE_V1, suite, encoder.encode(label), info), length);
 }
 
@@ -71,7 +78,10 @@ function keySchedule(sharedSecret: Uint8Array, info: Uint8Array): { key: Uint8Ar
   const infoHash = labeledExtract(HPKE_SUITE, EMPTY, 'info_hash', info);
   const context = concat(Uint8Array.of(MODE_AUTH), pskIdHash, infoHash);
   const secret = labeledExtract(HPKE_SUITE, sharedSecret, 'secret', EMPTY);
-  return { key: labeledExpand(HPKE_SUITE, secret, 'key', context, 32), nonce: labeledExpand(HPKE_SUITE, secret, 'base_nonce', context, 12) };
+  return {
+    key: labeledExpand(HPKE_SUITE, secret, 'key', context, 32),
+    nonce: labeledExpand(HPKE_SUITE, secret, 'base_nonce', context, 12),
+  };
 }
 
 /** noble refuses low-order points (an all-zero result), which ends the seal or open. */
@@ -81,7 +91,12 @@ const dh = (secret: Uint8Array, publicKey: Uint8Array) => x25519.getSharedSecret
  * Seals `plaintext` for the device's push key, as the agent (`sender`, its
  * static key pair). `ephemeral` is only ever passed by the test vectors.
  */
-export function sealPush(sender: KeyPair, recipientPublic: Uint8Array, plaintext: Uint8Array, ephemeral: KeyPair = generateKeyPair()): Uint8Array {
+export function sealPush(
+  sender: KeyPair,
+  recipientPublic: Uint8Array,
+  plaintext: Uint8Array,
+  ephemeral: KeyPair = generateKeyPair(),
+): Uint8Array {
   if (recipientPublic.length !== 32) {
     throw new Error('a push key is 32 bytes');
   }
@@ -89,7 +104,10 @@ export function sealPush(sender: KeyPair, recipientPublic: Uint8Array, plaintext
     throw new Error(`push plaintext over ${MAX_PUSH_PLAINTEXT} bytes`);
   }
   const enc = ephemeral.publicKey;
-  const shared = kemSharedSecret(concat(dh(ephemeral.secretKey, recipientPublic), dh(sender.secretKey, recipientPublic)), concat(enc, recipientPublic, sender.publicKey));
+  const shared = kemSharedSecret(
+    concat(dh(ephemeral.secretKey, recipientPublic), dh(sender.secretKey, recipientPublic)),
+    concat(enc, recipientPublic, sender.publicKey),
+  );
   const { key, nonce } = keySchedule(shared, PUSH_INFO);
   return concat(Uint8Array.of(PUSH_VERSION), enc, chacha20poly1305(key, nonce, EMPTY).encrypt(plaintext));
 }
@@ -100,7 +118,10 @@ export function openPush(recipient: KeyPair, senderPublic: Uint8Array, message: 
     throw new Error('not a push message of this version');
   }
   const enc = message.subarray(1, 1 + ENC);
-  const shared = kemSharedSecret(concat(dh(recipient.secretKey, enc), dh(recipient.secretKey, senderPublic)), concat(enc, recipient.publicKey, senderPublic));
+  const shared = kemSharedSecret(
+    concat(dh(recipient.secretKey, enc), dh(recipient.secretKey, senderPublic)),
+    concat(enc, recipient.publicKey, senderPublic),
+  );
   const { key, nonce } = keySchedule(shared, PUSH_INFO);
   return chacha20poly1305(key, nonce, EMPTY).decrypt(message.subarray(1 + ENC));
 }
@@ -154,7 +175,13 @@ export const DEADMAN_GRACE_MINUTES: readonly number[] = [10, 15, 30, 60];
 export const DEADMAN_MAX_VALIDITY_MS = 27 * 3_600_000;
 
 /** A dead man's switch message: shown (priority 3, like a warning) when the relay sends it, never carrying a state for the widget. */
-export function deadmanPushContent(title: string, body: string, sealedAt: number, validUntil: number, graceMinutes: number): PushContent {
+export function deadmanPushContent(
+  title: string,
+  body: string,
+  sealedAt: number,
+  validUntil: number,
+  graceMinutes: number,
+): PushContent {
   return { t: title, b: body, p: 3, s: sealedAt, d: { u: validUntil, g: graceMinutes } };
 }
 
@@ -236,17 +263,28 @@ export function encodePushContent(content: PushContent): Uint8Array {
       throw new Error('push title too long');
     }
     // Cut well past the overflow at once; JSON escaping makes bytes and characters differ.
-    body = chars.slice(0, Math.max(0, chars.length - Math.max(16, Math.ceil((bytes.length - MAX_PUSH_PLAINTEXT) / 2)))).join('') + '…';
+    body =
+      chars
+        .slice(0, Math.max(0, chars.length - Math.max(16, Math.ceil((bytes.length - MAX_PUSH_PLAINTEXT) / 2))))
+        .join('') + '…';
   }
 }
 
 export function decodePushContent(bytes: Uint8Array): PushContent {
   const value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as Partial<PushContent> | null;
-  if (!value || typeof value.t !== 'string' || typeof value.b !== 'string' || typeof value.p !== 'number' || typeof value.s !== 'number') {
+  if (
+    !value ||
+    typeof value.t !== 'string' ||
+    typeof value.b !== 'string' ||
+    typeof value.p !== 'number' ||
+    typeof value.s !== 'number'
+  ) {
     throw new Error('not push content');
   }
   const status = decodePushStatus(value.w);
-  const content: PushContent = status ? { t: value.t, b: value.b, p: value.p, s: value.s, w: status } : { t: value.t, b: value.b, p: value.p, s: value.s };
+  const content: PushContent = status
+    ? { t: value.t, b: value.b, p: value.p, s: value.s, w: status }
+    : { t: value.t, b: value.b, p: value.p, s: value.s };
   if (value.d !== undefined) {
     // A dead man's switch message with a descriptor that does not parse is not shown under any rule.
     const deadman = decodePushDeadman(value.d);
@@ -271,13 +309,28 @@ export function decodePushStatus(value: unknown): PushStatus | null {
     return null;
   }
   const w = value as Record<string, unknown>;
-  if (!PUSH_LIGHTS.includes(w['l'] as PushLight) || !count(w['c']) || !count(w['n']) || !(w['a'] === null || (typeof w['a'] === 'number' && Number.isFinite(w['a'])))) {
+  if (
+    !PUSH_LIGHTS.includes(w['l'] as PushLight) ||
+    !count(w['c']) ||
+    !count(w['n']) ||
+    !(w['a'] === null || (typeof w['a'] === 'number' && Number.isFinite(w['a'])))
+  ) {
     return null;
   }
   const status: PushStatus = { l: w['l'] as PushLight, c: w['c'], n: w['n'], a: w['a'] as number | null };
   if (w['i'] !== undefined) {
     const items = w['i'];
-    if (!Array.isArray(items) || items.length > PUSH_STATUS_PROBLEMS || !items.every((p) => p && (p.s === 'c' || p.s === 'w') && typeof p.t === 'string' && Array.from(p.t as string).length <= PUSH_STATUS_TITLE)) {
+    if (
+      !Array.isArray(items) ||
+      items.length > PUSH_STATUS_PROBLEMS ||
+      !items.every(
+        (p) =>
+          p &&
+          (p.s === 'c' || p.s === 'w') &&
+          typeof p.t === 'string' &&
+          Array.from(p.t as string).length <= PUSH_STATUS_TITLE,
+      )
+    ) {
       return null;
     }
     status.i = items.map((p: { s: 'c' | 'w'; t: string }) => ({ s: p.s, t: p.t }));

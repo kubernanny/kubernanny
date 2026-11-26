@@ -1,5 +1,22 @@
-import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, OnInit, inject, viewChild } from '@angular/core';
-import { IonButton, IonButtons, IonContent, IonHeader, IonTitle, IonToolbar, ModalController } from '@ionic/angular/standalone';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  inject,
+  OnDestroy,
+  OnInit,
+  viewChild,
+} from '@angular/core';
+import {
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonTitle,
+  IonToolbar,
+  ModalController,
+} from '@ionic/angular/standalone';
+
 import type { ScanOutcome } from './qr-scanner.service';
 
 interface Detector {
@@ -74,10 +91,15 @@ export class WebQrScanModal implements OnInit, OnDestroy {
 
   async ngOnInit(): Promise<void> {
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      this.stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+        audio: false,
+      });
     } catch (err) {
       const name = (err as DOMException).name;
-      await this.close({ kind: name === 'NotAllowedError' || name === 'SecurityError' ? 'denied' : 'failed' });
+      await this.close({
+        kind: name === 'NotAllowedError' || name === 'SecurityError' ? 'denied' : 'failed',
+      });
       return;
     }
     if (this.closed) {
@@ -87,7 +109,9 @@ export class WebQrScanModal implements OnInit, OnDestroy {
     const video = this.video().nativeElement;
     video.srcObject = this.stream;
     await video.play().catch(() => undefined);
-    const Ctor = (window as unknown as { BarcodeDetector: new (o: { formats: string[] }) => Detector }).BarcodeDetector;
+    const Ctor = (
+      window as unknown as { BarcodeDetector: new (o: { formats: string[] }) => Detector }
+    ).BarcodeDetector;
     const detector = new Ctor({ formats: ['qr_code'] });
     const tick = async () => {
       if (this.closed) {

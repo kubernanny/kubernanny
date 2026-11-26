@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { de, en } from '../testing/i18n';
-import { cronText } from './format';
+
+import type { IdentityService } from '../auth/identity.service';
 import { checkNotifyUrl, loadConfig } from '../config';
 import { CATALOG } from '../discovery/catalog';
 import { distribution, imageVersion } from '../discovery/discovery';
 import { emptyInventory, parseQuantity } from '../inventory/inventory';
-import { detectFormat, webhookBody } from '../notify/notifier';
-import type { IdentityService } from '../auth/identity.service';
-import { CODE_TTL_MS, MAX_FAILURES_PER_WINDOW, PairingService, terminalQr } from '../pairing/pairing';
 import { KubeClient } from '../kube/kube-client';
-import { ServiceHttp } from './service-proxy';
+import { detectFormat, webhookBody } from '../notify/notifier';
+import { CODE_TTL_MS, MAX_FAILURES_PER_WINDOW, PairingService, terminalQr } from '../pairing/pairing';
 import { lightFor, scoreFor } from '../status/status.service';
+import { de, en } from '../testing/i18n';
 import { bytes, evaluateJobs, evaluateNodeUsage, evaluateVolumes, evaluateWorkloads } from './core';
+import { cronText } from './format';
+import { ServiceHttp } from './service-proxy';
 
 const fakeIdentity = { publicKey: 'A'.repeat(43), fingerprint: '0000-0000-0000-0000' } as IdentityService;
 
@@ -89,11 +90,20 @@ describe('core evaluations', () => {
     const inv = emptyInventory(NOW);
     const owner = [{ kind: 'CronJob', name: 'backup' }];
     inv.jobs = [
-      { metadata: { name: 'backup-1', namespace: 'x', ownerReferences: owner, creationTimestamp: ago(2000) }, status: { conditions: [{ type: 'Failed', status: 'True' }] } },
-      { metadata: { name: 'backup-2', namespace: 'x', ownerReferences: owner, creationTimestamp: ago(600) }, status: { completionTime: ago(590) } },
+      {
+        metadata: { name: 'backup-1', namespace: 'x', ownerReferences: owner, creationTimestamp: ago(2000) },
+        status: { conditions: [{ type: 'Failed', status: 'True' }] },
+      },
+      {
+        metadata: { name: 'backup-2', namespace: 'x', ownerReferences: owner, creationTimestamp: ago(600) },
+        status: { completionTime: ago(590) },
+      },
     ];
     expect(de(evaluateJobs(inv))).toEqual([]);
-    inv.jobs.push({ metadata: { name: 'backup-3', namespace: 'x', ownerReferences: owner, creationTimestamp: ago(30) }, status: { conditions: [{ type: 'Failed', status: 'True', message: 'BackoffLimitExceeded' }] } });
+    inv.jobs.push({
+      metadata: { name: 'backup-3', namespace: 'x', ownerReferences: owner, creationTimestamp: ago(30) },
+      status: { conditions: [{ type: 'Failed', status: 'True', message: 'BackoffLimitExceeded' }] },
+    });
     expect(de(evaluateJobs(inv))).toMatchObject([{ id: 'jobs/x/backup', cause: 'BackoffLimitExceeded' }]);
   });
 
@@ -116,10 +126,20 @@ describe('core evaluations', () => {
   it('reports a stuck rollout once, unless crashing pods already explain it', () => {
     const inv = emptyInventory(NOW);
     inv.deployments = [
-      { metadata: { name: 'web', namespace: 'd', creationTimestamp: ago(600) }, spec: { replicas: 2 }, status: { readyReplicas: 0 } },
-      { metadata: { name: 'fresh', namespace: 'd', creationTimestamp: ago(1) }, spec: { replicas: 1 }, status: { readyReplicas: 0 } },
+      {
+        metadata: { name: 'web', namespace: 'd', creationTimestamp: ago(600) },
+        spec: { replicas: 2 },
+        status: { readyReplicas: 0 },
+      },
+      {
+        metadata: { name: 'fresh', namespace: 'd', creationTimestamp: ago(1) },
+        spec: { replicas: 1 },
+        status: { readyReplicas: 0 },
+      },
     ];
-    expect(de(evaluateWorkloads(inv, new Set())).map((i) => [i.id, i.severity])).toEqual([['workloads/d/Deployment/web', 'critical']]);
+    expect(de(evaluateWorkloads(inv, new Set())).map((i) => [i.id, i.severity])).toEqual([
+      ['workloads/d/Deployment/web', 'critical'],
+    ]);
     expect(de(evaluateWorkloads(inv, new Set(['d/Deployment/web'])))).toEqual([]);
   });
 });
@@ -134,7 +154,13 @@ describe('notifications and pairing', () => {
   });
 
   it('colours Discord embeds by severity', () => {
-    const body = webhookBody('discord', 'home', { title: 't', body: 'b', priority: 5, tags: '' }, { opened: [], resolved: [], escalated: [] }, 'de') as {
+    const body = webhookBody(
+      'discord',
+      'home',
+      { title: 't', body: 'b', priority: 5, tags: '' },
+      { opened: [], resolved: [], escalated: [] },
+      'de',
+    ) as {
       embeds: { color: number }[];
     };
     expect(body.embeds[0].color).toBe(0xff5c6c);
@@ -145,8 +171,12 @@ describe('notifications and pairing', () => {
     process.env.WEB_ROOT = '/app/web';
     const pairing = new PairingService(loadConfig(), fakeIdentity);
     const links = pairing.links('ABCDE23456');
-    expect(links.app).toBe(`kubernanny://pair?url=https%3A%2F%2Fkubernanny.example.com&code=ABCDE23456&name=cluster&key=${fakeIdentity.publicKey}`);
-    expect(links.web).toBe(`https://kubernanny.example.com/#/pair?code=ABCDE23456&name=cluster&key=${fakeIdentity.publicKey}`);
+    expect(links.app).toBe(
+      `kubernanny://pair?url=https%3A%2F%2Fkubernanny.example.com&code=ABCDE23456&name=cluster&key=${fakeIdentity.publicKey}`,
+    );
+    expect(links.web).toBe(
+      `https://kubernanny.example.com/#/pair?code=ABCDE23456&name=cluster&key=${fakeIdentity.publicKey}`,
+    );
     delete process.env.PUBLIC_URL;
     delete process.env.WEB_ROOT;
   });
@@ -157,7 +187,9 @@ describe('notifications and pairing', () => {
     expect(english).toContain('Kubernanny for cluster is ready.');
     const german = await new PairingService({ ...loadConfig(), language: 'de' }, fakeIdentity).banner('ABCDE23456');
     expect(german).toContain('Pairing-Code: ABCDE-23456 (einmal verwendbar, 60 Minuten gültig).');
-    expect(german).toContain('QR als Bild (falls der Code im Log nicht scannbar ist): https://kubernanny.app/qr#kubernanny%3A%2F%2Fpair%3F');
+    expect(german).toContain(
+      'QR als Bild (falls der Code im Log nicht scannbar ist): https://kubernanny.app/qr#kubernanny%3A%2F%2Fpair%3F',
+    );
   });
 
   it('links the QR code as an image, with the app link in the fragment', () => {
@@ -239,7 +271,10 @@ describe('reaching in-cluster services', () => {
   it('goes straight to the service DNS name inside a pod, needing no services/proxy grant', async () => {
     const kube = new KubeClient();
     Object.defineProperty(kube, 'inCluster', { get: () => true });
-    const svc = { metadata: { name: 'prometheus-operated', namespace: 'monitoring' }, spec: { ports: [{ port: 9090 }] } };
+    const svc = {
+      metadata: { name: 'prometheus-operated', namespace: 'monitoring' },
+      spec: { ports: [{ port: 9090 }] },
+    };
     const http = ServiceHttp.forService(kube, svc, [9090])!;
     const calls: string[] = [];
     const original = globalThis.fetch;
@@ -260,7 +295,9 @@ describe('notification URLs', () => {
   it('accept https, and http only inside the cluster', () => {
     expect(checkNotifyUrl('NTFY_URL', 'https://ntfy.sh/topic')).toBe('https://ntfy.sh/topic');
     expect(checkNotifyUrl('NTFY_URL', 'http://ntfy.ntfy.svc/topic')).toBe('http://ntfy.ntfy.svc/topic');
-    expect(checkNotifyUrl('NTFY_URL', 'http://ntfy.ntfy.svc.cluster.local/topic')).toBe('http://ntfy.ntfy.svc.cluster.local/topic');
+    expect(checkNotifyUrl('NTFY_URL', 'http://ntfy.ntfy.svc.cluster.local/topic')).toBe(
+      'http://ntfy.ntfy.svc.cluster.local/topic',
+    );
     expect(() => checkNotifyUrl('WEBHOOK_URL', 'http://hooks.example.com/x')).toThrow(/https/);
     expect(() => checkNotifyUrl('WEBHOOK_URL', 'ftp://x')).toThrow(/https/);
     expect(() => checkNotifyUrl('WEBHOOK_URL', 'not a url')).toThrow(/not a URL/);

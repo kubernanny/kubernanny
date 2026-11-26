@@ -1,6 +1,15 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, afterNextRender, computed, inject, signal } from '@angular/core';
+import {
+  afterNextRender,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  signal,
+} from '@angular/core';
+
 import { SeoService } from '../core/seo.service';
-import { QrPayload, parseQrFragment, qrSvgPath } from '../qr/pair-qr';
+import { parseQrFragment, QrPayload, qrSvgPath } from '../qr/pair-qr';
 
 /** The page speaks the browser's language: German for de-*, English otherwise. The rest of the site is English. */
 const TEXT = {
@@ -130,7 +139,8 @@ export default class QrPage {
   constructor() {
     inject(SeoService).set({
       title: 'Pairing QR code',
-      description: "Shows the pairing QR code from a Kubernanny agent's log as a large image. The link stays in your browser.",
+      description:
+        "Shows the pairing QR code from a Kubernanny agent's log as a large image. The link stays in your browser.",
       path: '/qr',
       noindex: true,
     });

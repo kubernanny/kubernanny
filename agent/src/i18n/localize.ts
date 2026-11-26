@@ -1,4 +1,5 @@
 import type { IncomingMessage } from 'node:http';
+
 import { INTERNAL, LANGUAGE_HEADER } from '../auth/principal';
 import { Lang, resolveLang } from './text';
 

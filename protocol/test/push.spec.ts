@@ -1,14 +1,42 @@
 import { readFileSync, writeFileSync } from 'node:fs';
+
 import { Chacha20Poly1305 } from '@hpke/chacha20poly1305';
 import { CipherSuite, HkdfSha256 } from '@hpke/core';
 import { DhkemX25519HkdfSha256 } from '@hpke/dhkem-x25519';
 import { describe, expect, it } from 'vitest';
+
+import { toBase64Url } from '../src/keys.js';
 import { generateKeyPair, keyPairFromSecret } from '../src/noise.js';
 import { DEADMAN_GRACE_MINUTES, deadmanPushContent, isDeadman } from '../src/push.js';
-import { DEPOSIT_OUTCOMES, MAX_DEPOSIT_VALIDITY_SECONDS, decodeDeposit, decodeDepositResult, encodeDeposit, encodeDepositResult } from '../src/relay.js';
-import { MAX_PUSH_PLAINTEXT, PUSH_INFO, PUSH_STATUS_ONLY, decodePushContent, decodePushStatus, encodePushContent, isStatusOnly, openPush, pushKeyId, sealPush, statusPushContent } from '../src/push.js';
-import { decodePushRequest, decodePushResult, decodeFrame, encodePushRequest, encodePushResult, FrameType } from '../src/relay.js';
-import { toBase64Url } from '../src/keys.js';
+import {
+  decodePushContent,
+  decodePushStatus,
+  encodePushContent,
+  isStatusOnly,
+  MAX_PUSH_PLAINTEXT,
+  openPush,
+  PUSH_INFO,
+  PUSH_STATUS_ONLY,
+  pushKeyId,
+  sealPush,
+  statusPushContent,
+} from '../src/push.js';
+import {
+  decodeDeposit,
+  decodeDepositResult,
+  DEPOSIT_OUTCOMES,
+  encodeDeposit,
+  encodeDepositResult,
+  MAX_DEPOSIT_VALIDITY_SECONDS,
+} from '../src/relay.js';
+import {
+  decodeFrame,
+  decodePushRequest,
+  decodePushResult,
+  encodePushRequest,
+  encodePushResult,
+  FrameType,
+} from '../src/relay.js';
 
 /**
  * Fixed keys, fixed bytes: test/push-vectors.json, printed in docs/PROTOCOL.md
@@ -53,24 +81,43 @@ function build(name: string, plaintext: string, seed: number): PushVector {
 
 const expected: PushVector[] = [
   build('status', '{"t":"homelab: 2 problems","b":"🔴 default/api: CrashLoopBackOff","p":5,"s":1795000000000}', 0x01),
-  build('minimal', '{"t":"homelab: new problems","b":"1 critical. Details in Kubernanny.","p":5,"s":1795000060000}', 0x31),
+  build(
+    'minimal',
+    '{"t":"homelab: new problems","b":"1 critical. Details in Kubernanny.","p":5,"s":1795000060000}',
+    0x31,
+  ),
   build(
     'widget-status',
     '{"t":"homelab: 2 problems","b":"🔴 default/api: CrashLoopBackOff","p":5,"s":1795000120000,"w":{"l":"red","c":1,"n":1,"a":1795000110000,"i":[{"s":"c","t":"default/api: CrashLoopBackOff"},{"s":"w","t":"Certificate shop.example expires in 9 days"}]}}',
     0x51,
   ),
-  build('status-only', '{"t":"","b":"","p":0,"s":1795003600000,"w":{"l":"yellow","c":0,"n":1,"a":1795003590000,"i":[{"s":"w","t":"Certificate shop.example expires in 9 days"}]}}', 0x71),
-  build('deadman', '{"t":"homelab: Kubernanny is silent","b":"No word from Kubernanny for 15 min. Check the cluster or the agent.","p":3,"s":1795000000000,"d":{"u":1795010800000,"g":15}}', 0x91),
+  build(
+    'status-only',
+    '{"t":"","b":"","p":0,"s":1795003600000,"w":{"l":"yellow","c":0,"n":1,"a":1795003590000,"i":[{"s":"w","t":"Certificate shop.example expires in 9 days"}]}}',
+    0x71,
+  ),
+  build(
+    'deadman',
+    '{"t":"homelab: Kubernanny is silent","b":"No word from Kubernanny for 15 min. Check the cluster or the agent.","p":3,"s":1795000000000,"d":{"u":1795010800000,"g":15}}',
+    0x91,
+  ),
 ];
 
 if (process.env['UPDATE_VECTORS']) {
   writeFileSync(file, JSON.stringify(expected, null, 2) + '\n');
 }
 
-const suite = new CipherSuite({ kem: new DhkemX25519HkdfSha256(), kdf: new HkdfSha256(), aead: new Chacha20Poly1305() });
+const suite = new CipherSuite({
+  kem: new DhkemX25519HkdfSha256(),
+  kdf: new HkdfSha256(),
+  aead: new Chacha20Poly1305(),
+});
 
 async function hpkeKeyPair(secret: Uint8Array, publicKey: Uint8Array): Promise<CryptoKeyPair> {
-  return { privateKey: await suite.kem.importKey('raw', secret.slice().buffer, false), publicKey: await suite.kem.importKey('raw', publicKey.slice().buffer, true) };
+  return {
+    privateKey: await suite.kem.importKey('raw', secret.slice().buffer, false),
+    publicKey: await suite.kem.importKey('raw', publicKey.slice().buffer, true),
+  };
 }
 
 describe('push sealing', () => {
@@ -117,11 +164,24 @@ describe('push sealing', () => {
     const recipientPair = await hpkeKeyPair(push.secretKey, push.publicKey);
     const senderPair = await hpkeKeyPair(agent.secretKey, agent.publicKey);
     const ours = sealPush(agent, push.publicKey, plaintext);
-    const recipient = await suite.createRecipientContext({ recipientKey: recipientPair, enc: ours.slice(1, 33).buffer, senderPublicKey: senderPair.publicKey, info: PUSH_INFO.slice().buffer });
+    const recipient = await suite.createRecipientContext({
+      recipientKey: recipientPair,
+      enc: ours.slice(1, 33).buffer,
+      senderPublicKey: senderPair.publicKey,
+      info: PUSH_INFO.slice().buffer,
+    });
     expect(new Uint8Array(await recipient.open(ours.slice(33).buffer))).toEqual(plaintext);
 
-    const sender = await suite.createSenderContext({ recipientPublicKey: recipientPair.publicKey, senderKey: senderPair, info: PUSH_INFO.slice().buffer });
-    const theirs = new Uint8Array([1, ...new Uint8Array(sender.enc), ...new Uint8Array(await sender.seal(plaintext.slice().buffer))]);
+    const sender = await suite.createSenderContext({
+      recipientPublicKey: recipientPair.publicKey,
+      senderKey: senderPair,
+      info: PUSH_INFO.slice().buffer,
+    });
+    const theirs = new Uint8Array([
+      1,
+      ...new Uint8Array(sender.enc),
+      ...new Uint8Array(await sender.seal(plaintext.slice().buffer)),
+    ]);
     expect(openPush(push, agent.publicKey, theirs)).toEqual(plaintext);
   });
 });
@@ -142,15 +202,29 @@ describe('push content', () => {
   });
 
   it('carries the widget status and keeps it in key order', () => {
-    const w = { l: 'red' as const, c: 1, n: 2, a: 1795000000000, i: [{ s: 'c' as const, t: 'default/api: CrashLoopBackOff' }] };
+    const w = {
+      l: 'red' as const,
+      c: 1,
+      n: 2,
+      a: 1795000000000,
+      i: [{ s: 'c' as const, t: 'default/api: CrashLoopBackOff' }],
+    };
     const encoded = encodePushContent({ t: 'homelab: 1 problem', b: 'x', p: 5, s: 1795000000001, w });
-    expect(new TextDecoder().decode(encoded)).toBe('{"t":"homelab: 1 problem","b":"x","p":5,"s":1795000000001,"w":{"l":"red","c":1,"n":2,"a":1795000000000,"i":[{"s":"c","t":"default/api: CrashLoopBackOff"}]}}');
+    expect(new TextDecoder().decode(encoded)).toBe(
+      '{"t":"homelab: 1 problem","b":"x","p":5,"s":1795000000001,"w":{"l":"red","c":1,"n":2,"a":1795000000000,"i":[{"s":"c","t":"default/api: CrashLoopBackOff"}]}}',
+    );
     expect(decodePushContent(encoded).w).toEqual(w);
   });
 
   it('reads content without a status (older agents) and drops a malformed one', () => {
     expect(decodePushContent(text.encode('{"t":"a","b":"b","p":3,"s":1}')).w).toBeUndefined();
-    for (const w of ['{"l":"pink","c":0,"n":0,"a":null}', '{"l":"red","c":-1,"n":0,"a":null}', '{"l":"red","c":0,"n":0,"a":null,"i":[{"s":"x","t":"a"}]}', '{"l":"red","c":0,"n":0,"a":null,"i":[1,2,3,4]}', '"red"']) {
+    for (const w of [
+      '{"l":"pink","c":0,"n":0,"a":null}',
+      '{"l":"red","c":-1,"n":0,"a":null}',
+      '{"l":"red","c":0,"n":0,"a":null,"i":[{"s":"x","t":"a"}]}',
+      '{"l":"red","c":0,"n":0,"a":null,"i":[1,2,3,4]}',
+      '"red"',
+    ]) {
       const decoded = decodePushContent(text.encode(`{"t":"a","b":"b","p":3,"s":1,"w":${w}}`));
       expect(decoded.w).toBeUndefined();
       expect(decoded.t).toBe('a');
@@ -159,7 +233,13 @@ describe('push content', () => {
   });
 
   it('leaves the status out rather than fail when the title takes the room', () => {
-    const encoded = encodePushContent({ t: 'x'.repeat(1990), b: 'y', p: 3, s: 1, w: { l: 'red', c: 1, n: 0, a: 1, i: [{ s: 'c', t: 'z'.repeat(100) }] } });
+    const encoded = encodePushContent({
+      t: 'x'.repeat(1990),
+      b: 'y',
+      p: 3,
+      s: 1,
+      w: { l: 'red', c: 1, n: 0, a: 1, i: [{ s: 'c', t: 'z'.repeat(100) }] },
+    });
     expect(encoded.length).toBeLessThanOrEqual(MAX_PUSH_PLAINTEXT);
     expect(decodePushContent(encoded).w).toBeUndefined();
   });
@@ -180,7 +260,12 @@ describe('push content', () => {
 });
 
 describe('push frames on the relay socket', () => {
-  const request = { token: 'f'.repeat(30) + ':APA91b', platform: 'ios' as const, kid: 'AbCdEfGhIjKlMnOp', message: toBase64Url(new Uint8Array(80)) };
+  const request = {
+    token: 'f'.repeat(30) + ':APA91b',
+    platform: 'ios' as const,
+    kid: 'AbCdEfGhIjKlMnOp',
+    message: toBase64Url(new Uint8Array(80)),
+  };
 
   it('round-trip', () => {
     const frame = decodeFrame(encodePushRequest(7, request));
@@ -197,7 +282,9 @@ describe('push frames on the relay socket', () => {
     expect(decodePushRequest(payload)).toEqual(silent);
     expect(JSON.parse(new TextDecoder().decode(decodeFrame(encodePushRequest(9, request)).payload)).q).toBeUndefined();
     const enc = (v: unknown) => text.encode(JSON.stringify(v));
-    expect(decodePushRequest(enc({ t: request.token, o: 'ios', k: request.kid, m: request.message, q: true }))).toBeNull();
+    expect(
+      decodePushRequest(enc({ t: request.token, o: 'ios', k: request.kid, m: request.message, q: true })),
+    ).toBeNull();
     expect(decodePushRequest(enc({ t: request.token, o: 'ios', k: request.kid, m: request.message, q: 0 }))).toBeNull();
   });
 
@@ -223,15 +310,26 @@ describe('push vectors', () => {
       const message = bytes(vector.message);
       const recipientPair = await hpkeKeyPair(bytes(vector.pushSecret), bytes(vector.pushPublic));
       const senderPublic = await suite.kem.importKey('raw', bytes(vector.agentStaticPublic).buffer, true);
-      const recipient = await suite.createRecipientContext({ recipientKey: recipientPair, enc: message.slice(1, 33).buffer, senderPublicKey: senderPublic, info: PUSH_INFO.slice().buffer });
+      const recipient = await suite.createRecipientContext({
+        recipientKey: recipientPair,
+        enc: message.slice(1, 33).buffer,
+        senderPublicKey: senderPublic,
+        info: PUSH_INFO.slice().buffer,
+      });
       expect(new TextDecoder().decode(await recipient.open(message.slice(33).buffer))).toBe(vector.plaintext);
     });
   }
 });
 
-describe('dead man\'s switch messages', () => {
+describe("dead man's switch messages", () => {
   it('encode in key order and decode with their descriptor', () => {
-    const content = deadmanPushContent('homelab: Kubernanny is silent', 'No word from Kubernanny for 15 min. Check the cluster or the agent.', 1795000000000, 1795010800000, 15);
+    const content = deadmanPushContent(
+      'homelab: Kubernanny is silent',
+      'No word from Kubernanny for 15 min. Check the cluster or the agent.',
+      1795000000000,
+      1795010800000,
+      15,
+    );
     const bytes = encodePushContent(content);
     expect(new TextDecoder().decode(bytes)).toBe(expected.find((v) => v.name === 'deadman')!.plaintext);
     const decoded = decodePushContent(bytes);
@@ -249,10 +347,20 @@ describe('dead man\'s switch messages', () => {
 });
 
 describe('deposit frames', () => {
-  const item = { token: 'cXVpdGUtYS10b2tlbg:APA91bHPRgkF-test_token', platform: 'ios' as const, kid: 'LbUGLxX9BNGEjdbP', message: 'A'.repeat(200), lang: 'de' as const, graceMinutes: 30 };
+  const item = {
+    token: 'cXVpdGUtYS10b2tlbg:APA91bHPRgkF-test_token',
+    platform: 'ios' as const,
+    kid: 'LbUGLxX9BNGEjdbP',
+    message: 'A'.repeat(200),
+    lang: 'de' as const,
+    graceMinutes: 30,
+  };
 
   it('round-trip, an empty list included', () => {
-    for (const deposit of [{ validitySeconds: 10800, holdSeconds: 0, items: [item] }, { validitySeconds: 10800, holdSeconds: 3600, items: [] }]) {
+    for (const deposit of [
+      { validitySeconds: 10800, holdSeconds: 0, items: [item] },
+      { validitySeconds: 10800, holdSeconds: 3600, items: [] },
+    ]) {
       const frame = decodeFrame(encodeDeposit(9, deposit));
       expect(frame.type).toBe(FrameType.Deposit);
       expect(frame.callId).toBe(9);

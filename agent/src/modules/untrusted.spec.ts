@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { Detected } from '../discovery/discovery';
 import { raw } from '../i18n/text';
 import { emptyInventory } from '../inventory/inventory';
@@ -8,7 +9,14 @@ import { Integration } from './module';
 import { readCapped } from './service-proxy';
 import { ModuleContext, ModuleResult } from './types';
 
-const ctx = (prom: unknown): ModuleContext => ({ inv: emptyInventory(new Date()), kube: new KubeClient(), config: {} as ModuleContext['config'], now: new Date(), prom: prom as ModuleContext['prom'], data: {} });
+const ctx = (prom: unknown): ModuleContext => ({
+  inv: emptyInventory(new Date()),
+  kube: new KubeClient(),
+  config: {} as ModuleContext['config'],
+  now: new Date(),
+  prom: prom as ModuleContext['prom'],
+  data: {},
+});
 const det = { entry: { id: 'x' }, services: [], workloads: [], links: [] } as unknown as Detected;
 const restart = { type: 'restart' as const, kind: 'Deployment' as const, namespace: 'a', name: 'b' };
 
@@ -23,7 +31,20 @@ class Probe extends Integration {
   }
   protected async inspect(c: ModuleContext): Promise<ModuleResult> {
     this.seenProm = c.prom;
-    return { issues: [{ id: 'i', check: 'pods', severity: 'critical', title: raw('t'), cause: raw('c'), actions: [restart, { type: 'logs', namespace: 'a', pod: 'p' }] }], stats: [], summary: raw('') };
+    return {
+      issues: [
+        {
+          id: 'i',
+          check: 'pods',
+          severity: 'critical',
+          title: raw('t'),
+          cause: raw('c'),
+          actions: [restart, { type: 'logs', namespace: 'a', pod: 'p' }],
+        },
+      ],
+      stats: [],
+      summary: raw(''),
+    };
   }
   tryHttp(c: ModuleContext) {
     return this.http(c, det, [80]);

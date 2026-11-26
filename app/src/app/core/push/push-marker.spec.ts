@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { AgentPushView, ClusterConfig } from '../agent.model';
+
 import { translatorFor } from '../../i18n/translator';
-import { MARKER_POOL, markedTitle, normalizeMarker, suggestMarker } from './push-marker';
+import { AgentPushView, ClusterConfig } from '../agent.model';
+import { markedTitle, MARKER_POOL, normalizeMarker, suggestMarker } from './push-marker';
 import { clusterIdForPushKey, knownClusterId } from './push-tap';
 import { pushView } from './push-view';
 
@@ -47,22 +48,41 @@ describe('the push authenticity marker', () => {
 
 describe('the marker in the push section', () => {
   const en = translatorFor('en');
-  const agent: AgentPushView = { state: 'on', relay: true, registered: true, deadman: { state: 'on', grace: 15 } };
+  const agent: AgentPushView = {
+    state: 'on',
+    relay: true,
+    registered: true,
+    deadman: { state: 'on', grace: 15 },
+  };
   const native = { available: true, platform: 'android' as const };
 
   it('shows the marker while push is on, and nudges to choose one when there is none', () => {
-    expect(pushView({ demo: false, native, agent, marker: '🦉' }, en)).toMatchObject({ markerLine: expect.stringContaining('🦉'), markerActionLabel: 'Change sign' });
-    expect(pushView({ demo: false, native, agent, marker: null }, en)).toMatchObject({ markerLine: expect.stringContaining('No sign'), markerActionLabel: 'Choose a sign' });
+    expect(pushView({ demo: false, native, agent, marker: '🦉' }, en)).toMatchObject({
+      markerLine: expect.stringContaining('🦉'),
+      markerActionLabel: 'Change sign',
+    });
+    expect(pushView({ demo: false, native, agent, marker: null }, en)).toMatchObject({
+      markerLine: expect.stringContaining('No sign'),
+      markerActionLabel: 'Choose a sign',
+    });
   });
 
   it('says nothing about it while push is off', () => {
-    expect(pushView({ demo: false, native, agent: { ...agent, registered: false }, marker: '🦉' }, en)).toMatchObject({ markerLine: '', markerActionLabel: '' });
-    expect(pushView({ demo: false, native, agent: { ...agent, state: 'locked' }, marker: '🦉' }, en)).toMatchObject({ markerLine: '', markerActionLabel: '' });
+    expect(
+      pushView({ demo: false, native, agent: { ...agent, registered: false }, marker: '🦉' }, en),
+    ).toMatchObject({ markerLine: '', markerActionLabel: '' });
+    expect(
+      pushView({ demo: false, native, agent: { ...agent, state: 'locked' }, marker: '🦉' }, en),
+    ).toMatchObject({ markerLine: '', markerActionLabel: '' });
   });
 });
 
 describe('where a tap on a push leads', () => {
-  const cluster = (id: string, kid?: string, extra: Partial<ClusterConfig> = {}): ClusterConfig => ({
+  const cluster = (
+    id: string,
+    kid?: string,
+    extra: Partial<ClusterConfig> = {},
+  ): ClusterConfig => ({
     id,
     name: id,
     url: 'https://agent.example',
@@ -72,7 +92,11 @@ describe('where a tap on a push leads', () => {
     ...(kid ? { push: { kid, key: 'K', token: 'T' } } : {}),
     ...extra,
   });
-  const clusters = [cluster('home', 'LbUGLxX9BNGEjdbP'), cluster('work', 'AbCdEfGhIjKlMnOp'), cluster('demo-broken', 'ZZZZZZZZZZZZZZZZ', { demo: 'broken' })];
+  const clusters = [
+    cluster('home', 'LbUGLxX9BNGEjdbP'),
+    cluster('work', 'AbCdEfGhIjKlMnOp'),
+    cluster('demo-broken', 'ZZZZZZZZZZZZZZZZ', { demo: 'broken' }),
+  ];
 
   it('resolves the key id the push carried to the cluster this device registered it for', () => {
     expect(clusterIdForPushKey('LbUGLxX9BNGEjdbP', clusters)).toBe('home');

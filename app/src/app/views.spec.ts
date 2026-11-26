@@ -1,14 +1,20 @@
-import { describe, expect, it } from 'vitest';
-import { pairingRoute } from './app';
 import { HttpErrorResponse } from '@angular/common/http';
-import { AgentError, describeError, deviceName, transportAllowed } from './core/agent-client.service';
-import { eventRows } from './cluster/tabs/events.tab';
+import { describe, expect, it } from 'vitest';
+
+import { pairingRoute } from './app';
 import { buildClusterView, headline } from './cluster/cluster-view';
+import { eventRows } from './cluster/tabs/events.tab';
 import { hostRows } from './cluster/tabs/network.tab';
 import { nodeCards } from './cluster/tabs/nodes.tab';
 import { volumeRows } from './cluster/tabs/storage.tab';
 import { workloadGroups } from './cluster/tabs/workloads.tab';
 import { ModuleView, NetworkView, NodeView, Snapshot, WorkloadView } from './core/agent.model';
+import {
+  AgentError,
+  describeError,
+  deviceName,
+  transportAllowed,
+} from './core/agent-client.service';
 import { bytes, cores, formatValue } from './core/format';
 import { translatorFor } from './i18n/translator';
 import { chartGeometry } from './ui/area-chart';
@@ -18,7 +24,11 @@ const NOW = new Date('2026-11-24T12:00:00Z');
 const de = translatorFor('de');
 const en = translatorFor('en');
 
-const mod = (id: string, category: ModuleView['category'], status: ModuleView['status']): ModuleView => ({
+const mod = (
+  id: string,
+  category: ModuleView['category'],
+  status: ModuleView['status'],
+): ModuleView => ({
   id,
   name: id,
   category,
@@ -53,7 +63,13 @@ const snapshot: Snapshot = {
     prometheus: true,
     metricsServer: true,
   },
-  modules: [mod('nodes', 'core', 'ok'), mod('longhorn', 'storage', 'warning'), mod('argocd', 'gitops', 'critical'), mod('grafana', 'observability', 'ok'), mod('velero', 'backup', 'skipped')],
+  modules: [
+    mod('nodes', 'core', 'ok'),
+    mod('longhorn', 'storage', 'warning'),
+    mod('argocd', 'gitops', 'critical'),
+    mod('grafana', 'observability', 'ok'),
+    mod('velero', 'backup', 'skipped'),
+  ],
   issues: [
     {
       id: 'argocd/web/health',
@@ -69,7 +85,16 @@ const snapshot: Snapshot = {
         { type: 'argocd-sync', namespace: 'argocd', app: 'web' },
       ],
     },
-    { id: 'longhorn/x', check: 'longhorn', module: 'longhorn', severity: 'warning', title: 'Volume degraded', cause: '…', since: '2026-11-24T11:59:30Z', actions: [] },
+    {
+      id: 'longhorn/x',
+      check: 'longhorn',
+      module: 'longhorn',
+      severity: 'warning',
+      title: 'Volume degraded',
+      cause: '…',
+      since: '2026-11-24T11:59:30Z',
+      actions: [],
+    },
   ],
 };
 
@@ -83,10 +108,21 @@ describe('buildClusterView', () => {
   });
 
   it('says how long the agent has not been able to read the cluster, and how old the data is', () => {
-    const failing = { ...snapshot, failingSince: '2026-11-24T11:55:00Z', checkedAt: '2026-11-24T11:54:00Z', error: 'connect ECONNREFUSED' };
-    expect(buildClusterView(failing, null, NOW, de).checked).toBe('Cluster seit 5 min nicht lesbar, Stand vor 6 min');
-    expect(buildClusterView(failing, null, NOW, en).checked).toBe('Cluster unreadable for 5 min, data from 6 min ago');
-    expect(buildClusterView({ ...failing, failingSince: '2026-11-24T11:59:50Z' }, null, NOW, de).checked).toContain('seit kurzem');
+    const failing = {
+      ...snapshot,
+      failingSince: '2026-11-24T11:55:00Z',
+      checkedAt: '2026-11-24T11:54:00Z',
+      error: 'connect ECONNREFUSED',
+    };
+    expect(buildClusterView(failing, null, NOW, de).checked).toBe(
+      'Cluster seit 5 min nicht lesbar, Stand vor 6 min',
+    );
+    expect(buildClusterView(failing, null, NOW, en).checked).toBe(
+      'Cluster unreadable for 5 min, data from 6 min ago',
+    );
+    expect(
+      buildClusterView({ ...failing, failingSince: '2026-11-24T11:59:50Z' }, null, NOW, de).checked,
+    ).toContain('seit kurzem');
   });
 
   it('numbers actions per type, as the agent counts them, and names the area', () => {
@@ -107,15 +143,27 @@ describe('buildClusterView', () => {
 
   it('groups components by category, broken first, without uninstalled ones', () => {
     const v = buildClusterView(snapshot, null, NOW, de);
-    expect(v.groups.map((g) => g.label)).toEqual(['Kubernetes', 'Speicher', 'GitOps', 'Monitoring']);
+    expect(v.groups.map((g) => g.label)).toEqual([
+      'Kubernetes',
+      'Speicher',
+      'GitOps',
+      'Monitoring',
+    ]);
     expect(v.attention.map((r) => r.module.id)).toEqual(['longhorn', 'argocd']);
   });
 
   it('lists hints apart from problems, and a cluster with only hints still reads as fine', () => {
-    const hint = { ...snapshot.issues[1], id: 'argocd/weblate/sync', severity: 'info' as const, title: 'Änderung wartet auf Sync' };
+    const hint = {
+      ...snapshot.issues[1],
+      id: 'argocd/weblate/sync',
+      severity: 'info' as const,
+      title: 'Änderung wartet auf Sync',
+    };
     const v = buildClusterView({ ...snapshot, light: 'green', issues: [hint] }, null, NOW, de);
     expect(v.issues).toEqual([]);
-    expect(v.hints.map((h) => [h.issue.id, h.tone, h.icon])).toEqual([['argocd/weblate/sync', 'muted', 'information-circle-outline']]);
+    expect(v.hints.map((h) => [h.issue.id, h.tone, h.icon])).toEqual([
+      ['argocd/weblate/sync', 'muted', 'information-circle-outline'],
+    ]);
     expect(v.headline).toBe('Alles läuft');
   });
 
@@ -126,16 +174,28 @@ describe('buildClusterView', () => {
     expect(v.checked).toBe('Checked 2 min ago in 31 ms');
     expect(v.issues[0].sinceText).toBe('for 1 h');
     expect(v.issues[0].buttons.map((b) => b.label)).toEqual(['Restart a', 'Restart b', 'Sync']);
-    expect(v.kpis.find((k) => k.label === 'RAM')).toMatchObject({ value: '90%', note: '55.0 GiB / 61.0 GiB' });
+    expect(v.kpis.find((k) => k.label === 'RAM')).toMatchObject({
+      value: '90%',
+      note: '55.0 GiB / 61.0 GiB',
+    });
     expect(v.groups.map((g) => g.label)).toEqual(['Kubernetes', 'Storage', 'GitOps', 'Monitoring']);
     expect(v.attention.map((r) => r.statusLabel)).toEqual(['Warning', 'Failing']);
-    const many = buildClusterView({ ...snapshot, issues: [snapshot.issues[0], { ...snapshot.issues[0], id: 'b' }] }, null, NOW, en);
+    const many = buildClusterView(
+      { ...snapshot, issues: [snapshot.issues[0], { ...snapshot.issues[0], id: 'b' }] },
+      null,
+      NOW,
+      en,
+    );
     expect(many.headline).toBe('2 outages');
   });
 
   it('keeps the last answer when the agent stops answering, but goes grey', () => {
     const v = buildClusterView(snapshot, 'Agent nicht erreichbar. Bist du im VPN?', NOW, de);
-    expect(v).toMatchObject({ light: 'unknown', stale: true, headline: 'Keine Verbindung zum Agent' });
+    expect(v).toMatchObject({
+      light: 'unknown',
+      stale: true,
+      headline: 'Keine Verbindung zum Agent',
+    });
     expect(v.issues).toHaveLength(2);
   });
 });
@@ -167,9 +227,21 @@ describe('tabs', () => {
       disk: 0.5,
       pods: { count: 20, capacity: 110 },
       conditions: [{ type: 'DiskPressure', status: 'True', message: 'low' }],
-      taints: ['node-role.kubernetes.io/control-plane:NoSchedule', 'example.com/gpu=true:NoSchedule'],
+      taints: [
+        'node-role.kubernetes.io/control-plane:NoSchedule',
+        'example.com/gpu=true:NoSchedule',
+      ],
     };
-    const [card] = nodeCards([node], { source: 'prometheus', hours: 6, series: [{ id: 'node-cpu:n1', label: 'CPU', unit: 'ratio', points: [] }] }, NOW, de);
+    const [card] = nodeCards(
+      [node],
+      {
+        source: 'prometheus',
+        hours: 6,
+        series: [{ id: 'node-cpu:n1', label: 'CPU', unit: 'ratio', points: [] }],
+      },
+      NOW,
+      de,
+    );
     expect(card).toMatchObject({ state: 'Startet neu', tone: 'muted' });
     expect(card.cpu).toMatchObject({ kind: 'cpu', used: 2000, capacity: 4000, requested: 1000 });
     expect(card.cpuSeries?.id).toBe('node-cpu:n1');
@@ -177,7 +249,12 @@ describe('tabs', () => {
   });
 
   it('filters and groups workloads, namespaces with problems first', () => {
-    const w = (ns: string, name: string, health: WorkloadView['health'], restarts = 0): WorkloadView => ({
+    const w = (
+      ns: string,
+      name: string,
+      health: WorkloadView['health'],
+      restarts = 0,
+    ): WorkloadView => ({
       kind: 'Deployment',
       namespace: ns,
       name,
@@ -188,25 +265,68 @@ describe('tabs', () => {
       restarts,
       cpuMilli: 10,
       memBytes: 2 ** 20,
-      resources: { cpuRequestMilli: 0, cpuLimitMilli: null, memRequest: 0, memLimit: null, cpuUnlimited: 0, memUnlimited: 0 },
+      resources: {
+        cpuRequestMilli: 0,
+        cpuLimitMilli: null,
+        memRequest: 0,
+        memLimit: null,
+        cpuUnlimited: 0,
+        memUnlimited: 0,
+      },
       pods: [],
     });
     const list = [w('a', 'web', 'ok'), w('b', 'api', 'critical'), w('b', 'worker', 'ok', 3)];
     expect(workloadGroups(list, '', 'all', NOW, de).map((g) => g.namespace)).toEqual(['b', 'a']);
-    expect(workloadGroups(list, '', 'problems', NOW, de).flatMap((g) => g.rows.map((r) => r.w.name))).toEqual(['api']);
-    expect(workloadGroups(list, '', 'restarts', NOW, de).flatMap((g) => g.rows.map((r) => r.w.name))).toEqual(['worker']);
-    expect(workloadGroups(list, 'ghcr.io/x/web', 'all', NOW, de).flatMap((g) => g.rows.map((r) => r.w.name))).toEqual(['web']);
+    expect(
+      workloadGroups(list, '', 'problems', NOW, de).flatMap((g) => g.rows.map((r) => r.w.name)),
+    ).toEqual(['api']);
+    expect(
+      workloadGroups(list, '', 'restarts', NOW, de).flatMap((g) => g.rows.map((r) => r.w.name)),
+    ).toEqual(['worker']);
+    expect(
+      workloadGroups(list, 'ghcr.io/x/web', 'all', NOW, de).flatMap((g) =>
+        g.rows.map((r) => r.w.name),
+      ),
+    ).toEqual(['web']);
   });
 
   it('puts degraded and full volumes first', () => {
-    const rows = volumeRows({
-      classes: [],
-      volumes: [
-        { namespace: 'a', name: 'ok', phase: 'Bound', capacity: 10, accessModes: [], used: 1, usedBy: [] },
-        { namespace: 'a', name: 'full', phase: 'Bound', capacity: 10, accessModes: [], used: 9.5, usedBy: [] },
-        { namespace: 'a', name: 'deg', phase: 'Bound', capacity: 10, accessModes: [], used: null, usedBy: [], longhorn: { robustness: 'degraded' } },
-      ],
-    }, de);
+    const rows = volumeRows(
+      {
+        classes: [],
+        volumes: [
+          {
+            namespace: 'a',
+            name: 'ok',
+            phase: 'Bound',
+            capacity: 10,
+            accessModes: [],
+            used: 1,
+            usedBy: [],
+          },
+          {
+            namespace: 'a',
+            name: 'full',
+            phase: 'Bound',
+            capacity: 10,
+            accessModes: [],
+            used: 9.5,
+            usedBy: [],
+          },
+          {
+            namespace: 'a',
+            name: 'deg',
+            phase: 'Bound',
+            capacity: 10,
+            accessModes: [],
+            used: null,
+            usedBy: [],
+            longhorn: { robustness: 'degraded' },
+          },
+        ],
+      },
+      de,
+    );
     expect(rows.map((r) => [r.name, r.tone])).toEqual([
       ['full', 'critical'],
       ['deg', 'warning'],
@@ -218,9 +338,33 @@ describe('tabs', () => {
     const view: NetworkView = {
       loadBalancers: [],
       ingresses: [
-        { namespace: 'a', name: 'x', hosts: ['b.example'], tls: true, backends: [], workloads: [], certificate: { name: 'c', daysLeft: 60, ready: true } },
-        { namespace: 'a', name: 'y', hosts: ['a.example'], tls: true, backends: [], workloads: [], certificate: { name: 'd', daysLeft: 9, ready: true } },
-        { namespace: 'a', name: 'z', hosts: ['c.example'], tls: true, backends: [], workloads: [], certificate: { name: 'e', daysLeft: 1, ready: true } },
+        {
+          namespace: 'a',
+          name: 'x',
+          hosts: ['b.example'],
+          tls: true,
+          backends: [],
+          workloads: [],
+          certificate: { name: 'c', daysLeft: 60, ready: true },
+        },
+        {
+          namespace: 'a',
+          name: 'y',
+          hosts: ['a.example'],
+          tls: true,
+          backends: [],
+          workloads: [],
+          certificate: { name: 'd', daysLeft: 9, ready: true },
+        },
+        {
+          namespace: 'a',
+          name: 'z',
+          hosts: ['c.example'],
+          tls: true,
+          backends: [],
+          workloads: [],
+          certificate: { name: 'e', daysLeft: 1, ready: true },
+        },
       ],
     };
     expect(hostRows(view, de).map((r) => [r.host, r.cert])).toEqual([
@@ -228,7 +372,11 @@ describe('tabs', () => {
       ['a.example', 'Zertifikat noch 9 Tage'],
       ['b.example', 'Zertifikat noch 60 Tage'],
     ]);
-    expect(hostRows(view, en).map((r) => r.cert)).toEqual(['Certificate: 1 day', 'Certificate: 9 days', 'Certificate: 60 days']);
+    expect(hostRows(view, en).map((r) => r.cert)).toEqual([
+      'Certificate: 1 day',
+      'Certificate: 9 days',
+      'Certificate: 60 days',
+    ]);
   });
 });
 
@@ -248,8 +396,18 @@ describe('transport', () => {
   });
 
   it('names the device for the device list', () => {
-    expect(deviceName('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1', 'Gerät')).toBe('iPhone, Safari');
-    expect(deviceName('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36', 'Gerät')).toBe('Linux, Chrome');
+    expect(
+      deviceName(
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+        'Gerät',
+      ),
+    ).toBe('iPhone, Safari');
+    expect(
+      deviceName(
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36',
+        'Gerät',
+      ),
+    ).toBe('Linux, Chrome');
     expect(deviceName('', 'Gerät')).toBe('Gerät');
     expect(deviceName('', 'Device')).toBe('Device');
   });
@@ -276,11 +434,21 @@ describe('ui helpers', () => {
   });
 
   it('accepts only well-formed pairing links', () => {
-    expect(pairingRoute('kubernanny://pair?url=https%3A%2F%2Fkubernanny.example&code=ABCDE23456&name=home')).toEqual({ url: 'https://kubernanny.example', code: 'ABCDE23456', name: 'home' });
+    expect(
+      pairingRoute(
+        'kubernanny://pair?url=https%3A%2F%2Fkubernanny.example&code=ABCDE23456&name=home',
+      ),
+    ).toEqual({ url: 'https://kubernanny.example', code: 'ABCDE23456', name: 'home' });
     const key = 'A'.repeat(43);
-    expect(pairingRoute(`kubernanny://pair?url=http%3A%2F%2F10.0.0.5&code=ABCDE23456&key=${key}`)).toEqual({ url: 'http://10.0.0.5', code: 'ABCDE23456', name: undefined, key });
-    expect(pairingRoute('kubernanny://pair?url=https%3A%2F%2Fkubernanny.example&code=X&key=short')).toBeNull();
-    expect(pairingRoute('kubernanny://pair?url=https%3A%2F%2Fkubernanny.example&token=t')).toBeNull();
+    expect(
+      pairingRoute(`kubernanny://pair?url=http%3A%2F%2F10.0.0.5&code=ABCDE23456&key=${key}`),
+    ).toEqual({ url: 'http://10.0.0.5', code: 'ABCDE23456', name: undefined, key });
+    expect(
+      pairingRoute('kubernanny://pair?url=https%3A%2F%2Fkubernanny.example&code=X&key=short'),
+    ).toBeNull();
+    expect(
+      pairingRoute('kubernanny://pair?url=https%3A%2F%2Fkubernanny.example&token=t'),
+    ).toBeNull();
     expect(pairingRoute('kubernanny://pair?url=https%3A%2F%2Fkubernanny.example')).toBeNull();
     expect(pairingRoute('kubernanny://pair?url=javascript%3Aalert(1)&token=t')).toBeNull();
     expect(pairingRoute('https://evil.example/pair?url=https://x&token=t')).toBeNull();
@@ -292,18 +460,43 @@ describe('ui helpers', () => {
 
 describe('events', () => {
   it('says how often and since when, and how many Kubernetes events were merged', () => {
-    const base = { time: '2026-11-24T11:55:00Z', namespace: 'discourse', kind: 'Pod', name: 'discourse', reason: 'FailedScheduling', message: '0/3 nodes', count: 35, firstSeen: '2026-11-24T09:00:00Z', events: 2 };
+    const base = {
+      time: '2026-11-24T11:55:00Z',
+      namespace: 'discourse',
+      kind: 'Pod',
+      name: 'discourse',
+      reason: 'FailedScheduling',
+      message: '0/3 nodes',
+      count: 35,
+      firstSeen: '2026-11-24T09:00:00Z',
+      events: 2,
+    };
     const [row] = eventRows([base], NOW, de);
-    expect(row).toMatchObject({ object: 'Pod discourse/discourse', when: 'vor 5 min', repeat: '35× seit 3 h', merged: '2 Kubernetes-Events zusammengefasst' });
-    expect(eventRows([base], NOW, en)[0]).toMatchObject({ repeat: '35× in 3 h', merged: '2 Kubernetes events merged' });
-    expect(eventRows([{ ...base, count: 1, events: 1 }], NOW, de)[0]).toMatchObject({ repeat: null, merged: null });
+    expect(row).toMatchObject({
+      object: 'Pod discourse/discourse',
+      when: 'vor 5 min',
+      repeat: '35× seit 3 h',
+      merged: '2 Kubernetes-Events zusammengefasst',
+    });
+    expect(eventRows([base], NOW, en)[0]).toMatchObject({
+      repeat: '35× in 3 h',
+      merged: '2 Kubernetes events merged',
+    });
+    expect(eventRows([{ ...base, count: 1, events: 1 }], NOW, de)[0]).toMatchObject({
+      repeat: null,
+      merged: null,
+    });
   });
 });
 
 describe('errors', () => {
   it('words too many pairing attempts in both languages, encrypted or plain', () => {
-    expect(describeError(new AgentError(429, 'PAIRING_RATE_LIMITED', 'x'), de)).toBe('Zu viele Kopplungsversuche. Code prüfen und in ein paar Minuten nochmal versuchen.');
+    expect(describeError(new AgentError(429, 'PAIRING_RATE_LIMITED', 'x'), de)).toBe(
+      'Zu viele Kopplungsversuche. Code prüfen und in ein paar Minuten nochmal versuchen.',
+    );
     const plain = new HttpErrorResponse({ status: 429, error: { code: 'PAIRING_RATE_LIMITED' } });
-    expect(describeError(plain, en)).toBe('Too many pairing attempts. Check the code and try again in a few minutes.');
+    expect(describeError(plain, en)).toBe(
+      'Too many pairing attempts. Check the code and try again in a few minutes.',
+    );
   });
 });

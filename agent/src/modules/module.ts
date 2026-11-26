@@ -1,11 +1,11 @@
 import { ActionType, Issue, IssueActionType } from '../checks/types';
 import type { Config } from '../config';
-import type { Text } from '../i18n/text';
 import { Detected } from '../discovery/discovery';
-import { ServiceHttp } from './service-proxy';
-import { boundDetails, boundStats, capIssues } from './untrusted';
+import type { Text } from '../i18n/text';
 import type { InventoryKind } from '../inventory/inventory';
+import { ServiceHttp } from './service-proxy';
 import { ApiRead, ModuleContext, ModuleResult } from './types';
+import { boundDetails, boundStats, capIssues } from './untrusted';
 
 /**
  * What every module declares about itself. The agent, the Helm chart and the
@@ -29,11 +29,24 @@ export abstract class CheckModule {
    * them. By default the lists most checks look at; events and routes only
    * feed the views and component links.
    */
-  readonly uses: readonly InventoryKind[] = ['nodes', 'pods', 'deployments', 'statefulsets', 'daemonsets', 'jobs', 'cronjobs', 'services', 'pvcs'];
+  readonly uses: readonly InventoryKind[] = [
+    'nodes',
+    'pods',
+    'deployments',
+    'statefulsets',
+    'daemonsets',
+    'jobs',
+    'cronjobs',
+    'services',
+    'pvcs',
+  ];
 
   /** Drops every action this module did not declare or that is switched off. */
   protected keepActions(issues: Issue[], allowed: (type: IssueActionType) => boolean): Issue[] {
-    return issues.map((i) => ({ ...i, actions: i.actions.filter((a) => this.actions.includes(a.type) && allowed(a.type)) }));
+    return issues.map((i) => ({
+      ...i,
+      actions: i.actions.filter((a) => this.actions.includes(a.type) && allowed(a.type)),
+    }));
   }
 }
 
@@ -95,7 +108,14 @@ export abstract class Integration extends CheckModule {
     const result = await this.inspect(scoped, det);
     const issues = this.keepActions(result.issues, (t) => !this.untrusted && allowed(t));
     // An answer from an in-cluster service can be forged and as long as its sender likes.
-    return this.untrusted ? { ...result, issues: capIssues(issues, this.id), stats: boundStats(result.stats), details: boundDetails(result.details) } : { ...result, issues };
+    return this.untrusted
+      ? {
+          ...result,
+          issues: capIssues(issues, this.id),
+          stats: boundStats(result.stats),
+          details: boundDetails(result.details),
+        }
+      : { ...result, issues };
   }
 
   /** The first service of the component with one of the ports, over cluster DNS. Untrusted integrations only. */
@@ -103,7 +123,9 @@ export abstract class Integration extends CheckModule {
     if (!this.untrusted) {
       throw new Error(`${this.id}: reading in-cluster HTTP requires untrusted = true`);
     }
-    const svc = det.services.find((s) => s.spec?.ports?.some((p) => ports.includes(p.port) || (p.name !== undefined && ports.includes(p.name))));
+    const svc = det.services.find((s) =>
+      s.spec?.ports?.some((p) => ports.includes(p.port) || (p.name !== undefined && ports.includes(p.name))),
+    );
     return svc ? ServiceHttp.forService(ctx.kube, svc, ports) : null;
   }
 }

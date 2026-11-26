@@ -1,4 +1,4 @@
-import { Locator, Page, expect } from '@playwright/test';
+import { expect, Locator, Page } from '@playwright/test';
 
 /** Ionic keeps earlier pages in the DOM; the visible one is the last page that is not hidden. */
 export function visiblePage(page: Page): Locator {

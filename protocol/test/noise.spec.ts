@@ -1,20 +1,29 @@
 import { createRequire } from 'node:module';
+
 import { describe, expect, it } from 'vitest';
+
 import { generateKeyPair, Initiator, Responder } from '../src/noise.js';
 import { cipherKey } from './cipher-key.js';
 
 /** The independent implementation: emilbayes/noise-protocol on libsodium. */
 const noise = createRequire(import.meta.url)('noise-protocol') as {
   initialize(pattern: string, initiator: boolean, prologue: Buffer, s?: unknown, e?: unknown, rs?: Buffer): unknown;
-  writeMessage: ((state: unknown, payload: Buffer, out: Buffer) => { tx: Buffer; rx: Buffer } | undefined) & { bytes: number };
-  readMessage: ((state: unknown, message: Buffer, out: Buffer) => { tx: Buffer; rx: Buffer } | undefined) & { bytes: number };
+  writeMessage: ((state: unknown, payload: Buffer, out: Buffer) => { tx: Buffer; rx: Buffer } | undefined) & {
+    bytes: number;
+  };
+  readMessage: ((state: unknown, message: Buffer, out: Buffer) => { tx: Buffer; rx: Buffer } | undefined) & {
+    bytes: number;
+  };
   keygen(): { publicKey: Buffer; secretKey: Buffer };
 };
 
 const prologue = new TextEncoder().encode('kubernanny-e2e/1');
 const payload = (text: string) => new TextEncoder().encode(text);
 
-function sodiumKeys(): { pair: { publicKey: Buffer; secretKey: Buffer }; mine: { publicKey: Uint8Array; secretKey: Uint8Array } } {
+function sodiumKeys(): {
+  pair: { publicKey: Buffer; secretKey: Buffer };
+  mine: { publicKey: Uint8Array; secretKey: Uint8Array };
+} {
   const pair = noise.keygen();
   // libsodium stores the 32-byte scalar as secret key, like noble.
   return { pair, mine: { publicKey: new Uint8Array(pair.publicKey), secretKey: new Uint8Array(pair.secretKey) } };
@@ -35,7 +44,9 @@ describe('Noise IK against libsodium (noise-protocol)', () => {
 
       const m2 = Buffer.alloc(200);
       const split = noise.writeMessage(responder, Buffer.from(`answer ${round}`), m2)!;
-      const { payload: p2, transport } = initiator.readMessage2(new Uint8Array(m2.subarray(0, noise.writeMessage.bytes)));
+      const { payload: p2, transport } = initiator.readMessage2(
+        new Uint8Array(m2.subarray(0, noise.writeMessage.bytes)),
+      );
       expect(new TextDecoder().decode(p2)).toBe(`answer ${round}`);
       // Same Split() outputs. noise-protocol names them from the side that
       // finished the handshake (writer: tx = c1), so compare c1 and c2 directly.
@@ -46,7 +57,14 @@ describe('Noise IK against libsodium (noise-protocol)', () => {
     it(`their initiator, our responder (${round})`, () => {
       const device = sodiumKeys();
       const agent = generateKeyPair();
-      const initiator = noise.initialize('IK', true, Buffer.from(prologue), device.pair, null, Buffer.from(agent.publicKey));
+      const initiator = noise.initialize(
+        'IK',
+        true,
+        Buffer.from(prologue),
+        device.pair,
+        null,
+        Buffer.from(agent.publicKey),
+      );
       const responder = new Responder(agent, prologue);
 
       const m1 = Buffer.alloc(300);

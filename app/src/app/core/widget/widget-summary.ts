@@ -42,7 +42,9 @@ export interface WidgetCluster {
 }
 
 /** The widgets show "Agent not answering" for this entry: the silence warning came after the last check. */
-export function isUnreachable(entry: Pick<WidgetCluster, 'checkedAt' | 'unreachableSince'>): boolean {
+export function isUnreachable(
+  entry: Pick<WidgetCluster, 'checkedAt' | 'unreachableSince'>,
+): boolean {
   if (!entry.unreachableSince) {
     return false;
   }
@@ -81,7 +83,10 @@ export function widgetCluster(cluster: ClusterConfig, snapshot: Snapshot): Widge
     warning: warnings.length,
     checkedAt: snapshot.checkedAt,
     demo: cluster.demo !== undefined,
-    problems: [...outages, ...warnings].slice(0, MAX_PROBLEMS).map((i) => ({ title: clip(i.title, MAX_PROBLEM_TITLE), severity: i.severity === 'critical' ? 'critical' : 'warning' })),
+    problems: [...outages, ...warnings].slice(0, MAX_PROBLEMS).map((i) => ({
+      title: clip(i.title, MAX_PROBLEM_TITLE),
+      severity: i.severity === 'critical' ? 'critical' : 'warning',
+    })),
   };
 }
 
@@ -93,7 +98,12 @@ export function widgetCluster(cluster: ClusterConfig, snapshot: Snapshot): Widge
  * showed before, only renamed if the name changed: the widget then ages and
  * greys out on its own instead of going blank.
  */
-export function nextWidgetList(previous: WidgetCluster[], clusters: ClusterConfig[], states: Record<string, ClusterState>, allOff: boolean): WidgetCluster[] {
+export function nextWidgetList(
+  previous: WidgetCluster[],
+  clusters: ClusterConfig[],
+  states: Record<string, ClusterState>,
+  allOff: boolean,
+): WidgetCluster[] {
   if (allOff) {
     return [];
   }
@@ -123,9 +133,15 @@ export function nextWidgetList(previous: WidgetCluster[], clusters: ClusterConfi
 export function keepFresher(next: WidgetCluster[], stored: WidgetCluster[]): WidgetCluster[] {
   return next.map((entry) => {
     const other = stored.find((s) => s.id === entry.id);
-    if (!other?.checkedAt || (entry.checkedAt && Date.parse(other.checkedAt) <= Date.parse(entry.checkedAt))) {
+    if (
+      !other?.checkedAt ||
+      (entry.checkedAt && Date.parse(other.checkedAt) <= Date.parse(entry.checkedAt))
+    ) {
       // The silence warning a push wrote stays while the app has nothing newer than it.
-      return other?.unreachableSince && isUnreachable({ checkedAt: entry.checkedAt, unreachableSince: other.unreachableSince }) ? { ...entry, unreachableSince: other.unreachableSince } : entry;
+      return other?.unreachableSince &&
+        isUnreachable({ checkedAt: entry.checkedAt, unreachableSince: other.unreachableSince })
+        ? { ...entry, unreachableSince: other.unreachableSince }
+        : entry;
     }
     return { ...other, name: entry.name, demo: entry.demo };
   });
@@ -138,8 +154,19 @@ function validProblems(value: unknown): WidgetProblem[] | null {
   if (!Array.isArray(value)) {
     return null;
   }
-  const ok = value.every((p) => typeof p === 'object' && p !== null && typeof p.title === 'string' && (p.severity === 'critical' || p.severity === 'warning'));
-  return ok ? value.slice(0, MAX_PROBLEMS).map((p: WidgetProblem) => ({ title: clip(p.title, MAX_PROBLEM_TITLE), severity: p.severity })) : null;
+  const ok = value.every(
+    (p) =>
+      typeof p === 'object' &&
+      p !== null &&
+      typeof p.title === 'string' &&
+      (p.severity === 'critical' || p.severity === 'warning'),
+  );
+  return ok
+    ? value.slice(0, MAX_PROBLEMS).map((p: WidgetProblem) => ({
+        title: clip(p.title, MAX_PROBLEM_TITLE),
+        severity: p.severity,
+      }))
+    : null;
 }
 
 /** Reads back what native storage returned; anything malformed is dropped rather than trusted. */
@@ -171,6 +198,8 @@ export function validWidgetList(value: unknown): WidgetCluster[] {
       checkedAt,
       demo,
       problems: validProblems(problems)!,
-      ...(typeof unreachableSince === 'string' && Number.isFinite(Date.parse(unreachableSince)) ? { unreachableSince } : {}),
+      ...(typeof unreachableSince === 'string' && Number.isFinite(Date.parse(unreachableSince))
+        ? { unreachableSince }
+        : {}),
     }));
 }

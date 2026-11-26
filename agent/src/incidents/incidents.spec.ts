@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { DemoKubeClient } from '../demo/demo-cluster';
 import { raw } from '../i18n/text';
 import { EpisodeLog } from '../notify/digest';
@@ -25,7 +26,10 @@ describe('incident history', () => {
   it('lists episodes newest first, with end, duration, module and whether they were silenced', () => {
     const log = new EpisodeLog(0);
     log.record([issue('a', 0)], H);
-    log.record([issue('a', 0, { silencedUntil: 'x' }), issue('b', 2 * H, { module: 'cnpg', severity: 'critical' })], 2 * H);
+    log.record(
+      [issue('a', 0, { silencedUntil: 'x' }), issue('b', 2 * H, { module: 'cnpg', severity: 'critical' })],
+      2 * H,
+    );
     log.record([issue('b', 2 * H, { module: 'cnpg', severity: 'critical' })], 3 * H);
     // a comes back: a second episode under the same issue id
     log.record([issue('a', 4 * H), issue('b', 2 * H, { module: 'cnpg', severity: 'critical' })], 4 * H);
@@ -56,7 +60,8 @@ describe('incident history', () => {
   });
 
   it('gives the demo a week of resolved incidents, calm when healthy and rough when broken', () => {
-    const count = (scenario: 'healthy' | 'warning' | 'broken') => new IncidentsService(new DemoKubeClient(undefined, scenario)).view(7, Date.now());
+    const count = (scenario: 'healthy' | 'warning' | 'broken') =>
+      new IncidentsService(new DemoKubeClient(undefined, scenario)).view(7, Date.now());
     const healthy = count('healthy');
     expect(healthy.incidents.length).toBe(2);
     expect(healthy.incidents.every((i) => i.end !== null)).toBe(true);

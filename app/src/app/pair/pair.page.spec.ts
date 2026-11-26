@@ -4,8 +4,9 @@ import { Router } from '@angular/router';
 import { Preferences } from '@capacitor/preferences';
 import { fingerprint, generateKeyPair, toBase64Url } from '@kubernanny/protocol';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AgentClient } from '../core/agent-client.service';
+
 import { ClusterConfig } from '../core/agent.model';
+import { AgentClient } from '../core/agent-client.service';
 import { ClusterStore } from '../core/cluster-store.service';
 import { DeviceKeyVault } from '../core/device-key-vault';
 import { PushRegistration } from '../core/push/push-registration.service';
@@ -32,7 +33,11 @@ const REAL = toBase64Url(realKey);
 const ATTACKER = toBase64Url(attackerKey);
 
 describe('PairPage', () => {
-  let client: { identity: ReturnType<typeof vi.fn>; pair: ReturnType<typeof vi.fn>; revokeDevice: ReturnType<typeof vi.fn> };
+  let client: {
+    identity: ReturnType<typeof vi.fn>;
+    pair: ReturnType<typeof vi.fn>;
+    revokeDevice: ReturnType<typeof vi.fn>;
+  };
   let push: { forget: ReturnType<typeof vi.fn> };
   let vault: FakeVault;
   let navigate: ReturnType<typeof vi.fn>;
@@ -42,7 +47,13 @@ describe('PairPage', () => {
     vault = new FakeVault();
     client = {
       identity: vi.fn(),
-      pair: vi.fn(async (url: string, agentKey: string) => ({ url, agentKey, deviceKey: 'new-device-key', deviceId: 'dev-new', cluster: 'homelab' })),
+      pair: vi.fn(async (url: string, agentKey: string) => ({
+        url,
+        agentKey,
+        deviceKey: 'new-device-key',
+        deviceId: 'dev-new',
+        cluster: 'homelab',
+      })),
       revokeDevice: vi.fn(async () => undefined),
     };
     push = { forget: vi.fn(async () => undefined) };
@@ -55,7 +66,10 @@ describe('PairPage', () => {
         { provide: DeviceKeyVault, useValue: vault },
         { provide: AgentClient, useValue: client },
         { provide: PushRegistration, useValue: push },
-        { provide: StatusStore, useValue: { refresh: vi.fn(async () => undefined), forget: vi.fn() } },
+        {
+          provide: StatusStore,
+          useValue: { refresh: vi.fn(async () => undefined), forget: vi.fn() },
+        },
         { provide: Router, useValue: { navigate, navigateByUrl: navigate } },
       ],
     });
@@ -72,10 +86,17 @@ describe('PairPage', () => {
     return fixture;
   };
   const text = (el: HTMLElement) => el.textContent ?? '';
-  const button = (el: HTMLElement, label: string) => [...el.querySelectorAll<HTMLElement>('ion-button')].find((b) => text(b).trim() === label)!;
+  const button = (el: HTMLElement, label: string) =>
+    [...el.querySelectorAll<HTMLElement>('ion-button')].find((b) => text(b).trim() === label)!;
 
   it('shows what the link would pair with, the fingerprint included, and connects only on confirmation', async () => {
-    const fixture = await open({ url: 'https://k.example', code: 'ABCDE23456', name: 'homelab', key: REAL, relay: 'https://relay.kubernanny.app' });
+    const fixture = await open({
+      url: 'https://k.example',
+      code: 'ABCDE23456',
+      name: 'homelab',
+      key: REAL,
+      relay: 'https://relay.kubernanny.app',
+    });
     const el = fixture.nativeElement as HTMLElement;
     expect(text(el)).toContain('Pair with this agent?');
     expect(text(el)).toContain('https://k.example');
@@ -84,16 +105,35 @@ describe('PairPage', () => {
     expect(client.pair).not.toHaveBeenCalled();
 
     await fixture.componentInstance.connect();
-    expect(client.pair).toHaveBeenCalledWith('https://k.example', REAL, 'ABCDE23456', expect.any(String), 'https://relay.kubernanny.app');
+    expect(client.pair).toHaveBeenCalledWith(
+      'https://k.example',
+      REAL,
+      'ABCDE23456',
+      expect.any(String),
+      'https://relay.kubernanny.app',
+    );
     expect(TestBed.inject(ClusterStore).clusters()).toHaveLength(1);
   });
 
   it('refuses a link that would give an existing cluster another agent key, unless replaced explicitly', async () => {
     const store = TestBed.inject(ClusterStore);
     await store.loaded;
-    const existing: ClusterConfig = await store.save({ name: 'homelab', url: 'https://k.example', agentKey: REAL, deviceKey: 'old-device-key', deviceId: 'dev-old', push: { kid: 'kid', key: 'k', token: 't' }, relayOff: true });
+    const existing: ClusterConfig = await store.save({
+      name: 'homelab',
+      url: 'https://k.example',
+      agentKey: REAL,
+      deviceKey: 'old-device-key',
+      deviceId: 'dev-old',
+      push: { kid: 'kid', key: 'k', token: 't' },
+      relayOff: true,
+    });
 
-    const fixture = await open({ url: 'https://k.example', code: 'ABCDE23456', key: ATTACKER, relay: 'https://evil.example' });
+    const fixture = await open({
+      url: 'https://k.example',
+      code: 'ABCDE23456',
+      key: ATTACKER,
+      relay: 'https://evil.example',
+    });
     const el = fixture.nativeElement as HTMLElement;
     expect(text(el)).toContain('The agent key changed');
     expect(text(el)).toContain(fingerprint(realKey));
@@ -113,7 +153,12 @@ describe('PairPage', () => {
     expect(replaced.push).toBeUndefined();
     expect(replaced.relayOff).toBe(true);
     expect(vault.keys.get(existing.id)).toBe('new-device-key');
-    await vi.waitFor(() => expect(client.revokeDevice).toHaveBeenCalledWith(expect.objectContaining({ deviceKey: 'old-device-key' }), 'dev-old'));
+    await vi.waitFor(() =>
+      expect(client.revokeDevice).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceKey: 'old-device-key' }),
+        'dev-old',
+      ),
+    );
     expect(push.forget).toHaveBeenCalledWith(expect.objectContaining({ push: existing.push }));
   });
 

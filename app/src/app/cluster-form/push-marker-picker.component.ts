@@ -1,7 +1,13 @@
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 import { IonButton } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
-import { MAX_MARKER_LENGTH, markedTitle, normalizeMarker, suggestMarker } from '../core/push/push-marker';
+
+import {
+  markedTitle,
+  MAX_MARKER_LENGTH,
+  normalizeMarker,
+  suggestMarker,
+} from '../core/push/push-marker';
 
 /**
  * Picks the authenticity marker for native push (core/push/push-marker.ts):
@@ -19,17 +25,44 @@ import { MAX_MARKER_LENGTH, markedTitle, normalizeMarker, suggestMarker } from '
         <p class="hint">{{ t('push.markerExplain') }}</p>
         <div class="choices" role="radiogroup" [attr.aria-label]="t('push.markerTitle')">
           @for (chip of vm().chips; track chip.value) {
-            <button type="button" role="radio" class="chip" [class.selected]="chip.selected" [attr.aria-checked]="chip.selected" (click)="pick(chip.value)">{{ chip.value }}</button>
+            <button
+              type="button"
+              role="radio"
+              class="chip"
+              [class.selected]="chip.selected"
+              [attr.aria-checked]="chip.selected"
+              (click)="pick(chip.value)"
+            >
+              {{ chip.value }}
+            </button>
           }
-          <button type="button" role="radio" class="chip own" [class.selected]="vm().own" [attr.aria-checked]="vm().own" (click)="useOwn()">{{ t('push.markerOwn') }}</button>
+          <button
+            type="button"
+            role="radio"
+            class="chip own"
+            [class.selected]="vm().own"
+            [attr.aria-checked]="vm().own"
+            (click)="useOwn()"
+          >
+            {{ t('push.markerOwn') }}
+          </button>
         </div>
         @if (!vm().own) {
-          <ion-button fill="clear" size="small" (click)="reroll()">{{ t('push.markerAnother') }}</ion-button>
+          <ion-button fill="clear" size="small" (click)="reroll()">{{
+            t('push.markerAnother')
+          }}</ion-button>
         }
         @if (vm().own) {
           <label>
             <span>{{ t('push.markerOwn') }}</span>
-            <input type="text" [value]="ownWord()" [attr.maxlength]="maxInput" [placeholder]="t('push.markerOwnPlaceholder')" autocomplete="off" (input)="typed($event)" />
+            <input
+              type="text"
+              [value]="ownWord()"
+              [attr.maxlength]="maxInput"
+              [placeholder]="t('push.markerOwnPlaceholder')"
+              autocomplete="off"
+              (input)="typed($event)"
+            />
           </label>
           @if (vm().invalid) {
             <p class="hint error">{{ t('push.markerInvalid') }}</p>
@@ -41,7 +74,9 @@ import { MAX_MARKER_LENGTH, markedTitle, normalizeMarker, suggestMarker } from '
         }
         <p class="hint">{{ t('push.markerDevice') }}</p>
         <div class="actions">
-          <ion-button fill="solid" [disabled]="!vm().marker" (click)="save()">{{ t('push.markerSave') }}</ion-button>
+          <ion-button fill="solid" [disabled]="!vm().marker" (click)="save()">{{
+            t('push.markerSave')
+          }}</ion-button>
           <ion-button fill="clear" (click)="cancelled.emit()">{{ t('common.cancel') }}</ion-button>
         </div>
       </div>

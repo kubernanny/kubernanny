@@ -1,4 +1,4 @@
-import { FrameType, RegistrationChallenge, RelayClose, RelayFrameError, decodeFrame } from '@kubernanny/protocol';
+import { decodeFrame, FrameType, RegistrationChallenge, RelayClose, RelayFrameError } from '@kubernanny/protocol';
 
 export type RegistrationOutcome = { ok: true } | { ok: false; close: number; reason: string };
 
@@ -8,7 +8,12 @@ export type RegistrationOutcome = { ok: true } | { ok: false; close: number; rea
  * `origin`. Anything else ends the connection; there is no second try on the
  * same socket.
  */
-export function checkRegistration(challenge: RegistrationChallenge, message: Uint8Array, agentId: string, origin: string): RegistrationOutcome {
+export function checkRegistration(
+  challenge: RegistrationChallenge,
+  message: Uint8Array,
+  agentId: string,
+  origin: string,
+): RegistrationOutcome {
   let frame;
   try {
     frame = decodeFrame(message);

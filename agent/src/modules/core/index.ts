@@ -1,22 +1,22 @@
-import { CoreCheck } from '../module';
+import { ImageUpdatesCheck } from '../image-updates/image-updates.check';
 import { KubernetesSupportCheck } from '../kubernetes-support/kubernetes-support.check';
+import { CoreCheck } from '../module';
 import { SecurityCheck } from '../security/security.check';
 import { VulnerabilitiesCheck } from '../vulnerabilities/vulnerabilities.check';
-import { ImageUpdatesCheck } from '../image-updates/image-updates.check';
-import { NodeClocksCheck } from './node-clocks';
-import { StandardAlertsCheck } from './standard-alerts/standard-alerts.check';
 import { ApiServerCheck } from './api-server';
 import { HpaCheck } from './autoscalers';
 import { PdbCheck } from './disruption-budgets';
 import { EtcdCheck } from './etcd';
+import { NodeClocksCheck } from './node-clocks';
 import { NodesCheck } from './nodes';
+import { StandardAlertsCheck } from './standard-alerts/standard-alerts.check';
 import { VolumesCheck } from './volumes';
 import { WorkloadsCheck } from './workloads';
 
+export { bytes } from '../format';
 export { evaluateNodeUsage } from './nodes';
 export { evaluateVolumes } from './volumes';
 export { evaluateJobs, evaluateWorkloads } from './workloads';
-export { bytes } from '../format';
 
 /**
  * The checks of Kubernetes itself, one file each; every one can be switched

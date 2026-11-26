@@ -129,12 +129,17 @@ export function parseLimits(env: Record<string, string | undefined>): RelayLimit
   if (env['TRUST_PROXY']) {
     const header = env['TRUST_PROXY'].trim().toLowerCase();
     if (!['cf-connecting-ip', 'x-forwarded-for', 'x-real-ip'].includes(header)) {
-      throw new Error(`TRUST_PROXY must be cf-connecting-ip, x-forwarded-for or x-real-ip, got "${env['TRUST_PROXY']}"`);
+      throw new Error(
+        `TRUST_PROXY must be cf-connecting-ip, x-forwarded-for or x-real-ip, got "${env['TRUST_PROXY']}"`,
+      );
     }
     limits.trustProxy = header;
   }
   if (env['CORS_ORIGINS']) {
-    limits.corsOrigins = env['CORS_ORIGINS'].split(',').map((s) => s.trim()).filter(Boolean);
+    limits.corsOrigins = env['CORS_ORIGINS']
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
   }
   return limits;
 }
@@ -275,7 +280,8 @@ export class ByteBudget {
 
   private reserveNow(amount: number, holder?: BudgetHolder): boolean {
     for (let evictions = 0; this.used + amount > this.capacity; evictions++) {
-      const victim = holder && evictions < MAX_EVICTIONS ? this.largerThan((this.holders.get(holder) ?? 0) + amount, holder) : null;
+      const victim =
+        holder && evictions < MAX_EVICTIONS ? this.largerThan((this.holders.get(holder) ?? 0) + amount, holder) : null;
       if (!victim) {
         return false;
       }
@@ -329,7 +335,11 @@ export function shareBytes(limits: Pick<RelayLimits, 'maxInflightBytes' | 'infli
  * proxy added), else the socket address. Without a trusted proxy the
  * header is ignored, since anyone can send it.
  */
-export function clientAddress(headers: Record<string, string | string[] | undefined>, socketAddress: string | undefined, trustProxy: string): string {
+export function clientAddress(
+  headers: Record<string, string | string[] | undefined>,
+  socketAddress: string | undefined,
+  trustProxy: string,
+): string {
   if (trustProxy) {
     const raw = headers[trustProxy];
     const value = Array.isArray(raw) ? raw.at(-1) : raw;
@@ -386,8 +396,16 @@ export class CallerLimiter {
     } else {
       const share = this.limits.callerShare;
       entry = {
-        calls: new TokenBucket(Math.max(1, Math.floor(this.limits.callBurst * share)), (this.limits.callsPerMinute * share) / 60_000, now),
-        bytes: new TokenBucket(Math.max(1, Math.floor(this.limits.bytesPerHour * share)), (this.limits.bytesPerHour * share) / 3_600_000, now),
+        calls: new TokenBucket(
+          Math.max(1, Math.floor(this.limits.callBurst * share)),
+          (this.limits.callsPerMinute * share) / 60_000,
+          now,
+        ),
+        bytes: new TokenBucket(
+          Math.max(1, Math.floor(this.limits.bytesPerHour * share)),
+          (this.limits.bytesPerHour * share) / 3_600_000,
+          now,
+        ),
       };
     }
     this.callers.set(key, entry);

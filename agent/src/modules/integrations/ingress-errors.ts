@@ -50,20 +50,36 @@ export function evaluateErrorRates(module: string, routes: RouteTraffic[]): Issu
 /** The routes `evaluateErrorRates` reported, with their severity, for the sheet's route list. */
 export function failingRoutes(module: string, issues: Issue[]): Map<string, 'critical' | 'warning'> {
   const prefix = `${module}/errors/`;
-  return new Map(issues.filter((i) => i.id.startsWith(prefix) && i.severity !== 'info').map((i) => [i.id.slice(prefix.length), i.severity as 'critical' | 'warning']));
+  return new Map(
+    issues
+      .filter((i) => i.id.startsWith(prefix) && i.severity !== 'info')
+      .map((i) => [i.id.slice(prefix.length), i.severity as 'critical' | 'warning']),
+  );
 }
 
 /** Requests and 5xx per route from two `sum by (label) (increase(...))` queries. */
-export async function routeTraffic(prom: Prometheus, metric: string, by: string[], codeLabel: string, filter = ''): Promise<RouteTraffic[]> {
+export async function routeTraffic(
+  prom: Prometheus,
+  metric: string,
+  by: string[],
+  codeLabel: string,
+  filter = '',
+): Promise<RouteTraffic[]> {
   const group = by.join(', ');
   const sel = (extra: string) => `{${[filter, extra].filter(Boolean).join(',')}}`;
   const [total, failed] = await Promise.all([
     prom.query(`sum by (${group}) (increase(${metric}${sel('')}[${ERROR_WINDOW}]))`),
     prom.query(`sum by (${group}) (increase(${metric}${sel(`${codeLabel}=~"5.."`)}[${ERROR_WINDOW}]))`),
   ]);
-  const key = (m: Record<string, string>) => by.map((l) => m[l] ?? '').filter(Boolean).join('/');
+  const key = (m: Record<string, string>) =>
+    by
+      .map((l) => m[l] ?? '')
+      .filter(Boolean)
+      .join('/');
   const errors = new Map(failed.map((s) => [key(s.metric), s.value]));
-  return total.filter((s) => key(s.metric) !== '').map((s) => ({ route: key(s.metric), requests: s.value, errors: errors.get(key(s.metric)) ?? 0 }));
+  return total
+    .filter((s) => key(s.metric) !== '')
+    .map((s) => ({ route: key(s.metric), requests: s.value, errors: errors.get(key(s.metric)) ?? 0 }));
 }
 
 export function trafficStats(routes: RouteTraffic[], issues: Issue[]): Stat[] {
@@ -71,10 +87,17 @@ export function trafficStats(routes: RouteTraffic[], issues: Issue[]): Stat[] {
   return [
     { label: t('ingress.stat.routes'), value: String(routes.length) },
     { label: t('ingress.stat.busy'), value: String(active.length), tone: 'muted' },
-    { label: t('ingress.stat.failing'), value: String(issues.length), tone: issues.some((i) => i.severity === 'critical') ? 'critical' : issues.length ? 'warning' : 'ok' },
+    {
+      label: t('ingress.stat.failing'),
+      value: String(issues.length),
+      tone: issues.some((i) => i.severity === 'critical') ? 'critical' : issues.length ? 'warning' : 'ok',
+    },
   ];
 }
 
 export function noPrometheus(): { issues: Issue[]; stats: Stat[] } {
-  return { issues: [], stats: [{ label: t('ingress.stat.errorRates'), value: t('ingress.noPrometheus'), tone: 'muted' }] };
+  return {
+    issues: [],
+    stats: [{ label: t('ingress.stat.errorRates'), value: t('ingress.noPrometheus'), tone: 'muted' }],
+  };
 }

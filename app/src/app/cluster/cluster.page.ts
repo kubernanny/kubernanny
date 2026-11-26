@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  effect,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import {
   IonButton,
@@ -15,23 +24,24 @@ import {
   RefresherCustomEvent,
   ToastController,
 } from '@ionic/angular/standalone';
-import { shareText } from '../core/share';
 import { TranslocoDirective } from '@jsverse/transloco';
+
 import { AgentClient } from '../core/agent-client.service';
 import { ClusterDataStore } from '../core/cluster-data.store';
 import { ClusterStore } from '../core/cluster-store.service';
+import { shareText } from '../core/share';
 import { StatusStore } from '../core/status-store.service';
 import { LanguageService } from '../i18n/language.service';
 import { NannyEye } from '../ui/nanny-eye';
+import { buildClusterView, issueCards } from './cluster-view';
 import { countdownView } from './countdown';
-import { ResourceRail } from './resource-rail';
+import { historyView } from './history-view';
+import { ModuleSheet } from './module-sheet';
 import { PendingSyncCard } from './pending-sync-card';
 import { PendingSyncSheet } from './pending-sync-sheet';
-import { buildClusterView, issueCards } from './cluster-view';
-import { historyView } from './history-view';
+import { ResourceRail } from './resource-rail';
 import { statusReport } from './status-report';
 import { BackupsTab } from './tabs/backups.tab';
-import { ModuleSheet } from './module-sheet';
 import { EventsTab } from './tabs/events.tab';
 import { NetworkTab } from './tabs/network.tab';
 import { NodesTab } from './tabs/nodes.tab';
@@ -40,7 +50,8 @@ import { ServicesTab } from './tabs/services.tab';
 import { StorageTab } from './tabs/storage.tab';
 import { WorkloadsTab } from './tabs/workloads.tab';
 
-export type Tab = 'lage' | 'dienste' | 'nodes' | 'workloads' | 'speicher' | 'backups' | 'netzwerk' | 'ereignisse';
+export type Tab =
+  'lage' | 'dienste' | 'nodes' | 'workloads' | 'speicher' | 'backups' | 'netzwerk' | 'ereignisse';
 
 const NEEDS: Record<Tab, Parameters<ClusterDataStore['need']>> = {
   lage: ['history', 'incidents'],
@@ -100,16 +111,24 @@ export class ClusterPage {
   readonly now = signal(new Date());
   /** The countdown's clock: one timer, every second (every 5 s with reduced motion), stopped while the page is hidden. */
   readonly clock = signal(Date.now());
-  private readonly reducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  private readonly reducedMotion =
+    typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   readonly countdown = computed(() => {
     const state = this.state();
     if (!state?.snapshot || state.error || state.snapshot.failingSince) {
       return null;
     }
-    return countdownView(state.snapshot, this.clock(), this.language.translator(), this.reducedMotion ? 5000 : 1000);
+    return countdownView(
+      state.snapshot,
+      this.clock(),
+      this.language.translator(),
+      this.reducedMotion ? 5000 : 1000,
+    );
   });
   readonly tab = signal<Tab>('lage');
-  readonly cluster = computed(() => this.clusters.clusters().find((c) => c.id === this.id()) ?? null);
+  readonly cluster = computed(
+    () => this.clusters.clusters().find((c) => c.id === this.id()) ?? null,
+  );
   readonly multiple = computed(() => this.clusters.clusters().length > 1);
   private readonly client = inject(AgentClient);
   /** The last call went through the relay: said small in the header, the data is just as private (docs/RELAY.md). */
@@ -119,14 +138,32 @@ export class ClusterPage {
   });
   private readonly state = computed(() => this.status.states()[this.id()] ?? null);
   readonly loading = computed(() => this.state()?.loading ?? false);
-  readonly view = computed(() => buildClusterView(this.state()?.snapshot ?? null, this.state()?.error ?? null, this.now(), this.language.translator()));
-  readonly stateLabel = computed(() => this.language.translator().t('cluster.stateLabel', { headline: this.view().headline }));
+  readonly view = computed(() =>
+    buildClusterView(
+      this.state()?.snapshot ?? null,
+      this.state()?.error ?? null,
+      this.now(),
+      this.language.translator(),
+    ),
+  );
+  readonly stateLabel = computed(() =>
+    this.language.translator().t('cluster.stateLabel', { headline: this.view().headline }),
+  );
   readonly incidents = computed(() => {
     const value = this.data.incidents().value;
-    return value ? historyView(value, this.state()?.snapshot?.modules ?? [], this.now(), this.language.translator()) : null;
+    return value
+      ? historyView(
+          value,
+          this.state()?.snapshot?.modules ?? [],
+          this.now(),
+          this.language.translator(),
+        )
+      : null;
   });
   /** Backups that need attention, once the tab has loaded them. */
-  private readonly backupBadge = computed(() => this.data.backups().value?.rows.filter((r) => r.state !== 'ok').length || null);
+  private readonly backupBadge = computed(
+    () => this.data.backups().value?.rows.filter((r) => r.state !== 'ok').length || null,
+  );
   /** Something to report: the agent answered at least once. */
   readonly canShare = computed(() => Boolean(this.state()?.snapshot));
   readonly tabs = computed(() => {
@@ -134,7 +171,11 @@ export class ClusterPage {
     const tr = this.language.translator();
     return [
       { id: 'lage' as Tab, label: tr.t('cluster.tabs.overview'), badge: v.issues.length || null },
-      { id: 'dienste' as Tab, label: tr.t('cluster.tabs.services'), badge: v.attention.length || null },
+      {
+        id: 'dienste' as Tab,
+        label: tr.t('cluster.tabs.services'),
+        badge: v.attention.length || null,
+      },
       { id: 'nodes' as Tab, label: tr.t('cluster.tabs.nodes'), badge: null },
       { id: 'workloads' as Tab, label: tr.t('cluster.tabs.workloads'), badge: null },
       { id: 'speicher' as Tab, label: tr.t('cluster.tabs.storage'), badge: null },
@@ -227,12 +268,22 @@ export class ClusterPage {
     }
     const tr = this.language.translator();
     const text = statusReport(
-      { name: cluster.name, view: this.view(), checkedAt: state.snapshot.checkedAt ?? null, agentVersion: state.snapshot.agentVersion, error: state.error },
+      {
+        name: cluster.name,
+        view: this.view(),
+        checkedAt: state.snapshot.checkedAt ?? null,
+        agentVersion: state.snapshot.agentVersion,
+        error: state.error,
+      },
       tr,
     );
     const outcome = await shareText(text, tr.t('cluster.shareTitle', { cluster: cluster.name }));
     if (outcome !== 'shared') {
-      const toast = await this.toasts.create({ message: tr.t(outcome === 'copied' ? 'cluster.copiedReport' : 'cluster.shareFailed'), duration: 2500, position: 'bottom' });
+      const toast = await this.toasts.create({
+        message: tr.t(outcome === 'copied' ? 'cluster.copiedReport' : 'cluster.shareFailed'),
+        duration: 2500,
+        position: 'bottom',
+      });
       await toast.present();
     }
   }
@@ -244,7 +295,11 @@ export class ClusterPage {
       cssClass: 'sheet',
       breakpoints: [0, 0.6, 1],
       initialBreakpoint: 1,
-      componentProps: { pending: this.view().pendingSyncs, cluster: this.cluster(), now: this.now() },
+      componentProps: {
+        pending: this.view().pendingSyncs,
+        cluster: this.cluster(),
+        now: this.now(),
+      },
     });
     await modal.present();
     const { data } = await modal.onDidDismiss<{ changed: boolean }>();
@@ -265,7 +320,11 @@ export class ClusterPage {
       cssClass: 'sheet',
       breakpoints: [0, 0.6, 1],
       initialBreakpoint: 1,
-      componentProps: { module, cluster: this.cluster(), issueCards: issueCards(related, snapshot.modules, this.now(), this.language.translator()) },
+      componentProps: {
+        module,
+        cluster: this.cluster(),
+        issueCards: issueCards(related, snapshot.modules, this.now(), this.language.translator()),
+      },
     });
     await modal.present();
     const { data } = await modal.onDidDismiss<{ changed: boolean }>();

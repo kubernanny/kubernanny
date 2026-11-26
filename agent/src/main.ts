@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+
 import { Agent } from './agent';
 import { Logger } from './logger';
 import { renderMetrics } from './metrics/exporter';
@@ -11,7 +12,9 @@ async function bootstrap(): Promise<void> {
 
   // The API lives under /api so the web UI can own every other path.
   await agent.listen(config.port, '0.0.0.0');
-  logger.log(`agent for ${config.clusterName} on :${config.port}, checks every ${config.intervalSeconds}s, key ${identity.fingerprint}`);
+  logger.log(
+    `agent for ${config.clusterName} on :${config.port}, checks every ${config.intervalSeconds}s, key ${identity.fingerprint}`,
+  );
 
   if (config.pairingLog !== false) {
     // A one-time code: logs often end up in Loki & co., and a code is worth little there.
@@ -21,7 +24,9 @@ async function bootstrap(): Promise<void> {
   if (config.metricsPort > 0) {
     createServer((req, res) => {
       if (req.url === '/metrics') {
-        res.writeHead(200, { 'content-type': 'text/plain; version=0.0.4' }).end(renderMetrics(status.snapshot(), { widgetPushes: appPush.widgetPushCounts() }));
+        res
+          .writeHead(200, { 'content-type': 'text/plain; version=0.0.4' })
+          .end(renderMetrics(status.snapshot(), { widgetPushes: appPush.widgetPushCounts() }));
       } else {
         res.writeHead(404).end();
       }
@@ -44,7 +49,9 @@ async function bootstrap(): Promise<void> {
 // restart would hand whoever triggers it a crash loop. Start-up failures still
 // end it, through bootstrap's own catch.
 process.on('unhandledRejection', (reason) => {
-  new Logger('kubernanny').error(`unhandled rejection: ${reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)}`);
+  new Logger('kubernanny').error(
+    `unhandled rejection: ${reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)}`,
+  );
 });
 
 bootstrap().catch((err: unknown) => {

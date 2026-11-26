@@ -33,11 +33,28 @@ export function widgetPushState(push: PushVM | null, cluster: ClusterConfig): Wi
 }
 
 /** The widget section's explanation (docs/NOTIFICATIONS.md, "The home-screen widget"). */
-export function widgetView(input: { cluster: ClusterConfig; push: PushVM | null }, tr: Translator): WidgetVM {
+export function widgetView(
+  input: { cluster: ClusterConfig; push: PushVM | null },
+  tr: Translator,
+): WidgetVM {
   const push = widgetPushState(input.push, input.cluster);
-  const pushLine = push === 'unknown' ? '' : tr.t(push === 'on' ? 'widget.pushOn' : push === 'off' ? 'widget.pushOff' : 'widget.pushUnavailable');
+  const pushLine =
+    push === 'unknown'
+      ? ''
+      : tr.t(
+          push === 'on'
+            ? 'widget.pushOn'
+            : push === 'off'
+              ? 'widget.pushOff'
+              : 'widget.pushUnavailable',
+        );
   return {
-    lines: [tr.t('widget.updates'), tr.t('widget.quiet'), tr.t('widget.stale', { hours: WIDGET_STALE_HOURS }), tr.t('widget.silent')],
+    lines: [
+      tr.t('widget.updates'),
+      tr.t('widget.quiet'),
+      tr.t('widget.stale', { hours: WIDGET_STALE_HOURS }),
+      tr.t('widget.silent'),
+    ],
     push,
     pushLine,
     offerPush: push === 'off',

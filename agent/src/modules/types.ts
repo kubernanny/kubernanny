@@ -1,20 +1,20 @@
+import type { PendingSync } from '../checks/argocd-pending';
+import type { RollbackApp } from '../checks/argocd-rollback';
+import type { Certificate } from '../checks/certificates.check';
+import type { CnpgCluster } from '../checks/cnpg.check';
+import type { LonghornVolume } from '../checks/longhorn.check';
+import type { EtcdSnapshot, LonghornBackup, LonghornBackupTarget } from '../checks/maintenance.check';
 import { CheckStatus, Issue } from '../checks/types';
-import type { Text } from '../i18n/text';
 import { Config } from '../config';
 import { Category } from '../discovery/catalog';
 import { Detected, Link } from '../discovery/discovery';
+import type { Text } from '../i18n/text';
 import { Inventory } from '../inventory/inventory';
 import { KubeClient } from '../kube/kube-client';
-import { Prometheus } from './service-proxy';
-import type { Certificate } from '../checks/certificates.check';
-import type { LonghornVolume } from '../checks/longhorn.check';
-import type { CnpgCluster } from '../checks/cnpg.check';
-import type { EtcdSnapshot, LonghornBackup, LonghornBackupTarget } from '../checks/maintenance.check';
 import type { VeleroBackup } from './integrations/velero';
-import type { VulnDb } from './vulnerabilities/osv-client';
+import { Prometheus } from './service-proxy';
 import type { AcceptanceState } from './vulnerabilities/acceptance';
-import type { RollbackApp } from '../checks/argocd-rollback';
-import type { PendingSync } from '../checks/argocd-pending';
+import type { VulnDb } from './vulnerabilities/osv-client';
 
 export type Tone = 'ok' | 'warning' | 'critical' | 'muted';
 
@@ -118,7 +118,15 @@ export interface LonghornNode {
   spec?: { allowScheduling?: boolean };
   status?: {
     conditions?: { type: string; status: string; message?: string }[];
-    diskStatus?: Record<string, { storageAvailable?: number; storageMaximum?: number; storageScheduled?: number; conditions?: { type: string; status: string; message?: string }[] }>;
+    diskStatus?: Record<
+      string,
+      {
+        storageAvailable?: number;
+        storageMaximum?: number;
+        storageScheduled?: number;
+        conditions?: { type: string; status: string; message?: string }[];
+      }
+    >;
   };
 }
 
@@ -167,7 +175,11 @@ export interface ModuleView {
   details?: DetailSection[];
   instances?: ComponentInstance[];
   links: Link[];
-  workloads: { ready: number; total: number; items: { kind: string; namespace: string; name: string; ready: number; desired: number }[] };
+  workloads: {
+    ready: number;
+    total: number;
+    items: { kind: string; namespace: string; name: string; ready: number; desired: number }[];
+  };
   issueIds: string[];
   error?: Text;
   /** Vulnerabilities only: accepted advisories, listed on the sheet with a way to take them back. */

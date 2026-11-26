@@ -1,8 +1,28 @@
-import { DeadmanDeposit, decodeDepositResult, encodeDeposit, FrameType, KeyPair, answerChallenge, decodeFrame, decodePushResult, encodePushRequest, encodeReply, generateKeyPair, relayAgentId, toBase64Url } from '@kubernanny/protocol';
-import type { PushSender, TokenGate } from '../src/core/push';
-import { TokenLimiterCore, durableTokenGate } from '../cloudflare/src/token-limiter';
+import {
+  answerChallenge,
+  DeadmanDeposit,
+  decodeDepositResult,
+  decodeFrame,
+  decodePushResult,
+  encodeDeposit,
+  encodePushRequest,
+  encodeReply,
+  FrameType,
+  generateKeyPair,
+  KeyPair,
+  relayAgentId,
+  toBase64Url,
+} from '@kubernanny/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AgentObjectCore, AgentObjectState, HibernatableSocket, MAX_PENDING_PER_OBJECT } from '../cloudflare/src/agent-object';
+
+import {
+  AgentObjectCore,
+  AgentObjectState,
+  HibernatableSocket,
+  MAX_PENDING_PER_OBJECT,
+} from '../cloudflare/src/agent-object';
+import { durableTokenGate, TokenLimiterCore } from '../cloudflare/src/token-limiter';
+import type { PushSender, TokenGate } from '../src/core/push';
 
 /** A Workers WebSocket, as far as the object uses it. */
 class FakeSocket implements HibernatableSocket {
@@ -38,8 +58,8 @@ class FakeState implements AgentObjectState {
     deleteAlarm: async () => {
       this.alarm = null;
     },
-    get: async <T,>(key: string) => structuredClone(this.stored.get(key)) as T | undefined,
-    put: async <T,>(key: string, value: T) => {
+    get: async <T>(key: string) => structuredClone(this.stored.get(key)) as T | undefined,
+    put: async <T>(key: string, value: T) => {
       this.writes++;
       this.stored.set(key, structuredClone(value));
     },
@@ -74,14 +94,20 @@ describe('Cloudflare agent object', () => {
 
   /** A new core on the same state and sockets: what the runtime does when the object wakes from hibernation. */
   const wake = (env: Record<string, string> = {}, send?: PushSender, tokens?: TokenGate) =>
-    new AgentObjectCore(state, { RELAY_REGISTER_TIMEOUT_MS: '3000', ...env }, {
-      newSocketPair: () => {
-        last = new FakeSocket(state);
-        return [{}, last];
+    new AgentObjectCore(
+      state,
+      { RELAY_REGISTER_TIMEOUT_MS: '3000', ...env },
+      {
+        newSocketPair: () => {
+          last = new FakeSocket(state);
+          return [{}, last];
+        },
+        autoResponse: () => null,
+        upgradeResponse: () => new Response(null, { status: 200 }),
       },
-      autoResponse: () => null,
-      upgradeResponse: () => new Response(null, { status: 200 }),
-    }, send, tokens);
+      send,
+      tokens,
+    );
 
   const connect = async () => {
     await object.fetch(new Request(`https://relay/v1/agents/${agentId}/ws`), 'connect', agentId);
@@ -91,7 +117,8 @@ describe('Cloudflare agent object', () => {
     const challenge = decodeFrame(socket.sent[0] as Uint8Array);
     await object.webSocketMessage(socket, answerChallenge(keys, challenge.payload, origin).slice().buffer);
   };
-  const call = (body: Uint8Array) => object.fetch(new Request(`https://relay/v1/agents/${agentId}/e2e`, { method: 'POST', body }), 'call', agentId);
+  const call = (body: Uint8Array) =>
+    object.fetch(new Request(`https://relay/v1/agents/${agentId}/e2e`, { method: 'POST', body }), 'call', agentId);
 
   it('registers with the proof and forwards a call', async () => {
     const socket = await connect();
@@ -121,7 +148,10 @@ describe('Cloudflare agent object', () => {
     const pending = call(Uint8Array.of(1));
     await vi.advanceTimersByTimeAsync(0);
     const forwarded = decodeFrame(socket.sent[2] as Uint8Array);
-    await object.webSocketMessage(socket, encodeReply(forwarded.callId, 301, new TextEncoder().encode('<b>'))[0]!.slice().buffer);
+    await object.webSocketMessage(
+      socket,
+      encodeReply(forwarded.callId, 301, new TextEncoder().encode('<b>'))[0]!.slice().buffer,
+    );
     const res = await pending;
     expect(res.status).toBe(502);
     expect(await res.json()).toEqual({ code: 'RELAY_BAD_AGENT_RESPONSE' });
@@ -176,7 +206,15 @@ describe('Cloudflare agent object', () => {
         controller.enqueue(new Uint8Array(16 * 1024));
       },
     });
-    const offline = await object.fetch(new Request(`https://relay/v1/agents/${agentId}/e2e`, { method: 'POST', body: endless, duplex: 'half' } as RequestInit), 'call', agentId);
+    const offline = await object.fetch(
+      new Request(`https://relay/v1/agents/${agentId}/e2e`, {
+        method: 'POST',
+        body: endless,
+        duplex: 'half',
+      } as RequestInit),
+      'call',
+      agentId,
+    );
     expect(await offline.json()).toEqual({ code: 'RELAY_AGENT_OFFLINE' });
     expect(pulled).toBeLessThanOrEqual(1);
     const socket = await connect();
@@ -188,7 +226,11 @@ describe('Cloudflare agent object', () => {
       },
     });
     pulled = 0;
-    const large = await object.fetch(new Request(`https://relay/v1/agents/${agentId}/e2e`, { method: 'POST', body, duplex: 'half' } as RequestInit), 'call', agentId);
+    const large = await object.fetch(
+      new Request(`https://relay/v1/agents/${agentId}/e2e`, { method: 'POST', body, duplex: 'half' } as RequestInit),
+      'call',
+      agentId,
+    );
     expect(await large.json()).toEqual({ code: 'RELAY_TOO_LARGE' });
     expect(pulled).toBeLessThan(10);
   });
@@ -197,13 +239,24 @@ describe('Cloudflare agent object', () => {
     object = wake({ RELAY_CALL_BURST: '4', RELAY_CALLS_PER_MINUTE: '4', RELAY_MAX_CONCURRENT: '100' });
     const socket = await connect();
     await prove(socket);
-    const from = (ip: string) => object.fetch(new Request(`https://relay/v1/agents/${agentId}/e2e`, { method: 'POST', body: Uint8Array.of(1), headers: { 'cf-connecting-ip': ip } }), 'call', agentId);
+    const from = (ip: string) =>
+      object.fetch(
+        new Request(`https://relay/v1/agents/${agentId}/e2e`, {
+          method: 'POST',
+          body: Uint8Array.of(1),
+          headers: { 'cf-connecting-ip': ip },
+        }),
+        'call',
+        agentId,
+      );
     void from('6.6.6.6');
     await vi.advanceTimersByTimeAsync(0);
     expect((await from('6.6.6.6')).status).toBe(429);
     void from('7.7.7.7');
     await vi.advanceTimersByTimeAsync(0);
-    expect(socket.sent.map((m) => decodeFrame(m as Uint8Array)).filter((f) => f.type === FrameType.Call)).toHaveLength(2);
+    expect(socket.sent.map((m) => decodeFrame(m as Uint8Array)).filter((f) => f.type === FrameType.Call)).toHaveLength(
+      2,
+    );
   });
 
   it('keeps at most a few unproven sockets per agent id, and a real agent still gets in (review H2)', async () => {
@@ -243,10 +296,26 @@ describe('Cloudflare agent object', () => {
   });
 
   describe('native push', () => {
-    const fcm = JSON.stringify({ client_email: 'r@p.iam.gserviceaccount.com', private_key: '-----BEGIN PRIVATE KEY-----\nAA\n-----END PRIVATE KEY-----', project_id: 'kubernanny-test' });
-    const push = (id: number) => encodePushRequest(id, { token: 'device-token-0123456789:APA91b', platform: 'ios', kid: 'AbCdEfGhIjKlMnOp', message: toBase64Url(new Uint8Array(80)) });
-    const ready = (socket: FakeSocket) => JSON.parse(new TextDecoder().decode(decodeFrame(socket.sent[1] as Uint8Array).payload)) as { push: boolean };
-    const results = (socket: FakeSocket) => socket.sent.filter((m) => typeof m !== 'string').map((m) => decodeFrame(m as Uint8Array)).filter((f) => f.type === FrameType.PushResult).map((f) => decodePushResult(f.payload));
+    const fcm = JSON.stringify({
+      client_email: 'r@p.iam.gserviceaccount.com',
+      private_key: '-----BEGIN PRIVATE KEY-----\nAA\n-----END PRIVATE KEY-----',
+      project_id: 'kubernanny-test',
+    });
+    const push = (id: number) =>
+      encodePushRequest(id, {
+        token: 'device-token-0123456789:APA91b',
+        platform: 'ios',
+        kid: 'AbCdEfGhIjKlMnOp',
+        message: toBase64Url(new Uint8Array(80)),
+      });
+    const ready = (socket: FakeSocket) =>
+      JSON.parse(new TextDecoder().decode(decodeFrame(socket.sent[1] as Uint8Array).payload)) as { push: boolean };
+    const results = (socket: FakeSocket) =>
+      socket.sent
+        .filter((m) => typeof m !== 'string')
+        .map((m) => decodeFrame(m as Uint8Array))
+        .filter((f) => f.type === FrameType.PushResult)
+        .map((f) => decodePushResult(f.payload));
 
     it('is off without a service account: Ready says so and pushes are refused', async () => {
       const socket = await connect();
@@ -286,7 +355,9 @@ describe('Cloudflare agent object', () => {
 
     it('asks the per-token gate (the token limiter object on Cloudflare)', async () => {
       const limiterState = new FakeState();
-      const limiter = new TokenLimiterCore(limiterState.storage, { RELAY_PUSHES_PER_TOKEN_PER_HOUR: '6' }, () => Date.now());
+      const limiter = new TokenLimiterCore(limiterState.storage, { RELAY_PUSHES_PER_TOKEN_PER_HOUR: '6' }, () =>
+        Date.now(),
+      );
       const tokens: TokenGate = { take: async () => (await limiter.fetch()).status === 204 };
       const send = vi.fn(async () => 'sent' as const);
       object = wake({ FCM_SERVICE_ACCOUNT: fcm }, undefined, tokens);
@@ -300,14 +371,18 @@ describe('Cloudflare agent object', () => {
     });
 
     it('keeps status pushes in an object of their own, with the status budget', async () => {
-      const limiter = new TokenLimiterCore(new FakeState().storage, { RELAY_PUSHES_PER_TOKEN_PER_HOUR: '60' }, () => Date.now());
+      const limiter = new TokenLimiterCore(new FakeState().storage, { RELAY_PUSHES_PER_TOKEN_PER_HOUR: '60' }, () =>
+        Date.now(),
+      );
       const take = async (path: string) => (await limiter.fetch({ url: `https://token-limiter${path}` })).status;
       expect(await take('/take-status')).toBe(204);
       expect(await take('/take-status')).toBe(429); // 2 per hour: burst 1
       const names: string[] = [];
       const gate = durableTokenGate({
         idFromName: (name) => (names.push(name), name),
-        get: () => ({ fetch: async (url: string) => new Response(null, { status: url.endsWith('/take-status') ? 204 : 429 }) }),
+        get: () => ({
+          fetch: async (url: string) => new Response(null, { status: url.endsWith('/take-status') ? 204 : 429 }),
+        }),
       });
       expect(await gate.take('device-token-0123456789abc', true)).toBe(true);
       expect(await gate.take('device-token-0123456789abc')).toBe(false);
@@ -334,10 +409,30 @@ describe('Cloudflare agent object', () => {
   });
 
   describe("dead man's switch", () => {
-    const fcm = JSON.stringify({ client_email: 'r@x.iam.gserviceaccount.com', private_key: '-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n', project_id: 'kubernanny-test' });
+    const fcm = JSON.stringify({
+      client_email: 'r@x.iam.gserviceaccount.com',
+      private_key: '-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n',
+      project_id: 'kubernanny-test',
+    });
     const MIN = 60_000;
-    const held: DeadmanDeposit = { validitySeconds: 3 * 3600, holdSeconds: 0, items: [{ token: 'device-token-0123456789:APA91b', platform: 'ios', kid: 'AbCdEfGhIjKlMnOp', message: toBase64Url(new Uint8Array(120)), graceMinutes: 15 }] };
-    const readyOf = (socket: FakeSocket) => JSON.parse(new TextDecoder().decode(decodeFrame(socket.sent[1] as Uint8Array).payload)) as Record<string, unknown>;
+    const held: DeadmanDeposit = {
+      validitySeconds: 3 * 3600,
+      holdSeconds: 0,
+      items: [
+        {
+          token: 'device-token-0123456789:APA91b',
+          platform: 'ios',
+          kid: 'AbCdEfGhIjKlMnOp',
+          message: toBase64Url(new Uint8Array(120)),
+          graceMinutes: 15,
+        },
+      ],
+    };
+    const readyOf = (socket: FakeSocket) =>
+      JSON.parse(new TextDecoder().decode(decodeFrame(socket.sent[1] as Uint8Array).payload)) as Record<
+        string,
+        unknown
+      >;
     const depositResults = (socket: FakeSocket) =>
       socket.sent
         .filter((m): m is Uint8Array => typeof m !== 'string')
@@ -358,12 +453,18 @@ describe('Cloudflare agent object', () => {
       const { socket } = await setup();
       expect(readyOf(socket).deadman).toBe(true);
       expect(depositResults(socket)).toEqual(['stored']);
-      expect(state.stored.get('deadman')).toMatchObject({ items: [{ kid: 'AbCdEfGhIjKlMnOp', graceMs: 15 * MIN }], lostAt: null });
+      expect(state.stored.get('deadman')).toMatchObject({
+        items: [{ kid: 'AbCdEfGhIjKlMnOp', graceMs: 15 * MIN }],
+        lostAt: null,
+      });
       expect(state.alarm).toBe(5 * MIN);
     });
 
     it('is off with RELAY_DEADMAN=off and without push', async () => {
-      object = wake({ FCM_SERVICE_ACCOUNT: fcm, RELAY_DEADMAN: 'off' }, vi.fn<PushSender>(async () => 'sent'));
+      object = wake(
+        { FCM_SERVICE_ACCOUNT: fcm, RELAY_DEADMAN: 'off' },
+        vi.fn<PushSender>(async () => 'sent'),
+      );
       const socket = await connect();
       await prove(socket);
       expect(readyOf(socket).deadman).toBe(false);

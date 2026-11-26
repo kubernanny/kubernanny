@@ -8,9 +8,10 @@
  * compile error, not a German sentence in an English app.
  */
 import type { Language } from '@kubernanny/protocol';
+
+import { CONTROL_CHARS } from '../util/log-safe';
 import { de, type Messages } from './messages.de';
 import { en } from './messages.en';
-import { CONTROL_CHARS } from '../util/log-safe';
 
 export type Lang = Language;
 export const LANGS: readonly Lang[] = ['en', 'de'];
@@ -32,7 +33,11 @@ export interface Text {
 type ParamsOf<K extends MessageKey> = Messages[K] extends (p: infer P) => string ? P : never;
 /** String parameters also take a nested Text (an age, a fallback sentence), lists a list of them; numbers stay numbers, for plural forms. */
 type Accepts<P> = {
-  [N in keyof P]: P[N] extends string | undefined ? P[N] | Text : P[N] extends string[] ? readonly (string | Text)[] : P[N];
+  [N in keyof P]: P[N] extends string | undefined
+    ? P[N] | Text
+    : P[N] extends string[]
+      ? readonly (string | Text)[]
+      : P[N];
 };
 type ArgsOf<K extends MessageKey> = Messages[K] extends string ? [] : [params: Accepts<ParamsOf<K>>];
 

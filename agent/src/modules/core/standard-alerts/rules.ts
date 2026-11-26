@@ -88,7 +88,11 @@ function above(levels: { warning?: number; critical?: number; info?: number }): 
 /** Fires when the value is below the thresholds (strictly, as upstream's `<`). */
 function below(levels: { warning?: number; critical?: number }): (f: Finding) => IssueSeverity | null {
   return ({ value }) =>
-    levels.critical !== undefined && value < levels.critical ? 'critical' : levels.warning !== undefined && value < levels.warning ? 'warning' : null;
+    levels.critical !== undefined && value < levels.critical
+      ? 'critical'
+      : levels.warning !== undefined && value < levels.warning
+        ? 'warning'
+        : null;
 }
 
 /** Label values come from Prometheus: bounded before they go into ids and titles. */
@@ -115,8 +119,11 @@ export const PROM_RULES: readonly PromRule[] = [
     area: 'etcd',
     alerts: ['etcdMemberCommunicationSlow'],
     needs: ['etcd_network_peer_round_trip_time_seconds_bucket'],
-    query: 'max by (instance, To) (min_over_time(histogram_quantile(0.99, rate(etcd_network_peer_round_trip_time_seconds_bucket[5m]))[10m:1m]))',
-    extra: { now: 'max by (instance, To) (histogram_quantile(0.99, rate(etcd_network_peer_round_trip_time_seconds_bucket[5m])))' },
+    query:
+      'max by (instance, To) (min_over_time(histogram_quantile(0.99, rate(etcd_network_peer_round_trip_time_seconds_bucket[5m]))[10m:1m]))',
+    extra: {
+      now: 'max by (instance, To) (histogram_quantile(0.99, rate(etcd_network_peer_round_trip_time_seconds_bucket[5m])))',
+    },
     by: ['instance', 'To'],
     judge: above({ warning: ETCD_PEER_RTT_WARNING_S }),
     describe: (f, n) => {
@@ -135,12 +142,17 @@ export const PROM_RULES: readonly PromRule[] = [
     area: 'etcd',
     alerts: ['etcdHighFsyncDurations'],
     needs: ['etcd_disk_wal_fsync_duration_seconds_bucket'],
-    query: 'max by (instance) (min_over_time(histogram_quantile(0.99, rate(etcd_disk_wal_fsync_duration_seconds_bucket[5m]))[10m:1m]))',
+    query:
+      'max by (instance) (min_over_time(histogram_quantile(0.99, rate(etcd_disk_wal_fsync_duration_seconds_bucket[5m]))[10m:1m]))',
     by: ['instance'],
     judge: above({ warning: 0.5, critical: 1 }),
     describe: (f, n) => {
       const node = n.node(f.labels);
-      return { where: node, title: t('std.etcdFsync.title', { node, ms: ms(f.value) }), cause: t('std.etcdFsync.cause', { ms: ms(f.value) }) };
+      return {
+        where: node,
+        title: t('std.etcdFsync.title', { node, ms: ms(f.value) }),
+        cause: t('std.etcdFsync.cause', { ms: ms(f.value) }),
+      };
     },
   },
   {
@@ -149,12 +161,17 @@ export const PROM_RULES: readonly PromRule[] = [
     area: 'etcd',
     alerts: ['etcdHighCommitDurations'],
     needs: ['etcd_disk_backend_commit_duration_seconds_bucket'],
-    query: 'max by (instance) (min_over_time(histogram_quantile(0.99, rate(etcd_disk_backend_commit_duration_seconds_bucket[5m]))[10m:1m]))',
+    query:
+      'max by (instance) (min_over_time(histogram_quantile(0.99, rate(etcd_disk_backend_commit_duration_seconds_bucket[5m]))[10m:1m]))',
     by: ['instance'],
     judge: above({ warning: 0.25 }),
     describe: (f, n) => {
       const node = n.node(f.labels);
-      return { where: node, title: t('std.etcdCommit.title', { node, ms: ms(f.value) }), cause: t('std.etcdCommit.cause', { ms: ms(f.value) }) };
+      return {
+        where: node,
+        title: t('std.etcdCommit.title', { node, ms: ms(f.value) }),
+        cause: t('std.etcdCommit.cause', { ms: ms(f.value) }),
+      };
     },
   },
   {
@@ -179,10 +196,15 @@ export const PROM_RULES: readonly PromRule[] = [
     area: 'etcd',
     alerts: ['etcdHighNumberOfLeaderChanges'],
     needs: ['etcd_server_leader_changes_seen_total'],
-    query: 'max(min_over_time(increase((max without (instance, pod) (etcd_server_leader_changes_seen_total))[15m:1m])[5m:1m]))',
+    query:
+      'max(min_over_time(increase((max without (instance, pod) (etcd_server_leader_changes_seen_total))[15m:1m])[5m:1m]))',
     by: [],
     judge: above({ warning: 3.5 }),
-    describe: (f) => ({ where: 'cluster', title: t('std.etcdLeaderChanges.title', { n: Math.round(f.value) }), cause: t('std.etcdLeaderChanges.cause') }),
+    describe: (f) => ({
+      where: 'cluster',
+      title: t('std.etcdLeaderChanges.title', { n: Math.round(f.value) }),
+      cause: t('std.etcdLeaderChanges.cause'),
+    }),
   },
   {
     // etcdDatabaseQuotaLowSpace: db size / quota > 95 % for 10m, critical: at the quota etcd raises NOSPACE and refuses every write.
@@ -190,12 +212,17 @@ export const PROM_RULES: readonly PromRule[] = [
     area: 'etcd',
     alerts: ['etcdDatabaseQuotaLowSpace'],
     needs: ['etcd_mvcc_db_total_size_in_bytes', 'etcd_server_quota_backend_bytes'],
-    query: 'max by (instance) (min_over_time((last_over_time(etcd_mvcc_db_total_size_in_bytes[5m]) / last_over_time(etcd_server_quota_backend_bytes[5m]))[10m:1m]))',
+    query:
+      'max by (instance) (min_over_time((last_over_time(etcd_mvcc_db_total_size_in_bytes[5m]) / last_over_time(etcd_server_quota_backend_bytes[5m]))[10m:1m]))',
     by: ['instance'],
     judge: above({ critical: 0.95 }),
     describe: (f, n) => {
       const node = n.node(f.labels);
-      return { where: node, title: t('std.etcdDbQuota.title', { node, pct: pct(f.value) }), cause: t('std.etcdDbQuota.cause') };
+      return {
+        where: node,
+        title: t('std.etcdDbQuota.title', { node, pct: pct(f.value) }),
+        cause: t('std.etcdDbQuota.cause'),
+      };
     },
   },
   {
@@ -204,7 +231,8 @@ export const PROM_RULES: readonly PromRule[] = [
     area: 'etcd',
     alerts: ['etcdExcessiveDatabaseGrowth'],
     needs: ['etcd_mvcc_db_total_size_in_bytes', 'etcd_server_quota_backend_bytes'],
-    query: 'max by (instance) (min_over_time((predict_linear(etcd_mvcc_db_total_size_in_bytes[4h], 14400) / etcd_server_quota_backend_bytes)[10m:1m]))',
+    query:
+      'max by (instance) (min_over_time((predict_linear(etcd_mvcc_db_total_size_in_bytes[4h], 14400) / etcd_server_quota_backend_bytes)[10m:1m]))',
     by: ['instance'],
     judge: above({ warning: 1 }),
     describe: (f, n) => {
@@ -219,13 +247,18 @@ export const PROM_RULES: readonly PromRule[] = [
     area: 'etcd',
     alerts: ['etcdDatabaseHighFragmentationRatio'],
     needs: ['etcd_mvcc_db_total_size_in_use_in_bytes'],
-    query: 'max by (instance) (max_over_time((last_over_time(etcd_mvcc_db_total_size_in_use_in_bytes[5m]) / last_over_time(etcd_mvcc_db_total_size_in_bytes[5m]))[10m:1m]))',
+    query:
+      'max by (instance) (max_over_time((last_over_time(etcd_mvcc_db_total_size_in_use_in_bytes[5m]) / last_over_time(etcd_mvcc_db_total_size_in_bytes[5m]))[10m:1m]))',
     extra: { inUse: 'max by (instance) (etcd_mvcc_db_total_size_in_use_in_bytes)' },
     by: ['instance'],
     judge: (f) => (f.value < 0.5 && (f.extra.inUse ?? 0) > 104_857_600 ? 'info' : null),
     describe: (f, n) => {
       const node = n.node(f.labels);
-      return { where: node, title: t('std.etcdFragmentation.title', { node, pct: pct(1 - f.value) }), cause: t('std.etcdFragmentation.cause') };
+      return {
+        where: node,
+        title: t('std.etcdFragmentation.title', { node, pct: pct(1 - f.value) }),
+        cause: t('std.etcdFragmentation.cause'),
+      };
     },
   },
 
@@ -267,7 +300,10 @@ export const PROM_RULES: readonly PromRule[] = [
       return {
         where: `${node}${mount}`,
         title: t('std.filesystem.title', { node, mount, free }),
-        cause: filling < 0 ? t('std.filesystem.fillingCause', { hours: severity === 'critical' ? 4 : 24 }) : t('std.filesystem.fullCause'),
+        cause:
+          filling < 0
+            ? t('std.filesystem.fillingCause', { hours: severity === 'critical' ? 4 : 24 })
+            : t('std.filesystem.fullCause'),
       };
     },
   },
@@ -284,7 +320,11 @@ export const PROM_RULES: readonly PromRule[] = [
     describe: (f, n) => {
       const node = n.node(f.labels);
       const mount = label(f.labels, 'mountpoint');
-      return { where: `${node}${mount}`, title: t('std.inodes.title', { node, mount, free: pct(f.value) }), cause: t('std.inodes.cause') };
+      return {
+        where: `${node}${mount}`,
+        title: t('std.inodes.title', { node, mount, free: pct(f.value) }),
+        cause: t('std.inodes.cause'),
+      };
     },
   },
   {
@@ -298,7 +338,11 @@ export const PROM_RULES: readonly PromRule[] = [
     judge: above({ warning: 0.75 }),
     describe: (f, n) => {
       const node = n.node(f.labels);
-      return { where: node, title: t('std.conntrack.title', { node, pct: pct(f.value) }), cause: t('std.conntrack.cause') };
+      return {
+        where: node,
+        title: t('std.conntrack.title', { node, pct: pct(f.value) }),
+        cause: t('std.conntrack.cause'),
+      };
     },
   },
   {
@@ -322,7 +366,11 @@ export const PROM_RULES: readonly PromRule[] = [
       const direction = f.labels.direction === 'transmit' ? 'transmit' : 'receive';
       return {
         where: `${node}/${device}/${direction}`,
-        title: t(direction === 'transmit' ? 'std.networkErrors.transmitTitle' : 'std.networkErrors.receiveTitle', { node, device, pct: pct(f.value) }),
+        title: t(direction === 'transmit' ? 'std.networkErrors.transmitTitle' : 'std.networkErrors.receiveTitle', {
+          node,
+          device,
+          pct: pct(f.value),
+        }),
         cause: t('std.networkErrors.cause'),
       };
     },
@@ -338,7 +386,11 @@ export const PROM_RULES: readonly PromRule[] = [
     judge: above({ warning: 0.7, critical: 0.9 }),
     describe: (f, n) => {
       const node = n.node(f.labels);
-      return { where: node, title: t('std.fileDescriptors.title', { node, pct: pct(f.value) }), cause: t('std.fileDescriptors.cause') };
+      return {
+        where: node,
+        title: t('std.fileDescriptors.title', { node, pct: pct(f.value) }),
+        cause: t('std.fileDescriptors.cause'),
+      };
     },
   },
   {
@@ -348,13 +400,18 @@ export const PROM_RULES: readonly PromRule[] = [
     alerts: ['NodeRAIDDegraded'],
     needs: ['node_md_disks_required', 'node_md_disks'],
     absent: t('std.absent.raid'),
-    query: 'max by (instance, device) (min_over_time((node_md_disks_required - ignoring (state) node_md_disks{state="active"})[15m:1m]))',
+    query:
+      'max by (instance, device) (min_over_time((node_md_disks_required - ignoring (state) node_md_disks{state="active"})[15m:1m]))',
     by: ['instance', 'device'],
     judge: above({ critical: 0 }),
     describe: (f, n) => {
       const node = n.node(f.labels);
       const device = label(f.labels, 'device');
-      return { where: `${node}/${device}`, title: t('std.raidDegraded.title', { node, device, n: Math.round(f.value) }), cause: t('std.raidDegraded.cause') };
+      return {
+        where: `${node}/${device}`,
+        title: t('std.raidDegraded.title', { node, device, n: Math.round(f.value) }),
+        cause: t('std.raidDegraded.cause'),
+      };
     },
   },
   {
@@ -370,7 +427,11 @@ export const PROM_RULES: readonly PromRule[] = [
     describe: (f, n) => {
       const node = n.node(f.labels);
       const device = label(f.labels, 'device');
-      return { where: `${node}/${device}`, title: t('std.raidDiskFailed.title', { node, device }), cause: t('std.raidDiskFailed.cause') };
+      return {
+        where: `${node}/${device}`,
+        title: t('std.raidDiskFailed.title', { node, device }),
+        cause: t('std.raidDiskFailed.cause'),
+      };
     },
   },
 
@@ -381,12 +442,17 @@ export const PROM_RULES: readonly PromRule[] = [
     area: 'kubernetes',
     alerts: ['KubeNodeReadinessFlapping'],
     needs: ['kube_node_status_condition'],
-    query: 'max by (node) (min_over_time(sum by (node) (changes(kube_node_status_condition{condition="Ready",status="true"}[15m]))[15m:1m]))',
+    query:
+      'max by (node) (min_over_time(sum by (node) (changes(kube_node_status_condition{condition="Ready",status="true"}[15m]))[15m:1m]))',
     by: ['node'],
     judge: above({ warning: 2 }),
     describe: (f) => {
       const node = label(f.labels, 'node');
-      return { where: node, title: t('std.nodeFlapping.title', { node, n: Math.round(f.value) }), cause: t('std.nodeFlapping.cause') };
+      return {
+        where: node,
+        title: t('std.nodeFlapping.title', { node, n: Math.round(f.value) }),
+        cause: t('std.nodeFlapping.cause'),
+      };
     },
   },
   {
@@ -395,7 +461,8 @@ export const PROM_RULES: readonly PromRule[] = [
     area: 'kubernetes',
     alerts: ['KubePersistentVolumeInodesFillingUp'],
     needs: ['kubelet_volume_stats_inodes_free', 'kubelet_volume_stats_inodes'],
-    query: 'max by (namespace, persistentvolumeclaim) (max_over_time((kubelet_volume_stats_inodes_free / kubelet_volume_stats_inodes)[1h:5m]))',
+    query:
+      'max by (namespace, persistentvolumeclaim) (max_over_time((kubelet_volume_stats_inodes_free / kubelet_volume_stats_inodes)[1h:5m]))',
     extra: {
       now: 'max by (namespace, persistentvolumeclaim) (kubelet_volume_stats_inodes_free / kubelet_volume_stats_inodes)',
       in4d: `max by (namespace, persistentvolumeclaim) (max_over_time(predict_linear(kubelet_volume_stats_inodes_free[6h], ${4 * DAY})[1h:5m]))`,
@@ -424,14 +491,19 @@ export const PROM_RULES: readonly PromRule[] = [
     area: 'kubernetes',
     alerts: ['KubePersistentVolumeErrors'],
     needs: ['kube_persistentvolume_status_phase'],
-    query: 'max by (persistentvolume, phase) (min_over_time(kube_persistentvolume_status_phase{phase=~"Failed|Pending"}[5m]))',
+    query:
+      'max by (persistentvolume, phase) (min_over_time(kube_persistentvolume_status_phase{phase=~"Failed|Pending"}[5m]))',
     by: ['persistentvolume', 'phase'],
     match: ['persistentvolume'],
     judge: above({ warning: 0 }),
     describe: (f) => {
       const pv = label(f.labels, 'persistentvolume');
       const phase = label(f.labels, 'phase');
-      return { where: pv, title: t('std.pvErrors.title', { pv, phase }), cause: t(phase === 'Failed' ? 'std.pvErrors.failedCause' : 'std.pvErrors.pendingCause') };
+      return {
+        where: pv,
+        title: t('std.pvErrors.title', { pv, phase }),
+        cause: t(phase === 'Failed' ? 'std.pvErrors.failedCause' : 'std.pvErrors.pendingCause'),
+      };
     },
   },
   {
@@ -449,7 +521,11 @@ export const PROM_RULES: readonly PromRule[] = [
     describe: (f) => {
       const quota = `${label(f.labels, 'namespace')}/${label(f.labels, 'resourcequota')}`;
       const resource = label(f.labels, 'resource');
-      return { where: `${quota}/${resource}`, title: t('std.quotaExceeded.title', { quota, resource, pct: Math.round(f.value * 100) }), cause: t('std.quotaExceeded.cause') };
+      return {
+        where: `${quota}/${resource}`,
+        title: t('std.quotaExceeded.title', { quota, resource, pct: Math.round(f.value * 100) }),
+        cause: t('std.quotaExceeded.cause'),
+      };
     },
   },
   {
@@ -466,7 +542,11 @@ export const PROM_RULES: readonly PromRule[] = [
     judge: below({ warning: 7 * DAY, critical: DAY }),
     describe: (f, n) => {
       const node = n.node(f.labels);
-      return { where: `${node}/${label(f.labels, 'job')}`, title: t('std.clientCertificate.title', { node, days: days(f.value) }), cause: t('std.clientCertificate.cause') };
+      return {
+        where: `${node}/${label(f.labels, 'job')}`,
+        title: t('std.clientCertificate.title', { node, days: days(f.value) }),
+        cause: t('std.clientCertificate.cause'),
+      };
     },
   },
   {
@@ -481,7 +561,11 @@ export const PROM_RULES: readonly PromRule[] = [
     judge: below({ warning: 7 * DAY, critical: DAY }),
     describe: (f, n) => {
       const node = n.node(f.labels);
-      return { where: node, title: t('std.kubeletCertificate.clientTitle', { node, days: days(f.value) }), cause: t('std.kubeletCertificate.cause') };
+      return {
+        where: node,
+        title: t('std.kubeletCertificate.clientTitle', { node, days: days(f.value) }),
+        cause: t('std.kubeletCertificate.cause'),
+      };
     },
   },
   {
@@ -496,7 +580,11 @@ export const PROM_RULES: readonly PromRule[] = [
     judge: below({ warning: 7 * DAY, critical: DAY }),
     describe: (f, n) => {
       const node = n.node(f.labels);
-      return { where: node, title: t('std.kubeletCertificate.serverTitle', { node, days: days(f.value) }), cause: t('std.kubeletCertificate.cause') };
+      return {
+        where: node,
+        title: t('std.kubeletCertificate.serverTitle', { node, days: days(f.value) }),
+        cause: t('std.kubeletCertificate.cause'),
+      };
     },
   },
   {
@@ -508,10 +596,17 @@ export const PROM_RULES: readonly PromRule[] = [
     alerts: ['KubeAPIErrorBudgetBurn'],
     needs: ['apiserver_request_total'],
     query: apiErrorShare('1h'),
-    extra: { m5: apiErrorShare('5m'), m30: apiErrorShare('30m'), h2: apiErrorShare('2h'), h6: apiErrorShare('6h'), d1: apiErrorShare('1d') },
+    extra: {
+      m5: apiErrorShare('5m'),
+      m30: apiErrorShare('30m'),
+      h2: apiErrorShare('2h'),
+      h6: apiErrorShare('6h'),
+      d1: apiErrorShare('1d'),
+    },
     by: [],
     judge: ({ value, extra: e }) => {
-      const both = (a: number | undefined, b: number | undefined, limit: number) => a !== undefined && b !== undefined && a > limit && b > limit;
+      const both = (a: number | undefined, b: number | undefined, limit: number) =>
+        a !== undefined && b !== undefined && a > limit && b > limit;
       if (value > 0.144 && (e.m5 ?? 0) > 0.144) {
         return 'critical';
       }
@@ -519,7 +614,11 @@ export const PROM_RULES: readonly PromRule[] = [
     },
     describe: (f, _n, severity) => {
       const share = severity === 'critical' ? f.value : Math.max(f.extra.h6 ?? 0, f.extra.d1 ?? 0);
-      return { where: 'cluster', title: t('std.apiErrors.title', { pct: pct(share) }), cause: t('std.apiErrors.cause') };
+      return {
+        where: 'cluster',
+        title: t('std.apiErrors.title', { pct: pct(share) }),
+        cause: t('std.apiErrors.cause'),
+      };
     },
   },
 
@@ -535,7 +634,11 @@ export const PROM_RULES: readonly PromRule[] = [
     by: ['job'],
     match: [],
     judge: above({ warning: 0.01, critical: 0.03 }),
-    describe: (f) => ({ where: label(f.labels, 'job'), title: t('std.dnsErrors.title', { pct: pct(f.value) }), cause: t('std.dnsErrors.cause') }),
+    describe: (f) => ({
+      where: label(f.labels, 'job'),
+      title: t('std.dnsErrors.title', { pct: pct(f.value) }),
+      cause: t('std.dnsErrors.cause'),
+    }),
   },
   {
     // CoreDNSLatencyHigh: p99 of coredns_dns_request_duration_seconds > 4 s for 10m, critical: most clients give up after 5 s.
@@ -543,12 +646,17 @@ export const PROM_RULES: readonly PromRule[] = [
     area: 'dns',
     alerts: ['CoreDNSLatencyHigh'],
     needs: ['coredns_dns_request_duration_seconds_bucket'],
-    query: 'max by (server, zone) (min_over_time(histogram_quantile(0.99, sum by (server, zone, le) (rate(coredns_dns_request_duration_seconds_bucket[5m])))[10m:1m]))',
+    query:
+      'max by (server, zone) (min_over_time(histogram_quantile(0.99, sum by (server, zone, le) (rate(coredns_dns_request_duration_seconds_bucket[5m])))[10m:1m]))',
     by: ['server', 'zone'],
     judge: above({ critical: 4 }),
     describe: (f) => {
       const zone = label(f.labels, 'zone');
-      return { where: `${label(f.labels, 'server')}/${zone}`, title: t('std.dnsLatency.title', { zone, seconds: Math.round(f.value * 10) / 10 }), cause: t('std.dnsLatency.cause') };
+      return {
+        where: `${label(f.labels, 'server')}/${zone}`,
+        title: t('std.dnsLatency.title', { zone, seconds: Math.round(f.value * 10) / 10 }),
+        cause: t('std.dnsLatency.cause'),
+      };
     },
   },
   {
@@ -560,7 +668,11 @@ export const PROM_RULES: readonly PromRule[] = [
     query: 'min_over_time(sum(rate(coredns_forward_healthcheck_broken_total[5m]))[10m:1m])',
     by: [],
     judge: above({ warning: 0 }),
-    describe: () => ({ where: 'cluster', title: t('std.dnsForwardBroken.title'), cause: t('std.dnsForwardBroken.cause') }),
+    describe: () => ({
+      where: 'cluster',
+      title: t('std.dnsForwardBroken.title'),
+      cause: t('std.dnsForwardBroken.cause'),
+    }),
   },
 
   // ---------------- Prometheus (prometheus-mixin) ----------------
@@ -575,7 +687,11 @@ export const PROM_RULES: readonly PromRule[] = [
     by: ['job', 'instance'],
     match: ['instance'],
     judge: below({ warning: 1 }),
-    describe: (f) => ({ where: label(f.labels, 'instance'), title: t('std.prometheusConfig.title'), cause: t('std.prometheusConfig.cause') }),
+    describe: (f) => ({
+      where: label(f.labels, 'instance'),
+      title: t('std.prometheusConfig.title'),
+      cause: t('std.prometheusConfig.cause'),
+    }),
   },
   {
     // PrometheusRuleFailures: increase(prometheus_rule_evaluation_failures_total[5m]) > 0 for 15m. Upstream critical;
@@ -591,7 +707,11 @@ export const PROM_RULES: readonly PromRule[] = [
     describe: (f) => {
       // "<file>;<group>": the group's name is what people wrote.
       const group = label(f.labels, 'rule_group').split(';').pop() ?? '?';
-      return { where: group, title: t('std.prometheusRuleFailures.title', { group }), cause: t('std.prometheusRuleFailures.cause') };
+      return {
+        where: group,
+        title: t('std.prometheusRuleFailures.title', { group }),
+        cause: t('std.prometheusRuleFailures.cause'),
+      };
     },
   },
   {
@@ -606,7 +726,11 @@ export const PROM_RULES: readonly PromRule[] = [
     match: ['instance'],
     when: (env) => env.alertmanager,
     judge: below({ warning: 1 }),
-    describe: (f) => ({ where: label(f.labels, 'instance'), title: t('std.prometheusAlertmanager.title'), cause: t('std.prometheusAlertmanager.cause') }),
+    describe: (f) => ({
+      where: label(f.labels, 'instance'),
+      title: t('std.prometheusAlertmanager.title'),
+      cause: t('std.prometheusAlertmanager.cause'),
+    }),
   },
   {
     // PrometheusTSDBCompactionsFailing: increase(prometheus_tsdb_compactions_failed_total[3h]) > 0 for 4h, warning.
@@ -618,6 +742,10 @@ export const PROM_RULES: readonly PromRule[] = [
     by: ['job', 'instance'],
     match: ['instance'],
     judge: above({ warning: 0 }),
-    describe: (f) => ({ where: label(f.labels, 'instance'), title: t('std.prometheusCompactions.title'), cause: t('std.prometheusCompactions.cause') }),
+    describe: (f) => ({
+      where: label(f.labels, 'instance'),
+      title: t('std.prometheusCompactions.title'),
+      cause: t('std.prometheusCompactions.cause'),
+    }),
   },
 ];

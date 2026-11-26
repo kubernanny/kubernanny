@@ -1,9 +1,10 @@
-import { defineConfig } from 'vite';
 import analog from '@analogjs/platform';
 import angular from '@analogjs/vite-plugin-angular';
 import nitro from '@analogjs/vite-plugin-nitro';
-import { docsPlugin } from './build/vite-plugin-docs.ts';
+import { defineConfig } from 'vite';
+
 import { allRoutes } from './build/routes.ts';
+import { docsPlugin } from './build/vite-plugin-docs.ts';
 
 // Static prerendering: every route becomes a plain HTML file, no server at runtime.
 const prerender = { routes: allRoutes() };

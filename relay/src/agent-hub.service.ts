@@ -1,16 +1,27 @@
 import type { IncomingMessage, Server } from 'node:http';
 import type { Duplex } from 'node:stream';
-import { Inject, Injectable, Logger, BeforeApplicationShutdown, OnApplicationBootstrap } from '@nestjs/common';
+
+import {
+  decodeFrame,
+  encodeFrame,
+  FrameType,
+  HEARTBEAT_PING,
+  HEARTBEAT_PONG,
+  RelayClose,
+  RelayFrameError,
+  REPLY_CHUNK,
+} from '@kubernanny/protocol';
+import { BeforeApplicationShutdown, Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
-import { FrameType, HEARTBEAT_PING, HEARTBEAT_PONG, REPLY_CHUNK, RelayClose, RelayFrameError, decodeFrame, encodeFrame } from '@kubernanny/protocol';
 import { RawData, WebSocket, WebSocketServer } from 'ws';
+
+import { RELAY_CONFIG, RelayConfig } from './config';
 import { Admission } from './core/admission';
 import { AgentLink, CallResult } from './core/agent-link';
 import { idPrefix, parseRoute, pathOf, registrationOrigin, toBytes } from './core/http';
 import { clientAddress } from './core/limits';
 import { PushSender, pushSender } from './core/push';
-import { Session, endSession, openSession, proveSession } from './core/session';
-import { RELAY_CONFIG, RelayConfig } from './config';
+import { endSession, openSession, proveSession, Session } from './core/session';
 import { DeadmanRegistry } from './deadman-registry';
 import { RelayMetrics } from './metrics';
 
@@ -45,7 +56,12 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
   /** Unproven connections, oldest first (a Set keeps insertion order). */
   private readonly pendingConnections = new Set<Connection>();
   private readonly admission: Admission<Connection>;
-  private readonly wss = new WebSocketServer({ noServer: true, maxPayload: MAX_AGENT_MESSAGE, perMessageDeflate: false, clientTracking: false });
+  private readonly wss = new WebSocketServer({
+    noServer: true,
+    maxPayload: MAX_AGENT_MESSAGE,
+    perMessageDeflate: false,
+    clientTracking: false,
+  });
   private sweeper: ReturnType<typeof setInterval> | null = null;
   /** One sender for every agent, so the per-token limit spans them all; null without push. */
   private readonly send: PushSender | null;
@@ -67,17 +83,34 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
           return outcome;
         }
       : null;
-    this.deadmen = new DeadmanRegistry(config.deadman, this.send, this.admission, metrics, (line) => this.logger.log(line), (agentId) => this.agents.has(agentId));
+    this.deadmen = new DeadmanRegistry(
+      config.deadman,
+      this.send,
+      this.admission,
+      metrics,
+      (line) => this.logger.log(line),
+      (agentId) => this.agents.has(agentId),
+    );
   }
 
   onApplicationBootstrap(): void {
     const server = this.adapterHost.httpAdapter.getHttpServer() as Server;
     server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => this.upgrade(req, socket, head));
-    this.logger.log(this.send ? `native push on (FCM project ${this.config.push.account!.projectId})` : 'native push off');
+    this.logger.log(
+      this.send ? `native push on (FCM project ${this.config.push.account!.projectId})` : 'native push off',
+    );
     if (this.send) {
-      this.logger.log(this.config.deadman.enabled ? "dead man's switch on (deposits are held in memory: a restart of the relay forgets them)" : "dead man's switch off");
+      this.logger.log(
+        this.config.deadman.enabled
+          ? "dead man's switch on (deposits are held in memory: a restart of the relay forgets them)"
+          : "dead man's switch off",
+      );
     }
-    this.logger.log(this.config.publicOrigin ? `agents register for ${this.config.publicOrigin}` : 'RELAY_PUBLIC_URL unset: only agents dialling a loopback address can register');
+    this.logger.log(
+      this.config.publicOrigin
+        ? `agents register for ${this.config.publicOrigin}`
+        : 'RELAY_PUBLIC_URL unset: only agents dialling a loopback address can register',
+    );
     const every = Math.max(1000, Math.min(30_000, this.config.limits.idleTimeoutMs / 3));
     this.sweeper = setInterval(() => this.sweep(Date.now()), every);
     this.sweeper.unref();
@@ -89,7 +122,12 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
     }
     // 1001 "going away": agents reconnect with backoff, to this relay's successor.
     const all = [...this.agents.values(), ...this.pendingConnections];
-    const closed = all.map((c) => new Promise<void>((resolve) => (c.socket.readyState === WebSocket.CLOSED ? resolve() : c.socket.once('close', () => resolve()))));
+    const closed = all.map(
+      (c) =>
+        new Promise<void>((resolve) =>
+          c.socket.readyState === WebSocket.CLOSED ? resolve() : c.socket.once('close', () => resolve()),
+        ),
+    );
     for (const connection of all) {
       connection.link?.shutdown();
       connection.socket.close(1001, 'relay restarting');
@@ -146,7 +184,9 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
     if (this.admission.refuseConnect(address, this.agents.size)) {
       this.metrics.registration('full');
       const body = JSON.stringify({ code: 'RELAY_FULL' });
-      socket.end(`HTTP/1.1 503 Service Unavailable\r\nconnection: close\r\ncontent-type: application/json\r\ncontent-length: ${body.length}\r\n\r\n${body}`);
+      socket.end(
+        `HTTP/1.1 503 Service Unavailable\r\nconnection: close\r\ncontent-type: application/json\r\ncontent-length: ${body.length}\r\n\r\n${body}`,
+      );
       return;
     }
     // Full of unproven connections: the oldest goes. A real agent proves its key within one round trip,
@@ -277,8 +317,22 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
       limits,
       {
         parent: budget,
-        push: this.send && policy ? { send: this.send, policy, gate: this.admission.pushGate(address), maxInFlight: this.config.push.maxInFlight } : null,
-        deadman: this.send && this.config.deadman.enabled ? { deposit: (deposit) => (this.agents.get(agentId) === connection ? this.deadmen.deposit(agentId, deposit) : 'disabled') } : null,
+        push:
+          this.send && policy
+            ? {
+                send: this.send,
+                policy,
+                gate: this.admission.pushGate(address),
+                maxInFlight: this.config.push.maxInFlight,
+              }
+            : null,
+        deadman:
+          this.send && this.config.deadman.enabled
+            ? {
+                deposit: (deposit) =>
+                  this.agents.get(agentId) === connection ? this.deadmen.deposit(agentId, deposit) : 'disabled',
+              }
+            : null,
       },
     );
     this.agents.set(agentId, connection);
@@ -290,7 +344,15 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
       previous.link?.shutdown();
       previous.socket.close(RelayClose.Replaced, 'replaced');
     }
-    socket.send(encodeFrame(FrameType.Ready, 0, new TextEncoder().encode(JSON.stringify({ ...connection.link.info(), ...(fired ? { deadmanFired: fired } : {}) }))));
+    socket.send(
+      encodeFrame(
+        FrameType.Ready,
+        0,
+        new TextEncoder().encode(
+          JSON.stringify({ ...connection.link.info(), ...(fired ? { deadmanFired: fired } : {}) }),
+        ),
+      ),
+    );
     this.metrics.registration('ok');
     this.metrics.pending = this.pendingConnections.size;
     this.metrics.agents = this.agents.size;

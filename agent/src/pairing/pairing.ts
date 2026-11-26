@@ -1,9 +1,11 @@
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
-import { Logger } from '../logger';
+
 import QRCode from 'qrcode';
+
 import { IdentityService } from '../auth/identity.service';
 import type { Config } from '../config';
-import { Text, render, t } from '../i18n/text';
+import { render, t, Text } from '../i18n/text';
+import { Logger } from '../logger';
 import { relayHttpUrl } from '../relay/relay-url';
 
 /** No 0/O, 1/I/L: the code is also typed by hand. */
@@ -134,7 +136,9 @@ export class PairingService {
     }
     if (now - this.warnedAt >= FAILURE_WINDOW_MS) {
       this.warnedAt = now;
-      this.logger.warn(`more than ${MAX_FAILURES_PER_WINDOW} wrong pairing codes in ${FAILURE_WINDOW_MS / 60_000} minutes; someone may be guessing (the code stays valid)`);
+      this.logger.warn(
+        `more than ${MAX_FAILURES_PER_WINDOW} wrong pairing codes in ${FAILURE_WINDOW_MS / 60_000} minutes; someone may be guessing (the code stays valid)`,
+      );
     }
     // Bounded: only the window's attempts are kept, and they cost one comparison each.
     this.failures = this.failures.slice(-MAX_FAILURES_PER_WINDOW - 1);
@@ -151,8 +155,15 @@ export class PairingService {
     // The app falls back to the relay when the address is out of reach; it addresses the agent there by its key.
     const relay: Record<string, string> = this.config.relayUrl ? { relay: relayHttpUrl(this.config.relayUrl) } : {};
     const app = `kubernanny://pair?${new URLSearchParams({ url, code, name: this.config.clusterName, key, ...relay })}`;
-    const web = this.config.webRoot ? `${url}/#/pair?${new URLSearchParams({ code, name: this.config.clusterName, key, ...relay })}` : null;
-    return { app, web, image: `${QR_PAGE}#${encodeURIComponent(app)}`, portForward: `kubectl -n ${this.config.namespace} port-forward svc/kubernanny 8080:80` };
+    const web = this.config.webRoot
+      ? `${url}/#/pair?${new URLSearchParams({ code, name: this.config.clusterName, key, ...relay })}`
+      : null;
+    return {
+      app,
+      web,
+      image: `${QR_PAGE}#${encodeURIComponent(app)}`,
+      portForward: `kubectl -n ${this.config.namespace} port-forward svc/kubernanny 8080:80`,
+    };
   }
 
   /** The block the agent logs on start: `kubectl logs deploy/kubernanny` is the whole pairing step. */
@@ -161,7 +172,16 @@ export class PairingService {
     const qr = terminalQr(links.app);
     // Pod logs have no reader to ask, so the banner speaks the agent's LANGUAGE.
     const s = (text: Text) => render(text, this.config.language);
-    const lines = ['', s(t('banner.ready', { cluster: this.config.clusterName })), '', s(t('banner.scan')), qr, s(t('banner.image', { link: links.image })), '', s(t('banner.link', { link: links.app }))];
+    const lines = [
+      '',
+      s(t('banner.ready', { cluster: this.config.clusterName })),
+      '',
+      s(t('banner.scan')),
+      qr,
+      s(t('banner.image', { link: links.image })),
+      '',
+      s(t('banner.link', { link: links.app })),
+    ];
     if (links.web) {
       lines.push('', s(t('banner.web', { link: links.web })));
     }
@@ -172,7 +192,11 @@ export class PairingService {
       '',
       s(t('banner.code', { code: `${code.slice(0, 5)}-${code.slice(5)}` })),
       s(t('banner.key', { fingerprint: this.identity.fingerprint })),
-      s(t('banner.expired', { command: `kubectl -n ${this.config.namespace} exec deploy/kubernanny -- node dist/cli.js pair` })),
+      s(
+        t('banner.expired', {
+          command: `kubectl -n ${this.config.namespace} exec deploy/kubernanny -- node dist/cli.js pair`,
+        }),
+      ),
       '',
     );
     return lines.join('\n');

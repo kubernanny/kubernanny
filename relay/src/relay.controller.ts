@@ -1,10 +1,11 @@
 import { Controller, Get, Inject, Logger, Options, Param, Post, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
+
 import { AgentHub } from './agent-hub.service';
-import { RelayErrorCode, corsHeaders, idPrefix, parseRoute, relayError } from './core/http';
-import { clientAddress } from './core/limits';
 import { RELAY_CONFIG, RelayConfig } from './config';
-import { RelayMetrics, outcomeOf } from './metrics';
+import { corsHeaders, idPrefix, parseRoute, relayError, RelayErrorCode } from './core/http';
+import { clientAddress } from './core/limits';
+import { outcomeOf, RelayMetrics } from './metrics';
 
 /**
  * The app's side: `POST /v1/agents/{agentId}/e2e` with the sealed body the

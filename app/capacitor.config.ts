@@ -1,6 +1,7 @@
-import type { CapacitorConfig } from '@capacitor/cli';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+import type { CapacitorConfig } from '@capacitor/cli';
 
 /**
  * One QR scanner plugin per platform (src/app/core/scan/qr-scanner.service.ts):
@@ -12,7 +13,13 @@ import { join } from 'node:path';
  * Every other dependency stays included: the allowlist is the package's
  * dependencies minus that one plugin (names that are no plugin are ignored).
  */
-const dependencies = Object.keys((JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8')) as { dependencies: Record<string, string> }).dependencies);
+const dependencies = Object.keys(
+  (
+    JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8')) as {
+      dependencies: Record<string, string>;
+    }
+  ).dependencies,
+);
 const without = (plugin: string) => dependencies.filter((name) => name !== plugin);
 
 const config: CapacitorConfig = {

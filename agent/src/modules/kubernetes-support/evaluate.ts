@@ -1,5 +1,5 @@
-import { Issue, IssueSeverity, ageText } from '../../checks/types';
-import { Text, t } from '../../i18n/text';
+import { ageText, Issue, IssueSeverity } from '../../checks/types';
+import { t, Text } from '../../i18n/text';
 import { KUBERNETES_EOL } from './releases';
 
 const DAY = 86_400_000;
@@ -53,7 +53,9 @@ export function evaluateKubernetesSupport(
     return { minor: null, eol: null, ended: false, next: null, issues: [] };
   }
   const minor = Number(match[1]);
-  const known = Object.keys(table).map(Number).sort((a, b) => a - b);
+  const known = Object.keys(table)
+    .map(Number)
+    .sort((a, b) => a - b);
   const version = `1.${minor}`;
   if (known.length === 0 || minor > known[known.length - 1]!) {
     return { minor: version, eol: null, ended: false, next: null, issues: [] };
@@ -96,7 +98,9 @@ export function evaluateKubernetesSupport(
         id: `kubernetes-support/${version}`,
         check: 'kubernetes-support',
         severity,
-        title: ended ? t('kubernetesSupport.ended.title', { version }) : t('kubernetesSupport.ending.title', { version, age: ageText(left) }),
+        title: ended
+          ? t('kubernetesSupport.ended.title', { version })
+          : t('kubernetesSupport.ending.title', { version, age: ageText(left) }),
         cause: t('common.sentences', { parts }),
         actions: [],
       },

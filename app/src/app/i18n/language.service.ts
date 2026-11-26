@@ -1,6 +1,7 @@
-import { DOCUMENT, Injectable, computed, inject, signal } from '@angular/core';
+import { computed, DOCUMENT, inject, Injectable, signal } from '@angular/core';
 import { Preferences } from '@capacitor/preferences';
-import { LANGS, Lang, langFromLocale } from './lang';
+
+import { Lang, langFromLocale, LANGS } from './lang';
 import { Translator, translatorFor } from './translator';
 
 /** What the person picked: follow the device, or one language for good. */
@@ -68,7 +69,9 @@ export class LanguageService {
     const lang = this.lang();
     const root = this.document.documentElement;
     root.lang = lang;
-    this.document.querySelector('meta[name="description"]')?.setAttribute('content', translatorFor(lang).t('app.description'));
+    this.document
+      .querySelector('meta[name="description"]')
+      ?.setAttribute('content', translatorFor(lang).t('app.description'));
   }
 }
 

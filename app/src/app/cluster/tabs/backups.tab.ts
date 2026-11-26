@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { IonIcon, IonSpinner } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
+
 import { BackupsView } from '../../core/agent.model';
 import { Loadable } from '../../core/cluster-data.store';
 import { LanguageService } from '../../i18n/language.service';
@@ -32,7 +33,9 @@ import { backupsView } from '../backups-view';
 
           @for (g of v.groups; track g.kind) {
             <section>
-              <h2>{{ g.product }} <span class="what">{{ g.what }}</span></h2>
+              <h2>
+                {{ g.product }} <span class="what">{{ g.what }}</span>
+              </h2>
               <ul class="rows">
                 @for (l of g.lines; track l.id) {
                   <li [class]="'tone-' + l.tone">
@@ -72,7 +75,9 @@ import { backupsView } from '../backups-view';
                 @for (x of v.targets; track x.name) {
                   <li [class]="'tone-' + x.tone">
                     <div class="top">
-                      <span class="name"><strong>{{ x.name }}</strong></span>
+                      <span class="name"
+                        ><strong>{{ x.name }}</strong></span
+                      >
                       <span class="pill">{{ x.availability }}</span>
                     </div>
                     <span class="muted target">{{ x.text }}</span>
@@ -84,11 +89,15 @@ import { backupsView } from '../backups-view';
 
           @if (v.unprotected.length > 0) {
             <section class="unprotected">
-              <h2>{{ t('backups.unprotected') }} <span class="what">{{ v.unprotected.length }}</span></h2>
+              <h2>
+                {{ t('backups.unprotected') }} <span class="what">{{ v.unprotected.length }}</span>
+              </h2>
               <p class="muted intro">{{ t('backups.unprotectedIntro') }}</p>
               <ul>
                 @for (u of v.unprotected; track u.key) {
-                  <li><span class="kind">{{ u.kind }}</span><span class="uname">{{ u.name }}</span></li>
+                  <li>
+                    <span class="kind">{{ u.kind }}</span><span class="uname">{{ u.name }}</span>
+                  </li>
                 }
               </ul>
             </section>
@@ -231,5 +240,9 @@ export class BackupsTab {
   readonly backups = input.required<Loadable<BackupsView>>();
   readonly now = input.required<Date>();
   private readonly language = inject(LanguageService);
-  readonly vm = computed(() => (this.backups().value || !this.backups().loading ? backupsView(this.backups().value, this.now(), this.language.translator()) : null));
+  readonly vm = computed(() =>
+    this.backups().value || !this.backups().loading
+      ? backupsView(this.backups().value, this.now(), this.language.translator())
+      : null,
+  );
 }

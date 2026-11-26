@@ -1,10 +1,25 @@
-import { EnvironmentProviders, Injectable, Provider, effect, inject, isDevMode, provideAppInitializer, signal } from '@angular/core';
+import {
+  effect,
+  EnvironmentProviders,
+  inject,
+  Injectable,
+  isDevMode,
+  provideAppInitializer,
+  Provider,
+  signal,
+} from '@angular/core';
 import { Title } from '@angular/platform-browser';
 import { RouterStateSnapshot, TitleStrategy } from '@angular/router';
-import { Translation, TranslocoLoader, TranslocoService, provideTransloco } from '@jsverse/transloco';
+import {
+  provideTransloco,
+  Translation,
+  TranslocoLoader,
+  TranslocoService,
+} from '@jsverse/transloco';
 import { of } from 'rxjs';
-import { TranslationKey, flatten } from './dictionary';
-import { LANGS, Lang } from './lang';
+
+import { flatten, TranslationKey } from './dictionary';
+import { Lang, LANGS } from './lang';
 import { LanguageService } from './language.service';
 import { DICTIONARIES } from './translator';
 
@@ -43,7 +58,13 @@ export class TranslatedTitleStrategy extends TitleStrategy {
 export function provideI18n(): (Provider | EnvironmentProviders)[] {
   return [
     provideTransloco({
-      config: { availableLangs: [...LANGS], defaultLang: 'en', fallbackLang: 'en', reRenderOnLangChange: true, prodMode: !isDevMode() },
+      config: {
+        availableLangs: [...LANGS],
+        defaultLang: 'en',
+        fallbackLang: 'en',
+        reRenderOnLangChange: true,
+        prodMode: !isDevMode(),
+      },
       loader: BundledLoader,
     }),
     provideAppInitializer(() => followLanguage(null)),
@@ -79,7 +100,15 @@ function followLanguage(choice: Lang | null): void {
 /** For component tests: Transloco with the bundled texts, fixed to one language and not stored. */
 export function provideI18nTesting(lang: Lang = 'de'): (Provider | EnvironmentProviders)[] {
   return [
-    provideTransloco({ config: { availableLangs: [...LANGS], defaultLang: lang, reRenderOnLangChange: true, prodMode: true }, loader: BundledLoader }),
+    provideTransloco({
+      config: {
+        availableLangs: [...LANGS],
+        defaultLang: lang,
+        reRenderOnLangChange: true,
+        prodMode: true,
+      },
+      loader: BundledLoader,
+    }),
     provideAppInitializer(() => followLanguage(lang)),
   ];
 }

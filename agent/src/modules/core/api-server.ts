@@ -17,8 +17,18 @@ export class ApiServerCheck extends CoreCheck {
     const issues = evaluateApiServerCertificate(notAfter, ctx.now);
     const stats: Stat[] = [{ label: t('stat.version'), value: ctx.inv.version?.gitVersion ?? '?' }];
     if (notAfter) {
-      stats.push({ label: t('apiserver.stat.certValidUntil'), value: notAfter.toISOString().slice(0, 10), tone: issues.length ? 'warning' : 'ok' });
+      stats.push({
+        label: t('apiserver.stat.certValidUntil'),
+        value: notAfter.toISOString().slice(0, 10),
+        tone: issues.length ? 'warning' : 'ok',
+      });
     }
-    return { issues, stats, summary: notAfter ? t('apiserver.summary.cert', { age: ageText(notAfter.getTime() - ctx.now.getTime()) }) : t('apiserver.summary.reachable') };
+    return {
+      issues,
+      stats,
+      summary: notAfter
+        ? t('apiserver.summary.cert', { age: ageText(notAfter.getTime() - ctx.now.getTime()) })
+        : t('apiserver.summary.reachable'),
+    };
   }
 }

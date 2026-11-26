@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+
 import { Tone } from '../core/agent.model';
 
 /** Tone for a usage ratio: amber from 80 %, coral from 90 %. */
@@ -22,7 +23,15 @@ export function usageTone(ratio: number | null): Tone {
       <span class="label">{{ label() }}</span>
       <span class="value">{{ text() }}</span>
     </div>
-    <div class="track" [class]="'track tone-' + tone()" role="meter" [attr.aria-label]="label()" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="usedPct()">
+    <div
+      class="track"
+      [class]="'track tone-' + tone()"
+      role="meter"
+      [attr.aria-label]="label()"
+      aria-valuemin="0"
+      aria-valuemax="100"
+      [attr.aria-valuenow]="usedPct()"
+    >
       @if (reservedPct() > usedPct()) {
         <span class="reserved" [style.width.%]="reservedPct()"></span>
       }

@@ -1,9 +1,9 @@
 import { Issue } from '../../checks/types';
 import { t, Text } from '../../i18n/text';
-import { withUnit } from '../format';
 import { Inventory } from '../../inventory/inventory';
-import { PromSample } from '../service-proxy';
+import { withUnit } from '../format';
 import { CoreCheck } from '../module';
+import { PromSample } from '../service-proxy';
 import { ModuleContext, ModuleResult } from '../types';
 
 /**
@@ -39,12 +39,22 @@ export function evaluateNodeClocks(clocks: NodeClock[]): Issue[] {
         id: `node-clocks/${c.node}`,
         check: 'node-clocks',
         severity: off > CLOCK_CRITICAL_S ? 'critical' : 'warning',
-        title: t('nodeClocks.skew.title', { node: c.node, seconds: off < 10 ? Math.round(off * 100) / 100 : Math.round(off) }),
+        title: t('nodeClocks.skew.title', {
+          node: c.node,
+          seconds: off < 10 ? Math.round(off * 100) / 100 : Math.round(off),
+        }),
         cause: t('nodeClocks.skew.cause'),
         actions: [],
       });
     } else if (c.synchronised === false) {
-      issues.push({ id: `node-clocks/${c.node}`, check: 'node-clocks', severity: 'warning', title: t('nodeClocks.unsynced.title', { node: c.node }), cause: t('nodeClocks.unsynced.cause'), actions: [] });
+      issues.push({
+        id: `node-clocks/${c.node}`,
+        check: 'node-clocks',
+        severity: 'warning',
+        title: t('nodeClocks.unsynced.title', { node: c.node }),
+        cause: t('nodeClocks.unsynced.cause'),
+        actions: [],
+      });
     }
   }
   return issues;
@@ -116,25 +126,38 @@ export class NodeClocksCheck extends CoreCheck {
 
   protected async check(ctx: ModuleContext): Promise<ModuleResult> {
     if (!ctx.prom) {
-      return { issues: [], stats: [{ label: t('nodeClocks.stat.source'), value: t('nodeClocks.needsPrometheus'), tone: 'muted' }], summary: t('nodeClocks.summary.noPrometheus') };
+      return {
+        issues: [],
+        stats: [{ label: t('nodeClocks.stat.source'), value: t('nodeClocks.needsPrometheus'), tone: 'muted' }],
+        summary: t('nodeClocks.summary.noPrometheus'),
+      };
     }
     const clocks = await readNodeClocks(ctx);
     const issues = evaluateNodeClocks(clocks);
     const measured = clocks.filter((c) => c.offset !== undefined);
     const worst = measured.reduce((m, c) => Math.max(m, Math.abs(c.offset!)), 0);
-    const ms = (v: number): string | Text => (v < 0.001 ? '< 1 ms' : v < 1 ? `${Math.round(v * 1000)} ms` : withUnit(v, 's'));
+    const ms = (v: number): string | Text =>
+      v < 0.001 ? '< 1 ms' : v < 1 ? `${Math.round(v * 1000)} ms` : withUnit(v, 's');
     if (measured.length === 0) {
       // No offset (chrony): the kernel still says whether the clock is synchronised, and the daemon how far off it may be.
       const known = clocks.filter((c) => c.synchronised !== undefined);
       if (known.length === 0) {
-        return { issues, stats: [{ label: t('nodeClocks.stat.source'), value: t('nodeClocks.noMetrics'), tone: 'muted' }], summary: issues[0]?.title ?? t('nodeClocks.summary.noMetrics') };
+        return {
+          issues,
+          stats: [{ label: t('nodeClocks.stat.source'), value: t('nodeClocks.noMetrics'), tone: 'muted' }],
+          summary: issues[0]?.title ?? t('nodeClocks.summary.noMetrics'),
+        };
       }
       const synced = known.filter((c) => c.synchronised).length;
       const errors = clocks.map((c) => c.estimatedError).filter((v): v is number => v !== undefined);
       return {
         issues,
         stats: [
-          { label: t('nodeClocks.stat.synced'), value: `${synced}/${ctx.inv.nodes.length}`, tone: synced === known.length ? 'ok' : 'warning' },
+          {
+            label: t('nodeClocks.stat.synced'),
+            value: `${synced}/${ctx.inv.nodes.length}`,
+            tone: synced === known.length ? 'ok' : 'warning',
+          },
           ...(errors.length ? [{ label: t('nodeClocks.stat.estimatedError'), value: ms(Math.max(...errors)) }] : []),
         ],
         summary: issues[0]?.title ?? t('nodeClocks.summary.synced', { n: synced }),
@@ -144,7 +167,11 @@ export class NodeClocksCheck extends CoreCheck {
       issues,
       stats: [
         { label: t('nodeClocks.stat.measured'), value: `${measured.length}/${ctx.inv.nodes.length}` },
-        { label: t('nodeClocks.stat.worst'), value: ms(worst), tone: worst > CLOCK_CRITICAL_S ? 'critical' : worst > CLOCK_WARNING_S ? 'warning' : 'ok' },
+        {
+          label: t('nodeClocks.stat.worst'),
+          value: ms(worst),
+          tone: worst > CLOCK_CRITICAL_S ? 'critical' : worst > CLOCK_WARNING_S ? 'warning' : 'ok',
+        },
       ],
       summary: issues[0]?.title ?? t('nodeClocks.summary.ok', { n: measured.length }),
     };

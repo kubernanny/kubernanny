@@ -3,8 +3,9 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { generateKeyPair, openRequest, toBase64Url } from '@kubernanny/protocol';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ClusterConfig } from './agent.model';
+
 import { translatorFor } from '../i18n/translator';
+import { ClusterConfig } from './agent.model';
 import { AgentClient, AgentError, describeError } from './agent-client.service';
 
 const json = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
@@ -24,7 +25,9 @@ describe('AgentClient end to end', () => {
   let http: HttpTestingController;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
     client = TestBed.inject(AgentClient);
     http = TestBed.inject(HttpTestingController);
   });
@@ -77,7 +80,9 @@ describe('AgentClient end to end', () => {
     await Promise.resolve();
     const req = http.expectOne(`${cluster.url}/api/e2e`);
     // An impostor sees the request but cannot open it; a made-up answer does not verify.
-    expect(() => openRequest(generateKeyPair(), new Uint8Array(req.request.body as ArrayBuffer))).toThrow();
+    expect(() =>
+      openRequest(generateKeyPair(), new Uint8Array(req.request.body as ArrayBuffer)),
+    ).toThrow();
     req.flush(new Uint8Array([1, 0, 40, ...new Uint8Array(40)]).buffer);
     const err = await pending.catch((e: unknown) => e);
     expect(describeError(err, translatorFor('de'))).toContain('nicht vom gekoppelten Agent');
@@ -88,12 +93,25 @@ describe('AgentClient end to end', () => {
     await Promise.resolve();
     const req = http.expectOne(`${cluster.url}/api/e2e`);
     const opened = openRequest(agent, new Uint8Array(req.request.body as ArrayBuffer));
-    expect(opened.request).toMatchObject({ method: 'POST', path: '/pair', body: { code: 'ABCDE23456', name: 'iPhone, Safari' } });
-    req.flush(opened.respond(200, json({ deviceId: 'd9', cluster: 'home' }), Date.now()).slice().buffer);
+    expect(opened.request).toMatchObject({
+      method: 'POST',
+      path: '/pair',
+      body: { code: 'ABCDE23456', name: 'iPhone, Safari' },
+    });
+    req.flush(
+      opened.respond(200, json({ deviceId: 'd9', cluster: 'home' }), Date.now()).slice().buffer,
+    );
     const pairing = await pending;
-    expect(pairing).toMatchObject({ url: cluster.url, agentKey: cluster.agentKey, deviceId: 'd9', cluster: 'home' });
+    expect(pairing).toMatchObject({
+      url: cluster.url,
+      agentKey: cluster.agentKey,
+      deviceId: 'd9',
+      cluster: 'home',
+    });
     expect(pairing.deviceKey).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(new TextDecoder().decode(new Uint8Array(req.request.body as ArrayBuffer))).not.toContain(pairing.deviceKey);
+    expect(new TextDecoder().decode(new Uint8Array(req.request.body as ArrayBuffer))).not.toContain(
+      pairing.deviceKey,
+    );
   });
 
   it('refuses to fetch an unpinned key over plain http', async () => {

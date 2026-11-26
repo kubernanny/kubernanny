@@ -1,4 +1,5 @@
 import { PushOutcome, PushRequest, pushTokenDigest } from '@kubernanny/protocol';
+
 import { BucketState, TokenBucket } from './limits';
 
 /** WebCrypto's key type; named through `crypto` because the relay compiles without the DOM library. */
@@ -46,7 +47,16 @@ export interface ServiceAccount {
   tokenUri: string;
 }
 
-export const DEFAULT_PUSH = { agentBurst: 20, agentPerHour: 60, tokenPerHour: 30, statusTokenPerHour: 2, tokensPerDay: 32, addressPerHour: 240, relayPerHour: 20_000, maxInFlight: 4 } as const;
+export const DEFAULT_PUSH = {
+  agentBurst: 20,
+  agentPerHour: 60,
+  tokenPerHour: 30,
+  statusTokenPerHour: 2,
+  tokensPerDay: 32,
+  addressPerHour: 240,
+  relayPerHour: 20_000,
+  maxInFlight: 4,
+} as const;
 const GOOGLE_TOKEN_URI = 'https://oauth2.googleapis.com/token';
 const FCM_SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
 /** Tokens kept for the per-token limit; past this the least recently used goes. */
@@ -98,7 +108,13 @@ export function parseServiceAccount(json: string): ServiceAccount {
     throw new Error('FCM_SERVICE_ACCOUNT is not JSON (expected the service account key file)');
   }
   const { client_email, private_key, project_id, token_uri } = raw ?? {};
-  if (typeof client_email !== 'string' || typeof private_key !== 'string' || !private_key.includes('PRIVATE KEY') || typeof project_id !== 'string' || !/^[a-z0-9-]{4,40}$/.test(project_id)) {
+  if (
+    typeof client_email !== 'string' ||
+    typeof private_key !== 'string' ||
+    !private_key.includes('PRIVATE KEY') ||
+    typeof project_id !== 'string' ||
+    !/^[a-z0-9-]{4,40}$/.test(project_id)
+  ) {
     throw new Error('FCM_SERVICE_ACCOUNT needs client_email, private_key and project_id');
   }
   // Only Google's own token endpoint: the assertion is a credential, and a key file pointing elsewhere would hand it out.
@@ -144,7 +160,11 @@ export function fcmMessage(push: PushRequest): unknown {
         token: push.token,
         data,
         apns: {
-          headers: { 'apns-priority': '5', 'apns-push-type': 'background', 'apns-expiration': String(Math.floor(Date.now() / 1000) + 3600) },
+          headers: {
+            'apns-priority': '5',
+            'apns-push-type': 'background',
+            'apns-expiration': String(Math.floor(Date.now() / 1000) + 3600),
+          },
           payload: { aps: { 'content-available': 1 } },
         },
       },
@@ -158,7 +178,11 @@ export function fcmMessage(push: PushRequest): unknown {
       token: push.token,
       data,
       apns: {
-        headers: { 'apns-priority': '10', 'apns-push-type': 'alert', 'apns-expiration': String(Math.floor(Date.now() / 1000) + 86_400) },
+        headers: {
+          'apns-priority': '10',
+          'apns-push-type': 'alert',
+          'apns-expiration': String(Math.floor(Date.now() / 1000) + 86_400),
+        },
         payload: { aps: { alert: FALLBACK[push.lang ?? 'en'], 'mutable-content': 1, sound: 'default' } },
       },
     },
@@ -179,10 +203,20 @@ export function outcomeOf(status: number, body: unknown): PushOutcome {
   if (status >= 200 && status < 300) {
     return 'sent';
   }
-  const error = (body as { error?: { details?: { errorCode?: unknown; fieldViolations?: { field?: unknown }[] }[]; status?: unknown } } | null)?.error;
+  const error = (
+    body as {
+      error?: { details?: { errorCode?: unknown; fieldViolations?: { field?: unknown }[] }[]; status?: unknown };
+    } | null
+  )?.error;
   const code = error?.details?.find((d) => typeof d?.errorCode === 'string')?.errorCode ?? error?.status;
-  const tokenField = error?.details?.some((d) => d?.fieldViolations?.some((v) => v?.field === 'message.token')) ?? false;
-  if (status === 404 || code === 'UNREGISTERED' || code === 'SENDER_ID_MISMATCH' || ((code === 'INVALID_ARGUMENT' || status === 400) && tokenField)) {
+  const tokenField =
+    error?.details?.some((d) => d?.fieldViolations?.some((v) => v?.field === 'message.token')) ?? false;
+  if (
+    status === 404 ||
+    code === 'UNREGISTERED' ||
+    code === 'SENDER_ID_MISMATCH' ||
+    ((code === 'INVALID_ARGUMENT' || status === 400) && tokenField)
+  ) {
     return 'unregistered';
   }
   if (status === 429 || code === 'QUOTA_EXCEEDED') {
@@ -197,7 +231,10 @@ export function outcomeOf(status: number, body: unknown): PushOutcome {
   return 'failed';
 }
 
-type Fetch = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal }) => Promise<{ status: number; json(): Promise<unknown> }>;
+type Fetch = (
+  url: string,
+  init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal },
+) => Promise<{ status: number; json(): Promise<unknown> }>;
 
 /** Access tokens per service account, shared by every client in this process or isolate (a Worker's objects come and go). */
 const accessTokens = new Map<string, { token: string; until: number }>();
@@ -224,12 +261,15 @@ export class FcmClient {
         return 'unavailable';
       }
       try {
-        const res = await this.fetchFn(`https://fcm.googleapis.com/v1/projects/${this.account.projectId}/messages:send`, {
-          method: 'POST',
-          headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-          body: JSON.stringify(fcmMessage(push)),
-          signal: AbortSignal.timeout(10_000),
-        });
+        const res = await this.fetchFn(
+          `https://fcm.googleapis.com/v1/projects/${this.account.projectId}/messages:send`,
+          {
+            method: 'POST',
+            headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+            body: JSON.stringify(fcmMessage(push)),
+            signal: AbortSignal.timeout(10_000),
+          },
+        );
         const body = res.status >= 300 ? await res.json().catch(() => null) : null;
         // THIRD_PARTY_AUTH_ERROR is a 401 too, but about the APNs credentials in Firebase: a new token does not help.
         if (res.status === 401 && !isThirdPartyAuthError(body)) {
@@ -275,16 +315,31 @@ export class FcmClient {
       throw new Error(`token endpoint answered ${res.status}`);
     }
     const lifetime = typeof body.expires_in === 'number' ? body.expires_in : 3600;
-    accessTokens.set(this.account.clientEmail, { token: body.access_token, until: this.now() + Math.max(60, lifetime - 300) * 1000 });
+    accessTokens.set(this.account.clientEmail, {
+      token: body.access_token,
+      until: this.now() + Math.max(60, lifetime - 300) * 1000,
+    });
     return body.access_token;
   }
 
   async assertion(): Promise<string> {
     const iat = Math.floor(this.now() / 1000);
     const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-    const claims = b64url(JSON.stringify({ iss: this.account.clientEmail, scope: FCM_SCOPE, aud: this.account.tokenUri, iat, exp: iat + 3600 }));
+    const claims = b64url(
+      JSON.stringify({
+        iss: this.account.clientEmail,
+        scope: FCM_SCOPE,
+        aud: this.account.tokenUri,
+        iat,
+        exp: iat + 3600,
+      }),
+    );
     this.signingKey ??= importPkcs8(this.account.privateKey);
-    const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', await this.signingKey, new TextEncoder().encode(`${header}.${claims}`));
+    const signature = await crypto.subtle.sign(
+      'RSASSA-PKCS1-v1_5',
+      await this.signingKey,
+      new TextEncoder().encode(`${header}.${claims}`),
+    );
     return `${header}.${claims}.${b64url(new Uint8Array(signature))}`;
   }
 }
@@ -367,7 +422,10 @@ export interface TokenGate {
 }
 
 /** The Node relay's gate: one TokenLimiter for alerts, one for status pushes. */
-export function memoryTokenGate(config: Pick<PushConfig, 'tokenPerHour' | 'statusTokenPerHour'>, now: () => number = Date.now): TokenGate {
+export function memoryTokenGate(
+  config: Pick<PushConfig, 'tokenPerHour' | 'statusTokenPerHour'>,
+  now: () => number = Date.now,
+): TokenGate {
   const alerts = new TokenLimiter(config.tokenPerHour, now);
   const status = new TokenLimiter(config.statusTokenPerHour, now);
   return { take: (token, silent) => (silent ? status : alerts).take(token) };
@@ -376,7 +434,11 @@ export function memoryTokenGate(config: Pick<PushConfig, 'tokenPerHour' | 'statu
 /** What an AgentLink calls for a Push frame: per-token limit, then FCM. */
 export type PushSender = (push: PushRequest) => Promise<PushOutcome>;
 
-export function pushSender(config: PushConfig, client: FcmClient | null = config.account ? new FcmClient(config.account) : null, tokens: TokenGate = memoryTokenGate(config)): PushSender | null {
+export function pushSender(
+  config: PushConfig,
+  client: FcmClient | null = config.account ? new FcmClient(config.account) : null,
+  tokens: TokenGate = memoryTokenGate(config),
+): PushSender | null {
   if (!config.enabled || !client) {
     return null;
   }

@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+
 import { Tone } from '../core/agent.model';
 import { bytes, decimal, percent } from '../core/format';
 import { LanguageService } from '../i18n/language.service';
@@ -67,13 +68,26 @@ const clamp = (v: number) => Math.max(0, Math.min(100, v));
  * to more than there is. Tone: coral from 90 % use, amber from 80 % use or
  * when requests take 90 % (nothing more can be scheduled).
  */
-export function resourceBarView(r: ResourceInput, label: string, tr: Translator, short = false): ResourceBarView {
+export function resourceBarView(
+  r: ResourceInput,
+  label: string,
+  tr: Translator,
+  short = false,
+): ResourceBarView {
   const cap = r.capacity > 0 ? r.capacity : 0;
-  const share = (v: number | null | undefined) => (v === null || v === undefined || cap === 0 ? null : v / cap);
+  const share = (v: number | null | undefined) =>
+    v === null || v === undefined || cap === 0 ? null : v / cap;
   const used = share(r.used);
   const reserved = share(r.requested);
   const limit = r.capacityIsLimit ? null : share(r.limit);
-  const tone: Tone = used === null || r.uncapped ? 'muted' : used >= 0.9 ? 'critical' : used >= 0.8 || (reserved ?? 0) >= 0.9 ? 'warning' : 'ok';
+  const tone: Tone =
+    used === null || r.uncapped
+      ? 'muted'
+      : used >= 0.9
+        ? 'critical'
+        : used >= 0.8 || (reserved ?? 0) >= 0.9
+          ? 'warning'
+          : 'ok';
   const unit = r.kind === 'cpu' ? ` ${tr.t('bar.cores')}` : '';
   const fmt = (v: number) => amount(r.kind, v, tr);
   const value =
@@ -82,8 +96,8 @@ export function resourceBarView(r: ResourceInput, label: string, tr: Translator,
       : r.uncapped
         ? `${fmt(r.used)}${unit}`
         : r.kind === 'cpu'
-        ? `${fmt(r.used)} / ${fmt(cap)}${unit}`
-        : `${fmt(r.used)} / ${fmt(cap)}`;
+          ? `${fmt(r.used)} / ${fmt(cap)}${unit}`
+          : `${fmt(r.used)} / ${fmt(cap)}`;
   const legend: LegendItem[] = [];
   if (r.used !== null) {
     legend.push({ kind: 'used', text: tr.t('bar.used', { value: fmt(r.used) }) });
@@ -92,17 +106,29 @@ export function resourceBarView(r: ResourceInput, label: string, tr: Translator,
     legend.push({ kind: 'reserved', text: tr.t('bar.reserved', { value: fmt(r.requested) }) });
   }
   if (r.capacityIsLimit) {
-    legend.push({ kind: 'limit', text: tr.t('bar.limit', { value: fmt(cap) }), ...(r.withoutLimit ? { extra: tr.n(short ? 'bar.withoutLimitShort' : 'bar.withoutLimit', r.withoutLimit) } : {}) });
+    legend.push({
+      kind: 'limit',
+      text: tr.t('bar.limit', { value: fmt(cap) }),
+      ...(r.withoutLimit
+        ? { extra: tr.n(short ? 'bar.withoutLimitShort' : 'bar.withoutLimit', r.withoutLimit) }
+        : {}),
+    });
   } else if (r.limit !== undefined) {
     const over = limit !== null && limit > 1 ? Math.round((limit - 1) * 100) : 0;
     legend.push({
       kind: 'limit',
       text: r.limit > 0 ? tr.t('bar.limit', { value: fmt(r.limit) }) : tr.t('bar.noLimit'),
-      ...(r.withoutLimit ? { extra: tr.n(short ? 'bar.withoutLimitShort' : 'bar.withoutLimit', r.withoutLimit) } : {}),
+      ...(r.withoutLimit
+        ? { extra: tr.n(short ? 'bar.withoutLimitShort' : 'bar.withoutLimit', r.withoutLimit) }
+        : {}),
       ...(over > 0 ? { over: tr.t('bar.over', { pct: over }) } : {}),
     });
   }
-  const aria = [label, value, ...legend.map((l) => [l.text, l.extra, l.over].filter(Boolean).join(' '))].join(', ');
+  const aria = [
+    label,
+    value,
+    ...legend.map((l) => [l.text, l.extra, l.over].filter(Boolean).join(' ')),
+  ].join(', ');
   return {
     label,
     value,
@@ -123,7 +149,15 @@ export function resourceBarView(r: ResourceInput, label: string, tr: Translator,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (view(); as v) {
-      <div [class]="'rb tone-' + v.tone" [class.compact]="compact()" role="meter" [attr.aria-label]="v.aria" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="v.usedPct">
+      <div
+        [class]="'rb tone-' + v.tone"
+        [class.compact]="compact()"
+        role="meter"
+        [attr.aria-label]="v.aria"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        [attr.aria-valuenow]="v.usedPct"
+      >
         @if (head()) {
           <div class="head">
             <span class="label">{{ v.label }}</span>
@@ -142,7 +176,11 @@ export function resourceBarView(r: ResourceInput, label: string, tr: Translator,
               <span class="seg-used" [style.width.%]="v.usedPct"></span>
             </div>
             @if (v.limitPct !== null) {
-              <span class="seg-limit" [class.at-end]="v.overbooked" [style.left.%]="v.limitPct"></span>
+              <span
+                class="seg-limit"
+                [class.at-end]="v.overbooked"
+                [style.left.%]="v.limitPct"
+              ></span>
             }
           </div>
           @if (v.overbooked) {
@@ -150,20 +188,20 @@ export function resourceBarView(r: ResourceInput, label: string, tr: Translator,
           }
         </div>
         @if (legend()) {
-        <ul class="legend" [class.one-line]="oneLine()" aria-hidden="true">
-          @for (l of v.legend; track l.kind) {
-            <li [class]="l.kind">
-              <span class="swatch"></span>
-              <span>{{ l.text }}</span>
-              @if (l.extra) {
-                <span class="extra">{{ l.extra }}</span>
-              }
-              @if (l.over) {
-                <span class="over-text">{{ l.over }}</span>
-              }
-            </li>
-          }
-        </ul>
+          <ul class="legend" [class.one-line]="oneLine()" aria-hidden="true">
+            @for (l of v.legend; track l.kind) {
+              <li [class]="l.kind">
+                <span class="swatch"></span>
+                <span>{{ l.text }}</span>
+                @if (l.extra) {
+                  <span class="extra">{{ l.extra }}</span>
+                }
+                @if (l.over) {
+                  <span class="over-text">{{ l.over }}</span>
+                }
+              </li>
+            }
+          </ul>
         }
       </div>
     }
@@ -223,7 +261,11 @@ export function resourceBarView(r: ResourceInput, label: string, tr: Translator,
       inset: 0 auto 0 0;
       border-radius: 999px;
       background:
-        repeating-linear-gradient(135deg, color-mix(in srgb, var(--tone) 55%, transparent) 0 2px, transparent 2px 5px),
+        repeating-linear-gradient(
+          135deg,
+          color-mix(in srgb, var(--tone) 55%, transparent) 0 2px,
+          transparent 2px 5px
+        ),
         color-mix(in srgb, var(--tone) 22%, transparent);
       box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 55%, transparent);
     }
@@ -234,7 +276,12 @@ export function resourceBarView(r: ResourceInput, label: string, tr: Translator,
       left: 3px;
       max-width: calc(100% - 6px);
       border-radius: 999px;
-      background: linear-gradient(90deg, var(--tone) 0, var(--tone) calc(100% - 6px), color-mix(in srgb, var(--tone) 45%, white) 100%);
+      background: linear-gradient(
+        90deg,
+        var(--tone) 0,
+        var(--tone) calc(100% - 6px),
+        color-mix(in srgb, var(--tone) 45%, white) 100%
+      );
       box-shadow: 0 0 6px color-mix(in srgb, var(--tone) 45%, transparent);
       transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
@@ -312,7 +359,11 @@ export function resourceBarView(r: ResourceInput, label: string, tr: Translator,
     }
     .reserved .swatch {
       background:
-        repeating-linear-gradient(135deg, color-mix(in srgb, var(--tone) 50%, transparent) 0 2px, transparent 2px 4px),
+        repeating-linear-gradient(
+          135deg,
+          color-mix(in srgb, var(--tone) 50%, transparent) 0 2px,
+          transparent 2px 4px
+        ),
         color-mix(in srgb, var(--tone) 18%, transparent);
     }
     .limit .swatch {
@@ -345,5 +396,7 @@ export class ResourceBar {
   /** Legend on one line with the short "+ 57 ohne Limit" (the overview rail). */
   readonly oneLine = input(false);
   private readonly language = inject(LanguageService);
-  readonly view = computed(() => resourceBarView(this.resource(), this.label(), this.language.translator(), this.oneLine()));
+  readonly view = computed(() =>
+    resourceBarView(this.resource(), this.label(), this.language.translator(), this.oneLine()),
+  );
 }

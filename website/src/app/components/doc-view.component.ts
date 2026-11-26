@@ -1,10 +1,10 @@
 import {
+  afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
+  computed,
   DestroyRef,
   ElementRef,
-  afterRenderEffect,
-  computed,
   inject,
   signal,
 } from '@angular/core';
@@ -12,6 +12,7 @@ import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { DomSanitizer } from '@angular/platform-browser';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { map } from 'rxjs';
+
 import { copyText } from '../core/clipboard';
 import type { DocPage } from '../core/docs.types';
 import { renderMermaid } from '../core/mermaid';
@@ -184,7 +185,14 @@ export class DocViewComponent {
     const link = target?.closest<HTMLAnchorElement>('a[href]');
     const href = link?.getAttribute('href') ?? '';
     const plainClick = event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
-    if (link && plainClick && !link.target && href.startsWith('/') && !href.startsWith('//') && !href.startsWith('/docs-media/')) {
+    if (
+      link &&
+      plainClick &&
+      !link.target &&
+      href.startsWith('/') &&
+      !href.startsWith('//') &&
+      !href.startsWith('/docs-media/')
+    ) {
       event.preventDefault();
       void this.router.navigateByUrl(href);
     }

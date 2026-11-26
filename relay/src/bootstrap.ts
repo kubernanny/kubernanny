@@ -1,8 +1,11 @@
 import 'reflect-metadata';
-import { Server, createServer } from 'node:http';
+
+import { createServer, Server } from 'node:http';
+
 import { INestApplication, LogLevel } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
+
 import { RELAY_CONFIG, RelayConfig } from './config';
 import { RelayMetrics } from './metrics';
 import { RelayNotFoundFilter } from './not-found.filter';
@@ -18,7 +21,9 @@ export interface RunningRelay {
 const LEVELS: LogLevel[] = ['fatal', 'error', 'warn', 'log', 'debug', 'verbose'];
 
 /** Starts the relay; used by main.ts and by the tests (port 0 picks a free one). */
-export async function startRelay(options: { port?: number; metricsPort?: number; logger?: false | LogLevel } = {}): Promise<RunningRelay> {
+export async function startRelay(
+  options: { port?: number; metricsPort?: number; logger?: false | LogLevel } = {},
+): Promise<RunningRelay> {
   const level = options.logger ?? ((process.env.LOG_LEVEL as LogLevel | undefined) || 'log');
   const app = await NestFactory.create<NestExpressApplication>(RelayModule, {
     bodyParser: false,

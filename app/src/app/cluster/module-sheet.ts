@@ -1,22 +1,51 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { ActionSheetController, AlertController, IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonToolbar, ModalController, ToastController } from '@ionic/angular/standalone';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
+import {
+  ActionSheetController,
+  AlertController,
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonIcon,
+  IonToolbar,
+  ModalController,
+  ToastController,
+} from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
-import { AgentClient, describeError } from '../core/agent-client.service';
+
 import { ClusterConfig, ModuleView, Tone } from '../core/agent.model';
+import { AgentClient, describeError } from '../core/agent-client.service';
 import { externalUrl } from '../core/external-url';
 import { LanguageService } from '../i18n/language.service';
 import { IssueList } from '../ui/issue-list';
+import { markRolledBack, RollbackRow, rollbackRows } from './argocd-rollback';
 import { IssueCard, moduleRow } from './cluster-view';
-import { AcceptedRow, acceptedRows } from './vulnerability-acceptance';
-import { RollbackRow, markRolledBack, rollbackRows } from './argocd-rollback';
-import { SheetView, buildSheetView } from './module-sheet-view';
 import { DetailSectionView } from './detail-section';
+import { buildSheetView, SheetView } from './module-sheet-view';
+import { AcceptedRow, acceptedRows } from './vulnerability-acceptance';
 
 /** Everything Kubernanny knows about one component: its numbers, its problems, its pods and where to open it. */
 @Component({
   selector: 'app-module-sheet',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, IonHeader, IonToolbar, IonButtons, IonButton, IonContent, IonIcon, IssueList, DetailSectionView],
+  imports: [
+    TranslocoDirective,
+    IonHeader,
+    IonToolbar,
+    IonButtons,
+    IonButton,
+    IonContent,
+    IonIcon,
+    IssueList,
+    DetailSectionView,
+  ],
   template: `
     <ng-container *transloco="let t">
       <ion-header>
@@ -37,7 +66,9 @@ import { DetailSectionView } from './detail-section';
             }
           </div>
         </header>
-        <p [class]="'summary tone-' + head().tone"><span class="pill">{{ head().statusLabel }}</span> {{ module.summary }}</p>
+        <p [class]="'summary tone-' + head().tone">
+          <span class="pill">{{ head().statusLabel }}</span> {{ module.summary }}
+        </p>
         @if (module.error) {
           <p class="error">{{ t('module.checkFailed', { error: module.error }) }}</p>
         }
@@ -54,7 +85,14 @@ import { DetailSectionView } from './detail-section';
         }
 
         @if (sheet().figures.length > 0) {
-          <dl class="figures" [attr.aria-label]="t('module.keyFigures')" [style.--n]="sheet().columns" [class.four]="sheet().columns === 4" [class.three]="sheet().columns === 3" [class.long]="sheet().longLabels">
+          <dl
+            class="figures"
+            [attr.aria-label]="t('module.keyFigures')"
+            [style.--n]="sheet().columns"
+            [class.four]="sheet().columns === 4"
+            [class.three]="sheet().columns === 3"
+            [class.long]="sheet().longLabels"
+          >
             @for (s of sheet().figures; track s.label) {
               <div [class]="'tone-' + (s.tone ?? 'muted')">
                 <dt>{{ s.label }}</dt>
@@ -70,7 +108,11 @@ import { DetailSectionView } from './detail-section';
         }
 
         @for (sec of sheet().sections; track sec.key) {
-          <app-detail-section [section]="sec" [expanded]="expanded().has(sec.key)" (toggle)="toggle(sec.key)" />
+          <app-detail-section
+            [section]="sec"
+            [expanded]="expanded().has(sec.key)"
+            (toggle)="toggle(sec.key)"
+          />
         }
 
         @if (rollbacks().length > 0) {
@@ -85,7 +127,9 @@ import { DetailSectionView } from './detail-section';
                     <span class="muted">{{ r.now }}</span>
                   }
                 </div>
-                <button type="button" [disabled]="busy() !== null" (click)="rollback(r)">{{ t('module.rollbackButton') }}</button>
+                <button type="button" [disabled]="busy() !== null" (click)="rollback(r)">
+                  {{ t('module.rollbackButton') }}
+                </button>
               </li>
             }
           </ul>
@@ -98,7 +142,9 @@ import { DetailSectionView } from './detail-section';
               <li>
                 <div>
                   @if (a.url) {
-                    <a class="advisory" [href]="a.url" target="_blank" rel="noopener noreferrer">{{ a.advisory }}</a>
+                    <a class="advisory" [href]="a.url" target="_blank" rel="noopener noreferrer">{{
+                      a.advisory
+                    }}</a>
                   } @else {
                     <span class="advisory">{{ a.advisory }}</span>
                   }
@@ -108,7 +154,9 @@ import { DetailSectionView } from './detail-section';
                   }
                 </div>
                 @if (a.canUndo) {
-                  <button type="button" [disabled]="busy() !== null" (click)="unaccept(a)">{{ t('module.unaccept') }}</button>
+                  <button type="button" [disabled]="busy() !== null" (click)="unaccept(a)">
+                    {{ t('module.unaccept') }}
+                  </button>
                 }
               </li>
             }
@@ -116,13 +164,31 @@ import { DetailSectionView } from './detail-section';
         }
 
         @if (module.workloads.items.length > 0 && !sheet().hasRuntime) {
-          <h2>{{ t('module.workloads') }} <span class="count">{{ t('module.podsReady', { ready: module.workloads.ready, total: module.workloads.total }) }}</span></h2>
+          <h2>
+            {{ t('module.workloads') }}
+            <span class="count">{{
+              t('module.podsReady', {
+                ready: module.workloads.ready,
+                total: module.workloads.total,
+              })
+            }}</span>
+          </h2>
           <ul class="workloads">
             @for (w of module.workloads.items; track w.kind + w.namespace + w.name) {
               <li>
                 <span class="wname">{{ w.name }}</span>
                 <span class="muted">{{ w.kind }}, {{ w.namespace }}</span>
-                <span [class]="'pill ' + (w.ready >= w.desired ? 'tone-ok' : w.ready === 0 ? 'tone-critical' : 'tone-warning')">{{ w.ready }}/{{ w.desired }}</span>
+                <span
+                  [class]="
+                    'pill ' +
+                    (w.ready >= w.desired
+                      ? 'tone-ok'
+                      : w.ready === 0
+                        ? 'tone-critical'
+                        : 'tone-warning')
+                  "
+                  >{{ w.ready }}/{{ w.desired }}</span
+                >
               </li>
             }
           </ul>
@@ -344,7 +410,9 @@ export class ModuleSheet implements OnInit {
   readonly expanded = signal<ReadonlySet<string>>(new Set());
   readonly sheet = computed<SheetView>(() => {
     const m = this.view();
-    return m ? buildSheetView(m, this.expanded(), this.language.translator()) : { meta: '', figures: [], columns: 0, longLabels: false, hasRuntime: false, sections: [] };
+    return m
+      ? buildSheetView(m, this.expanded(), this.language.translator())
+      : { meta: '', figures: [], columns: 0, longLabels: false, hasRuntime: false, sections: [] };
   });
   readonly issues = signal<IssueCard[]>([]);
   readonly accepted = signal<AcceptedRow[]>([]);
@@ -357,10 +425,12 @@ export class ModuleSheet implements OnInit {
   ngOnInit(): void {
     const row = moduleRow(this.module, this.language.translator());
     this.head.set({ tone: row.tone, statusLabel: row.statusLabel });
-    this.links.set(this.module.links.flatMap((l) => {
-      const url = externalUrl(l.url);
-      return url ? [{ url, label: l.label }] : [];
-    }));
+    this.links.set(
+      this.module.links.flatMap((l) => {
+        const url = externalUrl(l.url);
+        return url ? [{ url, label: l.label }] : [];
+      }),
+    );
     this.issues.set(this.issueCards);
     this.accepted.set(acceptedRows(this.module, this.language.translator()));
     this.view.set(this.module);
@@ -382,7 +452,10 @@ export class ModuleSheet implements OnInit {
     const sheet = await this.sheets.create({
       header: row.sheetTitle,
       subHeader: tr.t('module.rollbackSheetText'),
-      buttons: [...row.choices.map((c) => ({ text: c.label, data: c.id })), { text: tr.t('common.cancel'), role: 'cancel' }],
+      buttons: [
+        ...row.choices.map((c) => ({ text: c.label, data: c.id })),
+        { text: tr.t('common.cancel'), role: 'cancel' },
+      ],
     });
     await sheet.present();
     const { data: id } = await sheet.onDidDismiss<number>();
@@ -404,7 +477,12 @@ export class ModuleSheet implements OnInit {
     }
     this.busy.set(row.key);
     try {
-      const { done } = await this.client.rollbackArgoApp(this.cluster, row.namespace, row.app, choice.id);
+      const { done } = await this.client.rollbackArgoApp(
+        this.cluster,
+        row.namespace,
+        row.app,
+        choice.id,
+      );
       this.view.update((m) => (m ? markRolledBack(m, row, choice.id) : m));
       this.changed.set(true);
       await this.toast(done, 'success');
@@ -439,4 +517,3 @@ export class ModuleSheet implements OnInit {
     return this.modals.dismiss({ changed: this.changed() });
   }
 }
-

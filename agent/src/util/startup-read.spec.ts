@@ -1,13 +1,14 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import { generateKeyPair, toBase64Url } from '@kubernanny/protocol';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { DevicesService } from '../auth/devices.service';
+import { IdentityService } from '../auth/identity.service';
 import { loadConfig } from '../config';
 import { KubeClient, KubeError } from '../kube/kube-client';
+import { AcceptanceService } from '../modules/vulnerabilities/acceptance.service';
 import { SettingsService } from '../settings/settings.service';
 import { SilenceService } from '../silence/silence.service';
-import { IdentityService } from '../auth/identity.service';
-import { DevicesService } from '../auth/devices.service';
-import { AcceptanceService } from '../modules/vulnerabilities/acceptance.service';
-import { NotLoadedError, StartupReadError, readAtStartup } from './startup-read';
+import { NotLoadedError, readAtStartup, StartupReadError } from './startup-read';
 
 const who = { kind: 'device' as const, id: 'd1', name: 'Test' };
 const noWait = { sleep: async () => undefined };
@@ -111,7 +112,12 @@ describe('state read at start-up (review: a transient error failed open or lost 
     const acceptances = new AcceptanceService(config, kube, settings);
     const devices = new DevicesService(config, kube);
     const identity = new IdentityService(config, kube);
-    const inits = [settings, silences, acceptances, devices, identity].map((s) => s.onModuleInit().then(() => null, (err: unknown) => err));
+    const inits = [settings, silences, acceptances, devices, identity].map((s) =>
+      s.onModuleInit().then(
+        () => null,
+        (err: unknown) => err,
+      ),
+    );
     await vi.runAllTimersAsync();
     for (const err of await Promise.all(inits)) {
       expect(err).toBeInstanceOf(StartupReadError);
@@ -135,10 +141,16 @@ describe('state read at start-up (review: a transient error failed open or lost 
     const silences = new SilenceService(loadConfig(), kube);
     expect((await settle(silences.onModuleInit())).ok).toBe(true);
     await silences.silence('pods/y', 1, who);
-    const written = JSON.parse((kube.writes.at(-1) as { data: { silenced: string } }).data.silenced) as Record<string, unknown>;
+    const written = JSON.parse((kube.writes.at(-1) as { data: { silenced: string } }).data.silenced) as Record<
+      string,
+      unknown
+    >;
     expect(Object.keys(written).sort()).toEqual(['pods/x', 'pods/y']);
 
-    const devices = new DevicesService(loadConfig(), new HiccupKube(2, { devices: Buffer.from(JSON.stringify(stored)).toString('base64') }));
+    const devices = new DevicesService(
+      loadConfig(),
+      new HiccupKube(2, { devices: Buffer.from(JSON.stringify(stored)).toString('base64') }),
+    );
     expect((await settle(devices.onModuleInit())).ok).toBe(true);
     expect(devices.byKey(phone)).toMatchObject({ id: 'a' });
   });

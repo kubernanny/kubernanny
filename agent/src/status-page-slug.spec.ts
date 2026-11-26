@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { checkStatusPageSlug } from './config';
 
 describe('UPTIME_KUMA_STATUS_PAGE', () => {

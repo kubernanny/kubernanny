@@ -1,10 +1,11 @@
-import { DestroyRef, Injectable, effect, inject, signal } from '@angular/core';
+import { DestroyRef, effect, inject, Injectable, signal } from '@angular/core';
 import { App } from '@capacitor/app';
-import { AgentClient, describeError, isTransient } from './agent-client.service';
-import { ClusterConfig, Snapshot } from './agent.model';
-import { ClusterStore } from './cluster-store.service';
-import { RELAY_INFO_EVERY_MS, adoptedRelay } from './relay-route';
+
 import { LanguageService } from '../i18n/language.service';
+import { ClusterConfig, Snapshot } from './agent.model';
+import { AgentClient, describeError, isTransient } from './agent-client.service';
+import { ClusterStore } from './cluster-store.service';
+import { adoptedRelay, RELAY_INFO_EVERY_MS } from './relay-route';
 
 export interface ClusterState {
   snapshot: Snapshot | null;
@@ -89,7 +90,10 @@ export class StatusStore {
           continue;
         }
         // Keep the last snapshot: it is still the best we know, shown as stale.
-        this.patch(cluster.id, { error: describeError(err, this.language.translator()), loading: false });
+        this.patch(cluster.id, {
+          error: describeError(err, this.language.translator()),
+          loading: false,
+        });
         return;
       }
     }
@@ -102,7 +106,10 @@ export class StatusStore {
    */
   private async learnRelay(cluster: ClusterConfig): Promise<void> {
     const now = Date.now();
-    if (cluster.demo || now - (this.relayAsked.get(cluster.id) ?? -Infinity) < RELAY_INFO_EVERY_MS) {
+    if (
+      cluster.demo ||
+      now - (this.relayAsked.get(cluster.id) ?? -Infinity) < RELAY_INFO_EVERY_MS
+    ) {
       return;
     }
     this.relayAsked.set(cluster.id, now);

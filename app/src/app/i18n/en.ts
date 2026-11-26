@@ -3,7 +3,8 @@ import { Dictionary } from './dictionary';
 /** English UI texts: the same keys as de.ts, written for English readers, not translated word by word. */
 export const en: Dictionary = {
   app: {
-    description: 'Kubernanny shows whether everything is fine in your Kubernetes cluster, and if not, exactly what is wrong.',
+    description:
+      'Kubernanny shows whether everything is fine in your Kubernetes cluster, and if not, exactly what is wrong.',
     titles: {
       clusters: 'Clusters',
       cluster: 'Cluster',
@@ -48,8 +49,10 @@ export const en: Dictionary = {
       logsTitle: 'Open the logs',
       logsNote: 'They show a QR code with the address, a one-time code and the agent’s key.',
       scanTitle: 'Scan the code',
-      scanNote: 'With your phone’s camera, or open the link. Kubernanny connects and shows how your cluster is doing.',
-      scanNoteInApp: 'Right here with “Scan QR code”, or open the link. Kubernanny connects and shows how your cluster is doing.',
+      scanNote:
+        'With your phone’s camera, or open the link. Kubernanny connects and shows how your cluster is doing.',
+      scanNoteInApp:
+        'Right here with “Scan QR code”, or open the link. Kubernanny connects and shows how your cluster is doing.',
       manual: 'Enter address and code',
       tryDemo: 'Try the demo first',
     },
@@ -61,7 +64,8 @@ export const en: Dictionary = {
     settings: 'Cluster settings',
     demoTitle: 'Made-up data. Actions are only simulated.',
     viaRelay: 'via relay',
-    viaRelayTitle: 'The agent cannot be reached directly right now. The connection runs encrypted through the relay, which cannot read any of it.',
+    viaRelayTitle:
+      'The agent cannot be reached directly right now. The connection runs encrypted through the relay, which cannot read any of it.',
     share: 'Share status',
     shareTitle: 'Status of {{cluster}}',
     copiedReport: 'Status copied to the clipboard.',
@@ -96,7 +100,8 @@ export const en: Dictionary = {
     failing: 'Cluster unreadable for {{since}}, data from {{when}}',
     failingMoment: 'a moment',
     connecting: 'Connecting…',
-    update: 'Agent {{agent}} is older than this app ({{app}}). Updating brings new checks and fixes.',
+    update:
+      'Agent {{agent}} is older than this app ({{app}}). Updating brings new checks and fixes.',
     kpi: {
       nodesReady: 'Nodes ready',
       allThere: 'all there',
@@ -144,34 +149,51 @@ export const en: Dictionary = {
     logsBeforeCrash: 'Logs before the crash',
     backup: 'Start backup',
     backupConfirm: 'Start a base backup of {{cluster}}?',
-    restartHint: 'Helps once you have fixed the cause, e.g. changed a Secret or a dependency is back.',
-    restartConfirmChanged: 'Restart {{kind}} {{target}}? Its pods are replaced one after another and read the changed ConfigMap {{configMap}}.',
+    restartHint:
+      'Helps once you have fixed the cause, e.g. changed a Secret or a dependency is back.',
+    restartConfirmChanged:
+      'Restart {{kind}} {{target}}? Its pods are replaced one after another and read the changed ConfigMap {{configMap}}.',
     uncordon: 'Uncordon',
-    uncordonConfirm: 'Open node {{node}} to new pods again? Kubernanny sets spec.unschedulable to false, like kubectl uncordon. Running pods stay where they are.',
+    uncordonConfirm:
+      'Open node {{node}} to new pods again? Kubernanny sets spec.unschedulable to false, like kubectl uncordon. Running pods stay where they are.',
     rerun: 'Run again',
-    rerunCronConfirm: "Start a new job from the CronJob {{target}}'s template, like kubectl create job --from=cronjob? The next scheduled run still happens.",
-    rerunJobConfirm: 'Run job {{target}} again? Kubernanny creates a copy with the same pod template. The failed job stays for reading.',
+    rerunCronConfirm:
+      "Start a new job from the CronJob {{target}}'s template, like kubectl create job --from=cronjob? The next scheduled run still happens.",
+    rerunJobConfirm:
+      'Run job {{target}} again? Kubernanny creates a copy with the same pod template. The failed job stays for reading.',
     reconcile: 'Reconcile now',
-    reconcileFluxConfirm: 'Ask Flux to reconcile {{kind}} {{target}} right away? Kubernanny sets the annotation reconcile.fluxcd.io/requestedAt, like flux reconcile.',
-    reconcileExternalSecretConfirm: 'Fetch ExternalSecret {{target}} from its secret store again right away? Kubernanny sets the annotation force-sync.',
-    reconcileInfisicalConfirm: 'Fetch InfisicalStaticSecret {{target}} from Infisical again right away? Kubernanny sets an annotation the operator reconciles on.',
+    reconcileFluxConfirm:
+      'Ask Flux to reconcile {{kind}} {{target}} right away? Kubernanny sets the annotation reconcile.fluxcd.io/requestedAt, like flux reconcile.',
+    reconcileExternalSecretConfirm:
+      'Fetch ExternalSecret {{target}} from its secret store again right away? Kubernanny sets the annotation force-sync.',
+    reconcileInfisicalConfirm:
+      'Fetch InfisicalStaticSecret {{target}} from Infisical again right away? Kubernanny sets an annotation the operator reconciles on.',
     renew: 'Renew',
-    renewConfirm: 'Have certificate {{target}} reissued now, like cmctl renew? cert-manager requests a new one from the issuer.',
+    renewConfirm:
+      'Have certificate {{target}} reissued now, like cmctl renew? cert-manager requests a new one from the issuer.',
     cleanup: 'Clean up',
     cleanupConfirm: {
       one: 'Delete one finished pod in {{namespace}}? It no longer runs. Its logs go with it.',
-      other: 'Delete {{count}} finished pods in {{namespace}}? Only pods that no longer run. Their logs go with them.',
+      other:
+        'Delete {{count}} finished pods in {{namespace}}? Only pods that no longer run. Their logs go with them.',
     },
     forceDelete: 'Force delete',
-    forceDeleteConfirm: 'Remove pod {{target}} right away, without waiting for node {{node}}? Only safe when the node is really down: if it still runs, the pod can run twice.',
-    forceDeleteConfirmStatefulSet: 'Remove pod {{target}} right away, without waiting for node {{node}}? Only safe when the node is really down: if it still runs, StatefulSet {{statefulSet}} starts the same pod a second time and both write to the same volume.',
-    longhornBackupConfirm: 'Back up {{volume}} now? Kubernanny takes a Longhorn snapshot and uploads it to the backup target.',
-    veleroBackupConfirm: 'Start a backup from the schedule {{schedule}} now, like velero backup create --from-schedule?',
+    forceDeleteConfirm:
+      'Remove pod {{target}} right away, without waiting for node {{node}}? Only safe when the node is really down: if it still runs, the pod can run twice.',
+    forceDeleteConfirmStatefulSet:
+      'Remove pod {{target}} right away, without waiting for node {{node}}? Only safe when the node is really down: if it still runs, StatefulSet {{statefulSet}} starts the same pod a second time and both write to the same volume.',
+    longhornBackupConfirm:
+      'Back up {{volume}} now? Kubernanny takes a Longhorn snapshot and uploads it to the backup target.',
+    veleroBackupConfirm:
+      'Start a backup from the schedule {{schedule}} now, like velero backup create --from-schedule?',
     terminate: 'Stop sync',
-    terminateConfirm: 'Stop the running sync of {{app}}, like argocd app terminate-op? Changes already applied stay, the rest is not rolled out.',
+    terminateConfirm:
+      'Stop the running sync of {{app}}, like argocd app terminate-op? Changes already applied stay, the rest is not rolled out.',
     expand: 'Grow to {{size}}',
-    expandConfirm: 'Grow PVC {{target}} from {{from}} to {{to}}? A volume cannot be shrunk afterwards.',
-    expandConfirmTemplate: "Grow PVC {{target}} from {{from}} to {{to}}? A volume cannot be shrunk afterwards. StatefulSet {{template}}'s volumeClaimTemplates keep the old size: change them wherever you manage them.",
+    expandConfirm:
+      'Grow PVC {{target}} from {{from}} to {{to}}? A volume cannot be shrunk afterwards.',
+    expandConfirmTemplate:
+      "Grow PVC {{target}} from {{from}} to {{to}}? A volume cannot be shrunk afterwards. StatefulSet {{template}}'s volumeClaimTemplates keep the old size: change them wherever you manage them.",
   },
   overview: {
     showWarnings: 'Show all {{n}} warnings',
@@ -184,28 +206,33 @@ export const en: Dictionary = {
     calmTitle: 'Nothing to do.',
     calmText: 'Every check is green. Kubernanny lets you know as soon as that changes.',
     hints: 'Hints',
-    hintsIntro: 'Not a problem, just good to know. Hints never change the traffic light or send a notification.',
+    hintsIntro:
+      'Not a problem, just good to know. Hints never change the traffic light or send a notification.',
     silenced: 'Silenced',
-    silencedIntro: 'Known and silenced for a while. They do not count toward the traffic light until the time is up.',
+    silencedIntro:
+      'Known and silenced for a while. They do not count toward the traffic light until the time is up.',
     usage: 'Usage',
     range: 'Time range',
     historyFromAgent:
       'History from metrics-server since the agent started. With Prometheus in the cluster, Kubernanny also shows network, restarts and etcd over several days.',
     loadingHistory: 'Loading history…',
-    noHistory: 'No history yet. Without Prometheus or metrics-server, Kubernanny cannot measure usage.',
+    noHistory:
+      'No history yet. Without Prometheus or metrics-server, Kubernanny cannot measure usage.',
     keyFigures: 'Key figures',
     attention: 'Services to look at',
   },
   services: {
     instances: { one: '{{count}} instance', other: '{{count}} instances' },
     versionsDiffer: 'versions differ',
-    intro: 'Kubernanny recognizes components by their container images, however they were installed. Tap one for details.',
+    intro:
+      'Kubernanny recognizes components by their container images, however they were installed. Tap one for details.',
   },
   pendingSync: {
     card: { one: '{{count}} app ready to sync', other: '{{count}} apps ready to sync' },
     cardHint: 'Changes in Git not rolled out yet. Not a problem.',
     title: 'Ready to sync',
-    intro: 'Argo CD apps with manual sync whose Git has a change. Healthy and without errors: roll it out when it suits you.',
+    intro:
+      'Argo CD apps with manual sync whose Git has a change. Healthy and without errors: roll it out when it suits you.',
     into: 'into {{namespace}}',
     project: 'project {{project}}',
     since: 'waiting since the last sync {{when}}',
@@ -217,7 +244,8 @@ export const en: Dictionary = {
     new: 'new',
     prune: 'to be removed',
     sync: 'Sync',
-    noSync: 'Syncing from the app is switched off. Sync in Argo CD (UI or argocd app sync), or switch the action on in the settings.',
+    noSync:
+      'Syncing from the app is switched off. Sync in Argo CD (UI or argocd app sync), or switch the action on in the settings.',
   },
   countdown: {
     seconds: '{{n}} s',
@@ -236,7 +264,10 @@ export const en: Dictionary = {
     limit: '{{value}} limit',
     noLimit: 'no limit',
     withoutLimitShort: { one: '+ {{count}} without limit', other: '+ {{count}} without limit' },
-    withoutLimit: { one: '+ {{count}} pod without a limit', other: '+ {{count}} pods without a limit' },
+    withoutLimit: {
+      one: '+ {{count}} pod without a limit',
+      other: '+ {{count}} pods without a limit',
+    },
     over: '+{{pct}}% overbooked',
   },
   resources: {
@@ -322,7 +353,8 @@ export const en: Dictionary = {
   },
   events: {
     workload: 'belongs to {{kind}} {{name}}',
-    intro: 'Warnings that Kubernetes reported itself. They disappear from the cluster after about an hour.',
+    intro:
+      'Warnings that Kubernetes reported itself. They disappear from the cluster after about an hour.',
     none: 'No warnings. Kubernetes is happy.',
     repeated: '{{count}}× in {{span}}',
     merged: '{{count}} Kubernetes events merged',
@@ -344,7 +376,8 @@ export const en: Dictionary = {
     showLess: 'Show less',
   },
   backups: {
-    intro: 'When each thing was last backed up. Older than {{hours}} h counts as overdue, twice that as critical.',
+    intro:
+      'When each thing was last backed up. Older than {{hours}} h counts as overdue, twice that as critical.',
     allGood: { one: 'The backup is up to date.', other: 'All {{count}} backups are up to date.' },
     needAttention: '{{bad}} of {{count}} need attention.',
     cnpg: 'Databases',
@@ -366,9 +399,11 @@ export const en: Dictionary = {
     unreachable: 'Unreachable',
     unchecked: 'Not checked yet',
     unprotected: 'Without a backup',
-    orphaned: 'The backup target also keeps {{backups}} backups of {{volumes}} deleted since. They protect nothing here; delete them in Longhorn if they are not needed.',
+    orphaned:
+      'The backup target also keeps {{backups}} backups of {{volumes}} deleted since. They protect nothing here; delete them in Longhorn if they are not needed.',
     volumes: { one: '{{count}} volume', other: '{{count}} volumes' },
-    unprotectedIntro: 'No backup is set up for these databases and volumes. Not every one needs one, but check that this is intended.',
+    unprotectedIntro:
+      'No backup is set up for these databases and volumes. Not every one needs one, but check that this is intended.',
     database: 'Database',
     volume: 'Volume',
     emptyTitle: 'No backups found',
@@ -394,17 +429,23 @@ export const en: Dictionary = {
     disable: 'Turn push off',
     test: 'Send a test push',
     on: 'On for this device.',
-    relayNotNow: 'On for this device. The relay does not deliver push right now; messages go out once it does.',
-    locked: 'Switched off in the deployment (notifications.appPush.enabled). Only changeable there.',
-    noRelay: 'Needs the agent to use a relay (relay.enabled in Helm), the only way a push leaves the cluster.',
-    denied: 'Notifications are not allowed for Kubernanny. Allow them in the system settings, then try again.',
+    relayNotNow:
+      'On for this device. The relay does not deliver push right now; messages go out once it does.',
+    locked:
+      'Switched off in the deployment (notifications.appPush.enabled). Only changeable there.',
+    noRelay:
+      'Needs the agent to use a relay (relay.enabled in Helm), the only way a push leaves the cluster.',
+    denied:
+      'Notifications are not allowed for Kubernanny. Allow them in the system settings, then try again.',
     enabled: 'Push is on. A test message is on its way.',
     disabled: 'Push is off for this device.',
     testSent: 'Test push sent.',
     testFailed: 'The relay did not take the test push ({{outcome}}).',
     markerTitle: 'Your sign for pushes',
-    markerExplain: 'Every push Kubernanny opens on this device starts with this sign. A push without it did not come from your cluster. Three random emoji are hard to guess; take a new draw if you like, or an own word of at least three characters.',
-    markerDevice: 'The sign stays on this device. It is never sent to the agent, the relay or Google, and it is the same for all clusters on this device.',
+    markerExplain:
+      'Every push Kubernanny opens on this device starts with this sign. A push without it did not come from your cluster. Three random emoji are hard to guess; take a new draw if you like, or an own word of at least three characters.',
+    markerDevice:
+      'The sign stays on this device. It is never sent to the agent, the relay or Google, and it is the same for all clusters on this device.',
     markerOwn: 'Own word',
     markerOwnPlaceholder: '3 to 12 characters',
     markerPreview: 'A push then looks like this:',
@@ -413,16 +454,19 @@ export const en: Dictionary = {
     markerInvalid: 'Three to 12 characters, no line breaks.',
     markerAnother: 'Another draw',
     markerOn: 'Your sign: {{marker}}. A push without it did not come from your cluster.',
-    markerMissing: 'No sign chosen yet. With one you can tell a push from your cluster from one someone else sent.',
+    markerMissing:
+      'No sign chosen yet. With one you can tell a push from your cluster from one someone else sent.',
     markerChange: 'Change sign',
     markerChoose: 'Choose a sign',
     markerSaved: 'Sign saved on this device.',
     deadmanTitle: 'Warn when the agent goes silent',
-    deadmanHint: 'If Kubernanny stops answering (the cluster or the agent is down), the relay sends this phone a message it holds sealed, without being able to read it.',
+    deadmanHint:
+      'If Kubernanny stops answering (the cluster or the agent is down), the relay sends this phone a message it holds sealed, without being able to read it.',
     deadmanAfter: 'After this much silence',
     deadmanMinutes: '{{n}} min',
     deadmanLocked: 'Switched off in the deployment (notifications.appPush.deadman.enabled).',
-    deadmanRelay: 'The relay does not support this yet. Once it does, it works without anything to do here.',
+    deadmanRelay:
+      'The relay does not support this yet. Once it does, it works without anything to do here.',
     deadmanOn: 'On: a message after {{n}} minutes of silence.',
     deadmanOff: 'Off for this device.',
   },
@@ -449,7 +493,8 @@ export const en: Dictionary = {
     silence: 'Silence',
     unsilence: 'Unsilence',
     silenceHeader: 'Silence',
-    silenceText: 'It stays visible, but does not change the traffic light or send notifications. If it gets worse and becomes an outage, you hear about it again. Your notification channels are told that you silenced it.',
+    silenceText:
+      'It stays visible, but does not change the traffic light or send notifications. If it gets worse and becomes an outage, you hear about it again. Your notification channels are told that you silenced it.',
     hour: '1 hour',
     hours8: '8 hours',
     day: '1 day',
@@ -459,7 +504,8 @@ export const en: Dictionary = {
     accept: 'Not applicable',
     acceptLabel: 'Mark {{id}} as not applicable',
     acceptHeader: '{{id}} does not apply here',
-    acceptText: 'It no longer counts for this component until the time is up. Your notification channels are told.',
+    acceptText:
+      'It no longer counts for this component until the time is up. Your notification channels are told.',
     days30: '30 days',
     days90: '90 days',
     days365: '1 year',
@@ -485,14 +531,16 @@ export const en: Dictionary = {
     acceptedMeta: '{{name}}, until {{until}}, by {{by}}',
     unaccept: 'Count again',
     rollbackTitle: 'Roll back',
-    rollbackHint: 'Apps with manual sync. Takes an app back to a state it was deployed in before, also when nothing looks wrong.',
+    rollbackHint:
+      'Apps with manual sync. Takes an app back to a state it was deployed in before, also when nothing looks wrong.',
     rollbackButton: 'Roll back',
     rollbackNow: 'Deployed now: {{revision}}',
     rollbackSheet: 'Roll back {{app}}',
     rollbackSheetText: 'Earlier deployments, newest first.',
     rollbackChoice: '{{date}}, {{revision}}',
     rollbackConfirmTitle: 'Roll back {{app}}?',
-    rollbackConfirm: '{{app}} goes from {{from}} back to {{to}}. The cluster then differs from Git until you revert the change there.',
+    rollbackConfirm:
+      '{{app}} goes from {{from}} back to {{to}}. The cluster then differs from Git until you revert the change there.',
     rollbackConfirmButton: 'Roll back',
     keyFigures: 'Key figures',
     showAll: 'Show all {{n}}',
@@ -522,15 +570,18 @@ export const en: Dictionary = {
     retry: 'Try again',
     checking: 'Reading the pairing link…',
     confirmTitle: 'Pair with this agent?',
-    confirmLead: 'Anyone can make a pairing link. Pair only if you opened this one yourself and the agent key below is the one in the agent’s log (“Agent key: …”).',
+    confirmLead:
+      'Anyone can make a pairing link. Pair only if you opened this one yourself and the agent key below is the one in the agent’s log (“Agent key: …”).',
     nameLabel: 'Name',
     addressLabel: 'Address',
     relayLabel: 'Relay',
     keyLater: 'fetched from the address when you continue (TLS vouches for it)',
-    alreadyPaired: '{{name}} is already in the app with this key. Pairing again gives this device a new key for it and removes the old one.',
+    alreadyPaired:
+      '{{name}} is already in the app with this key. Pairing again gives this device a new key for it and removes the old one.',
     confirm: 'Pair',
     keyChangedTitle: 'The agent key changed',
-    keyChangedText: '{{name}} is already in the app, with a different agent key. Unless you reinstalled the agent or replaced its key yourself, this link may come from someone who wants to pose as your cluster. Cancel and compare the key with the one in the agent’s log.',
+    keyChangedText:
+      '{{name}} is already in the app, with a different agent key. Unless you reinstalled the agent or replaced its key yourself, this link may come from someone who wants to pose as your cluster. Cancel and compare the key with the one in the agent’s log.',
     oldKey: 'Key in the app:',
     newKey: 'Key in the link:',
     replace: 'Replace the key anyway',
@@ -539,8 +590,10 @@ export const en: Dictionary = {
       or: 'or by hand',
       title: 'Scan QR code',
       hint: 'Hold the QR code from the agent’s logs inside the frame.',
-      notPairing: 'That is not a Kubernanny pairing code. Scan the QR code from the agent’s logs (kubectl -n kubernanny logs deploy/kubernanny).',
-      denied: 'Kubernanny may not use the camera. Allow it in the device settings, or enter the address and code by hand.',
+      notPairing:
+        'That is not a Kubernanny pairing code. Scan the QR code from the agent’s logs (kubectl -n kubernanny logs deploy/kubernanny).',
+      denied:
+        'Kubernanny may not use the camera. Allow it in the device settings, or enter the address and code by hand.',
       preparing: 'The scanner is being set up. Try again in a moment.',
       failed: 'The camera could not be opened. Enter the address and code by hand.',
     },
@@ -554,7 +607,8 @@ export const en: Dictionary = {
     code: 'Pairing code',
     hintNew:
       'The address and code are in the agent’s log: <code>kubectl -n kubernanny logs deploy/kubernanny</code>. The QR code there is quicker and also works without https, because it contains the agent’s key.',
-    hintEdit: 'You can change the address, for example after moving behind a VPN: the app recognizes the agent by its key, not by its address.',
+    hintEdit:
+      'You can change the address, for example after moving behind a VPN: the app recognizes the agent by its key, not by its address.',
     connecting: 'Connecting…',
     save: 'Connect and save',
     agent: 'Agent',
@@ -586,10 +640,12 @@ export const en: Dictionary = {
     noRelay:
       'No relay set up. To reach the agent on the go without a VPN, set <code>relay.enabled=true</code> on the agent (Helm), and the app learns the address by itself.',
     checks: 'What is checked',
-    checksHint: 'Turn tools like Argo CD or Longhorn, actions and notifications on or off one by one.',
+    checksHint:
+      'Turn tools like Argo CD or Longhorn, actions and notifications on or off one by one.',
     modules: 'Modules and actions',
     devices: 'Paired devices',
-    devicesHint: 'Each device has its own key, and it never leaves the device. Remove a lost phone here: it loses access at once, while all others keep theirs.',
+    devicesHint:
+      'Each device has its own key, and it never leaves the device. Remove a lost phone here: it loses access at once, while all others keep theirs.',
     deviceSeen: 'paired {{paired}}, last active {{seen}}',
     deviceUnseen: 'paired {{paired}}, not active since the agent started',
     pairAnother: 'Pair another device',
@@ -597,7 +653,8 @@ export const en: Dictionary = {
     newCode: 'Create pairing code',
     removeCluster: 'Remove cluster from the app',
     revokeTitle: 'Remove {{name}}?',
-    revokeCurrent: 'This device loses access to the cluster at once, and the cluster is removed from the app.',
+    revokeCurrent:
+      'This device loses access to the cluster at once, and the cluster is removed from the app.',
     revokeOther: 'The device loses access at once. To pair it again, it needs a new pairing code.',
     removeTitle: 'Remove cluster?',
     removeText: 'Only from the app. The agent in the cluster keeps running.',
@@ -610,25 +667,33 @@ export const en: Dictionary = {
     coreTitle: 'Kubernetes',
     coreHint: 'Always checked while switched on.',
     foundTitle: 'Detected components',
-    foundHint: 'When switched off, the agent no longer reads anything from this tool or shows it. The Kubernetes check still watches its pods.',
+    foundHint:
+      'When switched off, the agent no longer reads anything from this tool or shows it. The Kubernetes check still watches its pods.',
     actionsTitle: 'Actions',
-    actionsHint: 'What the app may trigger in the cluster. Always for one open issue only, except the Argo CD rollback, which works on any manual-sync app and only if the Helm chart allows it.',
+    actionsHint:
+      'What the app may trigger in the cluster. Always for one open issue only, except the Argo CD rollback, which works on any manual-sync app and only if the Helm chart allows it.',
     notificationsTitle: 'Notifications',
-    notificationsHint: 'While paused, no messages go to ntfy or webhooks. The app keeps showing the state.',
+    notificationsHint:
+      'While paused, no messages go to ntfy or webhooks. The app keeps showing the state.',
     sendNotifications: 'Send notifications',
     sendNotificationsNote: 'Through the channels set up on the agent.',
     missingTitle: 'Not found',
-    missingHint: 'Integrations for tools that are not running right now. You can switch them off in advance, too.',
+    missingHint:
+      'Integrations for tools that are not running right now. You can switch them off in advance, too.',
     clusterNotFound: 'Cluster not found.',
   },
   errors: {
     insecureTransport:
       'Without the QR code, only over https:// (or http://localhost through a port-forward): otherwise the agent’s key could be swapped on the way. Scan the QR code from the log, and plain http works too.',
-    tampered: 'The answer did not come from the paired agent, or it was changed on the way. It was discarded.',
-    pairingCodeInvalid: 'The code is wrong, expired or already used. For a new code: kubectl -n kubernanny exec deploy/kubernanny -- node dist/cli.js pair',
-    deviceUnknown: 'This device is not paired with the agent (anymore). Pair it again with a pairing code.',
+    tampered:
+      'The answer did not come from the paired agent, or it was changed on the way. It was discarded.',
+    pairingCodeInvalid:
+      'The code is wrong, expired or already used. For a new code: kubectl -n kubernanny exec deploy/kubernanny -- node dist/cli.js pair',
+    deviceUnknown:
+      'This device is not paired with the agent (anymore). Pair it again with a pairing code.',
     actionDisabled: 'This action is turned off in the cluster’s settings.',
-    forbidden: 'The agent is not allowed to do that (RBAC). Check rbac.allowActions in the Helm chart.',
+    forbidden:
+      'The agent is not allowed to do that (RBAC). Check rbac.allowActions in the Helm chart.',
     unreachable: 'The agent cannot be reached. Are you on the VPN?',
     handshake:
       'The agent cannot decrypt the request: its key has changed (was the kubernanny-identity secret recreated?), or a different server answers at this address. Pair again if that was intended.',
@@ -638,8 +703,10 @@ export const en: Dictionary = {
     status: 'The agent answered with {{status}}.',
     timeout: 'The agent does not answer (timeout).',
     unknown: 'Unknown error.',
-    relayAgentOffline: 'The agent cannot be reached, neither directly nor through the relay. Is it running, and is it connected to the relay?',
-    relayRateLimited: 'The relay is limiting requests to this agent right now (fair use). Try again in a moment.',
+    relayAgentOffline:
+      'The agent cannot be reached, neither directly nor through the relay. Is it running, and is it connected to the relay?',
+    relayRateLimited:
+      'The relay is limiting requests to this agent right now (fair use). Try again in a moment.',
     relayTimeout: 'The agent does not answer through the relay in time.',
     relayTooLarge: 'The request is too large for the relay.',
     relayResponseTooLarge: 'The answer is too large for the relay.',
@@ -661,12 +728,16 @@ export const en: Dictionary = {
     showCluster: 'Show this cluster on the home-screen widget',
     hint: 'The widget shows only the name, the traffic light, the number of outages and warnings, the worst problems and the time of the last check. Switching this off deletes the cluster from the widget at once.',
     updates: 'It catches up when you open the app or a push from this cluster arrives.',
-    quiet: 'When nothing happens, a silent push brings the state about once an hour, only with push on.',
-    stale: 'Grey with "Not current" means nothing new for {{hours}} hours. Open Kubernanny to bring it up to date.',
-    silent: 'Coral with "Agent not answering": the relay sent the warning that the agent went silent. It clears with the next state from the cluster.',
+    quiet:
+      'When nothing happens, a silent push brings the state about once an hour, only with push on.',
+    stale:
+      'Grey with "Not current" means nothing new for {{hours}} hours. Open Kubernanny to bring it up to date.',
+    silent:
+      'Coral with "Agent not answering": the relay sent the warning that the agent went silent. It clears with the next state from the cluster.',
     pushOn: 'Push is on for this device: the widget stays current.',
     pushOff: 'Push is off for this device: the widget only catches up when you open the app.',
-    pushUnavailable: 'Push is not available for this cluster: the widget only catches up when you open the app.',
+    pushUnavailable:
+      'Push is not available for this cluster: the widget only catches up when you open the app.',
     turnOnPush: 'Turn push on',
     allOffNote: 'Widgets are switched off for every cluster (on the cluster list).',
     allLabel: 'Home-screen widgets',

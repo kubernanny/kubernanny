@@ -7,7 +7,14 @@ import { Prometheus, PromSample } from '../../service-proxy';
 import { DetailRow, DetailSection, ModuleContext, ModuleResult, Stat, Tone } from '../../types';
 import { nodeOf } from '../node-clocks';
 import { AlertMatch, recordAlertMatches } from './alertmanager-dedupe';
-import { evaluateOvercommit, evaluatePodCapacity, evaluateVersions, overcommit, Overcommit, spare } from './inventory-rules';
+import {
+  evaluateOvercommit,
+  evaluatePodCapacity,
+  evaluateVersions,
+  Overcommit,
+  overcommit,
+  spare,
+} from './inventory-rules';
 import { Area, ETCD_PEER_RTT_WARNING_S, Finding, label, Names, PROM_RULES, PromRule } from './rules';
 
 const ID = 'standard-alerts';
@@ -16,7 +23,9 @@ const PARALLEL = 6;
 /** Overcommit, pods per node, version skew: judged from the inventory, with or without Prometheus. */
 const INVENTORY_RULES = 3;
 
-export type RuleState = { rule: PromRule; state: 'checked' } | { rule: PromRule; state: 'missing' | 'failed' | 'no-prometheus' | 'not-applicable' };
+export type RuleState =
+  | { rule: PromRule; state: 'checked' }
+  | { rule: PromRule; state: 'missing' | 'failed' | 'no-prometheus' | 'not-applicable' };
 
 export interface PromOutcome {
   issues: Issue[];
@@ -44,7 +53,10 @@ const keyOf = (labels: Record<string, string>, by: readonly string[]) => by.map(
 /** Instance labels, node labels and etcd member ids as node names. */
 function namesFor(inv: Inventory, members: PromSample[]): Names {
   const node = (labels: Record<string, string>) =>
-    labels.node ? label(labels, 'node') : (nodeOf(inv, { metric: labels, value: 0 }) ?? (labels.instance ?? labels.pod ?? '?').replace(/:\d+$/, '').slice(0, 120));
+    labels.node
+      ? label(labels, 'node')
+      : (nodeOf(inv, { metric: labels, value: 0 }) ??
+        (labels.instance ?? labels.pod ?? '?').replace(/:\d+$/, '').slice(0, 120));
   const byId = new Map(members.map((m) => [m.metric.server_id, m.metric]));
   return {
     node,
@@ -56,17 +68,27 @@ function namesFor(inv: Inventory, members: PromSample[]): Names {
 }
 
 /** Runs every Prometheus rule: one query for which metrics exist, then each rule's own. */
-export async function runPromRules(prom: Prometheus, inv: Inventory, env: { alertmanager: boolean }, rules: readonly PromRule[] = PROM_RULES): Promise<PromOutcome> {
+export async function runPromRules(
+  prom: Prometheus,
+  inv: Inventory,
+  env: { alertmanager: boolean },
+  rules: readonly PromRule[] = PROM_RULES,
+): Promise<PromOutcome> {
   const applicable = rules.filter((r) => !r.when || r.when(env));
   const names = [...new Set(applicable.flatMap((r) => r.needs))];
-  const present = new Set((await prom.query(`group by (__name__) ({__name__=~"${names.join('|')}"})`)).map((s) => s.metric.__name__));
+  const present = new Set(
+    (await prom.query(`group by (__name__) ({__name__=~"${names.join('|')}"})`)).map((s) => s.metric.__name__),
+  );
   const runnable = applicable.filter((r) => r.needs.every((n) => present.has(n)));
   const peerRule = runnable.some((r) => r.key === 'etcd-peer-rtt');
   const [members, results] = await Promise.all([
     peerRule ? prom.query('max by (server_id, instance, pod) (etcd_server_id)').catch(() => []) : Promise.resolve([]),
     pool(runnable, async (rule) => {
       try {
-        const [main, ...extras] = await Promise.all([prom.query(rule.query), ...Object.values(rule.extra ?? {}).map((q) => prom.query(q))]);
+        const [main, ...extras] = await Promise.all([
+          prom.query(rule.query),
+          ...Object.values(rule.extra ?? {}).map((q) => prom.query(q)),
+        ]);
         return { rule, main: main as PromSample[] | null, extras };
       } catch {
         return { rule, main: null, extras: [] as PromSample[][] };
@@ -100,7 +122,11 @@ export async function runPromRules(prom: Prometheus, inv: Inventory, env: { aler
     });
     if (rule.key === 'etcd-peer-rtt') {
       // The current p99 of every pair, for the sheet; the window's value where there is no current one.
-      out.peers = findings.map((f) => ({ from: n.node(f.labels), to: n.etcdMember(label(f.labels, 'To')), p99: f.extra.now ?? f.value }));
+      out.peers = findings.map((f) => ({
+        from: n.node(f.labels),
+        to: n.etcdMember(label(f.labels, 'To')),
+        p99: f.extra.now ?? f.value,
+      }));
     }
     const seen = new Set<string>();
     for (const f of findings) {
@@ -115,7 +141,9 @@ export async function runPromRules(prom: Prometheus, inv: Inventory, env: { aler
       }
       seen.add(id);
       out.issues.push({ id, check: ID, severity, title: d.title, cause: d.cause, actions: [] });
-      const labels = Object.fromEntries((rule.match ?? rule.by).filter((l) => f.labels[l] !== undefined).map((l) => [l, f.labels[l]!]));
+      const labels = Object.fromEntries(
+        (rule.match ?? rule.by).filter((l) => f.labels[l] !== undefined).map((l) => [l, f.labels[l]!]),
+      );
       out.matches.push({ issueId: id, alerts: rule.alerts, labels });
     }
   }
@@ -144,14 +172,30 @@ const notApplying = (s: RuleState) => s.state === 'missing' && !!s.rule.absent;
 
 function ruleRows(states: RuleState[], issues: Issue[]): DetailRow[] {
   return states.map(({ rule, state }) => {
-    const own = issues.filter((i) => i.id.startsWith(`${ID}/${rule.key}/`)).sort((a, b) => RANK[a.severity] - RANK[b.severity]);
-    const tone: Tone = state !== 'checked' ? 'muted' : own[0]?.severity === 'critical' ? 'critical' : own[0]?.severity === 'warning' ? 'warning' : 'ok';
+    const own = issues
+      .filter((i) => i.id.startsWith(`${ID}/${rule.key}/`))
+      .sort((a, b) => RANK[a.severity] - RANK[b.severity]);
+    const tone: Tone =
+      state !== 'checked'
+        ? 'muted'
+        : own[0]?.severity === 'critical'
+          ? 'critical'
+          : own[0]?.severity === 'warning'
+            ? 'warning'
+            : 'ok';
     return {
       // Upstream's alert names are the same in every language.
       name: rule.alerts.join(' / '),
       sub: AREA[rule.area],
       tone,
-      value: state === 'checked' ? (own.length ? t('std.rule.fires', { n: own.length }) : t('std.rule.ok')) : state === 'missing' && rule.absent ? rule.absent : REASON[state],
+      value:
+        state === 'checked'
+          ? own.length
+            ? t('std.rule.fires', { n: own.length })
+            : t('std.rule.ok')
+          : state === 'missing' && rule.absent
+            ? rule.absent
+            : REASON[state],
     };
   });
 }
@@ -161,7 +205,11 @@ function overcommitStats(values: Overcommit[]): Stat[] {
     .filter((o) => o.nodes > 1 && spare(o) > 0)
     .map((o) => {
       const share = Math.round((o.requested / spare(o)) * 100);
-      return { label: t(o.resource === 'cpu' ? 'std.stat.cpuWithoutLargest' : 'std.stat.memoryWithoutLargest'), value: `${share} %`, tone: share > 100 ? ('warning' as const) : ('ok' as const) };
+      return {
+        label: t(o.resource === 'cpu' ? 'std.stat.cpuWithoutLargest' : 'std.stat.memoryWithoutLargest'),
+        value: `${share} %`,
+        tone: share > 100 ? ('warning' as const) : ('ok' as const),
+      };
     });
 }
 
@@ -186,10 +234,16 @@ export class StandardAlertsCheck extends CoreCheck {
     const alertmanager = !!ctx.config.alertmanagerUrl || !!ctx.detected?.some((d) => d.entry.id === 'alertmanager');
     const prom: PromOutcome = ctx.prom
       ? await runPromRules(ctx.prom, ctx.inv, { alertmanager })
-      : { issues: [], matches: [], peers: [], states: PROM_RULES.map((rule) => ({ rule, state: 'no-prometheus' as const })) };
+      : {
+          issues: [],
+          matches: [],
+          peers: [],
+          states: PROM_RULES.map((rule) => ({ rule, state: 'no-prometheus' as const })),
+        };
     // A flapping node that someone cordoned is being worked on (kured, upgrades): not reported, as upstream.
     const cordoned = new Set(ctx.inv.nodes.filter((n) => n.spec?.unschedulable).map((n) => n.metadata.name));
-    const flapping = (i: Issue) => i.id.startsWith(`${ID}/node-flapping/`) && cordoned.has(i.id.slice(`${ID}/node-flapping/`.length));
+    const flapping = (i: Issue) =>
+      i.id.startsWith(`${ID}/node-flapping/`) && cordoned.has(i.id.slice(`${ID}/node-flapping/`.length));
     const issues = [...local.flatMap((l) => l.issues), ...prom.issues.filter((i) => !flapping(i))];
     recordAlertMatches(ctx.data, [...local.flatMap((l) => l.matches), ...prom.matches]);
 
@@ -197,12 +251,20 @@ export class StandardAlertsCheck extends CoreCheck {
     const stats: Stat[] = [];
     if (prom.peers.length) {
       const worst = Math.max(...prom.peers.map((p) => p.p99));
-      stats.push({ label: t('std.stat.etcdPeerRtt'), value: `${Math.round(worst * 1000)} ms`, tone: worst > ETCD_PEER_RTT_WARNING_S ? 'warning' : 'ok' });
+      stats.push({
+        label: t('std.stat.etcdPeerRtt'),
+        value: `${Math.round(worst * 1000)} ms`,
+        tone: worst > ETCD_PEER_RTT_WARNING_S ? 'warning' : 'ok',
+      });
     }
     stats.push(...overcommitStats(values));
     stats.push(
       ctx.prom
-        ? { label: t('std.stat.rules'), value: `${checked + INVENTORY_RULES}/${PROM_RULES.length + INVENTORY_RULES}`, tone: checked === PROM_RULES.length ? 'ok' : 'muted' }
+        ? {
+            label: t('std.stat.rules'),
+            value: `${checked + INVENTORY_RULES}/${PROM_RULES.length + INVENTORY_RULES}`,
+            tone: checked === PROM_RULES.length ? 'ok' : 'muted',
+          }
         : { label: t('std.stat.rules'), value: t('std.needsPrometheus'), tone: 'muted' },
     );
     const peerSection: DetailSection | null = prom.peers.length
@@ -212,13 +274,25 @@ export class StandardAlertsCheck extends CoreCheck {
           columns: [t('std.detail.from'), t('std.detail.to'), raw('p99')],
           rows: [...prom.peers]
             .sort((a, b) => b.p99 - a.p99)
-            .map((p) => ({ cells: [p.from, p.to, `${Math.round(p.p99 * 1000)} ms`], tone: p.p99 > ETCD_PEER_RTT_WARNING_S ? ('warning' as const) : ('ok' as const) })),
+            .map((p) => ({
+              cells: [p.from, p.to, `${Math.round(p.p99 * 1000)} ms`],
+              tone: p.p99 > ETCD_PEER_RTT_WARNING_S ? ('warning' as const) : ('ok' as const),
+            })),
         }
       : null;
-    const summary = (issues.find((i) => i.severity === 'critical') ?? issues.find((i) => i.severity === 'warning'))?.title ?? (ctx.prom ? t('std.summary.ok', { n: checked + INVENTORY_RULES }) : t('std.summary.noPrometheus'));
+    const summary =
+      (issues.find((i) => i.severity === 'critical') ?? issues.find((i) => i.severity === 'warning'))?.title ??
+      (ctx.prom ? t('std.summary.ok', { n: checked + INVENTORY_RULES }) : t('std.summary.noPrometheus'));
     const details = sections(
       peerSection,
-      listSection(t('std.detail.rules'), ruleRows(prom.states.filter((st) => !notApplying(st)), issues), false),
+      listSection(
+        t('std.detail.rules'),
+        ruleRows(
+          prom.states.filter((st) => !notApplying(st)),
+          issues,
+        ),
+        false,
+      ),
       listSection(t('std.detail.notApplying'), ruleRows(prom.states.filter(notApplying), issues), false),
     );
     return { issues, stats, details, summary };

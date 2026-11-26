@@ -33,7 +33,11 @@ function workloadsBehind(inv: Inventory, namespace: string, services: string[]):
     }
     for (const { kind, w } of allWorkloads(inv)) {
       const labels = w.spec?.template?.metadata?.labels;
-      if ((w.metadata.namespace ?? 'default') === namespace && labels && Object.entries(selector).every(([k, v]) => labels[k] === v)) {
+      if (
+        (w.metadata.namespace ?? 'default') === namespace &&
+        labels &&
+        Object.entries(selector).every(([k, v]) => labels[k] === v)
+      ) {
         out.add(`${kind}/${w.metadata.name}`);
       }
     }
@@ -42,50 +46,58 @@ function workloadsBehind(inv: Inventory, namespace: string, services: string[]):
 }
 
 export function buildNetwork(inv: Inventory, data: RunData, detected: Detected[]): NetworkView {
-  const certBySecret = new Map((data.certificates ?? []).map((c) => [`${c.metadata.namespace}/${c.spec?.secretName}`, c]));
+  const certBySecret = new Map(
+    (data.certificates ?? []).map((c) => [`${c.metadata.namespace}/${c.spec?.secretName}`, c]),
+  );
   const componentOfService = new Map<string, string>();
   for (const d of detected) {
     for (const s of d.services) {
       componentOfService.set(`${s.metadata.namespace}/${s.metadata.name}`, d.entry.name);
     }
   }
-  const ingresses: IngressView[] = inv.ingresses
-    .map((ing) => {
-      const ns = ing.metadata.namespace ?? 'default';
-      const secret = ing.spec?.tls?.[0]?.secretName;
-      // cert-manager's ingress-shim names the Certificate after the secret.
-      const cert = secret ? certBySecret.get(`${ns}/${secret}`) : undefined;
-      const notAfter = Date.parse(cert?.status?.notAfter ?? '');
-      const backends = [
-        ...new Set(
-          (ing.spec?.rules ?? []).flatMap((r) =>
-            (r.http?.paths ?? []).map((p) => `${p.backend?.service?.name ?? '?'}:${p.backend?.service?.port?.number ?? p.backend?.service?.port?.name ?? ''}`),
+  const ingresses: IngressView[] = inv.ingresses.map((ing) => {
+    const ns = ing.metadata.namespace ?? 'default';
+    const secret = ing.spec?.tls?.[0]?.secretName;
+    // cert-manager's ingress-shim names the Certificate after the secret.
+    const cert = secret ? certBySecret.get(`${ns}/${secret}`) : undefined;
+    const notAfter = Date.parse(cert?.status?.notAfter ?? '');
+    const backends = [
+      ...new Set(
+        (ing.spec?.rules ?? []).flatMap((r) =>
+          (r.http?.paths ?? []).map(
+            (p) =>
+              `${p.backend?.service?.name ?? '?'}:${p.backend?.service?.port?.number ?? p.backend?.service?.port?.name ?? ''}`,
           ),
         ),
-      ];
-      const component = (ing.spec?.rules ?? [])
-        .flatMap((r) => r.http?.paths ?? [])
-        .map((p) => componentOfService.get(`${ns}/${p.backend?.service?.name}`))
-        .find(Boolean);
-      return {
-        namespace: ns,
-        name: ing.metadata.name,
-        hosts: hostsOf(ing),
-        className: ing.spec?.ingressClassName ?? ing.metadata.annotations?.['kubernetes.io/ingress.class'],
-        tls: (ing.spec?.tls?.length ?? 0) > 0,
-        certificate: cert
-          ? {
-              name: cert.metadata.name,
-              notAfter: cert.status?.notAfter,
-              daysLeft: Number.isFinite(notAfter) ? Math.floor((notAfter - inv.at.getTime()) / 86_400_000) : null,
-              ready: condition(cert.status?.conditions, 'Ready')?.status === 'True',
-            }
-          : undefined,
-        backends,
-        workloads: workloadsBehind(inv, ns, (ing.spec?.rules ?? []).flatMap((r) => (r.http?.paths ?? []).map((p) => p.backend?.service?.name ?? ''))),
-        component,
-      };
-    });
+      ),
+    ];
+    const component = (ing.spec?.rules ?? [])
+      .flatMap((r) => r.http?.paths ?? [])
+      .map((p) => componentOfService.get(`${ns}/${p.backend?.service?.name}`))
+      .find(Boolean);
+    return {
+      namespace: ns,
+      name: ing.metadata.name,
+      hosts: hostsOf(ing),
+      className: ing.spec?.ingressClassName ?? ing.metadata.annotations?.['kubernetes.io/ingress.class'],
+      tls: (ing.spec?.tls?.length ?? 0) > 0,
+      certificate: cert
+        ? {
+            name: cert.metadata.name,
+            notAfter: cert.status?.notAfter,
+            daysLeft: Number.isFinite(notAfter) ? Math.floor((notAfter - inv.at.getTime()) / 86_400_000) : null,
+            ready: condition(cert.status?.conditions, 'Ready')?.status === 'True',
+          }
+        : undefined,
+      backends,
+      workloads: workloadsBehind(
+        inv,
+        ns,
+        (ing.spec?.rules ?? []).flatMap((r) => (r.http?.paths ?? []).map((p) => p.backend?.service?.name ?? '')),
+      ),
+      component,
+    };
+  });
   // Gateway API HTTPRoutes and Traefik IngressRoutes: the same view, the kind in the class column.
   for (const route of inv.httpRoutes) {
     const ns = route.metadata.namespace ?? 'default';
@@ -98,7 +110,11 @@ export function buildNetwork(inv: Inventory, data: RunData, detected: Detected[]
       tls: true,
       certificate: undefined,
       backends: [...new Set(backends.map((b) => `${b.name}:${b.port ?? ''}`))],
-      workloads: workloadsBehind(inv, ns, backends.filter((b) => !b.namespace || b.namespace === ns).map((b) => b.name)),
+      workloads: workloadsBehind(
+        inv,
+        ns,
+        backends.filter((b) => !b.namespace || b.namespace === ns).map((b) => b.name),
+      ),
       component: backends.map((b) => componentOfService.get(`${b.namespace ?? ns}/${b.name}`)).find(Boolean),
     });
   }
@@ -115,10 +131,19 @@ export function buildNetwork(inv: Inventory, data: RunData, detected: Detected[]
       className: 'IngressRoute',
       tls: Boolean(route.spec?.tls),
       certificate: cert
-        ? { name: cert.metadata.name, notAfter: cert.status?.notAfter, daysLeft: Number.isFinite(notAfter) ? Math.floor((notAfter - inv.at.getTime()) / 86_400_000) : null, ready: condition(cert.status?.conditions, 'Ready')?.status === 'True' }
+        ? {
+            name: cert.metadata.name,
+            notAfter: cert.status?.notAfter,
+            daysLeft: Number.isFinite(notAfter) ? Math.floor((notAfter - inv.at.getTime()) / 86_400_000) : null,
+            ready: condition(cert.status?.conditions, 'Ready')?.status === 'True',
+          }
         : undefined,
       backends: [...new Set(services.map((s) => `${s.name}:${s.port ?? ''}`))],
-      workloads: workloadsBehind(inv, ns, services.filter((s) => !s.namespace || s.namespace === ns).map((s) => s.name)),
+      workloads: workloadsBehind(
+        inv,
+        ns,
+        services.filter((s) => !s.namespace || s.namespace === ns).map((s) => s.name),
+      ),
       component: services.map((s) => componentOfService.get(`${s.namespace ?? ns}/${s.name}`)).find(Boolean),
     });
   }

@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { IonIcon } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
+
 import { ResourceBar } from '../ui/resource-bar';
 import { RailView } from './cluster-view';
 
@@ -33,7 +34,9 @@ import { RailView } from './cluster-view';
           } @else {
             <div [class]="'plain tone-' + r.tone">
               <span class="label">{{ r.label }}</span>
-              <span><strong>{{ r.value }}</strong> {{ r.note }}</span>
+              <span
+                ><strong>{{ r.value }}</strong> {{ r.note }}</span
+              >
             </div>
           }
           @if (nodes() && r.nodes.length > 1) {
@@ -41,7 +44,13 @@ import { RailView } from './cluster-view';
               @for (n of r.nodes; track n.name) {
                 <li [class]="'tone-' + n.tone" [class.problem]="n.problem">
                   <span class="name">{{ n.name }}</span>
-                  <app-resource-bar [resource]="n.bar" [label]="r.label + ' ' + n.name" [head]="false" [legend]="false" [compact]="true" />
+                  <app-resource-bar
+                    [resource]="n.bar"
+                    [label]="r.label + ' ' + n.name"
+                    [head]="false"
+                    [legend]="false"
+                    [compact]="true"
+                  />
                   <span class="pct">
                     @if (n.problem) {
                       <ion-icon name="warning" aria-hidden="true" />

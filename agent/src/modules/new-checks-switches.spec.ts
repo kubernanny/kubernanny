@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { Agent } from '../agent';
 import { loadConfig } from '../config';
 import { DemoKubeClient } from '../demo/demo-cluster';
@@ -19,7 +21,17 @@ import { INTEGRATIONS } from './integrations';
  * run, the app cannot switch it back on, its RBAC is not generated, and it
  * makes no request, to the cluster or out of it.
  */
-const NEW = ['rook-ceph', 'traefik', 'ingress-nginx', 'kyverno', 'gatekeeper', 'node-clocks', 'image-updates', 'trivy', 'standard-alerts'];
+const NEW = [
+  'rook-ceph',
+  'traefik',
+  'ingress-nginx',
+  'kyverno',
+  'gatekeeper',
+  'node-clocks',
+  'image-updates',
+  'trivy',
+  'standard-alerts',
+];
 const who = { kind: 'device' as const, id: 'd1', name: 'Test' };
 
 function config(env: Record<string, string>) {
@@ -99,11 +111,17 @@ describe('the new checks, switched off in the deployment', () => {
         .filter(([id]) => id !== m.id)
         .flatMap(([, rules]) => rules.flatMap((r) => r.resources.map((res) => `${r.group}/${res}`)));
       for (const read of m.reads) {
-        expect(granted, `${read.group}/${read.resource} is also granted to another module`).not.toContain(`${read.group}/${read.resource}`);
+        expect(granted, `${read.group}/${read.resource} is also granted to another module`).not.toContain(
+          `${read.group}/${read.resource}`,
+        );
       }
     }
     // No action permission is tied to them either.
-    expect(Object.values(generated.actions).flatMap((a) => a.modules).filter((id) => NEW.includes(id))).toEqual([]);
+    expect(
+      Object.values(generated.actions)
+        .flatMap((a) => a.modules)
+        .filter((id) => NEW.includes(id)),
+    ).toEqual([]);
   });
 
   it('do not run and make no request: no CRD list, no Prometheus query, no registry', async () => {
@@ -114,9 +132,19 @@ describe('the new checks, switched off in the deployment', () => {
     const s = await run(kube, { DISABLED_MODULES: NEW.join(',') });
     expect(s.modules.filter((m) => NEW.includes(m.id))).toEqual([]);
     expect(s.issues.filter((i) => NEW.some((id) => i.id.startsWith(`${id}/`)))).toEqual([]);
-    expect(kube.lists.filter((p) => /ceph\.rook\.io|wgpolicyk8s\.io|kyverno\.io|gatekeeper\.sh|aquasecurity\.github\.io/.test(p))).toEqual([]);
+    expect(
+      kube.lists.filter((p) =>
+        /ceph\.rook\.io|wgpolicyk8s\.io|kyverno\.io|gatekeeper\.sh|aquasecurity\.github\.io/.test(p),
+      ),
+    ).toEqual([]);
     const queries = gets.mock.calls.map(([p]) => decodeURIComponent(String(p)));
-    expect(queries.filter((q) => /traefik_|nginx_ingress|node_timex|node_ntp|etcd_network_peer|coredns_|node_nf_conntrack|group by \(__name__\)/.test(q))).toEqual([]);
+    expect(
+      queries.filter((q) =>
+        /traefik_|nginx_ingress|node_timex|node_ntp|etcd_network_peer|coredns_|node_nf_conntrack|group by \(__name__\)/.test(
+          q,
+        ),
+      ),
+    ).toEqual([]);
     expect(registry).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -124,7 +152,21 @@ describe('the new checks, switched off in the deployment', () => {
   it('run when on (so the test above proves something)', async () => {
     const registry = vi.spyOn(DemoRegistry.prototype, 'tags');
     const s = await run(new DemoKubeClient(undefined, 'broken'), {});
-    expect(s.modules.filter((m) => NEW.includes(m.id)).map((m) => m.id).sort()).toEqual(['gatekeeper', 'image-updates', 'kyverno', 'node-clocks', 'rook-ceph', 'standard-alerts', 'traefik', 'trivy']);
+    expect(
+      s.modules
+        .filter((m) => NEW.includes(m.id))
+        .map((m) => m.id)
+        .sort(),
+    ).toEqual([
+      'gatekeeper',
+      'image-updates',
+      'kyverno',
+      'node-clocks',
+      'rook-ceph',
+      'standard-alerts',
+      'traefik',
+      'trivy',
+    ]);
     expect(registry).toHaveBeenCalled();
   });
 });
@@ -144,7 +186,11 @@ describe('image updates on a real cluster', () => {
     const s = await run(new ClusterLike(), { ENABLED_MODULES: 'image-updates' });
     expect(s.modules.map((m) => m.id)).toContain('image-updates');
     expect(fetchSpy).toHaveBeenCalled();
-    expect(fetchSpy.mock.calls.every(([url]) => /^https:\/\/(registry-1\.docker\.io|ghcr\.io|quay\.io|registry\.k8s\.io)\/v2\//.test(String(url)))).toBe(true);
+    expect(
+      fetchSpy.mock.calls.every(([url]) =>
+        /^https:\/\/(registry-1\.docker\.io|ghcr\.io|quay\.io|registry\.k8s\.io)\/v2\//.test(String(url)),
+      ),
+    ).toBe(true);
   });
 
   it('contacts nothing when enabled and locked off at the same time', async () => {

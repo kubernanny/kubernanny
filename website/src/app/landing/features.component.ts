@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { componentGroups } from 'virtual:kubernanny-components';
+
 import { SITE } from '../../site.config';
 import { IconComponent } from '../components/icon.component';
 import { SCREENSHOTS } from './screenshots';
@@ -59,14 +60,21 @@ const CHANNELS = ['ntfy', 'Discord', 'Slack', 'Gotify', 'JSON webhook'];
             <span class="badge"><kn-icon name="stethoscope" /></span>
             <h3>Deep checks, not just pod status</h3>
             <p>
-              Degraded Longhorn volumes, Argo CD apps with the broken resource, CNPG backup age, expiring
-              certificates. Plus the community mixins' standard alerts, built in: etcd peer latency, disks filling up,
-              overcommit, CoreDNS.
+              Degraded Longhorn volumes, Argo CD apps with the broken resource, CNPG backup age, expiring certificates.
+              Plus the community mixins' standard alerts, built in: etcd peer latency, disks filling up, overcommit,
+              CoreDNS.
               <a routerLink="/docs/checks">Every check</a>
             </p>
           </div>
           <div class="shot">
-            <img [src]="vm.longhorn.src" [alt]="vm.longhorn.alt" [width]="vm.longhorn.width" [height]="vm.longhorn.height" loading="lazy" decoding="async" />
+            <img
+              [src]="vm.longhorn.src"
+              [alt]="vm.longhorn.alt"
+              [width]="vm.longhorn.width"
+              [height]="vm.longhorn.height"
+              loading="lazy"
+              decoding="async"
+            />
           </div>
         </article>
 
@@ -74,10 +82,20 @@ const CHANNELS = ['ntfy', 'Discord', 'Slack', 'Gotify', 'JSON webhook'];
           <div class="card-text">
             <span class="badge crit"><kn-icon name="scan" /></span>
             <h3>Only what is broken</h3>
-            <p>No wall of green. Each problem says why, since when, and which action usually fixes it. A planned kured reboot is a warning; an Argo CD app waiting for its sync is a calm "ready to sync" note.</p>
+            <p>
+              No wall of green. Each problem says why, since when, and which action usually fixes it. A planned kured
+              reboot is a warning; an Argo CD app waiting for its sync is a calm "ready to sync" note.
+            </p>
           </div>
           <div class="shot">
-            <img [src]="vm.issues.src" [alt]="vm.issues.alt" [width]="vm.issues.width" [height]="vm.issues.height" loading="lazy" decoding="async" />
+            <img
+              [src]="vm.issues.src"
+              [alt]="vm.issues.alt"
+              [width]="vm.issues.width"
+              [height]="vm.issues.height"
+              loading="lazy"
+              decoding="async"
+            />
           </div>
         </article>
 
@@ -92,7 +110,14 @@ const CHANNELS = ['ntfy', 'Discord', 'Slack', 'Gotify', 'JSON webhook'];
             </p>
           </div>
           <div class="shot">
-            <img [src]="vm.confirm.src" [alt]="vm.confirm.alt" [width]="vm.confirm.width" [height]="vm.confirm.height" loading="lazy" decoding="async" />
+            <img
+              [src]="vm.confirm.src"
+              [alt]="vm.confirm.alt"
+              [width]="vm.confirm.width"
+              [height]="vm.confirm.height"
+              loading="lazy"
+              decoding="async"
+            />
           </div>
         </article>
 
@@ -100,8 +125,8 @@ const CHANNELS = ['ntfy', 'Discord', 'Slack', 'Gotify', 'JSON webhook'];
           <span class="badge"><kn-icon name="key" /></span>
           <h3>End-to-end encrypted, on any path</h3>
           <p>
-            Every call is a fresh Noise IK handshake between your device's own key and the agent's pinned key. VPN,
-            LAN or plain HTTP: the path stops mattering.
+            Every call is a fresh Noise IK handshake between your device's own key and the agent's pinned key. VPN, LAN
+            or plain HTTP: the path stops mattering.
           </p>
           <div class="handshake" aria-hidden="true">
             <span class="node">device key</span>
@@ -120,7 +145,9 @@ const CHANNELS = ['ntfy', 'Discord', 'Slack', 'Gotify', 'JSON webhook'];
           </p>
           <ul class="toggles" aria-hidden="true">
             @for (s of vm.switches; track s.label) {
-              <li><span>{{ s.label }}</span><i [class.on]="s.on"></i></li>
+              <li>
+                <span>{{ s.label }}</span><i [class.on]="s.on"></i>
+              </li>
             }
           </ul>
           <a href="#switches-title" class="more">What off removes <kn-icon name="arrowRight" /></a>
@@ -163,9 +190,9 @@ const CHANNELS = ['ntfy', 'Discord', 'Slack', 'Gotify', 'JSON webhook'];
           <p>
             A problem is sent once it has lasted five minutes, so rollouts and planned reboots never wake you. Again if
             it turns critical, and once more when it is resolved. Straight to the app as a native push, sealed for your
-            device so neither the relay nor Google can read it, and the home-screen widget updates with it. If the
-            agent or the whole cluster goes silent, the relay sends the warning it holds sealed for your phone. Or to
-            your own channels:
+            device so neither the relay nor Google can read it, and the home-screen widget updates with it. If the agent
+            or the whole cluster goes silent, the relay sends the warning it holds sealed for your phone. Or to your own
+            channels:
           </p>
           <ul class="channels" aria-label="Channels">
             @for (c of vm.channels; track c) {

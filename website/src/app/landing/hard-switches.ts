@@ -40,7 +40,8 @@ export const HARD_SWITCHES: HardSwitch[] = [
     value: 'rbac.allowActions',
     default: true,
     removes: ['write', 'route'],
-    detail: 'The ClusterRole loses every patch, create and delete verb, and the action routes answer 403. Strictly read-only.',
+    detail:
+      'The ClusterRole loses every patch, create and delete verb, and the action routes answer 403. Strictly read-only.',
   },
   {
     goal: 'No restarts, but syncs are fine',
@@ -66,7 +67,8 @@ export const HARD_SWITCHES: HardSwitch[] = [
     value: 'checks.disabled',
     default: null,
     removes: ['read', 'write'],
-    detail: 'Any module by its id. It never runs, and the chart grants no permission to read its resources or to run its actions.',
+    detail:
+      'Any module by its id. It never runs, and the chart grants no permission to read its resources or to run its actions.',
   },
   {
     goal: 'No connection out of the cluster',
@@ -74,7 +76,8 @@ export const HARD_SWITCHES: HardSwitch[] = [
     value: 'relay.enabled',
     default: false,
     removes: ['outbound'],
-    detail: 'No WebSocket to any relay, and no egress rule for it in the NetworkPolicy. The app reaches the agent directly or not at all.',
+    detail:
+      'No WebSocket to any relay, and no egress rule for it in the NetworkPolicy. The app reaches the agent directly or not at all.',
   },
   {
     goal: 'Do not tell anyone which versions I run',
@@ -82,7 +85,8 @@ export const HARD_SWITCHES: HardSwitch[] = [
     value: 'checks.disabled',
     default: null,
     removes: ['outbound'],
-    detail: 'The lookup is off by default; listed here, the app cannot switch it on either, and no request ever goes to OSV.dev or a mirror.',
+    detail:
+      'The lookup is off by default; listed here, the app cannot switch it on either, and no request ever goes to OSV.dev or a mirror.',
   },
   {
     goal: 'Do not ask registries about my images',
@@ -90,7 +94,8 @@ export const HARD_SWITCHES: HardSwitch[] = [
     value: 'checks.disabled',
     default: null,
     removes: ['outbound'],
-    detail: 'The update lookup is off by default; listed here it cannot be switched on from the app, and no registry is ever contacted.',
+    detail:
+      'The update lookup is off by default; listed here it cannot be switched on from the app, and no registry is ever contacted.',
   },
   {
     goal: 'Nobody may wave a vulnerability through',
@@ -98,7 +103,8 @@ export const HARD_SWITCHES: HardSwitch[] = [
     value: 'vulnerabilities.allowAccept',
     default: true,
     removes: ['route', 'data'],
-    detail: 'Marking an advisory as not applicable is refused before anything is stored, and acceptances stored earlier are ignored.',
+    detail:
+      'Marking an advisory as not applicable is refused before anything is stored, and acceptances stored earlier are ignored.',
   },
   {
     goal: 'No push through Google to my phone',
@@ -106,7 +112,8 @@ export const HARD_SWITCHES: HardSwitch[] = [
     value: 'notifications.appPush.enabled',
     default: true,
     removes: ['route', 'data', 'outbound'],
-    detail: 'The push routes answer 404, stored push tokens are deleted on start, and nothing is handed to the relay. Even when on, pushes are sealed per device: the relay and Google never see the text.',
+    detail:
+      'The push routes answer 404, stored push tokens are deleted on start, and nothing is handed to the relay. Even when on, pushes are sealed per device: the relay and Google never see the text.',
   },
   {
     goal: 'No notifications at all',

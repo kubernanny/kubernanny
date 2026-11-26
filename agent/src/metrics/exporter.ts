@@ -8,7 +8,12 @@ const esc = (v: string) => v.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace
  */
 export function renderMetrics(s: Snapshot, extra: { widgetPushes?: ReadonlyMap<string, number> } = {}): string {
   const lines: string[] = [];
-  const metric = (name: string, help: string, type: 'gauge' | 'counter', samples: [Record<string, string>, number][]) => {
+  const metric = (
+    name: string,
+    help: string,
+    type: 'gauge' | 'counter',
+    samples: [Record<string, string>, number][],
+  ) => {
     lines.push(`# HELP ${name} ${help}`, `# TYPE ${name} ${type}`);
     for (const [labels, value] of samples) {
       const l = Object.entries(labels)
@@ -29,18 +34,32 @@ export function renderMetrics(s: Snapshot, extra: { widgetPushes?: ReadonlyMap<s
     'kubernanny_module_status',
     'Per module: 0 ok, 1 warning, 2 critical, 3 error.',
     'gauge',
-    s.modules.filter((m) => m.status !== 'skipped').map((m) => [{ module: m.id, category: m.category }, { ok: 0, warning: 1, critical: 2, error: 3, skipped: 0 }[m.status]]),
+    s.modules
+      .filter((m) => m.status !== 'skipped')
+      .map((m) => [
+        { module: m.id, category: m.category },
+        { ok: 0, warning: 1, critical: 2, error: 3, skipped: 0 }[m.status],
+      ]),
   );
-  metric('kubernanny_components_detected', 'Components recognised in the cluster.', 'gauge', [[{}, s.overview?.components ?? 0]]);
+  metric('kubernanny_components_detected', 'Components recognised in the cluster.', 'gauge', [
+    [{}, s.overview?.components ?? 0],
+  ]);
   if (s.durationMs !== null) {
     metric('kubernanny_run_duration_seconds', 'Duration of the last check run.', 'gauge', [[{}, s.durationMs / 1000]]);
   }
   if (s.checkedAt) {
-    metric('kubernanny_last_run_timestamp_seconds', 'Time of the last check run that read the cluster.', 'gauge', [[{}, Math.floor(Date.parse(s.checkedAt) / 1000)]]);
+    metric('kubernanny_last_run_timestamp_seconds', 'Time of the last check run that read the cluster.', 'gauge', [
+      [{}, Math.floor(Date.parse(s.checkedAt) / 1000)],
+    ]);
   }
   if (extra.widgetPushes && extra.widgetPushes.size > 0) {
     // Outcomes only: never a device, a token or a key id.
-    metric('kubernanny_widget_pushes_total', 'Silent status pushes for home-screen widgets handed to the relay, by outcome.', 'counter', [...extra.widgetPushes].map(([outcome, n]) => [{ outcome }, n]));
+    metric(
+      'kubernanny_widget_pushes_total',
+      'Silent status pushes for home-screen widgets handed to the relay, by outcome.',
+      'counter',
+      [...extra.widgetPushes].map(([outcome, n]) => [{ outcome }, n]),
+    );
   }
   return `${lines.join('\n')}\n`;
 }

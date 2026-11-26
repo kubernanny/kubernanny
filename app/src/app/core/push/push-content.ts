@@ -1,12 +1,30 @@
-import { DEADMAN_MAX_VALIDITY_MS, PushContent, decodePushContent, fromBase64Url, keyPairFromSecret, openPush, parsePublicKey } from '@kubernanny/protocol';
+import {
+  DEADMAN_MAX_VALIDITY_MS,
+  decodePushContent,
+  fromBase64Url,
+  keyPairFromSecret,
+  openPush,
+  parsePublicKey,
+  PushContent,
+} from '@kubernanny/protocol';
 
 /**
  * Opens one push as the native code does (iOS extension, Android service):
  * the reference those copies mirror, tested against the same vectors
  * (protocol/test/push-vectors.json). `message` is the FCM data field `m`.
  */
-export function openPushMessage(pushSecret: string, agentKey: string, message: string): PushContent {
-  return decodePushContent(openPush(keyPairFromSecret(fromBase64Url(pushSecret)), parsePublicKey(agentKey), fromBase64Url(message)));
+export function openPushMessage(
+  pushSecret: string,
+  agentKey: string,
+  message: string,
+): PushContent {
+  return decodePushContent(
+    openPush(
+      keyPairFromSecret(fromBase64Url(pushSecret)),
+      parsePublicKey(agentKey),
+      fromBase64Url(message),
+    ),
+  );
 }
 
 /** A push sealed longer ago (or further ahead, by the agent's clock) than this is not shown. */
@@ -55,9 +73,20 @@ export function statusPushFresh(sealedAt: number, now: number): boolean {
  *     after the "reachable again" push is dropped.
  * Mirrored by PushFreshness.deadmanFresh and PushKeys.isDeadmanFresh.
  */
-export function deadmanFresh(content: { s: number; d: { u: number; g: number } }, now: number, lastDeadman: number | null, lastHeard: number | null): boolean {
+export function deadmanFresh(
+  content: { s: number; d: { u: number; g: number } },
+  now: number,
+  lastDeadman: number | null,
+  lastHeard: number | null,
+): boolean {
   const { s, d } = content;
-  if (!Number.isFinite(s) || !Number.isFinite(d.u) || s - now > MAX_PUSH_AGE_MS || now > d.u || d.u - s > DEADMAN_MAX_VALIDITY_MS) {
+  if (
+    !Number.isFinite(s) ||
+    !Number.isFinite(d.u) ||
+    s - now > MAX_PUSH_AGE_MS ||
+    now > d.u ||
+    d.u - s > DEADMAN_MAX_VALIDITY_MS
+  ) {
     return false;
   }
   if (lastDeadman !== null && s <= lastDeadman) {

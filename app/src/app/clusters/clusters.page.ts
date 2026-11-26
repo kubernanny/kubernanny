@@ -1,24 +1,55 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonTitle, IonToolbar, ToastController } from '@ionic/angular/standalone';
+import {
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonIcon,
+  IonTitle,
+  IonToolbar,
+  ToastController,
+} from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
+
+import { DEMO_HOST } from '../../environments/build-flags';
 import { buildClusterView } from '../cluster/cluster-view';
 import { ClusterStore } from '../core/cluster-store.service';
 import { ScanPairing } from '../core/scan/scan-pairing.service';
 import { copyText } from '../core/share';
 import { StatusStore } from '../core/status-store.service';
-import { DEMO_HOST } from '../../environments/build-flags';
 import { LangChoice, LanguageService } from '../i18n/language.service';
 import { NannyEye } from '../ui/nanny-eye';
 import { WidgetSwitchComponent } from './widget-switch.component';
 
-export const INSTALL_COMMAND = 'helm install kubernanny oci://ghcr.io/kubernanny/charts/kubernanny -n kubernanny --create-namespace';
+export const INSTALL_COMMAND =
+  'helm install kubernanny oci://ghcr.io/kubernanny/charts/kubernanny -n kubernanny --create-namespace';
 export const PAIR_COMMAND = 'kubectl -n kubernanny logs deploy/kubernanny';
 
 @Component({
   selector: 'app-clusters',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, RouterLink, IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonIcon, IonContent, NannyEye, WidgetSwitchComponent],
+  imports: [
+    TranslocoDirective,
+    RouterLink,
+    IonHeader,
+    IonToolbar,
+    IonTitle,
+    IonButtons,
+    IonButton,
+    IonIcon,
+    IonContent,
+    NannyEye,
+    WidgetSwitchComponent,
+  ],
   template: `
     <ng-container *transloco="let t">
       <ion-header class="ion-no-border">
@@ -43,9 +74,13 @@ export const PAIR_COMMAND = 'kubectl -n kubernanny logs deploy/kubernanny';
               </div>
               <div class="demo-actions">
                 @if (!demoHost) {
-                  <ion-button size="small" routerLink="/cluster/new">{{ t('clusters.demo.connect') }}</ion-button>
+                  <ion-button size="small" routerLink="/cluster/new">{{
+                    t('clusters.demo.connect')
+                  }}</ion-button>
                 }
-                <ion-button size="small" fill="clear" (click)="endDemo()">{{ t('clusters.demo.end') }}</ion-button>
+                <ion-button size="small" fill="clear" (click)="endDemo()">{{
+                  t('clusters.demo.end')
+                }}</ion-button>
               </div>
             </aside>
           }
@@ -82,34 +117,56 @@ export const PAIR_COMMAND = 'kubectl -n kubernanny logs deploy/kubernanny';
               @if (thisAgent()) {
                 <div class="local">
                   <p>{{ t('clusters.empty.local') }}</p>
-                  <ion-button routerLink="/pair" [queryParams]="{ url: origin }">{{ t('clusters.empty.connectLocal') }}</ion-button>
+                  <ion-button routerLink="/pair" [queryParams]="{ url: origin }">{{
+                    t('clusters.empty.connectLocal')
+                  }}</ion-button>
                 </div>
               }
 
               <ol class="steps">
                 <li>
                   <strong>{{ t('clusters.empty.installTitle') }}</strong>
-                  <button type="button" class="cmd" (click)="copy(install)"><code>{{ install }}</code><ion-icon name="copy-outline" [attr.aria-label]="t('common.copy')" /></button>
+                  <button type="button" class="cmd" (click)="copy(install)">
+                    <code>{{ install }}</code><ion-icon
+                      name="copy-outline"
+                      [attr.aria-label]="t('common.copy')"
+                    />
+                  </button>
                   <span class="muted" [innerHTML]="t('clusters.empty.installNote')"></span>
                 </li>
                 <li>
                   <strong>{{ t('clusters.empty.logsTitle') }}</strong>
-                  <button type="button" class="cmd" (click)="copy(pair)"><code>{{ pair }}</code><ion-icon name="copy-outline" [attr.aria-label]="t('common.copy')" /></button>
+                  <button type="button" class="cmd" (click)="copy(pair)">
+                    <code>{{ pair }}</code><ion-icon
+                      name="copy-outline"
+                      [attr.aria-label]="t('common.copy')"
+                    />
+                  </button>
                   <span class="muted">{{ t('clusters.empty.logsNote') }}</span>
                 </li>
                 <li>
                   <strong>{{ t('clusters.empty.scanTitle') }}</strong>
-                  <span class="muted">{{ canScan() ? t('clusters.empty.scanNoteInApp') : t('clusters.empty.scanNote') }}</span>
+                  <span class="muted">{{
+                    canScan() ? t('clusters.empty.scanNoteInApp') : t('clusters.empty.scanNote')
+                  }}</span>
                 </li>
               </ol>
               <div class="empty-actions">
                 @if (canScan()) {
-                  <ion-button class="scan" (click)="scan()"><ion-icon slot="start" name="qr-code-outline" />{{ t('pair.scan.button') }}</ion-button>
+                  <ion-button class="scan" (click)="scan()"
+                    ><ion-icon slot="start" name="qr-code-outline" />{{
+                      t('pair.scan.button')
+                    }}</ion-button
+                  >
                 }
                 @if (!demoHost) {
-                  <ion-button fill="outline" routerLink="/cluster/new">{{ t('clusters.empty.manual') }}</ion-button>
+                  <ion-button fill="outline" routerLink="/cluster/new">{{
+                    t('clusters.empty.manual')
+                  }}</ion-button>
                 }
-                <ion-button fill="clear" (click)="startDemo()">{{ t('clusters.empty.tryDemo') }}</ion-button>
+                <ion-button fill="clear" (click)="startDemo()">{{
+                  t('clusters.empty.tryDemo')
+                }}</ion-button>
               </div>
             </section>
           }
@@ -118,7 +175,14 @@ export const PAIR_COMMAND = 'kubectl -n kubernanny logs deploy/kubernanny';
             <span id="language-label">{{ t('language.label') }}</span>
             <div class="choices" role="group" aria-labelledby="language-label">
               @for (option of languageOptions(); track option.choice) {
-                <button type="button" [class.on]="option.on" [attr.aria-pressed]="option.on" [attr.lang]="option.lang" [title]="option.title" (click)="chooseLanguage(option.choice)">
+                <button
+                  type="button"
+                  [class.on]="option.on"
+                  [attr.aria-pressed]="option.on"
+                  [attr.lang]="option.lang"
+                  [title]="option.title"
+                  (click)="chooseLanguage(option.choice)"
+                >
                   {{ option.label }}
                 </button>
               }
@@ -362,7 +426,17 @@ export class ClustersPage implements OnInit {
   readonly cards = computed(() =>
     this.clusters.clusters().map((c) => {
       const state = this.status.states()[c.id];
-      return { id: c.id, name: c.name, demo: c.demo !== undefined, view: buildClusterView(state?.snapshot ?? null, state?.error ?? null, this.now(), this.language.translator()) };
+      return {
+        id: c.id,
+        name: c.name,
+        demo: c.demo !== undefined,
+        view: buildClusterView(
+          state?.snapshot ?? null,
+          state?.error ?? null,
+          this.now(),
+          this.language.translator(),
+        ),
+      };
     }),
   );
   /** Auto, Deutsch, English: the language names stay in their own language, so anyone finds theirs. */
@@ -370,7 +444,12 @@ export class ClustersPage implements OnInit {
     const choice = this.language.choice();
     const tr = this.language.translator();
     const options: { choice: LangChoice; label: string; lang: string | null; title: string }[] = [
-      { choice: 'auto', label: tr.t('language.auto'), lang: null, title: tr.t('language.autoTitle') },
+      {
+        choice: 'auto',
+        label: tr.t('language.auto'),
+        lang: null,
+        title: tr.t('language.autoTitle'),
+      },
       { choice: 'de', label: 'Deutsch', lang: 'de', title: 'Deutsch' },
       { choice: 'en', label: 'English', lang: 'en', title: 'English' },
     ];
@@ -430,7 +509,11 @@ export class ClustersPage implements OnInit {
   async copy(text: string): Promise<void> {
     // Refused (an old browser on an insecure origin): the text is selectable anyway.
     if (await copyText(text)) {
-      const toast = await this.toasts.create({ message: this.language.translator().t('common.copied'), duration: 1500, position: 'bottom' });
+      const toast = await this.toasts.create({
+        message: this.language.translator().t('common.copied'),
+        duration: 1500,
+        position: 'bottom',
+      });
       await toast.present();
     }
   }

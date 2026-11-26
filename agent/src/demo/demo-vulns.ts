@@ -18,18 +18,30 @@ const RECORDS: OsvVuln[] = [
     ],
     database_specific: { severity: 'CRITICAL' },
     affected: [
-      { package: { ecosystem: 'Go', name: 'github.com/cloudnative-pg/cloudnative-pg' }, ranges: [{ type: 'SEMVER', events: [{ introduced: '0' }, { fixed: '1.28.3' }] }] },
-      { package: { ecosystem: 'Go', name: 'github.com/cloudnative-pg/cloudnative-pg' }, ranges: [{ type: 'SEMVER', events: [{ introduced: '1.29.0' }, { fixed: '1.29.1' }] }] },
+      {
+        package: { ecosystem: 'Go', name: 'github.com/cloudnative-pg/cloudnative-pg' },
+        ranges: [{ type: 'SEMVER', events: [{ introduced: '0' }, { fixed: '1.28.3' }] }],
+      },
+      {
+        package: { ecosystem: 'Go', name: 'github.com/cloudnative-pg/cloudnative-pg' },
+        ranges: [{ type: 'SEMVER', events: [{ introduced: '1.29.0' }, { fixed: '1.29.1' }] }],
+      },
     ],
   },
   {
     id: 'GO-2026-5106',
     aliases: ['CVE-2026-44477', 'GHSA-423p-g724-fr39'],
-    summary: "CloudNativePG's metrics exporter allows privilege escalation to PostgreSQL superuser and OS RCE in github.com/cloudnative-pg/cloudnative-pg",
+    summary:
+      "CloudNativePG's metrics exporter allows privilege escalation to PostgreSQL superuser and OS RCE in github.com/cloudnative-pg/cloudnative-pg",
     affected: [
       {
         package: { ecosystem: 'Go', name: 'github.com/cloudnative-pg/cloudnative-pg' },
-        ranges: [{ type: 'SEMVER', events: [{ introduced: '0' }, { fixed: '1.28.3' }, { introduced: '1.29.0' }, { fixed: '1.29.1' }] }],
+        ranges: [
+          {
+            type: 'SEMVER',
+            events: [{ introduced: '0' }, { fixed: '1.28.3' }, { introduced: '1.29.0' }, { fixed: '1.29.1' }],
+          },
+        ],
       },
     ],
   },

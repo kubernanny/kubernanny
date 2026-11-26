@@ -1,17 +1,31 @@
-import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import { encodePushContent, generateKeyPair, parsePublicKey, pushKeyId, sealPush, toBase64Url } from '@kubernanny/protocol';
+import { TestBed } from '@angular/core/testing';
+import {
+  encodePushContent,
+  generateKeyPair,
+  parsePublicKey,
+  pushKeyId,
+  sealPush,
+  toBase64Url,
+} from '@kubernanny/protocol';
+import { isDeadman } from '@kubernanny/protocol';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { AgentClient } from '../agent-client.service';
-import { AgentPushView, ClusterConfig } from '../agent.model';
-import { ClusterStore } from '../cluster-store.service';
+
 import { translatorFor } from '../../i18n/translator';
-import { MAX_PUSH_AGE_MS, deadmanFresh, openPushMessage, pushFresh, statusPushFresh } from './push-content';
-import { PushNative } from './push-native';
+import { AgentPushView, ClusterConfig } from '../agent.model';
+import { AgentClient } from '../agent-client.service';
+import { ClusterStore } from '../cluster-store.service';
 import { WidgetBridge } from '../widget/widget-bridge';
+import {
+  deadmanFresh,
+  MAX_PUSH_AGE_MS,
+  openPushMessage,
+  pushFresh,
+  statusPushFresh,
+} from './push-content';
+import { PushNative } from './push-native';
 import { PushRegistration } from './push-registration.service';
 import { deadmanView, pushView } from './push-view';
-import { isDeadman } from '@kubernanny/protocol';
 
 const en = translatorFor('en');
 const agentKeys = generateKeyPair();
@@ -33,38 +47,74 @@ describe('openPushMessage (the reference the iOS extension and the Android servi
       'iDGGuAC0HVzwQpaV2ps8xPMo680YSm5IL6V4wQPwbHc',
       'ASRP47lj6JndKVuv_OJI01MPOpp0eboGMAJoDr_nra1JJ3c7HLo-EgGzY0xSag8J2ZIiwtXc6jwMsL2YkITc_seVhcnL7ojxpFUDLd48UcUc8ibPI7qRg3NBBTIU2X8bP0RjaVsOXKQJQqNah4vME2AhsE9Ya1k4qpxHHmn-xrM3VmJKK6TVF99vRbrJ',
     );
-    expect(content).toEqual({ t: 'homelab: 2 problems', b: '🔴 default/api: CrashLoopBackOff', p: 5, s: 1795000000000 });
+    expect(content).toEqual({
+      t: 'homelab: 2 problems',
+      b: '🔴 default/api: CrashLoopBackOff',
+      p: 5,
+      s: 1795000000000,
+    });
   });
 
   it('refuses a message from another key than the pinned agent', () => {
     const push = generateKeyPair();
-    const sealed = sealPush(generateKeyPair(), push.publicKey, encodePushContent({ t: 'x', b: 'y', p: 3, s: 1 }));
-    expect(() => openPushMessage(toBase64Url(push.secretKey), toBase64Url(agentKeys.publicKey), toBase64Url(sealed))).toThrow();
+    const sealed = sealPush(
+      generateKeyPair(),
+      push.publicKey,
+      encodePushContent({ t: 'x', b: 'y', p: 3, s: 1 }),
+    );
+    expect(() =>
+      openPushMessage(
+        toBase64Url(push.secretKey),
+        toBase64Url(agentKeys.publicKey),
+        toBase64Url(sealed),
+      ),
+    ).toThrow();
   });
 });
 
 describe('pushView', () => {
-  const agent = (extra: Partial<AgentPushView> = {}): AgentPushView => ({ state: 'on', relay: true, registered: false, deadman: { state: 'on', grace: 15 }, ...extra });
+  const agent = (extra: Partial<AgentPushView> = {}): AgentPushView => ({
+    state: 'on',
+    relay: true,
+    registered: false,
+    deadman: { state: 'on', grace: 15 },
+    ...extra,
+  });
   const ios = { available: true, platform: 'ios' as const };
 
   it('is hidden in a build without push, for the demo, and while the agent has not answered', () => {
-    expect(pushView({ demo: false, native: { available: false, platform: null }, agent: agent() }, en).visible).toBe(false);
+    expect(
+      pushView({ demo: false, native: { available: false, platform: null }, agent: agent() }, en)
+        .visible,
+    ).toBe(false);
     expect(pushView({ demo: true, native: ios, agent: agent() }, en).visible).toBe(false);
     expect(pushView({ demo: false, native: ios, agent: null }, en).visible).toBe(false);
   });
 
   it('shows a lock and no button when the deployment switched it off', () => {
-    expect(pushView({ demo: false, native: ios, agent: agent({ state: 'locked' }) }, en)).toMatchObject({ visible: true, locked: true, action: null, canTest: false });
+    expect(
+      pushView({ demo: false, native: ios, agent: agent({ state: 'locked' }) }, en),
+    ).toMatchObject({ visible: true, locked: true, action: null, canTest: false });
   });
 
   it('explains that a relay is needed, without a button', () => {
-    expect(pushView({ demo: false, native: ios, agent: agent({ state: 'no-relay' }) }, en)).toMatchObject({ visible: true, action: null, note: expect.stringContaining('relay') });
+    expect(
+      pushView({ demo: false, native: ios, agent: agent({ state: 'no-relay' }) }, en),
+    ).toMatchObject({ visible: true, action: null, note: expect.stringContaining('relay') });
   });
 
   it('offers to turn it on, and once on, to turn it off and test', () => {
-    expect(pushView({ demo: false, native: ios, agent: agent() }, en)).toMatchObject({ action: 'enable', actionLabel: 'Push to this device', canTest: false });
-    expect(pushView({ demo: false, native: ios, agent: agent({ registered: true }) }, en)).toMatchObject({ action: 'disable', canTest: true, note: 'On for this device.' });
-    expect(pushView({ demo: false, native: ios, agent: agent({ registered: true, relay: false }) }, en)).toMatchObject({ action: 'disable', canTest: false });
+    expect(pushView({ demo: false, native: ios, agent: agent() }, en)).toMatchObject({
+      action: 'enable',
+      actionLabel: 'Push to this device',
+      canTest: false,
+    });
+    expect(
+      pushView({ demo: false, native: ios, agent: agent({ registered: true }) }, en),
+    ).toMatchObject({ action: 'disable', canTest: true, note: 'On for this device.' });
+    expect(
+      pushView({ demo: false, native: ios, agent: agent({ registered: true, relay: false }) }, en),
+    ).toMatchObject({ action: 'disable', canTest: false });
   });
 });
 
@@ -73,7 +123,10 @@ class FakeNative {
   available = true;
   granted = true;
   currentToken = 'fcm-token-1:APA91b';
-  keys = new Map<string, { secretKey: string; publicKey: string; agentKey: string; clusterId: string }>();
+  keys = new Map<
+    string,
+    { secretKey: string; publicKey: string; agentKey: string; clusterId: string }
+  >();
   permissionAsked = 0;
   async status() {
     return { available: this.available, platform: this.available ? ('ios' as const) : null };
@@ -85,7 +138,13 @@ class FakeNative {
   async token() {
     return this.currentToken;
   }
-  async storeKey(o: { kid: string; secretKey: string; publicKey: string; agentKey: string; clusterId: string }) {
+  async storeKey(o: {
+    kid: string;
+    secretKey: string;
+    publicKey: string;
+    agentKey: string;
+    clusterId: string;
+  }) {
     this.keys.set(o.kid, o);
   }
   async removeKey(kid: string) {
@@ -106,10 +165,19 @@ class FakeWidgets {
 }
 
 class FakeClient {
-  registered: { token: string; platform: string; key: string; widget: boolean; deadman?: number | false }[] = [];
+  registered: {
+    token: string;
+    platform: string;
+    key: string;
+    widget: boolean;
+    deadman?: number | false;
+  }[] = [];
   unregistered = 0;
   fail = false;
-  async registerPush(_: ClusterConfig, r: { token: string; platform: string; key: string; widget: boolean; deadman?: number | false }) {
+  async registerPush(
+    _: ClusterConfig,
+    r: { token: string; platform: string; key: string; widget: boolean; deadman?: number | false },
+  ) {
     if (this.fail) {
       throw new Error('agent says no');
     }
@@ -160,14 +228,33 @@ describe('PushRegistration', () => {
     const [kid, stored] = [...native.keys][0]!;
     expect(stored).toMatchObject({ agentKey: config().agentKey, clusterId: 'c1' });
     expect(stored.secretKey).not.toBe(config().deviceKey);
-    expect(client.registered).toEqual([{ token: 'fcm-token-1:APA91b', platform: 'ios', key: stored.publicKey, widget: false, deadman: 15 }]);
+    expect(client.registered).toEqual([
+      {
+        token: 'fcm-token-1:APA91b',
+        platform: 'ios',
+        key: stored.publicKey,
+        widget: false,
+        deadman: 15,
+      },
+    ]);
     expect(kid).toBe(pushKeyId(parsePublicKey(stored.publicKey)));
-    expect(store.clusters()[0]!.push).toEqual({ kid, key: stored.publicKey, token: 'fcm-token-1:APA91b', deadman: 15 });
+    expect(store.clusters()[0]!.push).toEqual({
+      kid,
+      key: stored.publicKey,
+      token: 'fcm-token-1:APA91b',
+      deadman: 15,
+    });
     expect(JSON.stringify(store.clusters())).not.toContain(stored.secretKey);
 
     // What the agent seals for the registered key opens with what the phone stored.
-    const sealed = sealPush(agentKeys, parsePublicKey(stored.publicKey), encodePushContent({ t: 'homelab: 1 problem', b: 'x', p: 5, s: 1 }));
-    expect(openPushMessage(stored.secretKey, stored.agentKey, toBase64Url(sealed)).t).toBe('homelab: 1 problem');
+    const sealed = sealPush(
+      agentKeys,
+      parsePublicKey(stored.publicKey),
+      encodePushContent({ t: 'homelab: 1 problem', b: 'x', p: 5, s: 1 }),
+    );
+    expect(openPushMessage(stored.secretKey, stored.agentKey, toBase64Url(sealed)).t).toBe(
+      'homelab: 1 problem',
+    );
   });
 
   it('stores and registers nothing when permission is refused or the build cannot push', async () => {
@@ -199,7 +286,13 @@ describe('PushRegistration', () => {
     const before = store.clusters()[0]!.push!;
     native.currentToken = 'fcm-token-2:APA91b';
     await registration.refreshRegistrations();
-    expect(client.registered.at(-1)).toEqual({ token: 'fcm-token-2:APA91b', platform: 'ios', key: before.key, widget: false, deadman: 15 });
+    expect(client.registered.at(-1)).toEqual({
+      token: 'fcm-token-2:APA91b',
+      platform: 'ios',
+      key: before.key,
+      widget: false,
+      deadman: 15,
+    });
     expect(store.clusters()[0]!.push).toEqual({ ...before, token: 'fcm-token-2:APA91b' });
     const count = client.registered.length;
     await registration.refreshRegistrations();
@@ -218,7 +311,10 @@ describe('PushRegistration', () => {
     // The widget was removed from the home screen.
     widgets.count = 0;
     await registration.refreshRegistrations();
-    expect(client.registered.at(-1)).toMatchObject({ key: store.clusters()[0]!.push!.key, widget: false });
+    expect(client.registered.at(-1)).toMatchObject({
+      key: store.clusters()[0]!.push!.key,
+      widget: false,
+    });
     expect(store.clusters()[0]!.push!.widget).toBeUndefined();
     // Placed again, but this cluster is switched off for the widget (not in its list).
     widgets.count = 2;
@@ -230,7 +326,7 @@ describe('PushRegistration', () => {
     expect(client.registered.at(-1)!.widget).toBe(true);
   });
 
-  it('turns the dead man\'s switch on with push, changes its grace and switches it off, registering again each time', async () => {
+  it("turns the dead man's switch on with push, changes its grace and switches it off, registering again each time", async () => {
     await registration.enable(config());
     let cluster = await registration.setDeadman(store.clusters()[0]!, 60);
     expect(client.registered.at(-1)).toMatchObject({ key: cluster.push!.key, deadman: 60 });
@@ -243,10 +339,12 @@ describe('PushRegistration', () => {
     expect(client.registered.length).toBe(count);
   });
 
-  it('registers once more, with the default, a push set up by an app before the dead man\'s switch', async () => {
+  it("registers once more, with the default, a push set up by an app before the dead man's switch", async () => {
     store.clusters.set([config({ push: { kid: 'k', key: 'key', token: 'fcm-token-1:APA91b' } })]);
     await registration.refreshRegistrations();
-    expect(client.registered).toEqual([{ token: 'fcm-token-1:APA91b', platform: 'ios', key: 'key', widget: false, deadman: 15 }]);
+    expect(client.registered).toEqual([
+      { token: 'fcm-token-1:APA91b', platform: 'ios', key: 'key', widget: false, deadman: 15 },
+    ]);
     expect(store.clusters()[0]!.push!.deadman).toBe(15);
     await registration.refreshRegistrations();
     expect(client.registered).toHaveLength(1);
@@ -293,19 +391,58 @@ describe('pushFresh (mirrored by PushFreshness.java and PushKeys.isFresh)', () =
 });
 
 describe('deadmanView (the switch in the push section)', () => {
-  const on = { state: 'on' as const, relay: true, registered: true, deadman: { state: 'on' as const, grace: 15 } };
-  it('offers the switch and the graces, with the device\'s choice', () => {
+  const on = {
+    state: 'on' as const,
+    relay: true,
+    registered: true,
+    deadman: { state: 'on' as const, grace: 15 },
+  };
+  it("offers the switch and the graces, with the device's choice", () => {
     const vm = deadmanView({ ...on, deadman: { state: 'on', grace: 30 } }, en);
-    expect(vm).toMatchObject({ editable: true, on: true, grace: 30, note: expect.stringContaining('relay sends this phone') });
+    expect(vm).toMatchObject({
+      editable: true,
+      on: true,
+      grace: 30,
+      note: expect.stringContaining('relay sends this phone'),
+    });
     expect(vm.graces.map((g) => g.label)).toEqual(['10 min', '15 min', '30 min', '60 min']);
-    expect(deadmanView({ ...on, deadman: { state: 'on', grace: null } }, en)).toMatchObject({ editable: true, on: false, grace: 15 });
+    expect(deadmanView({ ...on, deadman: { state: 'on', grace: null } }, en)).toMatchObject({
+      editable: true,
+      on: false,
+      grace: 15,
+    });
   });
 
   it('explains a deployment that switched it off and a relay without it', () => {
-    expect(deadmanView({ ...on, deadman: { state: 'locked', grace: null } }, en)).toMatchObject({ editable: false, note: expect.stringContaining('deadman.enabled') });
-    expect(deadmanView({ ...on, deadman: { state: 'relay', grace: 15 } }, en)).toMatchObject({ editable: true, on: true, note: expect.stringContaining('relay does not support') });
-    expect(pushView({ demo: false, native: { available: true, platform: 'ios' }, agent: { ...on, deadman: { state: 'on', grace: 15 } } }, en).deadman).toMatchObject({ on: true });
-    expect(pushView({ demo: false, native: { available: true, platform: 'ios' }, agent: { ...on, registered: false } }, en).deadman).toBeNull();
+    expect(deadmanView({ ...on, deadman: { state: 'locked', grace: null } }, en)).toMatchObject({
+      editable: false,
+      note: expect.stringContaining('deadman.enabled'),
+    });
+    expect(deadmanView({ ...on, deadman: { state: 'relay', grace: 15 } }, en)).toMatchObject({
+      editable: true,
+      on: true,
+      note: expect.stringContaining('relay does not support'),
+    });
+    expect(
+      pushView(
+        {
+          demo: false,
+          native: { available: true, platform: 'ios' },
+          agent: { ...on, deadman: { state: 'on', grace: 15 } },
+        },
+        en,
+      ).deadman,
+    ).toMatchObject({ on: true });
+    expect(
+      pushView(
+        {
+          demo: false,
+          native: { available: true, platform: 'ios' },
+          agent: { ...on, registered: false },
+        },
+        en,
+      ).deadman,
+    ).toBeNull();
   });
 });
 
@@ -335,7 +472,9 @@ describe('deadmanFresh (mirrored by PushFreshness.deadmanFresh and PushKeys.isDe
     expect(deadmanFresh(message, s + 90 * MIN, s, null)).toBe(false);
     expect(deadmanFresh(message, s + 3 * 3_600_000 + 1, null, null)).toBe(false);
     expect(deadmanFresh({ s: s + 2 * 3_600_000, d: message.d }, s, null, null)).toBe(false);
-    expect(deadmanFresh({ s, d: { u: s + 28 * 3_600_000, g: 15 } }, s + MIN, null, null)).toBe(false);
+    expect(deadmanFresh({ s, d: { u: s + 28 * 3_600_000, g: 15 } }, s + MIN, null, null)).toBe(
+      false,
+    );
     expect(deadmanFresh(message, s + 90 * MIN, null, s + 80 * MIN)).toBe(false);
   });
 });

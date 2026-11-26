@@ -1,7 +1,19 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Injectable, inject, signal } from '@angular/core';
-import { Method, fingerprint, fromBase64Url, generateKeyPair, keyPairFromSecret, parsePublicKey, sealRequest, toBase64Url } from '@kubernanny/protocol';
+import { inject, Injectable, signal } from '@angular/core';
+import {
+  fingerprint,
+  fromBase64Url,
+  generateKeyPair,
+  keyPairFromSecret,
+  Method,
+  parsePublicKey,
+  sealRequest,
+  toBase64Url,
+} from '@kubernanny/protocol';
 import { firstValueFrom, timeout } from 'rxjs';
+
+import { DEMO_HOST } from '../../environments/build-flags';
+import { LanguageService } from '../i18n/language.service';
 import {
   AgentInfo,
   AgentPushView,
@@ -22,9 +34,14 @@ import {
 } from './agent.model';
 import { AgentError, InsecureTransportError } from './agent-error';
 import { DemoAgent } from './demo/demo-agent';
-import { AgentPath, PROBE_TIMEOUT_MS, PathMemory, relayCallUrl, transportFailure, usableRelay } from './relay-route';
-import { LanguageService } from '../i18n/language.service';
-import { DEMO_HOST } from '../../environments/build-flags';
+import {
+  AgentPath,
+  PathMemory,
+  PROBE_TIMEOUT_MS,
+  relayCallUrl,
+  transportFailure,
+  usableRelay,
+} from './relay-route';
 
 const TIMEOUT_MS = 20_000;
 /** A rolling update of the agent hands over within a few seconds: a write refused meanwhile is sent again this often. */
@@ -77,7 +94,15 @@ export function deviceName(userAgent: string, fallback: string): string {
             : /Linux/.test(userAgent)
               ? 'Linux'
               : fallback;
-  const browser = /Edg\//.test(userAgent) ? 'Edge' : /Firefox\//.test(userAgent) ? 'Firefox' : /Chrome\//.test(userAgent) ? 'Chrome' : /Safari\//.test(userAgent) ? 'Safari' : null;
+  const browser = /Edg\//.test(userAgent)
+    ? 'Edge'
+    : /Firefox\//.test(userAgent)
+      ? 'Firefox'
+      : /Chrome\//.test(userAgent)
+        ? 'Chrome'
+        : /Safari\//.test(userAgent)
+          ? 'Safari'
+          : null;
   return browser ? `${os}, ${browser}` : os;
 }
 
@@ -100,7 +125,8 @@ export interface Pairing {
   relayUrl?: string;
 }
 
-type Target = Pick<ClusterConfig, 'url' | 'agentKey' | 'deviceKey'> & Partial<Pick<ClusterConfig, 'demo' | 'relayUrl' | 'relayOff'>>;
+type Target = Pick<ClusterConfig, 'url' | 'agentKey' | 'deviceKey'> &
+  Partial<Pick<ClusterConfig, 'demo' | 'relayUrl' | 'relayOff'>>;
 
 /**
  * The agent's API, end-to-end encrypted: every call is one Noise IK handshake
@@ -121,7 +147,9 @@ export class AgentClient {
   readonly paths = this.pathState.asReadonly();
 
   status(cluster: ClusterConfig, refresh = false): Promise<Snapshot> {
-    return refresh ? this.call(cluster, 'POST', '/status/refresh') : this.call(cluster, 'GET', '/status');
+    return refresh
+      ? this.call(cluster, 'POST', '/status/refresh')
+      : this.call(cluster, 'GET', '/status');
   }
 
   info(cluster: ClusterConfig): Promise<AgentInfo> {
@@ -161,31 +189,72 @@ export class AgentClient {
     return this.call(cluster, 'GET', `/history?${new URLSearchParams({ hours: String(hours) })}`);
   }
 
-  runAction(cluster: ClusterConfig, issueId: string, type: IssueActionType, index: number): Promise<{ done: string }> {
-    return this.call(cluster, 'POST', `/actions/${type}?${new URLSearchParams({ issue: issueId, index: String(index) })}`);
+  runAction(
+    cluster: ClusterConfig,
+    issueId: string,
+    type: IssueActionType,
+    index: number,
+  ): Promise<{ done: string }> {
+    return this.call(
+      cluster,
+      'POST',
+      `/actions/${type}?${new URLSearchParams({ issue: issueId, index: String(index) })}`,
+    );
   }
 
   /** Rolls a manual-sync Argo CD app back to an entry of its history; the agent reads the revision itself. */
-  rollbackArgoApp(cluster: ClusterConfig, namespace: string, app: string, id: number): Promise<{ done: string; revision: string }> {
+  rollbackArgoApp(
+    cluster: ClusterConfig,
+    namespace: string,
+    app: string,
+    id: number,
+  ): Promise<{ done: string; revision: string }> {
     return this.call(cluster, 'POST', '/argocd/rollback', { namespace, app, id });
   }
 
   logs(cluster: ClusterConfig, issueId: string, index: number): Promise<Logs> {
-    return this.call(cluster, 'GET', `/logs?${new URLSearchParams({ issue: issueId, index: String(index) })}`);
+    return this.call(
+      cluster,
+      'GET',
+      `/logs?${new URLSearchParams({ issue: issueId, index: String(index) })}`,
+    );
   }
 
   /** Silences an issue for 1, 8, 24 or 168 hours: still shown, but no light, score or notification. */
-  silence(cluster: ClusterConfig, issueId: string, hours: number): Promise<{ silencedUntil: string }> {
-    return this.call(cluster, 'POST', `/issues/silence?${new URLSearchParams({ issue: issueId, hours: String(hours) })}`);
+  silence(
+    cluster: ClusterConfig,
+    issueId: string,
+    hours: number,
+  ): Promise<{ silencedUntil: string }> {
+    return this.call(
+      cluster,
+      'POST',
+      `/issues/silence?${new URLSearchParams({ issue: issueId, hours: String(hours) })}`,
+    );
   }
 
   unsilence(cluster: ClusterConfig, issueId: string): Promise<void> {
-    return this.call(cluster, 'POST', `/issues/unsilence?${new URLSearchParams({ issue: issueId })}`);
+    return this.call(
+      cluster,
+      'POST',
+      `/issues/unsilence?${new URLSearchParams({ issue: issueId })}`,
+    );
   }
 
   /** Marks one advisory on one component as not applicable for 30, 90 or 365 days. */
-  acceptAdvisory(cluster: ClusterConfig, component: string, advisory: string, days: number, reason?: string): Promise<{ acceptedUntil: string }> {
-    return this.call(cluster, 'POST', '/vulnerabilities/accept', { component, advisory, days, ...(reason ? { reason } : {}) });
+  acceptAdvisory(
+    cluster: ClusterConfig,
+    component: string,
+    advisory: string,
+    days: number,
+    reason?: string,
+  ): Promise<{ acceptedUntil: string }> {
+    return this.call(cluster, 'POST', '/vulnerabilities/accept', {
+      component,
+      advisory,
+      days,
+      ...(reason ? { reason } : {}),
+    });
   }
 
   unacceptAdvisory(cluster: ClusterConfig, component: string, advisory: string): Promise<void> {
@@ -194,7 +263,11 @@ export class AgentClient {
 
   /** A maintenance window of 1, 2, 4, 8 or 24 hours: checks go on, notifications wait. */
   startMaintenance(cluster: ClusterConfig, hours: number): Promise<{ maintenanceUntil: string }> {
-    return this.call(cluster, 'POST', `/maintenance?${new URLSearchParams({ hours: String(hours) })}`);
+    return this.call(
+      cluster,
+      'POST',
+      `/maintenance?${new URLSearchParams({ hours: String(hours) })}`,
+    );
   }
 
   endMaintenance(cluster: ClusterConfig): Promise<void> {
@@ -210,7 +283,9 @@ export class AgentClient {
   }
 
   /** A pairing code for another device. */
-  newPairingCode(cluster: ClusterConfig): Promise<{ code: string; app: string; web: string | null }> {
+  newPairingCode(
+    cluster: ClusterConfig,
+  ): Promise<{ code: string; app: string; web: string | null }> {
     return this.call(cluster, 'POST', '/pair/code');
   }
 
@@ -234,7 +309,16 @@ export class AgentClient {
 
   /** Registers this device's FCM token and its push public key for this cluster. */
   /** `widget`: this device has a home-screen widget showing the cluster; `deadman`: the dead man's switch grace in minutes, or false. */
-  registerPush(cluster: ClusterConfig, registration: { token: string; platform: 'ios' | 'android'; key: string; widget: boolean; deadman: number | false }): Promise<void> {
+  registerPush(
+    cluster: ClusterConfig,
+    registration: {
+      token: string;
+      platform: 'ios' | 'android';
+      key: string;
+      widget: boolean;
+      deadman: number | false;
+    },
+  ): Promise<void> {
     return this.call(cluster, 'POST', '/push/register', registration);
   }
 
@@ -258,17 +342,35 @@ export class AgentClient {
     if (!transportAllowed(url)) {
       throw new InsecureTransportError(url);
     }
-    const answer = await firstValueFrom(this.http.get<{ publicKey: string }>(`${url}/api/identity`).pipe(timeout(TIMEOUT_MS)));
+    const answer = await firstValueFrom(
+      this.http.get<{ publicKey: string }>(`${url}/api/identity`).pipe(timeout(TIMEOUT_MS)),
+    );
     const key = parsePublicKey(answer.publicKey);
     // Recomputed here: a fingerprint the server sends proves nothing.
     return { publicKey: toBase64Url(key), fingerprint: fingerprint(key) };
   }
 
   /** Registers a fresh key pair of this device with the agent, using a one-time code. */
-  async pair(url: string, agentKey: string, code: string, name: string, relayUrl?: string): Promise<Pairing> {
+  async pair(
+    url: string,
+    agentKey: string,
+    code: string,
+    name: string,
+    relayUrl?: string,
+  ): Promise<Pairing> {
     const device = generateKeyPair();
-    const target = { url, agentKey, deviceKey: toBase64Url(device.secretKey), ...(relayUrl ? { relayUrl } : {}) };
-    const { deviceId, cluster } = await this.call<{ deviceId: string; cluster: string }>(target, 'POST', '/pair', { code, name });
+    const target = {
+      url,
+      agentKey,
+      deviceKey: toBase64Url(device.secretKey),
+      ...(relayUrl ? { relayUrl } : {}),
+    };
+    const { deviceId, cluster } = await this.call<{ deviceId: string; cluster: string }>(
+      target,
+      'POST',
+      '/pair',
+      { code, name },
+    );
     return { ...target, deviceId, cluster };
   }
 
@@ -289,7 +391,11 @@ export class AgentClient {
           continue;
         }
         // A pod being replaced refused before doing anything: safe to send again, also for actions.
-        if (attempt < HANDOVER_RETRIES && err instanceof AgentError && err.code === 'AGENT_HANDOVER') {
+        if (
+          attempt < HANDOVER_RETRIES &&
+          err instanceof AgentError &&
+          err.code === 'AGENT_HANDOVER'
+        ) {
           await new Promise((resolve) => setTimeout(resolve, HANDOVER_RETRY_MS));
           continue;
         }
@@ -309,12 +415,21 @@ export class AgentClient {
   private once<T>(target: Target, method: Method, path: string, body?: unknown): Promise<T> {
     const relay = usableRelay(target);
     // Not async on this path: the exchange's own promise, with no extra hop, is what callers and tests wait on.
-    return relay ? this.directOrRelay<T>(target, relay, method, path, body) : this.exchange<T>(target, `${target.url}/api/e2e`, method, path, body);
+    return relay
+      ? this.directOrRelay<T>(target, relay, method, path, body)
+      : this.exchange<T>(target, `${target.url}/api/e2e`, method, path, body);
   }
 
-  private async directOrRelay<T>(target: Target, relay: string, method: Method, path: string, body?: unknown): Promise<T> {
+  private async directOrRelay<T>(
+    target: Target,
+    relay: string,
+    method: Method,
+    path: string,
+    body?: unknown,
+  ): Promise<T> {
     const key = target.agentKey;
-    const via = this.pathMemory.get(key, Date.now()) ?? ((await this.probe(target.url)) ? 'direct' : 'relay');
+    const via =
+      this.pathMemory.get(key, Date.now()) ?? ((await this.probe(target.url)) ? 'direct' : 'relay');
     if (via === 'direct') {
       try {
         const result = await this.exchange<T>(target, `${target.url}/api/e2e`, method, path, body);
@@ -333,7 +448,13 @@ export class AgentClient {
       }
     }
     try {
-      const result = await this.exchange<T>(target, relayCallUrl(relay, target.agentKey), method, path, body);
+      const result = await this.exchange<T>(
+        target,
+        relayCallUrl(relay, target.agentKey),
+        method,
+        path,
+        body,
+      );
       this.remember(key, 'relay');
       return result;
     } catch (err) {
@@ -349,7 +470,9 @@ export class AgentClient {
   /** True when the agent's own address answers at all, within a few seconds. */
   private async probe(url: string): Promise<boolean> {
     try {
-      await firstValueFrom(this.http.get(`${url}/healthz`, { responseType: 'text' }).pipe(timeout(PROBE_TIMEOUT_MS)));
+      await firstValueFrom(
+        this.http.get(`${url}/healthz`, { responseType: 'text' }).pipe(timeout(PROBE_TIMEOUT_MS)),
+      );
       return true;
     } catch {
       return false;
@@ -371,15 +494,25 @@ export class AgentClient {
   }
 
   /** One sealed request to `endpoint` (the agent's /api/e2e or the relay's) and its opened answer. */
-  private async exchange<T>(target: Target, endpoint: string, method: Method, path: string, body?: unknown): Promise<T> {
-    const sealed = sealRequest(keyPairFromSecret(fromBase64Url(target.deviceKey)), parsePublicKey(target.agentKey), {
-      method,
-      path,
-      time: Date.now() + (this.clockOffset.get(target.url) ?? 0),
-      ...(body !== undefined ? { body } : {}),
-      // The agent writes its texts (issues, summaries, errors) in the UI language.
-      language: this.language.lang(),
-    });
+  private async exchange<T>(
+    target: Target,
+    endpoint: string,
+    method: Method,
+    path: string,
+    body?: unknown,
+  ): Promise<T> {
+    const sealed = sealRequest(
+      keyPairFromSecret(fromBase64Url(target.deviceKey)),
+      parsePublicKey(target.agentKey),
+      {
+        method,
+        path,
+        time: Date.now() + (this.clockOffset.get(target.url) ?? 0),
+        ...(body !== undefined ? { body } : {}),
+        // The agent writes its texts (issues, summaries, errors) in the UI language.
+        language: this.language.lang(),
+      },
+    );
     const sentAt = Date.now();
     const raw = await firstValueFrom(
       this.http
@@ -395,7 +528,11 @@ export class AgentClient {
     const parsed: unknown = text ? JSON.parse(text) : undefined;
     if (answer.status >= 400) {
       const e = (parsed ?? {}) as { code?: string; message?: string | string[] };
-      throw new AgentError(answer.status, e.code, Array.isArray(e.message) ? e.message.join(' ') : e.message);
+      throw new AgentError(
+        answer.status,
+        e.code,
+        Array.isArray(e.message) ? e.message.join(' ') : e.message,
+      );
     }
     return parsed as T;
   }

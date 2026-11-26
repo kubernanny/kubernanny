@@ -34,6 +34,12 @@ export class E2eApi {
 export function e2eRoutes(c: E2eApi): Route[] {
   return [
     { method: 'GET', path: '/api/identity', public: true, handle: () => c.identityKey() },
-    { method: 'POST', path: '/api/e2e', public: true, raw: true, handle: (r) => c.call(r.raw, r.req.socket.remoteAddress) },
+    {
+      method: 'POST',
+      path: '/api/e2e',
+      public: true,
+      raw: true,
+      handle: (r) => c.call(r.raw, r.req.socket.remoteAddress),
+    },
   ];
 }

@@ -1,11 +1,24 @@
-import { KeyPair, Method, generateKeyPair, sealRequest, toBase64Url } from '@kubernanny/protocol';
+import { generateKeyPair, KeyPair, Method, sealRequest, toBase64Url } from '@kubernanny/protocol';
 import { describe, expect, it } from 'vitest';
+
 import { DevicesService, Principal } from '../auth/devices.service';
 import { IdentityService } from '../auth/identity.service';
 import { Config } from '../config';
 import { Notifier } from '../notify/notifier';
 import { PairingService } from '../pairing/pairing';
-import { CLOCK_WINDOW_MS, DEVICE_LIMIT, FUTURE_PER_PRINCIPAL, E2eResult, E2eService, OPEN_LIMIT, OPEN_RESERVE, SOURCE_LIMIT, STRANGER_LIMIT, WRITE_CLOCK_WINDOW_MS, tunnelsIntoItself } from './e2e.service';
+import {
+  CLOCK_WINDOW_MS,
+  DEVICE_LIMIT,
+  E2eResult,
+  E2eService,
+  FUTURE_PER_PRINCIPAL,
+  OPEN_LIMIT,
+  OPEN_RESERVE,
+  SOURCE_LIMIT,
+  STRANGER_LIMIT,
+  tunnelsIntoItself,
+  WRITE_CLOCK_WINDOW_MS,
+} from './e2e.service';
 import { DispatchBusyError, InternalServer } from './internal-server';
 import { sourceKey } from './rate-limit';
 
@@ -24,7 +37,9 @@ function setup(options: { dispatch?: () => Promise<{ status: number; body: Buffe
   } as unknown as DevicesService;
   const identity = { keyPair: agent, persistent: true } as IdentityService;
   const config = { language: 'en', clusterName: 'home', demo: null } as unknown as Config;
-  const internal = { dispatch: options.dispatch ?? (async () => ({ status: 200, body: Buffer.from('{"ok":true}') })) } as unknown as InternalServer;
+  const internal = {
+    dispatch: options.dispatch ?? (async () => ({ status: 200, body: Buffer.from('{"ok":true}') })),
+  } as unknown as InternalServer;
   const alerts: unknown[][] = [];
   const notifier = { securityAlert: async (...args: unknown[]) => void alerts.push(args) } as unknown as Notifier;
   const pairing = new PairingService(config, identity);
@@ -35,20 +50,31 @@ function setup(options: { dispatch?: () => Promise<{ status: number; body: Buffe
     return device;
   };
   const call = async (device: KeyPair, method: Method, path: string, time = NOW, now = NOW, body?: unknown) => {
-    const sealed = sealRequest(device, agent.publicKey, { method, path, time, ...(body !== undefined ? { body } : {}) });
+    const sealed = sealRequest(device, agent.publicKey, {
+      method,
+      path,
+      time,
+      ...(body !== undefined ? { body } : {}),
+    });
     const result = await service.handle(sealed.body, now);
     return { result, sealed, ...answer(result, sealed.open) };
   };
   return { service, pair, call, agent, pairing, alerts };
 }
 
-function answer(result: E2eResult, open: (body: Uint8Array) => { status: number; body: Uint8Array }): { status: number; code?: string } {
+function answer(
+  result: E2eResult,
+  open: (body: Uint8Array) => { status: number; body: Uint8Array },
+): { status: number; code?: string } {
   if (result.kind === 'plain') {
     return { status: result.status, code: result.code };
   }
   const inner = open(result.body);
   const text = new TextDecoder().decode(inner.body);
-  return { status: inner.status, code: text.startsWith('{') ? (JSON.parse(text) as { code?: string }).code : undefined };
+  return {
+    status: inner.status,
+    code: text.startsWith('{') ? (JSON.parse(text) as { code?: string }).code : undefined,
+  };
 }
 
 describe('E2eService rate limits (review: one global bucket before auth)', () => {
@@ -82,9 +108,17 @@ describe('E2eService rate limits (review: one global bucket before auth)', () =>
     const { service, call, pair } = setup();
     const phone = pair('phone');
     for (let i = 0; i < OPEN_LIMIT.capacity * 3; i++) {
-      expect(await service.handle(Uint8Array.of(2, 1, 2), NOW)).toEqual({ kind: 'plain', status: 400, code: 'E2E_VERSION' });
+      expect(await service.handle(Uint8Array.of(2, 1, 2), NOW)).toEqual({
+        kind: 'plain',
+        status: 400,
+        code: 'E2E_VERSION',
+      });
     }
-    expect(await service.handle(new Uint8Array(70_000).fill(1), NOW)).toEqual({ kind: 'plain', status: 413, code: 'E2E_TOO_LARGE' });
+    expect(await service.handle(new Uint8Array(70_000).fill(1), NOW)).toEqual({
+      kind: 'plain',
+      status: 413,
+      code: 'E2E_TOO_LARGE',
+    });
     expect((await call(phone, 'GET', '/status')).status).toBe(200);
   });
 
@@ -99,9 +133,13 @@ describe('E2eService rate limits (review: one global bucket before auth)', () =>
     };
     // From many addresses, so no per-address bucket stops it first.
     for (let i = 0; i < OPEN_LIMIT.capacity; i++) {
-      expect(((await service.handle(junk(), NOW, 'direct', `10.0.${i >> 8}.${i & 255}`)) as { code: string }).code).toBe('E2E_HANDSHAKE');
+      expect(
+        ((await service.handle(junk(), NOW, 'direct', `10.0.${i >> 8}.${i & 255}`)) as { code: string }).code,
+      ).toBe('E2E_HANDSHAKE');
     }
-    expect(((await service.handle(junk(), NOW, 'direct', '10.9.9.9')) as { code: string }).code).toBe('E2E_RATE_LIMITED');
+    expect(((await service.handle(junk(), NOW, 'direct', '10.9.9.9')) as { code: string }).code).toBe(
+      'E2E_RATE_LIMITED',
+    );
     expect((await call(phone, 'GET', '/status', NOW + 100, NOW + 100)).status).toBe(200);
   });
 });
@@ -195,7 +233,11 @@ describe('E2eService replay and clock (review)', () => {
     expect(first.code).toBe('E2E_CLOCK_SKEW');
     // Replayed when its time has come, and later still, past the normal replay TTL.
     expect(await service.handle(first.sealed.body, ahead)).toEqual({ kind: 'plain', status: 400, code: 'E2E_REPLAY' });
-    expect(await service.handle(first.sealed.body, ahead + CLOCK_WINDOW_MS - 1)).toEqual({ kind: 'plain', status: 400, code: 'E2E_REPLAY' });
+    expect(await service.handle(first.sealed.body, ahead + CLOCK_WINDOW_MS - 1)).toEqual({
+      kind: 'plain',
+      status: 400,
+      code: 'E2E_REPLAY',
+    });
   });
 
   it('gives calls that change something a 60 s window, reads 5 minutes', async () => {
@@ -285,6 +327,10 @@ describe('E2eService future replay entries (review: strangers could fill them)',
     const code = pairing.issue();
     const first = await call(generateKeyPair(), 'POST', '/pair', NOW, NOW, { code, name: 'Phone' });
     expect(first.status).toBe(200);
-    expect(await service.handle(first.sealed.body, NOW + 1_000)).toEqual({ kind: 'plain', status: 400, code: 'E2E_REPLAY' });
+    expect(await service.handle(first.sealed.body, NOW + 1_000)).toEqual({
+      kind: 'plain',
+      status: 400,
+      code: 'E2E_REPLAY',
+    });
   });
 });

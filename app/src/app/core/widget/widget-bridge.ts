@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { WidgetCluster, validWidgetList } from './widget-summary';
+
+import { validWidgetList, WidgetCluster } from './widget-summary';
 
 /**
  * The native side (`app/native/widget-bridge`, Swift and Kotlin): keeps the

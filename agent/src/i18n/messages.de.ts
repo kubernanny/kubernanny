@@ -23,7 +23,8 @@ export const de = {
   'common.ofTotal': (p: { part: string; total: string }) => `${p.part} von ${p.total}`,
   'common.number': (p: { n: number }) => p.n.toLocaleString('de-DE'),
   'module.moreIssues.title': (p: { n: number }) => `${p.n} weitere Meldungen`,
-  'module.moreIssues.cause': 'Dieses Modul meldet mehr, als die App zeigt. Die vollständige Liste steht im Werkzeug selbst.',
+  'module.moreIssues.cause':
+    'Dieses Modul meldet mehr, als die App zeigt. Die vollständige Liste steht im Werkzeug selbst.',
   'common.yes': 'ja',
   'common.none': 'keiner',
 
@@ -45,7 +46,8 @@ export const de = {
   // ---------- run loop, workload health ----------
   'module.checkFailed': 'Prüfung fehlgeschlagen',
   'error.agentHandover': 'Der Agent wird gerade aktualisiert. Gleich noch einmal versuchen.',
-  'module.staleRead': (p: { kinds: string }) => `Konnte ${p.kinds} nicht lesen. Gezeigt wird der letzte bekannte Stand.`,
+  'module.staleRead': (p: { kinds: string }) =>
+    `Konnte ${p.kinds} nicht lesen. Gezeigt wird der letzte bekannte Stand.`,
   'workloadHealth.scheduled': 'Läuft nach Zeitplan',
   'workloadHealth.none': 'Keine Pods geplant',
   'workloadHealth.ready': (p: { n: number }) => n1(p.n, 'Pod', 'Pods') + ' bereit',
@@ -55,14 +57,17 @@ export const de = {
   'module.nodes.name': 'Nodes',
   'module.nodes.description': 'Erreichbarkeit, Druck und Auslastung der Maschinen.',
   'nodes.notReady.title': (p: { node: string }) => `Node ${p.node} NotReady`,
-  'nodes.notReady.cordoned': (p: { message?: string }) => `Der Node ist cordoned, vermutlich ein geplanter Neustart (kured). ${p.message ?? ''}`.trim(),
+  'nodes.notReady.cordoned': (p: { message?: string }) =>
+    `Der Node ist cordoned, vermutlich ein geplanter Neustart (kured). ${p.message ?? ''}`.trim(),
   'nodes.notReady.silent': 'Der Kubelet meldet sich nicht mehr beim API-Server.',
   'nodes.pressure.title': (p: { node: string; type: string }) => `Node ${p.node}: ${p.type}`,
   'nodes.pressure.cause': (p: { type: string }) => `Der Kubelet meldet ${p.type}.`,
   'nodes.cordoned.title': (p: { node: string; age: string }) => `Node ${p.node} seit ${p.age} cordoned`,
-  'nodes.cordoned.cause': 'Er ist bereit, nimmt aber keine neuen Pods an. Kein Neustart durch kured und kein Drain läuft: vermutlich nach einer Wartung vergessen.',
+  'nodes.cordoned.cause':
+    'Er ist bereit, nimmt aber keine neuen Pods an. Kein Neustart durch kured und kein Drain läuft: vermutlich nach einer Wartung vergessen.',
   'nodes.memory.title': (p: { node: string; pct: number }) => `Node ${p.node}: RAM zu ${p.pct} % belegt`,
-  'nodes.memory.cause': (p: { used: string; total: string }) => `${p.used} von ${p.total}. Darüber beginnt der Kubelet, Pods zu verdrängen.`,
+  'nodes.memory.cause': (p: { used: string; total: string }) =>
+    `${p.used} von ${p.total}. Darüber beginnt der Kubelet, Pods zu verdrängen.`,
   'nodes.disk.title': (p: { node: string; pct: number }) => `Node ${p.node}: Platte zu ${p.pct} % voll`,
   'nodes.disk.cause': 'Ab 85 % räumt der Kubelet Images ab, ab 90 % setzt er DiskPressure und verdrängt Pods.',
   'nodes.stat.cores': 'Kerne',
@@ -90,11 +95,13 @@ export const de = {
   'etcdSnapshots.none.cause':
     'Der Cluster kennt keinen einzigen etcd-Snapshot. Ohne ihn lässt sich der Cluster nach einem Datenverlust nicht wiederherstellen (etcd-snapshot-schedule-cron prüfen).',
   'etcdSnapshots.failed.title': 'Letzter etcd-Snapshot fehlgeschlagen',
-  'etcdSnapshots.failed.cause': (p: { node?: string; location: string; message?: string }) => `${p.node ?? ''} ${p.location}: ${p.message ?? 'Fehler'}`.trim(),
+  'etcdSnapshots.failed.cause': (p: { node?: string; location: string; message?: string }) =>
+    `${p.node ?? ''} ${p.location}: ${p.message ?? 'Fehler'}`.trim(),
   'etcdSnapshots.local': '(lokal)',
   'etcdSnapshots.age.title': (p: { age: string }) => `Letzter gültiger etcd-Snapshot vor ${p.age}`,
   'etcdSnapshots.noValid.title': 'Kein gültiger etcd-Snapshot',
-  'etcdSnapshots.age.cause': 'Ohne frischen Snapshot geht bei einem etcd-Verlust alles seit dem letzten verloren: alle Ressourcen, die seitdem angelegt oder geändert wurden.',
+  'etcdSnapshots.age.cause':
+    'Ohne frischen Snapshot geht bei einem etcd-Verlust alles seit dem letzten verloren: alle Ressourcen, die seitdem angelegt oder geändert wurden.',
 
   // ---------- API server ----------
   'module.apiserver.name': 'API-Server',
@@ -110,23 +117,37 @@ export const de = {
   // ---------- workloads ----------
   'module.pods.name': 'Workloads',
   'module.pods.description': 'Abstürzende Container, hängende Rollouts, fehlgeschlagene Jobs.',
-  'pods.title': (p: { workload: string; reason: string; pods: number }) => `${p.workload}: ${p.reason}${p.pods > 1 ? ` (${p.pods} Pods)` : ''}`,
+  'pods.title': (p: { workload: string; reason: string; pods: number }) =>
+    `${p.workload}: ${p.reason}${p.pods > 1 ? ` (${p.pods} Pods)` : ''}`,
   'pods.broken.cause': (p: { message?: string; exitReason?: string; exitCode?: number; restarts: number }) =>
-    [p.message, p.exitReason !== undefined ? `Letzter Exit: ${p.exitReason} (Code ${p.exitCode}).` : '', `${p.restarts} Neustarts.`].filter(Boolean).join(' '),
-  'pods.oom.title': (p: { workload: string; reason: string; pods: number }) => `${p.workload}: OOMKilled${p.pods > 1 ? ` (${p.pods} Pods)` : ''}`,
+    [
+      p.message,
+      p.exitReason !== undefined ? `Letzter Exit: ${p.exitReason} (Code ${p.exitCode}).` : '',
+      `${p.restarts} Neustarts.`,
+    ]
+      .filter(Boolean)
+      .join(' '),
+  'pods.oom.title': (p: { workload: string; reason: string; pods: number }) =>
+    `${p.workload}: OOMKilled${p.pods > 1 ? ` (${p.pods} Pods)` : ''}`,
   'pods.oom.cause': (p: { container: string; limit: string; restarts: number }) =>
     `Der Container ${p.container} braucht mehr Speicher als sein Limit von ${p.limit} und wird beendet (OOMKilled, ${p.restarts} Neustarts). Ein Neustart hilft nicht: erhöhe das Memory-Limit.`,
   'pods.oom.noLimit': (p: { container: string; restarts: number }) =>
     `Der Container ${p.container} wurde wegen Speichermangel beendet (OOMKilled, ${p.restarts} Neustarts), ohne eigenes Memory-Limit: dem Node ging der Speicher aus. Ein Neustart hilft nicht: setze Request und Limit passend oder entlaste den Node.`,
-  'pods.configChanged.cause': (p: { name: string; cause: string }) => `ConfigMap ${p.name} wurde nach dem letzten Start geändert: ein Neustart lädt sie sofort. ${p.cause}`,
+  'pods.configChanged.cause': (p: { name: string; cause: string }) =>
+    `ConfigMap ${p.name} wurde nach dem letzten Start geändert: ein Neustart lädt sie sofort. ${p.cause}`,
   'pods.terminating.title': (p: { pod: string; age: string }) => `Pod ${p.pod} hängt seit ${p.age} in Terminating`,
-  'pods.terminating.notReady': (p: { node: string }) => `Sein Node ${p.node} ist NotReady: kein Kubelet bestätigt das Ende, also bleibt der Pod stehen und ein Ersatz startet nicht.`,
-  'pods.terminating.nodeGone': (p: { node: string }) => `Sein Node ${p.node} existiert nicht mehr: kein Kubelet bestätigt das Ende, also bleibt der Pod stehen und ein Ersatz startet nicht.`,
-  'pods.finished.title': (p: { n: number; namespace: string }) => `${p.n} beendete${p.n === 1 ? 'r Pod' : ' Pods'} in ${p.namespace}`,
+  'pods.terminating.notReady': (p: { node: string }) =>
+    `Sein Node ${p.node} ist NotReady: kein Kubelet bestätigt das Ende, also bleibt der Pod stehen und ein Ersatz startet nicht.`,
+  'pods.terminating.nodeGone': (p: { node: string }) =>
+    `Sein Node ${p.node} existiert nicht mehr: kein Kubelet bestätigt das Ende, also bleibt der Pod stehen und ein Ersatz startet nicht.`,
+  'pods.finished.title': (p: { n: number; namespace: string }) =>
+    `${p.n} beendete${p.n === 1 ? 'r Pod' : ' Pods'} in ${p.namespace}`,
   'pods.finished.cause': (p: { evicted: number; others: number; names: string; more: number }) =>
     `${[p.evicted ? `${p.evicted} verdrängt (Evicted)` : '', p.others ? `${p.others} fehlgeschlagen oder ohne Job` : ''].filter(Boolean).join(', ')}: ${p.names}${p.more ? ` und ${p.more} weitere` : ''}. Sie laufen nicht mehr und können weg.`,
-  'pods.pending.cause': (p: { age: string; message?: string }) => `Seit ${p.age} nicht gestartet. ${p.message ?? ''}`.trim(),
-  'workloads.title': (p: { workload: string; ready: number; desired: number }) => `${p.workload}: ${p.ready}/${p.desired} bereit`,
+  'pods.pending.cause': (p: { age: string; message?: string }) =>
+    `Seit ${p.age} nicht gestartet. ${p.message ?? ''}`.trim(),
+  'workloads.title': (p: { workload: string; ready: number; desired: number }) =>
+    `${p.workload}: ${p.ready}/${p.desired} bereit`,
   'workloads.stuck': 'Rollout hängt (ProgressDeadlineExceeded).',
   'workloads.noneReady.daemonSet': 'Kein Pod des DaemonSets ist bereit.',
   'workloads.noneReady.replica': 'Kein Replica ist bereit.',
@@ -149,8 +170,10 @@ export const de = {
   'volumes.pending.cause': (p: { storageClass?: string }) =>
     `Kein Volume bereitgestellt. StorageClass: ${p.storageClass ?? 'Standard'}. Bei WaitForFirstConsumer wartet es, bis ein Pod es nutzt.`,
   'volumes.full.title': (p: { volume: string; pct: number }) => `Volume ${p.volume} zu ${p.pct} % voll`,
-  'volumes.full.cause': (p: { used: string; total: string }) => `${p.used} von ${p.total} belegt. Vergrößern geht, wenn die StorageClass allowVolumeExpansion erlaubt.`,
-  'volumes.full.cnpg': (p: { used: string; total: string; cluster: string }) => `${p.used} von ${p.total} belegt. Das Volume gehört zum CloudNativePG-Cluster ${p.cluster}: vergrößere dort storage.size, der Operator passt die Volumes an.`,
+  'volumes.full.cause': (p: { used: string; total: string }) =>
+    `${p.used} von ${p.total} belegt. Vergrößern geht, wenn die StorageClass allowVolumeExpansion erlaubt.`,
+  'volumes.full.cnpg': (p: { used: string; total: string; cluster: string }) =>
+    `${p.used} von ${p.total} belegt. Das Volume gehört zum CloudNativePG-Cluster ${p.cluster}: vergrößere dort storage.size, der Operator passt die Volumes an.`,
   'volumes.stat.bound': 'PVCs gebunden',
   'volumes.stat.reserved': 'Reserviert',
   'volumes.stat.storageClasses': 'StorageClasses',
@@ -174,10 +197,12 @@ export const de = {
   'module.hpa.name': 'Autoscaler',
   'module.hpa.description': 'HorizontalPodAutoscaler am Limit oder ohne Messwerte.',
   'hpa.noMetrics.title': (p: { target: string }) => `Autoscaler für ${p.target} misst nichts`,
-  'hpa.noMetrics.cause': (p: { message: string }) => `${p.message}. Ohne Messwerte bleibt die Replica-Zahl stehen, auch unter Last.`,
+  'hpa.noMetrics.cause': (p: { message: string }) =>
+    `${p.message}. Ohne Messwerte bleibt die Replica-Zahl stehen, auch unter Last.`,
   'hpa.cannotScale.title': (p: { target: string }) => `Autoscaler für ${p.target} kann nicht skalieren`,
   'hpa.atMax.title': (p: { target: string; max: string }) => `${p.target} läuft am Maximum (${p.max} Replicas)`,
-  'hpa.atMax.cause': (p: { desired?: string }) => `Der Autoscaler will ${p.desired ?? 'mehr'} Replicas, darf aber nicht. Last zu hoch, oder maxReplicas zu klein.`,
+  'hpa.atMax.cause': (p: { desired?: string }) =>
+    `Der Autoscaler will ${p.desired ?? 'mehr'} Replicas, darf aber nicht. Last zu hoch, oder maxReplicas zu klein.`,
   'hpa.stat.count': 'Autoscaler',
   'hpa.stat.atMax': 'Am Maximum',
   'hpa.summary.problems': (p: { n: number }) => `${p.n} mit Problemen`,
@@ -185,23 +210,35 @@ export const de = {
 
   // ---------- security posture ----------
   'module.security.name': 'Sicherheit',
-  'module.security.description': 'Privilegierte Container, Zugriff auf den Node, root, fehlende Speicherlimits und Images ohne feste Version.',
-  'security.privileged.title': (p: { ns: string; n: number }) => `${p.ns}: ${workloads(p.n)} mit privilegierten Containern`,
-  'security.privileged.why': 'Ein privilegierter Container darf auf dem Node alles: wer ihn übernimmt, übernimmt die Maschine.',
-  'security.privileged.fix': 'securityContext.privileged entfernen; braucht das Programm Geräte oder Netzwerkrechte, nur die nötigen capabilities setzen.',
+  'module.security.description':
+    'Privilegierte Container, Zugriff auf den Node, root, fehlende Speicherlimits und Images ohne feste Version.',
+  'security.privileged.title': (p: { ns: string; n: number }) =>
+    `${p.ns}: ${workloads(p.n)} mit privilegierten Containern`,
+  'security.privileged.why':
+    'Ein privilegierter Container darf auf dem Node alles: wer ihn übernimmt, übernimmt die Maschine.',
+  'security.privileged.fix':
+    'securityContext.privileged entfernen; braucht das Programm Geräte oder Netzwerkrechte, nur die nötigen capabilities setzen.',
   'security.host-access.title': (p: { ns: string; n: number }) => `${p.ns}: ${workloads(p.n)} mit Zugriff auf den Node`,
-  'security.host-access.why': 'hostNetwork, hostPID, hostIPC und hostPath öffnen dem Pod Netz, Prozesse oder Dateien des Nodes.',
+  'security.host-access.why':
+    'hostNetwork, hostPID, hostIPC und hostPath öffnen dem Pod Netz, Prozesse oder Dateien des Nodes.',
   'security.host-access.fix': 'Wo es geht entfernen; für Daten ein PersistentVolume statt hostPath nutzen.',
-  'security.root.title': (p: { ns: string; n: number }) => `${p.ns}: ${workloads(p.n)} ${p.n === 1 ? 'läuft' : 'laufen'} womöglich als root`,
-  'security.root.why': 'Weder runAsNonRoot noch eine runAsUser über 0 ist gesetzt, also entscheidet das Image, und viele Images laufen als root.',
-  'security.root.fix': 'securityContext.runAsNonRoot: true setzen, dazu runAsUser, falls das Image keinen eigenen Nutzer hat.',
+  'security.root.title': (p: { ns: string; n: number }) =>
+    `${p.ns}: ${workloads(p.n)} ${p.n === 1 ? 'läuft' : 'laufen'} womöglich als root`,
+  'security.root.why':
+    'Weder runAsNonRoot noch eine runAsUser über 0 ist gesetzt, also entscheidet das Image, und viele Images laufen als root.',
+  'security.root.fix':
+    'securityContext.runAsNonRoot: true setzen, dazu runAsUser, falls das Image keinen eigenen Nutzer hat.',
   'security.no-memory-limit.title': (p: { ns: string; n: number }) => `${p.ns}: ${workloads(p.n)} ohne Speicherlimit`,
-  'security.no-memory-limit.why': 'Ohne Speicherlimit kann ein Container den RAM des Nodes aufbrauchen, dann beendet der Kernel irgendeinen Pod.',
+  'security.no-memory-limit.why':
+    'Ohne Speicherlimit kann ein Container den RAM des Nodes aufbrauchen, dann beendet der Kernel irgendeinen Pod.',
   'security.no-memory-limit.fix': 'resources.limits.memory setzen, etwa auf das Doppelte des üblichen Verbrauchs.',
-  'security.mutable-image.title': (p: { ns: string; n: number }) => `${p.ns}: ${workloads(p.n)} mit Image ohne feste Version`,
-  'security.mutable-image.why': 'Mit latest oder ohne Tag kann jeder Neustart eine andere Version ziehen, und niemand sieht, was läuft.',
+  'security.mutable-image.title': (p: { ns: string; n: number }) =>
+    `${p.ns}: ${workloads(p.n)} mit Image ohne feste Version`,
+  'security.mutable-image.why':
+    'Mit latest oder ohne Tag kann jeder Neustart eine andere Version ziehen, und niemand sieht, was läuft.',
   'security.mutable-image.fix': 'Eine feste Version oder einen Digest angeben.',
-  'security.cause': (p: { why: string; affected: string; fix: string }) => `${p.why} Betroffen: ${p.affected}. ${p.fix}`,
+  'security.cause': (p: { why: string; affected: string; fix: string }) =>
+    `${p.why} Betroffen: ${p.affected}. ${p.fix}`,
   'security.affectedMore': (p: { names: string; more: number }) => `${p.names} und ${p.more} weitere`,
   'security.stat.findings': 'Befunde',
   'security.stat.privileged': 'Privilegiert',
@@ -209,15 +246,19 @@ export const de = {
   'security.stat.exempt': 'Ausgenommen',
   'security.stat.exemptValue': (p: { n: number }) => `${p.n} System-Namespaces`,
   'security.summary.ok': 'Nichts aufgefallen',
-  'security.summary.privileged': (p: { n: number }) => `Privilegierte Container in ${n1(p.n, 'Namespace', 'Namespaces')}`,
-  'security.summary.hints': (p: { n: number; namespaces: number }) => `${n1(p.n, 'Hinweis', 'Hinweise')} in ${n1(p.namespaces, 'Namespace', 'Namespaces')}`,
+  'security.summary.privileged': (p: { n: number }) =>
+    `Privilegierte Container in ${n1(p.n, 'Namespace', 'Namespaces')}`,
+  'security.summary.hints': (p: { n: number; namespaces: number }) =>
+    `${n1(p.n, 'Hinweis', 'Hinweise')} in ${n1(p.namespaces, 'Namespace', 'Namespaces')}`,
 
   // ---------- known vulnerabilities ----------
   'module.vulnerabilities.name': 'Bekannte Schwachstellen',
   'module.vulnerabilities.description':
     'Gleicht nur die Version von Kubernetes und die Versionen von 13 erkannten Komponenten mit OSV.dev ab, nicht deine eigenen Images und ihre Bibliotheken. Jedes Image prüft Trivy Operator im Cluster; Kubernanny liest dessen Berichte.',
-  'vulnerabilities.privacy.osv': 'Schickt Namen und Versionen der Komponenten an api.osv.dev (Google). Keine Clusterdaten, keine Namen von Workloads.',
-  'vulnerabilities.privacy.other': (p: { host: string }) => `Schickt Namen und Versionen der Komponenten an ${p.host}. Keine Clusterdaten, keine Namen von Workloads.`,
+  'vulnerabilities.privacy.osv':
+    'Schickt Namen und Versionen der Komponenten an api.osv.dev (Google). Keine Clusterdaten, keine Namen von Workloads.',
+  'vulnerabilities.privacy.other': (p: { host: string }) =>
+    `Schickt Namen und Versionen der Komponenten an ${p.host}. Keine Clusterdaten, keine Namen von Workloads.`,
   'vulnerabilities.noDatabase': 'keine Schwachstellen-Datenbank eingerichtet',
   'vulnerabilities.unreachable': (p: { host: string; message: string }) => `${p.host} nicht erreichbar: ${p.message}`,
   'vulnerabilities.unexpectedAnswer': 'unerwartete Antwort auf querybatch',
@@ -226,12 +267,14 @@ export const de = {
   'vulnerabilities.level.medium': 'mittel',
   'vulnerabilities.level.low': 'niedrig',
   'vulnerabilities.level.unknown': 'ohne Einstufung',
-  'vulnerabilities.rated': (p: { level: string; score: number }) => `${p.level}, CVSS ${p.score.toFixed(1).replace('.', ',')}`,
+  'vulnerabilities.rated': (p: { level: string; score: number }) =>
+    `${p.level}, CVSS ${p.score.toFixed(1).replace('.', ',')}`,
   'vulnerabilities.advisory': (p: { id: string; rating: string }) => `${p.id} (${p.rating})`,
   'vulnerabilities.worst.one': (p: { advisories: string[] }) => `${p.advisories.join(', ')}.`,
   'vulnerabilities.worst.many': (p: { advisories: string[] }) => `Am schwersten: ${p.advisories.join(', ')}.`,
   'vulnerabilities.fixed': (p: { version: string }) => `Behoben in ${p.version}.`,
-  'vulnerabilities.fixedSome': (p: { version: string; open: number }) => `Behoben in ${p.version}, für ${p.open} gibt es noch kein Update.`,
+  'vulnerabilities.fixedSome': (p: { version: string; open: number }) =>
+    `Behoben in ${p.version}, für ${p.open} gibt es noch kein Update.`,
   'vulnerabilities.noFix': 'Noch ist kein Update bekannt, das sie behebt.',
   'vulnerabilities.exposed': 'Über einen Ingress von außen erreichbar.',
   'vulnerabilities.title': (p: { name: string; version: string; n: number }) =>
@@ -245,17 +288,23 @@ export const de = {
   'vulnerabilities.stat.unmatched': 'Ohne Abgleich',
   'vulnerabilities.stat.accepted': 'Als nicht zutreffend markiert',
   'vulnerabilities.acceptedNote': (p: { n: number }) => `${p.n} weitere als nicht zutreffend markiert.`,
-  'vulnerabilities.summary.none': (p: { n: number }) => `Keine bekannten Schwachstellen in ${n1(p.n, 'Version', 'Versionen')}, nur Kubernetes und erkannte Komponenten`,
-  'vulnerabilities.summary.noneTrivy': (p: { n: number }) => `Keine bekannten Schwachstellen in ${n1(p.n, 'Version', 'Versionen')}, jedes Image prüft Trivy Operator`,
+  'vulnerabilities.summary.none': (p: { n: number }) =>
+    `Keine bekannten Schwachstellen in ${n1(p.n, 'Version', 'Versionen')}, nur Kubernetes und erkannte Komponenten`,
+  'vulnerabilities.summary.noneTrivy': (p: { n: number }) =>
+    `Keine bekannten Schwachstellen in ${n1(p.n, 'Version', 'Versionen')}, jedes Image prüft Trivy Operator`,
   'vulnerabilities.stat.scope': 'Gleicht ab',
-  'vulnerabilities.scope': (p: { n: number }) => `Kubernetes und ${p.n} erkannte Komponenten, nicht deine eigenen Images`,
+  'vulnerabilities.scope': (p: { n: number }) =>
+    `Kubernetes und ${p.n} erkannte Komponenten, nicht deine eigenen Images`,
   'vulnerabilities.stat.everyImage': 'Jedes Image',
-  'vulnerabilities.trivy.missing': 'Für jedes Image, auch deine eigenen: Trivy Operator installieren, Kubernanny liest seine Berichte',
+  'vulnerabilities.trivy.missing':
+    'Für jedes Image, auch deine eigenen: Trivy Operator installieren, Kubernanny liest seine Berichte',
   'vulnerabilities.trivy.found': 'Trivy Operator gefunden: jedes Image wird geprüft',
   'vulnerabilities.trivy.off': 'Trivy Operator gefunden, seine Prüfung ist abgeschaltet',
   'vulnerabilities.stat.byTrivy': 'Trivy Operator übernimmt',
-  'vulnerabilities.summary.affected': (p: { n: number }) => `${n1(p.n, 'Komponente', 'Komponenten')} mit bekannten Schwachstellen`,
-  'vulnerabilities.summary.stale': (p: { summary: string; age: string; host: string }) => `${p.summary} (Stand vor ${p.age}, ${p.host} gerade nicht erreichbar)`,
+  'vulnerabilities.summary.affected': (p: { n: number }) =>
+    `${n1(p.n, 'Komponente', 'Komponenten')} mit bekannten Schwachstellen`,
+  'vulnerabilities.summary.stale': (p: { summary: string; age: string; host: string }) =>
+    `${p.summary} (Stand vor ${p.age}, ${p.host} gerade nicht erreichbar)`,
 
   // ---------- integrations, shared ----------
   'integration.noServiceOnPort': (p: { port: number }) => `Kein Service mit Port ${p.port} gefunden`,
@@ -263,24 +312,32 @@ export const de = {
   'integration.noReachableService': 'Kein erreichbarer Service gefunden',
 
   // ---------- Longhorn ----------
-  'longhorn.volume.title': (p: { volume: string; robustness: string }) => `Volume ${p.volume} ${({ degraded: 'beeinträchtigt', faulted: 'ausgefallen' } as Record<string, string>)[p.robustness] ?? p.robustness}`,
-  'longhorn.volume.faulted': (p: { users?: string }) => `Kein gesundes Replica mehr. Das Volume ist nicht nutzbar${p.users ? ` (${p.users})` : ''}.`,
+  'longhorn.volume.title': (p: { volume: string; robustness: string }) =>
+    `Volume ${p.volume} ${({ degraded: 'beeinträchtigt', faulted: 'ausgefallen' } as Record<string, string>)[p.robustness] ?? p.robustness}`,
+  'longhorn.volume.faulted': (p: { users?: string }) =>
+    `Kein gesundes Replica mehr. Das Volume ist nicht nutzbar${p.users ? ` (${p.users})` : ''}.`,
   'longhorn.volume.degraded': (p: { replicas: string }) =>
     `Weniger gesunde Replicas als die geforderten ${p.replicas}. Longhorn baut neu auf, solange ein Node mit Platz frei ist.`,
   'longhorn.node.title': (p: { node: string }) => `Longhorn-Node ${p.node} nicht bereit`,
   'longhorn.node.cause': 'Longhorn-Manager auf dem Node antwortet nicht.',
   'longhorn.capacity.title': (p: { free: string }) => `Longhorn: nur noch ${p.free} frei`,
-  'longhorn.capacity.cause': (p: { pct: number }) => `${p.pct} % der Platten belegt. Neue Replicas finden bald keinen Platz.`,
+  'longhorn.capacity.cause': (p: { pct: number }) =>
+    `${p.pct} % der Platten belegt. Neue Replicas finden bald keinen Platz.`,
   'longhorn.backupTarget.title': 'Longhorn erreicht das Backup-Ziel nicht',
-  'longhorn.backupTarget.cause': (p: { url: string; reason?: string }) => `${p.url}: ${p.reason ?? 'nicht verfügbar'}. Solange laufen keine Volume-Backups.`,
+  'longhorn.backupTarget.cause': (p: { url: string; reason?: string }) =>
+    `${p.url}: ${p.reason ?? 'nicht verfügbar'}. Solange laufen keine Volume-Backups.`,
   'longhorn.backup.failed.title': (p: { volume: string }) => `Backup von Volume ${p.volume} fehlgeschlagen`,
   'longhorn.backup.failed.cause': 'Longhorn meldet Error.',
-  'longhorn.backup.old.title': (p: { volume: string; age: string }) => `Letztes Backup von Volume ${p.volume} vor ${p.age}`,
+  'longhorn.backup.old.title': (p: { volume: string; age: string }) =>
+    `Letztes Backup von Volume ${p.volume} vor ${p.age}`,
   'longhorn.backup.none.title': (p: { volume: string }) => `Volume ${p.volume} ohne erfolgreiches Backup`,
-  'longhorn.backup.old.cause': 'Der RecurringJob für Backups scheint nicht mehr zu laufen, oder das Volume ist ihm nicht mehr zugeordnet.',
-  'longhorn.backup.detached.cause': 'Das Volume ist nicht eingehängt. Longhorns RecurringJobs sichern ausgehängte Volumes nicht (Einstellung allow-recurring-job-while-volume-detached), und es ändert sich auch nichts darauf.',
+  'longhorn.backup.old.cause':
+    'Der RecurringJob für Backups scheint nicht mehr zu laufen, oder das Volume ist ihm nicht mehr zugeordnet.',
+  'longhorn.backup.detached.cause':
+    'Das Volume ist nicht eingehängt. Longhorns RecurringJobs sichern ausgehängte Volumes nicht (Einstellung allow-recurring-job-while-volume-detached), und es ändert sich auch nichts darauf.',
   'longhorn.stat.orphaned': 'Backups gelöschter Volumes',
-  'longhorn.orphaned.value': (p: { backups: number; volumes: number }) => `${p.backups} (${n1(p.volumes, 'Volume', 'Volumes')})`,
+  'longhorn.orphaned.value': (p: { backups: number; volumes: number }) =>
+    `${p.backups} (${n1(p.volumes, 'Volume', 'Volumes')})`,
   'longhorn.stat.healthy': 'Volumes gesund',
   'longhorn.stat.total': 'Volumes gesamt',
   'longhorn.stat.diskFree': 'Platte frei',
@@ -293,7 +350,8 @@ export const de = {
 
   // ---------- cert-manager ----------
   'certificates.expired.title': (p: { host: string }) => `Zertifikat ${p.host} abgelaufen`,
-  'certificates.expired.cause': (p: { age: string; message?: string }) => `Abgelaufen vor ${p.age}. ${p.message ?? ''}`.trim(),
+  'certificates.expired.cause': (p: { age: string; message?: string }) =>
+    `Abgelaufen vor ${p.age}. ${p.message ?? ''}`.trim(),
   'certificates.notReady.title': (p: { host: string }) => `Zertifikat ${p.host} nicht bereit`,
   'certificates.notReady.cause': 'cert-manager meldet Ready=False.',
   'certificates.expiring.title': (p: { host: string; age: string }) => `Zertifikat ${p.host} läuft in ${p.age} ab`,
@@ -315,10 +373,13 @@ export const de = {
   'argocd.syncFailed.title': (p: { app: string }) => `Sync von ${p.app} fehlgeschlagen`,
   'argocd.syncFailed.cause': 'Letzte Operation fehlgeschlagen.',
   'argocd.drift.title': (p: { app: string }) => `ArgoCD-App ${p.app} weicht von Git ab`,
-  'argocd.drift.cause': 'Automatischer Sync ist an, trotzdem weicht der Cluster ab: ein Sync hängt, oder eine Ressource wird außerhalb von Git geändert.',
+  'argocd.drift.cause':
+    'Automatischer Sync ist an, trotzdem weicht der Cluster ab: ein Sync hängt, oder eine Ressource wird außerhalb von Git geändert.',
   'argocd.pending.title': (p: { app: string }) => `ArgoCD-App ${p.app}: Änderung wartet auf Sync`,
-  'argocd.pending.cause': 'Manueller Sync: im Repo liegt eine Änderung, die noch nicht ausgerollt ist. Kein Fehler, nur zur Info.',
-  'argocd.pending.longCause': (p: { age: string }) => `Manueller Sync: im Repo liegt eine Änderung, und der letzte Sync ist ${p.age} her. Vergessen? Unter "Bereit zum Sync" steht, was sich ändert.`,
+  'argocd.pending.cause':
+    'Manueller Sync: im Repo liegt eine Änderung, die noch nicht ausgerollt ist. Kein Fehler, nur zur Info.',
+  'argocd.pending.longCause': (p: { age: string }) =>
+    `Manueller Sync: im Repo liegt eine Änderung, und der letzte Sync ist ${p.age} her. Vergessen? Unter "Bereit zum Sync" steht, was sich ändert.`,
   'argocd.comparison.title': (p: { app: string }) => `ArgoCD kann ${p.app} nicht vergleichen`,
   'argocd.stat.apps': 'Apps',
   'argocd.stat.synced': 'Synchron',
@@ -326,21 +387,25 @@ export const de = {
   'argocd.stat.automated': 'Automatischer Sync',
   'argocd.summary.ok': (p: { n: number }) => `${p.n} Apps synchron und gesund`,
   'argocd.summary.waiting': (p: { n: number }) => (p.n === 1 ? '1 App bereit zum Sync' : `${p.n} Apps bereit zum Sync`),
-  'argocd.summary.problems': (p: { outOfSync: number; unhealthy: number }) => `${p.outOfSync} nicht synchron, ${p.unhealthy} nicht gesund`,
+  'argocd.summary.problems': (p: { outOfSync: number; unhealthy: number }) =>
+    `${p.outOfSync} nicht synchron, ${p.unhealthy} nicht gesund`,
 
   // ---------- CloudNativePG ----------
   'cnpg.noInstance.title': (p: { cluster: string }) => `Postgres ${p.cluster} ohne bereite Instanz`,
   'cnpg.noInstance.cause': 'Keine Instanz bereit.',
-  'cnpg.instances.title': (p: { cluster: string; ready: number; wanted: number }) => `Postgres ${p.cluster}: ${p.ready}/${p.wanted} Instanzen bereit`,
+  'cnpg.instances.title': (p: { cluster: string; ready: number; wanted: number }) =>
+    `Postgres ${p.cluster}: ${p.ready}/${p.wanted} Instanzen bereit`,
   'cnpg.instances.cause': 'Nicht alle Instanzen bereit.',
   'cnpg.archiving.title': (p: { cluster: string }) => `WAL-Archivierung von ${p.cluster} schlägt fehl`,
-  'cnpg.archiving.cause': (p: { message?: string }) => `${p.message ?? ''} Der Primary hält jedes nicht hochgeladene WAL-Segment, bis sein Volume voll ist.`.trim(),
+  'cnpg.archiving.cause': (p: { message?: string }) =>
+    `${p.message ?? ''} Der Primary hält jedes nicht hochgeladene WAL-Segment, bis sein Volume voll ist.`.trim(),
   'cnpg.backupFailed.title': (p: { cluster: string }) => `Letztes Backup von ${p.cluster} fehlgeschlagen`,
   'cnpg.noBackup.title': (p: { cluster: string }) => `Postgres ${p.cluster}: noch kein Backup`,
   'cnpg.noBackup.cause': 'Backup ist konfiguriert, aber es gibt kein erfolgreiches Base-Backup.',
   'cnpg.oldBackup.title': (p: { cluster: string; age: string }) => `Letztes Backup von ${p.cluster} vor ${p.age}`,
   'cnpg.oldBackup.failing': (p: { at: string }) => `Seitdem fehlgeschlagen, zuletzt ${p.at}.`,
-  'cnpg.oldBackup.expected': (p: { hours: number }) => `Erwartet höchstens alle ${p.hours} h. Läuft der ScheduledBackup noch?`,
+  'cnpg.oldBackup.expected': (p: { hours: number }) =>
+    `Erwartet höchstens alle ${p.hours} h. Läuft der ScheduledBackup noch?`,
   'cnpg.stat.clusters': 'Cluster',
   'cnpg.stat.instancesReady': 'Instanzen bereit',
   'cnpg.stat.oldestBackup': 'Ältestes letztes Backup',
@@ -354,7 +419,8 @@ export const de = {
   'alertmanager.summary.none': 'Keine Alerts',
   'alertmanager.summary.firing': (p: { n: number }) => n1(p.n, 'Alert feuert', 'Alerts feuern'),
   'prometheus.down.title': (p: { job: string; n: number }) => `Scrape-Ziel ${p.job} down (${p.n})`,
-  'prometheus.down.cause': (p: { targets: string }) => `Prometheus erreicht ${p.targets} nicht. Metriken und Alerts dazu fehlen.`,
+  'prometheus.down.cause': (p: { targets: string }) =>
+    `Prometheus erreicht ${p.targets} nicht. Metriken und Alerts dazu fehlen.`,
   'prometheus.stat.reachable': 'Ziele erreichbar',
   'prometheus.stat.jobs': 'Jobs',
   'prometheus.stat.series': 'Zeitreihen',
@@ -373,18 +439,21 @@ export const de = {
   'kured.stat.rebooting': 'Startet gerade neu',
   'kured.stat.rebootRequired': 'Neustart nötig',
   'kured.lock.title': (p: { age: string }) => `kured-Sperre hängt seit ${p.age}`,
-  'kured.lock.cause': (p: { node: string }) => `${p.node} hält die Neustart-Sperre. Solange startet kein anderer Node neu und Sicherheitsupdates warten.`,
+  'kured.lock.cause': (p: { node: string }) =>
+    `${p.node} hält die Neustart-Sperre. Solange startet kein anderer Node neu und Sicherheitsupdates warten.`,
   'kured.summary.rebooting': (p: { node: string }) => `Startet ${p.node} neu`,
   'kured.summary.waiting': (p: { n: number }) => `${n1(p.n, 'Node wartet', 'Nodes warten')} auf das nächste Fenster`,
   'kured.summary.none': 'Kein Neustart nötig',
   'kured.summary.idle': 'Kein Neustart im Gange',
   'upgrade.unresolved.title': (p: { plan: string }) => `Upgrade-Plan ${p.plan}: Version nicht auflösbar`,
   'upgrade.stat.plan': (p: { plan: string }) => `Plan ${p.plan}`,
-  'upgrade.stat.planValue': (p: { version: string; nodes?: string }) => `${p.version}${p.nodes ? ` · läuft auf ${p.nodes}` : ''}`,
+  'upgrade.stat.planValue': (p: { version: string; nodes?: string }) =>
+    `${p.version}${p.nodes ? ` · läuft auf ${p.nodes}` : ''}`,
   'upgrade.summary.running': 'Upgrade läuft',
   'upgrade.summary.ok': (p: { n: number }) => `${n1(p.n, 'Plan', 'Pläne')}, nichts offen`,
   'metricsServer.noValues.title': 'metrics-server liefert keine Werte',
-  'metricsServer.noValues.cause': 'kubectl top, HPAs und die Auslastung in Kubernanny fehlen. Oft fehlt --kubelet-insecure-tls oder der APIService ist nicht verfügbar.',
+  'metricsServer.noValues.cause':
+    'kubectl top, HPAs und die Auslastung in Kubernanny fehlen. Oft fehlt --kubelet-insecure-tls oder der APIService ist nicht verfügbar.',
   'metricsServer.stat.nodes': 'Nodes mit Werten',
   'metricsServer.summary.ok': 'Liefert Auslastung',
   'metricsServer.summary.none': 'Keine Werte',
@@ -393,7 +462,8 @@ export const de = {
   'velero.manual': '(manuell)',
   'velero.stat.value': (p: { phase: string; age: string }) => `${p.phase} · vor ${p.age}`,
   'velero.failed.title': (p: { schedule: string; phase: string }) => `Velero-Backup ${p.schedule}: ${p.phase}`,
-  'velero.failed.cause': (p: { errors: number; warnings: number; backup: string }) => `${p.errors} Fehler, ${p.warnings} Warnungen. velero backup logs ${p.backup}`,
+  'velero.failed.cause': (p: { errors: number; warnings: number; backup: string }) =>
+    `${p.errors} Fehler, ${p.warnings} Warnungen. velero backup logs ${p.backup}`,
   'velero.old.title': (p: { schedule: string; age: string }) => `Velero-Backup ${p.schedule} vor ${p.age}`,
   'velero.old.cause': 'Der Schedule läuft nicht mehr wie erwartet.',
   'velero.summary.ok': (p: { n: number }) => `${n1(p.n, 'Zeitplan', 'Zeitpläne')}, letzte Läufe ok`,
@@ -426,44 +496,63 @@ export const de = {
   'action.cnpg-backup.description': 'Ein überfälliges Backup sofort starten.',
   'action.logs.label': 'Logs lesen',
   'action.logs.description': 'Die letzten Zeilen eines abgestürzten Pods anzeigen.',
-  'action.restart.effect': 'Darf am betroffenen Workload die Annotation restartedAt setzen, wie kubectl rollout restart.',
+  'action.restart.effect':
+    'Darf am betroffenen Workload die Annotation restartedAt setzen, wie kubectl rollout restart.',
   'action.argocd-sync.effect': 'Darf einen Sync der betroffenen Argo-CD-App starten (Patch des Felds operation).',
   'action.argocd-refresh.effect': 'Darf an der betroffenen App die Annotation argocd.argoproj.io/refresh=hard setzen.',
   'action.argocd-rollback.label': 'Argo CD: Zurückrollen',
-  'action.argocd-rollback.description': 'Eine App mit manuellem Sync auf einen früher ausgerollten Stand zurücksetzen, auch ohne Problem.',
-  'action.argocd-rollback.effect': 'Darf einen Sync einer App mit manuellem Sync auf eine Revision aus ihrer Historie starten (gleiche Quelle, Patch des Felds operation). Nur mit actions.enabled im Helm-Chart.',
+  'action.argocd-rollback.description':
+    'Eine App mit manuellem Sync auf einen früher ausgerollten Stand zurücksetzen, auch ohne Problem.',
+  'action.argocd-rollback.effect':
+    'Darf einen Sync einer App mit manuellem Sync auf eine Revision aus ihrer Historie starten (gleiche Quelle, Patch des Felds operation). Nur mit actions.enabled im Helm-Chart.',
   'action.cnpg-backup.effect': 'Darf für den betroffenen Datenbank-Cluster ein Backup-Objekt anlegen.',
   'action.logs.effect': 'Liest nur die letzten 300 Zeilen des genannten Pods, ändert nichts.',
   'action.uncordon.label': 'Nodes freigeben (uncordon)',
   'action.uncordon.description': 'Einen Node, der lange ohne Grund cordoned ist, wieder für neue Pods öffnen.',
-  'action.uncordon.effect': 'Darf am betroffenen Node spec.unschedulable auf false setzen, wie kubectl uncordon. Sonst nichts an Nodes.',
+  'action.uncordon.effect':
+    'Darf am betroffenen Node spec.unschedulable auf false setzen, wie kubectl uncordon. Sonst nichts an Nodes.',
   'action.job-rerun.label': 'Jobs neu ausführen',
-  'action.job-rerun.description': 'Einen fehlgeschlagenen Job erneut starten: aus der Vorlage des CronJobs oder als Kopie eines einzelnen Jobs.',
-  'action.job-rerun.effect': 'Darf Jobs anlegen (wie kubectl create job --from=cronjob/…). Nur mit actions.enabled im Helm-Chart.',
+  'action.job-rerun.description':
+    'Einen fehlgeschlagenen Job erneut starten: aus der Vorlage des CronJobs oder als Kopie eines einzelnen Jobs.',
+  'action.job-rerun.effect':
+    'Darf Jobs anlegen (wie kubectl create job --from=cronjob/…). Nur mit actions.enabled im Helm-Chart.',
   'action.reconcile-now.label': 'Sofort abgleichen',
-  'action.reconcile-now.description': 'Flux, External Secrets, Infisical oder cert-manager bitten, ein Objekt mit Problem sofort neu abzugleichen.',
-  'action.reconcile-now.effect': 'Darf am betroffenen Objekt eine Annotation setzen (Flux requestedAt, External Secrets force-sync, Infisical) oder ein Zertifikat erneuern lassen wie cmctl renew.',
+  'action.reconcile-now.description':
+    'Flux, External Secrets, Infisical oder cert-manager bitten, ein Objekt mit Problem sofort neu abzugleichen.',
+  'action.reconcile-now.effect':
+    'Darf am betroffenen Objekt eine Annotation setzen (Flux requestedAt, External Secrets force-sync, Infisical) oder ein Zertifikat erneuern lassen wie cmctl renew.',
   'action.cleanup-pods.label': 'Beendete Pods aufräumen',
   'action.cleanup-pods.description': 'Fehlgeschlagene und verdrängte Pods eines Namespace löschen. Laufende Pods nie.',
-  'action.cleanup-pods.effect': 'Darf Pods löschen, die beendet sind (Failed, oder Succeeded ohne Job). Die Admission-Policy lässt nichts anderes zu.',
+  'action.cleanup-pods.effect':
+    'Darf Pods löschen, die beendet sind (Failed, oder Succeeded ohne Job). Die Admission-Policy lässt nichts anderes zu.',
   'action.force-delete-terminating.label': 'Hängende Pods entfernen',
-  'action.force-delete-terminating.description': 'Einen Pod, der auf einem ausgefallenen Node in Terminating hängt, sofort löschen.',
-  'action.force-delete-terminating.effect': 'Darf Pods, die schon gelöscht werden, ohne Wartezeit entfernen. Nur mit actions.enabled im Helm-Chart.',
+  'action.force-delete-terminating.description':
+    'Einen Pod, der auf einem ausgefallenen Node in Terminating hängt, sofort löschen.',
+  'action.force-delete-terminating.effect':
+    'Darf Pods, die schon gelöscht werden, ohne Wartezeit entfernen. Nur mit actions.enabled im Helm-Chart.',
   'action.longhorn-backup.label': 'Longhorn: Backup',
-  'action.longhorn-backup.description': 'Für ein Volume mit veraltetem Backup sofort einen Snapshot und ein Backup anlegen.',
-  'action.longhorn-backup.effect': 'Darf für das betroffene Volume einen Longhorn-Snapshot und ein Backup-Objekt anlegen.',
+  'action.longhorn-backup.description':
+    'Für ein Volume mit veraltetem Backup sofort einen Snapshot und ein Backup anlegen.',
+  'action.longhorn-backup.effect':
+    'Darf für das betroffene Volume einen Longhorn-Snapshot und ein Backup-Objekt anlegen.',
   'action.velero-backup.label': 'Velero: Backup',
   'action.velero-backup.description': 'Ein Backup aus der Vorlage eines Zeitplans sofort starten.',
-  'action.velero-backup.effect': 'Darf den Zeitplan lesen und daraus ein Backup-Objekt anlegen, wie velero backup create --from-schedule.',
+  'action.velero-backup.effect':
+    'Darf den Zeitplan lesen und daraus ein Backup-Objekt anlegen, wie velero backup create --from-schedule.',
   'action.argocd-terminate-op.label': 'Argo CD: Sync abbrechen',
   'action.argocd-terminate-op.description': 'Einen Sync beenden, der seit über 30 Minuten läuft.',
-  'action.argocd-terminate-op.effect': 'Darf bei der betroffenen App status.operationState.phase auf Terminating setzen, wie argocd app terminate-op. Nur mit actions.enabled im Helm-Chart.',
+  'action.argocd-terminate-op.effect':
+    'Darf bei der betroffenen App status.operationState.phase auf Terminating setzen, wie argocd app terminate-op. Nur mit actions.enabled im Helm-Chart.',
   'action.config-change-hint.label': 'Geänderte ConfigMaps erkennen',
-  'action.config-change-hint.description': 'Bei einem abstürzenden Pod prüfen, ob eine ConfigMap aus seiner Umgebung nach dem Start geändert wurde, und dann den Neustart als Lösung anbieten.',
-  'action.config-change-hint.effect': 'Darf ConfigMaps im ganzen Cluster lesen (get). Kubernanny fragt nur ihre Metadaten ab, die Berechtigung reicht aber bis zum Inhalt. Nur mit actions.enabled im Helm-Chart.',
+  'action.config-change-hint.description':
+    'Bei einem abstürzenden Pod prüfen, ob eine ConfigMap aus seiner Umgebung nach dem Start geändert wurde, und dann den Neustart als Lösung anbieten.',
+  'action.config-change-hint.effect':
+    'Darf ConfigMaps im ganzen Cluster lesen (get). Kubernanny fragt nur ihre Metadaten ab, die Berechtigung reicht aber bis zum Inhalt. Nur mit actions.enabled im Helm-Chart.',
   'action.pvc-expand.label': 'Volumes vergrößern',
-  'action.pvc-expand.description': 'Ein fast volles Volume um ein Viertel vergrößern, wenn die StorageClass das erlaubt.',
-  'action.pvc-expand.effect': 'Darf die angeforderte Größe des betroffenen PVC erhöhen (höchstens um die Hälfte). Nur mit actions.enabled im Helm-Chart.',
+  'action.pvc-expand.description':
+    'Ein fast volles Volume um ein Viertel vergrößern, wenn die StorageClass das erlaubt.',
+  'action.pvc-expand.effect':
+    'Darf die angeforderte Größe des betroffenen PVC erhöhen (höchstens um die Hälfte). Nur mit actions.enabled im Helm-Chart.',
   'action.done.sync': (p: { app: string }) => `Sync von ${p.app} gestartet.`,
   'action.done.refresh': (p: { app: string }) => `Hard Refresh von ${p.app} angefordert.`,
   'action.done.restart': (p: { kind: string; name: string }) => `${p.kind} ${p.name} wird neu gestartet.`,
@@ -474,7 +563,8 @@ export const de = {
   'action.done.jobRerun': (p: { job: string }) => `${p.job} wird erneut ausgeführt.`,
   'action.done.reconcile': (p: { kind: string; name: string }) => `${p.kind} ${p.name} wird abgeglichen.`,
   'action.done.renew': (p: { name: string }) => `Zertifikat ${p.name} wird neu ausgestellt.`,
-  'action.done.cleanupPods': (p: { n: number; namespace: string }) => `${p.n} Pod${p.n === 1 ? '' : 's'} in ${p.namespace} gelöscht.`,
+  'action.done.cleanupPods': (p: { n: number; namespace: string }) =>
+    `${p.n} Pod${p.n === 1 ? '' : 's'} in ${p.namespace} gelöscht.`,
   'action.done.forceDelete': (p: { pod: string }) => `${p.pod} entfernt.`,
   'action.done.longhornBackup': (p: { volume: string }) => `Backup von ${p.volume} gestartet.`,
   'action.done.veleroBackup': (p: { schedule: string }) => `Backup aus ${p.schedule} gestartet.`,
@@ -487,42 +577,52 @@ export const de = {
   'error.actionNotOffered': (p: { type: string }) => `Dieses Problem bietet keine Aktion ${p.type}.`,
   'error.useLogsRoute': 'Logs über GET …/logs abrufen.',
   'error.actionUnknown': (p: { type: string }) => `Unbekannte Aktion ${p.type}.`,
-  'error.veleroHooks': (p: { schedule: string; fields: string }) => `Der Zeitplan ${p.schedule} nutzt ${p.fields}. Solche Backups startet Kubernanny nicht: die Admission-Policy kann sie nicht mit dem Zeitplan vergleichen. Starte es mit velero backup create --from-schedule.`,
-  'error.jobPrivileged': (p: { job: string; what: string }) => `${p.job} braucht ${p.what}. Solche Jobs legt Kubernanny nicht an. Starte ihn mit kubectl create job.`,
+  'error.veleroHooks': (p: { schedule: string; fields: string }) =>
+    `Der Zeitplan ${p.schedule} nutzt ${p.fields}. Solche Backups startet Kubernanny nicht: die Admission-Policy kann sie nicht mit dem Zeitplan vergleichen. Starte es mit velero backup create --from-schedule.`,
+  'error.jobPrivileged': (p: { job: string; what: string }) =>
+    `${p.job} braucht ${p.what}. Solche Jobs legt Kubernanny nicht an. Starte ihn mit kubectl create job.`,
   'error.targetChanged': 'Das Objekt hat sich inzwischen geändert. Lade neu und sieh es dir noch einmal an.',
   'error.issueMissing': 'Parameter issue fehlt.',
   'error.deviceNotFound': 'Gerät nicht gefunden.',
   'error.adminOnly': 'Nur über die Admin-CLI im Pod.',
   'error.bodyMissing': 'Body fehlt.',
-  'error.notificationsLocked': 'Benachrichtigungen sind im Helm-Chart abgeschaltet (checks.disabled: [notifications]); es wird nichts gesendet.',
+  'error.notificationsLocked':
+    'Benachrichtigungen sind im Helm-Chart abgeschaltet (checks.disabled: [notifications]); es wird nichts gesendet.',
   'error.notifyTestFailed': (p: { error: string }) => `Die Testnachricht kam nicht an: ${p.error}`,
-  'error.noChannel': 'Kein Kanal eingerichtet. Setze NTFY_URL oder WEBHOOK_URL am Agent, oder schalte Push für ein Gerät ein.',
-  'error.pushOff': 'Push an die App ist in der Installation abgeschaltet (APP_PUSH=off) und lässt sich nur dort einschalten.',
+  'error.noChannel':
+    'Kein Kanal eingerichtet. Setze NTFY_URL oder WEBHOOK_URL am Agent, oder schalte Push für ein Gerät ein.',
+  'error.pushOff':
+    'Push an die App ist in der Installation abgeschaltet (APP_PUSH=off) und lässt sich nur dort einschalten.',
   'error.pushDeviceOnly': 'Push lässt sich nur für ein gekoppeltes Gerät einrichten.',
   'error.pushNoRelay': 'Für Push an die App braucht der Agent ein Relay (RELAY_URL).',
-  'error.pushInvalid': 'Die Push-Anmeldung ist unvollständig: Token, Plattform (ios oder android) und Schlüssel fehlen oder sind ungültig.',
+  'error.pushInvalid':
+    'Die Push-Anmeldung ist unvollständig: Token, Plattform (ios oder android) und Schlüssel fehlen oder sind ungültig.',
   'error.pushNotRegistered': 'Für dieses Gerät ist kein Push eingerichtet.',
   'error.e2eRequired': 'Nur über den verschlüsselten Kanal (POST /api/e2e).',
   'error.moduleUnknown': (p: { id: string }) => `Unbekanntes Modul ${p.id}.`,
-  'error.settingLocked': (p: { id: string }) => `${p.id} ist im Helm-Chart abgeschaltet und lässt sich nur dort einschalten.`,
+  'error.settingLocked': (p: { id: string }) =>
+    `${p.id} ist im Helm-Chart abgeschaltet und lässt sich nur dort einschalten.`,
   'error.notificationsBoolean': 'notifications muss true oder false sein.',
   'error.silenceHours': (p: { hours: string }) => `Stummschalten geht für ${p.hours} Stunden.`,
   'error.maintenanceHours': (p: { hours: string }) => `Ein Wartungsfenster dauert ${p.hours} Stunden.`,
   'error.silenceLimit': 'Zu viele stummgeschaltete Probleme.',
-  'error.acceptLocked': 'Schwachstellen als nicht zutreffend zu markieren ist in dieser Installation abgeschaltet (vulnerabilities.allowAccept).',
+  'error.acceptLocked':
+    'Schwachstellen als nicht zutreffend zu markieren ist in dieser Installation abgeschaltet (vulnerabilities.allowAccept).',
   'error.vulnerabilitiesOff': 'Das Modul Bekannte Schwachstellen ist aus.',
   'error.argocdOff': 'Das Modul Argo CD ist aus.',
   'error.rollbackTarget': 'Namespace, App und eine Historien-Id (ganze Zahl) werden gebraucht.',
   'error.rollbackRateLimited': 'Diese App wurde gerade erst zurückgerollt. Höchstens einmal in 5 Minuten.',
   'error.rollbackAppNotFound': 'Diese Argo-CD-App gibt es nicht.',
-  'error.ROLLBACK_AUTOMATED': 'Die App hat automatischen Sync. Argo CD würde sofort wieder auf Git synchronisieren, daher kein Zurückrollen.',
+  'error.ROLLBACK_AUTOMATED':
+    'Die App hat automatischen Sync. Argo CD würde sofort wieder auf Git synchronisieren, daher kein Zurückrollen.',
   'error.ROLLBACK_MULTI_SOURCE': 'Die App hat mehrere Quellen (spec.sources). Zurückrollen geht nur bei einer Quelle.',
   'error.ROLLBACK_NO_SOURCE': 'Die App hat keine Quelle (spec.source).',
   'error.ROLLBACK_RUNNING': 'Für die App läuft gerade eine Operation. Bitte warten, bis sie fertig ist.',
   'error.ROLLBACK_HISTORY_NOT_FOUND': 'Diesen Stand gibt es in der Historie der App nicht.',
   'error.ROLLBACK_REVISION': 'Die Revision dieses Stands sieht nicht wie ein Commit oder eine Chart-Version aus.',
   'error.ROLLBACK_CURRENT': 'Dieser Stand ist schon ausgerollt.',
-  'error.ROLLBACK_OTHER_SOURCE': 'Dieser Stand kam aus einer anderen Quelle als der aktuellen der App. Kubernanny rollt nie auf ein anderes Repository zurück.',
+  'error.ROLLBACK_OTHER_SOURCE':
+    'Dieser Stand kam aus einer anderen Quelle als der aktuellen der App. Kubernanny rollt nie auf ein anderes Repository zurück.',
   'error.acceptDays': (p: { days: string }) => `Markieren geht für ${p.days} Tage.`,
   'error.acceptReason': 'Die Begründung muss Text sein.',
   'error.acceptLimit': 'Zu viele als nicht zutreffend markierte Schwachstellen.',
@@ -531,13 +631,16 @@ export const de = {
   'error.clockSkew': 'Die Uhr des Geräts weicht zu stark ab.',
   'error.deviceUnknown': 'Dieses Gerät ist nicht (mehr) gekoppelt.',
   'error.unknownPath': 'Unbekannter Pfad.',
-  'error.pairingUnavailable': 'Der Agent kann Schlüssel nicht speichern (RBAC für die Secrets kubernanny-identity und kubernanny-devices prüfen).',
+  'error.pairingUnavailable':
+    'Der Agent kann Schlüssel nicht speichern (RBAC für die Secrets kubernanny-identity und kubernanny-devices prüfen).',
   'error.pairingCodeInvalid': 'Code falsch, abgelaufen oder schon benutzt.',
-  'error.pairingRateLimited': 'Zu viele falsche Pairing-Codes in kurzer Zeit. Code prüfen und in ein paar Minuten nochmal versuchen.',
+  'error.pairingRateLimited':
+    'Zu viele falsche Pairing-Codes in kurzer Zeit. Code prüfen und in ein paar Minuten nochmal versuchen.',
   'error.deviceNotSaved': 'Gerät konnte nicht gespeichert werden.',
   'error.internal': 'Der Agent konnte die Anfrage intern nicht ausführen. Bitte gleich nochmal versuchen.',
   'agent.unreachable.title': 'Kubernanny kann den Cluster nicht lesen',
-  'agent.unreachable.cause': (p: { error: string }) => `Der API-Server antwortet dem Agent seit mehreren Läufen nicht: ${p.error}. Die angezeigten Daten sind vom letzten erfolgreichen Lauf.`,
+  'agent.unreachable.cause': (p: { error: string }) =>
+    `Der API-Server antwortet dem Agent seit mehreren Läufen nicht: ${p.error}. Die angezeigten Daten sind vom letzten erfolgreichen Lauf.`,
   'device.defaultName': 'Gerät',
 
   // ---------- notifications ----------
@@ -548,28 +651,36 @@ export const de = {
   'push.minimal.titleNew': (p: { cluster: string }) => `${p.cluster}: Neue Probleme`,
   'push.minimal.body': (p: { parts: string[] }) => `${p.parts.join(', ')}. Details in Kubernanny.`,
   'push.resolvedLine': (p: { title: string }) => `✅ behoben: ${p.title}`,
-  'push.title.resolved': (p: { cluster: string; n: number }) => `${p.cluster}: ${p.n === 1 ? 'Problem behoben' : `${p.n} Probleme behoben`}`,
+  'push.title.resolved': (p: { cluster: string; n: number }) =>
+    `${p.cluster}: ${p.n === 1 ? 'Problem behoben' : `${p.n} Probleme behoben`}`,
   'push.title.many': (p: { cluster: string; n: number }) => `${p.cluster}: ${p.n} Probleme`,
   'push.test.title': (p: { cluster: string }) => `${p.cluster}: Testnachricht`,
   'push.test.body': 'Kubernanny kann dich erreichen.',
   'push.deadman.title': (p: { cluster: string }) => `${p.cluster}: Kubernanny schweigt`,
-  'push.deadman.body': (p: { minutes: number }) => `Kubernanny meldet sich seit ${p.minutes} Min. nicht. Cluster oder Agent prüfen.`,
+  'push.deadman.body': (p: { minutes: number }) =>
+    `Kubernanny meldet sich seit ${p.minutes} Min. nicht. Cluster oder Agent prüfen.`,
   'push.deadman.backTitle': (p: { cluster: string }) => `${p.cluster}: Kubernanny ist wieder erreichbar`,
   'push.deadman.backBody': (p: { minutes: number }) => `War ${p.minutes} Min. weg.`,
   'push.security.title': (p: { cluster: string }) => `${p.cluster}: sicherheitsrelevante Änderung`,
   'push.security.notificationsOff': (p: { by: string }) => `${p.by} hat die Benachrichtigungen ausgeschaltet.`,
   'push.security.moduleOff': (p: { by: string; id: string }) => `${p.by} hat das Modul ${p.id} ausgeschaltet.`,
-  'push.security.moduleOn': (p: { by: string; id: string }) => `${p.by} hat das Modul ${p.id} eingeschaltet. Es sendet Daten aus dem Cluster.`,
+  'push.security.moduleOn': (p: { by: string; id: string }) =>
+    `${p.by} hat das Modul ${p.id} eingeschaltet. Es sendet Daten aus dem Cluster.`,
   'push.security.actionOff': (p: { by: string; id: string }) => `${p.by} hat die Aktion ${p.id} ausgeschaltet.`,
-  'push.security.maintenance': (p: { by: string; hours: number }) => `${p.by} hat ein Wartungsfenster für ${p.hours} Stunde${p.hours === 1 ? '' : 'n'} gestartet.`,
+  'push.security.maintenance': (p: { by: string; hours: number }) =>
+    `${p.by} hat ein Wartungsfenster für ${p.hours} Stunde${p.hours === 1 ? '' : 'n'} gestartet.`,
   'push.security.deviceRevoked': (p: { by: string; device: string }) => `${p.by} hat das Gerät ${p.device} entfernt.`,
   'push.security.devicePaired': (p: { by: string }) => `Ein neues Gerät wurde gekoppelt: ${p.by}.`,
   'push.security.advisoryAccepted': (p: { by: string; advisory: string; component: string; days: number }) =>
     `${p.by} hat ${p.advisory} bei ${p.component} für ${p.days} Tage als nicht zutreffend markiert.`,
-  'push.security.silenced': (p: { by: string; issue: string; hours: number }) => `${p.by} hat das kritische Problem ${p.issue} für ${p.hours} Stunde${p.hours === 1 ? '' : 'n'} stummgeschaltet.`,
-  'push.security.rolledBack': (p: { by: string; app: string; from: string; to: string }) => `${p.by} hat die Argo-CD-App ${p.app} von ${p.from} auf ${p.to} zurückgerollt.`,
-  'push.security.minimal': 'Ein gekoppeltes Gerät hat eine sicherheitsrelevante Einstellung geändert. Details im Audit-Log des Agents.',
-  'push.security.advice': 'Warst du das nicht? Entferne das Gerät von einem anderen gekoppelten Gerät aus (Gekoppelte Geräte) und prüfe die Einstellungen.',
+  'push.security.silenced': (p: { by: string; issue: string; hours: number }) =>
+    `${p.by} hat das kritische Problem ${p.issue} für ${p.hours} Stunde${p.hours === 1 ? '' : 'n'} stummgeschaltet.`,
+  'push.security.rolledBack': (p: { by: string; app: string; from: string; to: string }) =>
+    `${p.by} hat die Argo-CD-App ${p.app} von ${p.from} auf ${p.to} zurückgerollt.`,
+  'push.security.minimal':
+    'Ein gekoppeltes Gerät hat eine sicherheitsrelevante Einstellung geändert. Details im Audit-Log des Agents.',
+  'push.security.advice':
+    'Warst du das nicht? Entferne das Gerät von einem anderen gekoppelten Gerät aus (Gekoppelte Geräte) und prüfe die Einstellungen.',
   'digest.title': (p: { cluster: string }) => `${p.cluster}: Wochenbericht`,
   'digest.partial': (p: { age: string }) => ` (seit ${p.age}, so lange läuft der Agent)`,
   'digest.none': (p: { partial: string }) => `Keine Probleme in den letzten 7 Tagen${p.partial}.`,
@@ -583,11 +694,16 @@ export const de = {
   'module.kubernetes-support.name': 'Kubernetes-Version',
   'module.kubernetes-support.description': 'Ob die Kubernetes-Version noch Sicherheitsupdates bekommt.',
   'kubernetesSupport.ended.title': (p: { version: string }) => `Kubernetes ${p.version} bekommt keine Updates mehr`,
-  'kubernetesSupport.ending.title': (p: { version: string; age: string }) => `Kubernetes ${p.version}: Support endet in ${p.age}`,
-  'kubernetesSupport.cause.ended': (p: { version: string; date: string }) => `Das Kubernetes-Projekt pflegt ${p.version} seit dem ${deDate(p.date)} nicht mehr, auch Sicherheitslücken werden nicht mehr geschlossen.`,
-  'kubernetesSupport.cause.endedLongAgo': (p: { version: string }) => `Das Kubernetes-Projekt pflegt ${p.version} schon lange nicht mehr, auch Sicherheitslücken werden nicht mehr geschlossen.`,
-  'kubernetesSupport.cause.ending': (p: { version: string; date: string }) => `Das Kubernetes-Projekt pflegt ${p.version} nur noch bis zum ${deDate(p.date)}.`,
-  'kubernetesSupport.cause.next': (p: { next: string }) => `Aktualisiere auf ${p.next} oder neuer, eine Minor-Version nach der anderen.`,
+  'kubernetesSupport.ending.title': (p: { version: string; age: string }) =>
+    `Kubernetes ${p.version}: Support endet in ${p.age}`,
+  'kubernetesSupport.cause.ended': (p: { version: string; date: string }) =>
+    `Das Kubernetes-Projekt pflegt ${p.version} seit dem ${deDate(p.date)} nicht mehr, auch Sicherheitslücken werden nicht mehr geschlossen.`,
+  'kubernetesSupport.cause.endedLongAgo': (p: { version: string }) =>
+    `Das Kubernetes-Projekt pflegt ${p.version} schon lange nicht mehr, auch Sicherheitslücken werden nicht mehr geschlossen.`,
+  'kubernetesSupport.cause.ending': (p: { version: string; date: string }) =>
+    `Das Kubernetes-Projekt pflegt ${p.version} nur noch bis zum ${deDate(p.date)}.`,
+  'kubernetesSupport.cause.next': (p: { next: string }) =>
+    `Aktualisiere auf ${p.next} oder neuer, eine Minor-Version nach der anderen.`,
   'kubernetesSupport.cause.newer': 'Aktualisiere auf eine neuere Minor-Version, eine nach der anderen.',
   'kubernetesSupport.cause.guide': (p: { guide: string }) => `Anleitung: ${p.guide}`,
   'kubernetesSupport.stat.eol': 'Gepflegt bis',
@@ -597,7 +713,9 @@ export const de = {
   'kubernetesSupport.summary.unknown': (p: { version: string }) => `${p.version} ist neuer als die eingebaute Liste`,
   'kubernetesSupport.summary.noVersion': 'Version nicht lesbar',
   'kubernetesSupport.deprecated.title': (p: { n: number; release: string }) =>
-    p.n === 1 ? `Eine genutzte API fehlt ab Kubernetes ${p.release}` : `${p.n} genutzte APIs fehlen ab Kubernetes ${p.release}`,
+    p.n === 1
+      ? `Eine genutzte API fehlt ab Kubernetes ${p.release}`
+      : `${p.n} genutzte APIs fehlen ab Kubernetes ${p.release}`,
   'kubernetesSupport.deprecated.cause': (p: { apis: string; release: string }) =>
     `Seit dem letzten Start des API-Servers wurde nach ${p.apis} gefragt; ${p.release} entfernt sie. Was danach fragt (ein Chart, ein Operator, ein Skript), nennt das Audit-Log des API-Servers. Erst umstellen, dann aktualisieren.`,
   'kubernetesSupport.stat.deprecated': 'Veraltete APIs in Gebrauch',
@@ -608,14 +726,17 @@ export const de = {
   'uptime.stat.down': 'Gestört',
   'uptime.stat.other': 'Ohne Ergebnis',
   'uptime.summary.ok': (p: { n: number }) => `${n1(p.n, 'Endpunkt', 'Endpunkte')} erreichbar`,
-  'gatus.down.title': (p: { group: string; n: number }) => `Gatus-Gruppe ${p.group}: ${n1(p.n, 'Endpunkt', 'Endpunkte')} gestört`,
+  'gatus.down.title': (p: { group: string; n: number }) =>
+    `Gatus-Gruppe ${p.group}: ${n1(p.n, 'Endpunkt', 'Endpunkte')} gestört`,
   'gatus.down.titleUngrouped': (p: { n: number }) => `Gatus: ${n1(p.n, 'Endpunkt', 'Endpunkte')} gestört`,
   'gatus.down.cause': (p: { endpoints: string[]; error?: string; condition?: string }) =>
     `Laut Gatus schlägt die letzte Prüfung fehl: ${p.endpoints.join(', ')}.${p.error ? ` Gatus meldet: ${p.error}` : p.condition ? ` Nicht erfüllt: ${p.condition}` : ''}`,
   'gatus.protected': 'mit Anmeldung geschützt',
   'gatus.summary.protected': 'API verlangt eine Anmeldung, nur die Pods werden geprüft',
-  'uptimeKuma.down.title': (p: { group: string; n: number }) => `Uptime Kuma, ${p.group}: ${n1(p.n, 'Monitor', 'Monitore')} down`,
-  'uptimeKuma.down.cause': (p: { monitors: string[] }) => `Laut Uptime Kuma ist der letzte Heartbeat fehlgeschlagen: ${p.monitors.join(', ')}.`,
+  'uptimeKuma.down.title': (p: { group: string; n: number }) =>
+    `Uptime Kuma, ${p.group}: ${n1(p.n, 'Monitor', 'Monitore')} down`,
+  'uptimeKuma.down.cause': (p: { monitors: string[] }) =>
+    `Laut Uptime Kuma ist der letzte Heartbeat fehlgeschlagen: ${p.monitors.join(', ')}.`,
   'uptimeKuma.summary.ok': (p: { n: number }) => `${n1(p.n, 'Monitor', 'Monitore')} erreichbar`,
   'uptimeKuma.stat.statusPage': 'Statusseite',
   'uptimeKuma.stat.notConfigured': 'nicht eingerichtet (UPTIME_KUMA_STATUS_PAGE)',
@@ -623,15 +744,18 @@ export const de = {
   // ---------- Rook Ceph ----------
   'rookCeph.health.warnTitle': (p: { name: string }) => `Ceph ${p.name}: HEALTH_WARN`,
   'rookCeph.health.errTitle': (p: { name: string }) => `Ceph ${p.name}: HEALTH_ERR`,
-  'rookCeph.health.cause': (p: { details: string[]; more: number }) => `Ceph meldet: ${p.details.join('; ')}${p.more ? ` (und ${p.more} weitere)` : ''}. Details: ceph health detail in der Toolbox.`,
+  'rookCeph.health.cause': (p: { details: string[]; more: number }) =>
+    `Ceph meldet: ${p.details.join('; ')}${p.more ? ` (und ${p.more} weitere)` : ''}. Details: ceph health detail in der Toolbox.`,
   'rookCeph.health.noDetails': 'Ceph meldet ein Problem ohne Einzelheiten. Details: ceph health detail in der Toolbox.',
   'rookCeph.capacity.title': (p: { name: string; pct: number }) => `Ceph ${p.name} zu ${p.pct} % voll`,
   'rookCeph.capacity.cause': (p: { free: string }) =>
     `Noch ${p.free} frei (roh). OSDs füllen sich ungleich: Ceph warnt pro OSD ab 85 % (nearfull) und stoppt Schreibzugriffe ab 95 % (full). Platten hinzufügen oder Daten löschen.`,
   'rookCeph.operator.title': (p: { name: string }) => `Rook kann Ceph ${p.name} nicht verwalten`,
-  'rookCeph.operator.cause': 'Der Rook-Operator meldet einen Fehler beim Abgleich des CephCluster. Die Logs des Operators nennen den Grund.',
+  'rookCeph.operator.cause':
+    'Der Rook-Operator meldet einen Fehler beim Abgleich des CephCluster. Die Logs des Operators nennen den Grund.',
   'rookCeph.stale.title': (p: { name: string }) => `Zustand von Ceph ${p.name} veraltet`,
-  'rookCeph.stale.cause': 'Rook hat den Zustand seit über 15 Minuten nicht aktualisiert (sonst jede Minute). Läuft der Operator, und erreicht er die Monitore?',
+  'rookCeph.stale.cause':
+    'Rook hat den Zustand seit über 15 Minuten nicht aktualisiert (sonst jede Minute). Läuft der Operator, und erreicht er die Monitore?',
   'rookCeph.stat.clusters': 'Ceph-Cluster',
   'rookCeph.stat.used': 'Belegt (roh)',
   'rookCeph.summary.ok': (p: { n: number }) => (p.n === 1 ? 'Ceph gesund' : `${p.n} Ceph-Cluster gesund`),
@@ -649,10 +773,13 @@ export const de = {
   'ingress.summary.ok': (p: { n: number }) => `${n1(p.n, 'Route', 'Routen')} ohne auffällige Fehler`,
 
   // ---------- Richtlinien (Kyverno, Gatekeeper) ----------
-  'policy.violations.title': (p: { policy: string; n: number }) => `Richtlinie ${p.policy}: ${n1(p.n, 'Verstoß', 'Verstöße')}`,
-  'policy.errors.title': (p: { policy: string; n: number }) => `Richtlinie ${p.policy} kann nicht prüfen (${n1(p.n, 'Fehler', 'Fehler')})`,
+  'policy.violations.title': (p: { policy: string; n: number }) =>
+    `Richtlinie ${p.policy}: ${n1(p.n, 'Verstoß', 'Verstöße')}`,
+  'policy.errors.title': (p: { policy: string; n: number }) =>
+    `Richtlinie ${p.policy} kann nicht prüfen (${n1(p.n, 'Fehler', 'Fehler')})`,
   'policy.violations.fail': (p: { n: number }) => `${n1(p.n, 'Ressource verstößt', 'Ressourcen verstoßen')} dagegen.`,
-  'policy.violations.error': (p: { n: number }) => `Bei ${n1(p.n, 'Ressource', 'Ressourcen')} konnte die Regel nicht ausgewertet werden.`,
+  'policy.violations.error': (p: { n: number }) =>
+    `Bei ${n1(p.n, 'Ressource', 'Ressourcen')} konnte die Regel nicht ausgewertet werden.`,
   'policy.stat.policies': 'Richtlinien',
   'policy.stat.enforced': 'Blockierend',
   'policy.stat.violating': 'Mit Verstößen',
@@ -661,22 +788,30 @@ export const de = {
 
   // ---------- Trivy Operator ----------
   'trivy.noCrd': 'Trivy Operator läuft, aber die Ressource VulnerabilityReport fehlt (CRDs nicht installiert?)',
-  'trivy.title': (p: { kind: string; name: string; namespace: string; n: number }) => `${p.name} (${p.namespace}): ${n1(p.n, 'bekannte Schwachstelle', 'bekannte Schwachstellen')}`,
-  'trivy.fixed': (p: { packages: string[] }) => `Behoben in neueren Paketversionen: ${p.packages.join(', ')}. Image neu bauen oder ein neueres verwenden.`,
-  'trivy.fixedSome': (p: { packages: string[] }) => `Teils behoben in neueren Paketversionen: ${p.packages.join(', ')}; für die übrigen gibt es noch kein Update.`,
-  'trivy.scanned': (p: { images: string[]; age: string }) => `Von Trivy Operator geprüft vor ${p.age}: ${p.images.join(', ')}.`,
+  'trivy.title': (p: { kind: string; name: string; namespace: string; n: number }) =>
+    `${p.name} (${p.namespace}): ${n1(p.n, 'bekannte Schwachstelle', 'bekannte Schwachstellen')}`,
+  'trivy.fixed': (p: { packages: string[] }) =>
+    `Behoben in neueren Paketversionen: ${p.packages.join(', ')}. Image neu bauen oder ein neueres verwenden.`,
+  'trivy.fixedSome': (p: { packages: string[] }) =>
+    `Teils behoben in neueren Paketversionen: ${p.packages.join(', ')}; für die übrigen gibt es noch kein Update.`,
+  'trivy.scanned': (p: { images: string[]; age: string }) =>
+    `Von Trivy Operator geprüft vor ${p.age}: ${p.images.join(', ')}.`,
   'trivy.stat.workloads': 'Geprüfte Workloads',
   'trivy.stat.stale': 'Alte Berichte übergangen',
   'trivy.stat.unmatched': 'Berichte ohne Workload',
-  'trivy.summary.none': (p: { n: number }) => `Keine bekannten Schwachstellen in ${n1(p.n, 'geprüftem Workload', 'geprüften Workloads')}`,
+  'trivy.summary.none': (p: { n: number }) =>
+    `Keine bekannten Schwachstellen in ${n1(p.n, 'geprüftem Workload', 'geprüften Workloads')}`,
   'trivy.summary.affected': (p: { n: number }) => `${n1(p.n, 'Workload', 'Workloads')} mit bekannten Schwachstellen`,
   'kyverno.errors.enforced': (p: { n: number }) =>
     `Bei ${n1(p.n, 'Ressource', 'Ressourcen')} konnte Kyverno die Regel nicht auswerten. Die Richtlinie steht auf Enforce: was sie blockieren soll, wird je nach failurePolicy nicht geprüft oder ganz abgewiesen.`,
   'kyverno.notReady.title': (p: { policy: string }) => `Richtlinie ${p.policy} nicht bereit`,
-  'kyverno.notReady.cause': 'Kyverno meldet die Richtlinie als nicht bereit, obwohl sie auf Enforce steht: sie blockiert gerade nichts.',
+  'kyverno.notReady.cause':
+    'Kyverno meldet die Richtlinie als nicht bereit, obwohl sie auf Enforce steht: sie blockiert gerade nichts.',
   'gatekeeper.errors.title': (p: { constraint: string }) => `Constraint ${p.constraint} arbeitet nicht`,
-  'gatekeeper.errors.cause': (p: { message: string }) => `Gatekeeper meldet einen Fehler für diese blockierende Constraint oder ihr Template: ${p.message}`,
-  'gatekeeper.violations.deny': 'Gefunden vom Audit; neue Verstöße blockiert Gatekeeper, bestehende Ressourcen bleiben.',
+  'gatekeeper.errors.cause': (p: { message: string }) =>
+    `Gatekeeper meldet einen Fehler für diese blockierende Constraint oder ihr Template: ${p.message}`,
+  'gatekeeper.violations.deny':
+    'Gefunden vom Audit; neue Verstöße blockiert Gatekeeper, bestehende Ressourcen bleiben.',
   'gatekeeper.violations.audit': 'Gefunden vom Audit; die Constraint meldet nur (dryrun oder warn).',
   'gatekeeper.stat.templates': 'Templates',
   'gatekeeper.stat.constraints': 'Constraints',
@@ -684,12 +819,15 @@ export const de = {
 
   // ---------- Uhren der Nodes ----------
   'module.nodeClocks.name': 'Uhren der Nodes',
-  'module.nodeClocks.description': 'Prüft, wie weit die Uhr jedes Nodes von der Zeitquelle abweicht (node-exporter über Prometheus).',
-  'nodeClocks.skew.title': (p: { node: string; seconds: number }) => `Uhr von ${p.node} geht ${p.seconds.toLocaleString('de-DE')} s falsch`,
+  'module.nodeClocks.description':
+    'Prüft, wie weit die Uhr jedes Nodes von der Zeitquelle abweicht (node-exporter über Prometheus).',
+  'nodeClocks.skew.title': (p: { node: string; seconds: number }) =>
+    `Uhr von ${p.node} geht ${p.seconds.toLocaleString('de-DE')} s falsch`,
   'nodeClocks.skew.cause':
     'Abweichende Uhren stören etcd (warnt ab 1 s zwischen Mitgliedern), TLS (neue Zertifikate gelten noch nicht) und Tokens (der API-Server erlaubt eine Minute). Läuft chrony oder systemd-timesyncd auf dem Node, und erreicht er seinen NTP-Server?',
   'nodeClocks.unsynced.title': (p: { node: string }) => `Uhr von ${p.node} nicht synchronisiert`,
-  'nodeClocks.unsynced.cause': 'Der Kernel meldet die Uhr als nicht synchronisiert, ihr möglicher Fehler ist auf 16 s gewachsen. Läuft chrony oder systemd-timesyncd, und erreicht er seinen NTP-Server?',
+  'nodeClocks.unsynced.cause':
+    'Der Kernel meldet die Uhr als nicht synchronisiert, ihr möglicher Fehler ist auf 16 s gewachsen. Läuft chrony oder systemd-timesyncd, und erreicht er seinen NTP-Server?',
   'nodeClocks.stat.source': 'Messung',
   'nodeClocks.stat.measured': 'Gemessen',
   'nodeClocks.stat.worst': 'Größte Abweichung',
@@ -704,15 +842,18 @@ export const de = {
 
   // ---------- Neuere Images ----------
   'module.imageUpdates.name': 'Neuere Versionen',
-  'module.imageUpdates.description': 'Fragt die Registries der erkannten Komponenten nach neueren Versionen (Patch, Minor, Major), als Hinweis.',
-  'imageUpdates.privacy': (p: { hosts: string }) => `Schickt Namen von Images (keine Tags, keine Clusterdaten) an ihre Registry: ${p.hosts}.`,
+  'module.imageUpdates.description':
+    'Fragt die Registries der erkannten Komponenten nach neueren Versionen (Patch, Minor, Major), als Hinweis.',
+  'imageUpdates.privacy': (p: { hosts: string }) =>
+    `Schickt Namen von Images (keine Tags, keine Clusterdaten) an ihre Registry: ${p.hosts}.`,
   'imageUpdates.unreachable': 'Keine Registry erreichbar',
   'imageUpdates.title': (p: { name: string; version: string }) => `${p.name} ${p.version}: neuere Version verfügbar`,
   'imageUpdates.patch': (p: { version: string }) => `Patch: ${p.version}.`,
   'imageUpdates.minor': (p: { version: string }) => `Minor: ${p.version}.`,
   'imageUpdates.major': (p: { version: string }) => `Major: ${p.version}.`,
   'imageUpdates.releaseNotes': 'Vor dem Update die Release Notes lesen.',
-  'imageUpdates.releaseNotesMajor': 'Vor dem Update die Release Notes lesen: eine neue Major-Version kann Konfiguration oder APIs ändern.',
+  'imageUpdates.releaseNotesMajor':
+    'Vor dem Update die Release Notes lesen: eine neue Major-Version kann Konfiguration oder APIs ändern.',
   'imageUpdates.stat.checked': 'Geprüft',
   'imageUpdates.stat.newer': 'Mit neuerer Version',
   'imageUpdates.stat.skipped': 'Nicht prüfbar (Tag, Registry)',
@@ -737,14 +878,17 @@ export const de = {
   'banner.noIngress': (p: { command: string }) => `Ohne Ingress: ${p.command}`,
   'banner.thenLocalhost': 'und dann http://localhost:8080 nutzen.',
   'banner.code': (p: { code: string }) => `Pairing-Code: ${p.code} (einmal verwendbar, 60 Minuten gültig).`,
-  'banner.key': (p: { fingerprint: string }) => `Schlüssel des Agents: ${p.fingerprint} (zeigt die App beim Koppeln an).`,
+  'banner.key': (p: { fingerprint: string }) =>
+    `Schlüssel des Agents: ${p.fingerprint} (zeigt die App beim Koppeln an).`,
   'banner.expired': (p: { command: string }) => `Abgelaufen? Neuer Code: ${p.command}`,
-  'cli.device': (p: { id: string; name: string; paired: string; seen: string }) => `${p.id}  ${p.name}  gekoppelt ${p.paired}  zuletzt ${p.seen}`,
+  'cli.device': (p: { id: string; name: string; paired: string; seen: string }) =>
+    `${p.id}  ${p.name}  gekoppelt ${p.paired}  zuletzt ${p.seen}`,
   'cli.noDevices': 'Keine Geräte gekoppelt.',
   'cli.revoked': 'Gerät entfernt.',
   'cli.failed': (p: { status: number; body: string }) => `Fehler ${p.status}: ${p.body}`,
   'cli.usage': 'Befehle: pair | devices | revoke <id>',
-  'cli.unreachable': (p: { socket: string; message: string }) => `Agent nicht erreichbar über ${p.socket}: ${p.message}`,
+  'cli.unreachable': (p: { socket: string; message: string }) =>
+    `Agent nicht erreichbar über ${p.socket}: ${p.message}`,
 
   // ---------- module sheets: the objects of a module (modules/details.ts) ----------
   'detail.ready': 'bereit',
@@ -783,7 +927,8 @@ export const de = {
   'detail.cert.expired': 'abgelaufen',
   'detail.prometheus.targets': 'Ziele pro Job',
   'detail.ingress.routes': 'Routen',
-  'detail.ingress.requests': (p: { n: number }) => `${p.n.toLocaleString('de-DE', { maximumFractionDigits: 2 })} Anfragen/s`,
+  'detail.ingress.requests': (p: { n: number }) =>
+    `${p.n.toLocaleString('de-DE', { maximumFractionDigits: 2 })} Anfragen/s`,
   'detail.ingress.errors': (p: { pct: number }) => `${p.pct.toLocaleString('de-DE')} % Fehler`,
   'detail.kured.waiting': 'Warten auf einen Neustart',
   'detail.kured.rebooting': 'startet gerade neu',
@@ -795,18 +940,22 @@ export const de = {
   'detail.etcd.members': 'Mitglieder',
   'detail.etcd.snapshots': (p: { n: number }) => n1(p.n, 'Snapshot', 'Snapshots'),
   'detail.lookup': 'Abgleich',
-  'detail.cores': (p: { milli: number }) => `${(p.milli / 1000).toLocaleString('de-DE', { minimumFractionDigits: p.milli % 1000 ? 2 : 0, maximumFractionDigits: 2 })} ${p.milli === 1000 ? 'Kern' : 'Kerne'}`,
+  'detail.cores': (p: { milli: number }) =>
+    `${(p.milli / 1000).toLocaleString('de-DE', { minimumFractionDigits: p.milli % 1000 ? 2 : 0, maximumFractionDigits: 2 })} ${p.milli === 1000 ? 'Kern' : 'Kerne'}`,
   'detail.cpuMem': (p: { cpu: string; mem: string }) => `${p.cpu}, ${p.mem}`,
   'detail.pods': 'Pods',
   'detail.resources': 'CPU und RAM',
   'detail.volumes': 'Volumes',
   'detail.pod.where': (p: { node: string; namespace: string }) => `auf ${p.node}, ${p.namespace}`,
   'detail.pod.restarts': (p: { n: number }) => n1(p.n, 'Neustart', 'Neustarts'),
-  'detail.pod.oomLimit': (p: { limit: string; when?: string }) => `OOMKilled am Limit von ${p.limit}${p.when ? `, ${p.when}` : ''}`,
+  'detail.pod.oomLimit': (p: { limit: string; when?: string }) =>
+    `OOMKilled am Limit von ${p.limit}${p.when ? `, ${p.when}` : ''}`,
   'detail.pod.oom': (p: { when?: string }) => `OOMKilled ohne Limit${p.when ? `, ${p.when}` : ''}`,
-  'detail.pod.lastExit': (p: { reason: string; code: number; when?: string }) => `zuletzt ${p.reason} (Exit ${p.code})${p.when ? `, ${p.when}` : ''}`,
+  'detail.pod.lastExit': (p: { reason: string; code: number; when?: string }) =>
+    `zuletzt ${p.reason} (Exit ${p.code})${p.when ? `, ${p.when}` : ''}`,
   'detail.res.requests': (p: { cpu: string; mem: string }) => `Requests ${p.cpu}, ${p.mem}`,
-  'detail.res.limits': (p: { cpu?: string; mem?: string }) => [p.cpu ? `CPU-Limit ${p.cpu}` : 'kein CPU-Limit', p.mem ? `RAM-Limit ${p.mem}` : 'kein RAM-Limit'].join(', '),
+  'detail.res.limits': (p: { cpu?: string; mem?: string }) =>
+    [p.cpu ? `CPU-Limit ${p.cpu}` : 'kein CPU-Limit', p.mem ? `RAM-Limit ${p.mem}` : 'kein RAM-Limit'].join(', '),
   'detail.res.noLimits': 'kein Limit',
   'detail.volume.fill': (p: { pct: number }) => `${p.pct} % belegt`,
   'detail.cnpg.postgres': (p: { version: string }) => `PostgreSQL ${p.version}`,
@@ -815,7 +964,8 @@ export const de = {
   'detail.cnpg.lastRun': (p: { age: string }) => `zuletzt vor ${p.age}`,
   'detail.cnpg.forCluster': (p: { cluster: string }) => `für ${p.cluster}`,
   'detail.cnpg.suspended': 'angehalten',
-  'detail.longhorn.replicasOn': (p: { n: number; total: number; nodes: string }) => `${p.n}/${p.total} Replikate auf ${p.nodes}`,
+  'detail.longhorn.replicasOn': (p: { n: number; total: number; nodes: string }) =>
+    `${p.n}/${p.total} Replikate auf ${p.nodes}`,
   'detail.argocd.lastSync': (p: { phase: string; age: string }) => `Sync ${p.phase} vor ${p.age}`,
   'detail.cert.issuer': (p: { issuer: string }) => `von ${p.issuer}`,
   'detail.cert.renews': (p: { age: string }) => `Erneuerung in ${p.age}`,
@@ -845,11 +995,29 @@ export const de = {
   'detail.alertmanager.by': (p: { by: string }) => `von ${p.by}`,
   'stat.podsReady': 'Pods bereit',
   'fmt.number': (p: { n: number }) => p.n.toLocaleString('de-DE', { maximumFractionDigits: 3 }),
-  'fmt.unit': (p: { n: number; unit: string }) => `${p.n.toLocaleString('de-DE', { maximumFractionDigits: 3 })} ${p.unit}`,
-  'state.argoHealth': (p: { s: string }) => ({ Healthy: 'gesund', Progressing: 'läuft an', Degraded: 'gestört', Missing: 'fehlt', Suspended: 'pausiert', Unknown: 'unbekannt' })[p.s] ?? p.s,
-  'state.argoSync': (p: { s: string }) => ({ Synced: 'synchron', OutOfSync: 'nicht synchron', Unknown: 'unbekannt' })[p.s] ?? p.s,
+  'fmt.unit': (p: { n: number; unit: string }) =>
+    `${p.n.toLocaleString('de-DE', { maximumFractionDigits: 3 })} ${p.unit}`,
+  'state.argoHealth': (p: { s: string }) =>
+    ({
+      Healthy: 'gesund',
+      Progressing: 'läuft an',
+      Degraded: 'gestört',
+      Missing: 'fehlt',
+      Suspended: 'pausiert',
+      Unknown: 'unbekannt',
+    })[p.s] ?? p.s,
+  'state.argoSync': (p: { s: string }) =>
+    ({ Synced: 'synchron', OutOfSync: 'nicht synchron', Unknown: 'unbekannt' })[p.s] ?? p.s,
   'state.veleroPhase': (p: { s: string }) =>
-    ({ Completed: 'abgeschlossen', Failed: 'fehlgeschlagen', PartiallyFailed: 'teilweise fehlgeschlagen', InProgress: 'läuft', New: 'neu', FailedValidation: 'ungültig', Deleting: 'wird gelöscht' })[p.s] ?? p.s,
+    ({
+      Completed: 'abgeschlossen',
+      Failed: 'fehlgeschlagen',
+      PartiallyFailed: 'teilweise fehlgeschlagen',
+      InProgress: 'läuft',
+      New: 'neu',
+      FailedValidation: 'ungültig',
+      Deleting: 'wird gelöscht',
+    })[p.s] ?? p.s,
   'state.cnpgPhase': (p: { s: string }) =>
     ({
       'Cluster in healthy state': 'gesund',
@@ -861,13 +1029,15 @@ export const de = {
       'Upgrading cluster': 'wird aktualisiert',
       'Cluster cannot be reconciled': 'kann nicht abgeglichen werden',
     })[p.s] ?? p.s,
-  'state.severity': (p: { s: string }) => ({ critical: 'kritisch', warning: 'Warnung', info: 'Hinweis', none: 'ohne' })[p.s] ?? p.s,
+  'state.severity': (p: { s: string }) =>
+    ({ critical: 'kritisch', warning: 'Warnung', info: 'Hinweis', none: 'ohne' })[p.s] ?? p.s,
   'detail.alertmanager.count': (p: { n: number; severity: string }) => `${p.n} × ${p.severity}`,
   'module.summary.more': (p: { first: string; n: number }) => `${p.first} (+${p.n} weitere)`,
   'cron.daily': (p: { time: string }) => `täglich ${p.time}`,
   'cron.weekly': (p: { day: string; time: string }) => `jeden ${p.day} ${p.time}`,
   'cron.hourly': (p: { minute: string }) => `stündlich zur Minute ${p.minute}`,
-  'cron.day': (p: { d: number }) => ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'][p.d] ?? String(p.d),
+  'cron.day': (p: { d: number }) =>
+    ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'][p.d] ?? String(p.d),
   'detail.runtime': 'Laufzeit',
   'detail.velero.ran': (p: { age: string }) => `Lauf vor ${p.age}`,
   'detail.velero.lastSuccess': (p: { age: string }) => `letzter Erfolg vor ${p.age}`,
@@ -877,7 +1047,8 @@ export const de = {
   'timing.components': 'Komponenten (parallel)',
   'timing.core': 'Kubernetes-Checks (danach, parallel)',
   'timing.prometheus': 'Prometheus',
-  'timing.prometheusSub': (p: { n: number; sum: string; slowest: string }) => `${p.n} Abfragen, zusammen ${p.sum}, die längste ${p.slowest}, höchstens 8 gleichzeitig`,
+  'timing.prometheusSub': (p: { n: number; sum: string; slowest: string }) =>
+    `${p.n} Abfragen, zusammen ${p.sum}, die längste ${p.slowest}, höchstens 8 gleichzeitig`,
   'timing.queries': (p: { n: number }) => n1(p.n, 'Abfrage', 'Abfragen'),
   'timing.total': 'Gesamt',
   'timing.slowestModules': 'Langsamste Module',

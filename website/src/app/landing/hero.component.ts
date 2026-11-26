@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { componentGroups } from 'virtual:kubernanny-components';
+
 import { SITE } from '../../site.config';
 import { IconComponent } from '../components/icon.component';
 import { NannyLogoComponent } from '../components/nanny-logo.component';
@@ -34,7 +35,9 @@ const COMPONENT_COUNT = componentGroups.reduce((sum, g) => sum + g.components.le
             </a>
           </div>
           <ul class="facts" aria-label="At a glance">
-            <li><strong>{{ vm.count }}</strong> components recognised</li>
+            <li>
+              <strong>{{ vm.count }}</strong> components recognised
+            </li>
             <li>iPhone, Android and web</li>
             <li>End-to-end encrypted</li>
             <li>No account, no telemetry</li>

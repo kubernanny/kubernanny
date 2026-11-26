@@ -1,39 +1,79 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
-import { TranslocoDirective } from '@jsverse/transloco';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import { IonIcon } from '@ionic/angular/standalone';
+import { TranslocoDirective } from '@jsverse/transloco';
+
 import { ClusterConfig, HistoryView, Series } from '../../core/agent.model';
 import { Loadable } from '../../core/cluster-data.store';
-import { AreaChart } from '../../ui/area-chart';
-import { ResourceBar } from '../../ui/resource-bar';
-import { ResourceRail } from '../resource-rail';
-import { PendingSyncCard } from '../pending-sync-card';
-import { IssueList } from '../../ui/issue-list';
 import { LanguageService } from '../../i18n/language.service';
 import { Translator } from '../../i18n/translator';
+import { AreaChart } from '../../ui/area-chart';
+import { IssueList } from '../../ui/issue-list';
+import { ResourceBar } from '../../ui/resource-bar';
 import { ClusterView, IssueCard } from '../cluster-view';
 import { HistorySection } from '../history-section';
 import { HistoryVM } from '../history-view';
+import { PendingSyncCard } from '../pending-sync-card';
+import { ResourceRail } from '../resource-rail';
 
-const CHART_ORDER = ['cpu', 'memory', 'net-in', 'net-out', 'restarts', 'etcd-fsync', 'apiserver-p99'];
+const CHART_ORDER = [
+  'cpu',
+  'memory',
+  'net-in',
+  'net-out',
+  'restarts',
+  'etcd-fsync',
+  'apiserver-p99',
+];
 /** The time ranges of the usage charts. */
 export function hourChoices(tr: Translator): { hours: number; label: string }[] {
-  return [1, 6, 24, 168].map((hours) => ({ hours, label: hours < 48 ? tr.t('overview.hours', { count: hours }) : tr.t('overview.days', { count: hours / 24 }) }));
+  return [1, 6, 24, 168].map((hours) => ({
+    hours,
+    label:
+      hours < 48
+        ? tr.t('overview.hours', { count: hours })
+        : tr.t('overview.days', { count: hours / 24 }),
+  }));
 }
 
 /** Warnings shown before "Alle N Warnungen zeigen". */
 export const WARNINGS_SHOWN = 3;
 
-export function foldIssues(cards: IssueCard[], all: boolean, tr: Translator): { shown: IssueCard[]; folded: number; moreLabel: string } {
+export function foldIssues(
+  cards: IssueCard[],
+  all: boolean,
+  tr: Translator,
+): { shown: IssueCard[]; folded: number; moreLabel: string } {
   const critical = cards.filter((c) => c.issue.severity === 'critical');
   const rest = cards.filter((c) => c.issue.severity !== 'critical');
   const shown = all ? rest : rest.slice(0, WARNINGS_SHOWN);
-  return { shown: [...critical, ...shown], folded: rest.length - shown.length, moreLabel: tr.t('overview.showWarnings', { n: rest.length }) };
+  return {
+    shown: [...critical, ...shown],
+    folded: rest.length - shown.length,
+    moreLabel: tr.t('overview.showWarnings', { n: rest.length }),
+  };
 }
 
 @Component({
   selector: 'app-overview-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, IssueList, AreaChart, IonIcon, HistorySection, ResourceBar, ResourceRail, PendingSyncCard],
+  imports: [
+    TranslocoDirective,
+    IssueList,
+    AreaChart,
+    IonIcon,
+    HistorySection,
+    ResourceBar,
+    ResourceRail,
+    PendingSyncCard,
+  ],
   template: `
     <ng-container *transloco="let t">
       @if (view().update; as update) {
@@ -59,7 +99,9 @@ export function foldIssues(cards: IssueCard[], all: boolean, tr: Translator): { 
           <h2>{{ t('overview.needsYou') }}</h2>
           <app-issue-list [cards]="fold().shown" [cluster]="cluster()" (changed)="changed.emit()" />
           @if (fold().folded > 0) {
-            <button type="button" class="more" (click)="allWarnings.set(true)">{{ fold().moreLabel }}</button>
+            <button type="button" class="more" (click)="allWarnings.set(true)">
+              {{ fold().moreLabel }}
+            </button>
           }
         } @else if (view().light === 'green') {
           <div class="calm">
@@ -73,29 +115,50 @@ export function foldIssues(cards: IssueCard[], all: boolean, tr: Translator): { 
       </section>
 
       @if (view().pendingLabel) {
-        <app-pending-sync-card class="pending" [label]="view().pendingLabel" [hint]="t('pendingSync.cardHint')" (open)="openPending.emit()" />
+        <app-pending-sync-card
+          class="pending"
+          [label]="view().pendingLabel"
+          [hint]="t('pendingSync.cardHint')"
+          (open)="openPending.emit()"
+        />
       }
 
       @if (view().hints.length > 0) {
         <section class="hints">
-          <h2>{{ t('overview.hints') }} <span class="count">{{ view().hints.length }}</span></h2>
+          <h2>
+            {{ t('overview.hints') }} <span class="count">{{ view().hints.length }}</span>
+          </h2>
           @if (openHints()) {
             <p class="muted hint-intro">{{ t('overview.hintsIntro') }}</p>
-            <app-issue-list [cards]="view().hints" [cluster]="cluster()" (changed)="changed.emit()" />
+            <app-issue-list
+              [cards]="view().hints"
+              [cluster]="cluster()"
+              (changed)="changed.emit()"
+            />
           } @else {
-            <button type="button" class="more" (click)="openHints.set(true)">{{ t('overview.showHints', { n: view().hints.length }) }}</button>
+            <button type="button" class="more" (click)="openHints.set(true)">
+              {{ t('overview.showHints', { n: view().hints.length }) }}
+            </button>
           }
         </section>
       }
 
       @if (view().silenced.length > 0) {
         <section class="hints">
-          <h2>{{ t('overview.silenced') }} <span class="count">{{ view().silenced.length }}</span></h2>
+          <h2>
+            {{ t('overview.silenced') }} <span class="count">{{ view().silenced.length }}</span>
+          </h2>
           @if (openSilenced()) {
             <p class="muted hint-intro">{{ t('overview.silencedIntro') }}</p>
-            <app-issue-list [cards]="view().silenced" [cluster]="cluster()" (changed)="changed.emit()" />
+            <app-issue-list
+              [cards]="view().silenced"
+              [cluster]="cluster()"
+              (changed)="changed.emit()"
+            />
           } @else {
-            <button type="button" class="more" (click)="openSilenced.set(true)">{{ t('overview.showSilenced', { n: view().silenced.length }) }}</button>
+            <button type="button" class="more" (click)="openSilenced.set(true)">
+              {{ t('overview.showSilenced', { n: view().silenced.length }) }}
+            </button>
           }
         </section>
       }
@@ -110,7 +173,12 @@ export function foldIssues(cards: IssueCard[], all: boolean, tr: Translator): { 
           @if (view().hasPrometheus) {
             <div class="range" role="group" [attr.aria-label]="t('overview.range')">
               @for (choice of hourChoices(); track choice.hours) {
-                <button type="button" [class.on]="choice.hours === hours()" [attr.aria-pressed]="choice.hours === hours()" (click)="setHours.emit(choice.hours)">
+                <button
+                  type="button"
+                  [class.on]="choice.hours === hours()"
+                  [attr.aria-pressed]="choice.hours === hours()"
+                  (click)="setHours.emit(choice.hours)"
+                >
                   {{ choice.label }}
                 </button>
               }
@@ -121,7 +189,12 @@ export function foldIssues(cards: IssueCard[], all: boolean, tr: Translator): { 
           <div class="charts">
             @for (s of charts(); track s.id) {
               <div class="card">
-                <app-area-chart [title]="s.label" [points]="s.points" [unit]="s.unit" [loading]="rangeLoading()" />
+                <app-area-chart
+                  [title]="s.label"
+                  [points]="s.points"
+                  [unit]="s.unit"
+                  [loading]="rangeLoading()"
+                />
               </div>
             }
           </div>
@@ -168,7 +241,11 @@ export function foldIssues(cards: IssueCard[], all: boolean, tr: Translator): { 
           <ul class="attention">
             @for (row of view().attention; track row.module.id) {
               <li>
-                <button type="button" [class]="'tone-' + row.tone" (click)="openModule.emit(row.module.id)">
+                <button
+                  type="button"
+                  [class]="'tone-' + row.tone"
+                  (click)="openModule.emit(row.module.id)"
+                >
                   <span class="icon"><ion-icon [name]="row.module.icon" aria-hidden="true" /></span>
                   <span class="text">
                     <strong>{{ row.module.name }}</strong>
@@ -467,10 +544,14 @@ export class OverviewTab {
   readonly allWarnings = signal(false);
   readonly openHints = signal(false);
   readonly openSilenced = signal(false);
-  readonly fold = computed(() => foldIssues(this.view().issues, this.allWarnings(), this.language.translator()));
+  readonly fold = computed(() =>
+    foldIssues(this.view().issues, this.allWarnings(), this.language.translator()),
+  );
 
   readonly charts = computed<Series[]>(() => {
     const series = this.history().value?.series ?? [];
-    return CHART_ORDER.map((id) => series.find((s) => s.id === id)).filter((s): s is Series => Boolean(s && s.points.length > 1));
+    return CHART_ORDER.map((id) => series.find((s) => s.id === id)).filter((s): s is Series =>
+      Boolean(s && s.points.length > 1),
+    );
   });
 }

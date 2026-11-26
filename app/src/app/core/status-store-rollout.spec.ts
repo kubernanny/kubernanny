@@ -1,20 +1,37 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { ClusterConfig } from './agent.model';
 import { AgentClient } from './agent-client.service';
 import { AgentError } from './agent-error';
-import { ClusterConfig } from './agent.model';
 import { ClusterStore } from './cluster-store.service';
 import { isTransient } from './describe-error';
 import { QUIET_RETRY_MS, StatusStore } from './status-store.service';
 
-const cluster: ClusterConfig = { id: 'c1', name: 'home', url: 'http://10.0.0.5', agentKey: 'k', deviceKey: 'd', deviceId: 'x', demo: undefined };
+const cluster: ClusterConfig = {
+  id: 'c1',
+  name: 'home',
+  url: 'http://10.0.0.5',
+  agentKey: 'k',
+  deviceKey: 'd',
+  deviceId: 'x',
+  demo: undefined,
+};
 
 function storeWith(status: () => Promise<unknown>) {
   TestBed.configureTestingModule({
     providers: [
       { provide: AgentClient, useValue: { status, info: async () => ({}) } },
-      { provide: ClusterStore, useValue: { loaded: Promise.resolve(), clusters: () => [cluster], find: () => cluster, save: async (c: ClusterConfig) => c } },
+      {
+        provide: ClusterStore,
+        useValue: {
+          loaded: Promise.resolve(),
+          clusters: () => [cluster],
+          find: () => cluster,
+          save: async (c: ClusterConfig) => c,
+        },
+      },
     ],
   });
   return TestBed.inject(StatusStore);
@@ -29,7 +46,9 @@ describe('a rolling update of the agent (no "offline" flash)', () => {
   it('tells transient failures from real ones', () => {
     expect(isTransient(new HttpErrorResponse({ status: 0 }))).toBe(true);
     expect(isTransient(new HttpErrorResponse({ status: 503 }))).toBe(true);
-    expect(isTransient(new HttpErrorResponse({ status: 502, error: { code: 'RELAY_AGENT_OFFLINE' } }))).toBe(true);
+    expect(
+      isTransient(new HttpErrorResponse({ status: 502, error: { code: 'RELAY_AGENT_OFFLINE' } })),
+    ).toBe(true);
     expect(isTransient(new AgentError(503, 'AGENT_HANDOVER', 'being updated'))).toBe(true);
     expect(isTransient(new HttpErrorResponse({ status: 404 }))).toBe(false);
     expect(isTransient(new AgentError(403, 'ACTION_DISABLED', ''))).toBe(false);

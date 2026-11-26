@@ -11,6 +11,11 @@ export interface DeviceRow extends DeviceView {
 export function deviceRows(devices: readonly DeviceView[], now: Date, tr: Translator): DeviceRow[] {
   return devices.map((d) => {
     const paired = relativeTime(d.createdAt, now, tr.lang);
-    return { ...d, meta: d.lastSeenAt ? tr.t('form.deviceSeen', { paired, seen: relativeTime(d.lastSeenAt, now, tr.lang) }) : tr.t('form.deviceUnseen', { paired }) };
+    return {
+      ...d,
+      meta: d.lastSeenAt
+        ? tr.t('form.deviceSeen', { paired, seen: relativeTime(d.lastSeenAt, now, tr.lang) })
+        : tr.t('form.deviceUnseen', { paired }),
+    };
   });
 }

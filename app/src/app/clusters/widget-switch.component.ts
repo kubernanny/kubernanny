@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { TranslocoDirective } from '@jsverse/transloco';
+
 import { WidgetSync } from '../core/widget/widget-sync.service';
 
 /** The global on/off for the home-screen widgets, next to the language. Only in the iOS and Android apps. */
@@ -11,9 +12,21 @@ import { WidgetSync } from '../core/widget/widget-sync.service';
     <ng-container *transloco="let t">
       @if (options(); as opts) {
         <span id="widgets-label">{{ t('widget.allLabel') }}</span>
-        <div class="choices" role="group" aria-labelledby="widgets-label" [title]="t('widget.allTitle')">
+        <div
+          class="choices"
+          role="group"
+          aria-labelledby="widgets-label"
+          [title]="t('widget.allTitle')"
+        >
           @for (o of opts; track o.off) {
-            <button type="button" [class.on]="o.on" [attr.aria-pressed]="o.on" (click)="choose(o.off)">{{ t(o.label) }}</button>
+            <button
+              type="button"
+              [class.on]="o.on"
+              [attr.aria-pressed]="o.on"
+              (click)="choose(o.off)"
+            >
+              {{ t(o.label) }}
+            </button>
           }
         </div>
       }

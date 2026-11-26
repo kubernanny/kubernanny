@@ -35,7 +35,13 @@ export function parseQrFragment(hash: string): QrPayload {
     const url = u.searchParams.get('url');
     const code = u.searchParams.get('code');
     const key = u.searchParams.get('key');
-    if (!url || !/^https?:\/\//.test(url) || !code?.trim() || (key !== null && !/^[A-Za-z0-9_-]{43}$/.test(key)) || link.length > 1000) {
+    if (
+      !url ||
+      !/^https?:\/\//.test(url) ||
+      !code?.trim() ||
+      (key !== null && !/^[A-Za-z0-9_-]{43}$/.test(key)) ||
+      link.length > 1000
+    ) {
       return { kind: 'invalid' };
     }
     return { kind: 'pair', link, name: (u.searchParams.get('name') ?? '').slice(0, 64) };

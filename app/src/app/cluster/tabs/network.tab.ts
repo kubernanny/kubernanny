@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
-import { TranslocoDirective } from '@jsverse/transloco';
 import { IonIcon, IonSpinner } from '@ionic/angular/standalone';
+import { TranslocoDirective } from '@jsverse/transloco';
+
 import { NetworkView, Tone } from '../../core/agent.model';
 import { Loadable } from '../../core/cluster-data.store';
 import { externalUrl } from '../../core/external-url';
@@ -24,15 +25,40 @@ export function hostRows(view: NetworkView | null, tr: Translator): HostRow[] {
   const rows = (view?.ingresses ?? []).flatMap((ing) =>
     (ing.hosts.length ? ing.hosts : [ing.name]).map((host) => {
       const days = ing.certificate?.daysLeft ?? null;
-      const tone: Tone = !ing.tls ? 'muted' : ing.certificate && !ing.certificate.ready ? 'critical' : days === null ? 'ok' : days < 3 ? 'critical' : days < 14 ? 'warning' : 'ok';
-      const cert = !ing.tls ? tr.t('network.noTls') : days === null ? tr.t('network.tls') : days < 0 ? tr.t('network.expired') : tr.n('network.certDays', days);
+      const tone: Tone = !ing.tls
+        ? 'muted'
+        : ing.certificate && !ing.certificate.ready
+          ? 'critical'
+          : days === null
+            ? 'ok'
+            : days < 3
+              ? 'critical'
+              : days < 14
+                ? 'warning'
+                : 'ok';
+      const cert = !ing.tls
+        ? tr.t('network.noTls')
+        : days === null
+          ? tr.t('network.tls')
+          : days < 0
+            ? tr.t('network.expired')
+            : tr.n('network.certDays', days);
       return {
         key: `${ing.namespace}/${ing.name}/${host}`,
         host,
         url: externalUrl(`${ing.tls ? 'https' : 'http'}://${host}`),
         tone,
         cert,
-        detail: [ing.component, `${ing.namespace}/${ing.backends.join(', ')}`, ing.workloads.length ? tr.t('network.workloads', { workloads: ing.workloads.join(', ') }) : null, ing.className].filter(Boolean).join(', '),
+        detail: [
+          ing.component,
+          `${ing.namespace}/${ing.backends.join(', ')}`,
+          ing.workloads.length
+            ? tr.t('network.workloads', { workloads: ing.workloads.join(', ') })
+            : null,
+          ing.className,
+        ]
+          .filter(Boolean)
+          .join(', '),
       };
     }),
   );
@@ -40,11 +66,17 @@ export function hostRows(view: NetworkView | null, tr: Translator): HostRow[] {
 }
 
 /** "10.0.0.5, Ports 80, 443" / "10.0.0.5, ports 80, 443" for each LoadBalancer service. */
-export function loadBalancerRows(view: NetworkView | null, tr: Translator): { key: string; name: string; text: string }[] {
+export function loadBalancerRows(
+  view: NetworkView | null,
+  tr: Translator,
+): { key: string; name: string; text: string }[] {
   return (view?.loadBalancers ?? []).map((lb) => ({
     key: `${lb.namespace}/${lb.name}`,
     name: `${lb.namespace}/${lb.name}`,
-    text: tr.t('network.ports', { addresses: lb.addresses.join(', ') || tr.t('network.noIp'), ports: lb.ports.join(', ') }),
+    text: tr.t('network.ports', {
+      addresses: lb.addresses.join(', ') || tr.t('network.noIp'),
+      ports: lb.ports.join(', '),
+    }),
   }));
 }
 
@@ -150,5 +182,7 @@ export class NetworkTab {
   readonly network = input.required<Loadable<NetworkView>>();
   private readonly language = inject(LanguageService);
   readonly hosts = computed(() => hostRows(this.network().value, this.language.translator()));
-  readonly loadBalancers = computed(() => loadBalancerRows(this.network().value, this.language.translator()));
+  readonly loadBalancers = computed(() =>
+    loadBalancerRows(this.network().value, this.language.translator()),
+  );
 }

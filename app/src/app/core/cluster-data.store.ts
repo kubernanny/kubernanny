@@ -1,7 +1,18 @@
-import { Injectable, effect, inject, signal } from '@angular/core';
-import { AgentClient, describeError } from './agent-client.service';
-import { BackupsView, ClusterConfig, EventView, HistoryView, IncidentsView, NetworkView, NodeView, StorageView, WorkloadView } from './agent.model';
+import { effect, inject, Injectable, signal } from '@angular/core';
+
 import { LanguageService } from '../i18n/language.service';
+import {
+  BackupsView,
+  ClusterConfig,
+  EventView,
+  HistoryView,
+  IncidentsView,
+  NetworkView,
+  NodeView,
+  StorageView,
+  WorkloadView,
+} from './agent.model';
+import { AgentClient, describeError } from './agent-client.service';
 
 export interface Loadable<T> {
   value: T | null;
@@ -11,7 +22,8 @@ export interface Loadable<T> {
 
 const idle = <T>(): Loadable<T> => ({ value: null, error: null, loading: false });
 
-type Key = 'nodes' | 'workloads' | 'storage' | 'network' | 'events' | 'history' | 'incidents' | 'backups';
+type Key =
+  'nodes' | 'workloads' | 'storage' | 'network' | 'events' | 'history' | 'incidents' | 'backups';
 
 /**
  * The detail views of one cluster, loaded when a tab first needs them and
@@ -48,7 +60,16 @@ export class ClusterDataStore {
 
   use(cluster: ClusterConfig): void {
     if (this.cluster?.id !== cluster.id) {
-      for (const s of [this.nodes, this.workloads, this.storage, this.network, this.events, this.history, this.incidents, this.backups]) {
+      for (const s of [
+        this.nodes,
+        this.workloads,
+        this.storage,
+        this.network,
+        this.events,
+        this.history,
+        this.incidents,
+        this.backups,
+      ]) {
         (s as ReturnType<typeof signal<Loadable<unknown>>>).set(idle());
       }
       this.wanted.clear();
@@ -89,7 +110,11 @@ export class ClusterDataStore {
       }
     } catch (err) {
       // Keep the last value: it is still the best we know.
-      target.update((s) => ({ ...s, error: describeError(err, this.language.translator()), loading: false }));
+      target.update((s) => ({
+        ...s,
+        error: describeError(err, this.language.translator()),
+        loading: false,
+      }));
     }
   }
 

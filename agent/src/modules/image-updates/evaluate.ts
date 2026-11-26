@@ -45,7 +45,10 @@ export function availableUpdates(current: string, tags: readonly string[]): Upda
   }
   const newer = tags
     .map(parseSemverTag)
-    .filter((v): v is SemverTag => v !== null && v.prefix === cur.prefix && cmp(v, cur) > 0 && v.nums[0] - cur.nums[0] <= MAX_MAJOR_JUMP)
+    .filter(
+      (v): v is SemverTag =>
+        v !== null && v.prefix === cur.prefix && cmp(v, cur) > 0 && v.nums[0] - cur.nums[0] <= MAX_MAJOR_JUMP,
+    )
     .sort(cmp);
   const last = (f: (v: SemverTag) => boolean) => newer.filter(f).at(-1)?.tag;
   const [major, minor] = cur.nums;
@@ -57,7 +60,10 @@ export function availableUpdates(current: string, tags: readonly string[]): Upda
 }
 
 /** One hint per component with something newer; never more than a hint: an upgrade is a decision, not a fault. */
-export function imageUpdateIssue(component: { key: string; name: string; tag: string }, updates: Updates): Issue | null {
+export function imageUpdateIssue(
+  component: { key: string; name: string; tag: string },
+  updates: Updates,
+): Issue | null {
   const parts: Text[] = [];
   if (updates.patch) {
     parts.push(t('imageUpdates.patch', { version: updates.patch }));
@@ -76,7 +82,9 @@ export function imageUpdateIssue(component: { key: string; name: string; tag: st
     check: 'image-updates',
     severity: 'info',
     title: t('imageUpdates.title', { name: component.name, version: component.tag }),
-    cause: t('common.sentences', { parts: [...parts, t(updates.major ? 'imageUpdates.releaseNotesMajor' : 'imageUpdates.releaseNotes')] }),
+    cause: t('common.sentences', {
+      parts: [...parts, t(updates.major ? 'imageUpdates.releaseNotesMajor' : 'imageUpdates.releaseNotes')],
+    }),
     actions: [],
   };
 }

@@ -1,4 +1,4 @@
-import { KeyPair, Language, Method, generateKeyPair, parsePublicKey, sealRequest } from '@kubernanny/protocol';
+import { generateKeyPair, KeyPair, Language, Method, parsePublicKey, sealRequest } from '@kubernanny/protocol';
 import request from 'supertest';
 import { expect } from 'vitest';
 
@@ -26,7 +26,13 @@ export class E2eClient {
 
   /** The raw request body, for replay and tampering tests. */
   seal(method: Method, path: string, body?: unknown, time = Date.now()) {
-    return sealRequest(this.device, this.agentKey, { method, path, time, ...(body !== undefined ? { body } : {}), ...(this.language ? { language: this.language } : {}) });
+    return sealRequest(this.device, this.agentKey, {
+      method,
+      path,
+      time,
+      ...(body !== undefined ? { body } : {}),
+      ...(this.language ? { language: this.language } : {}),
+    });
   }
 
   async post_raw(body: Uint8Array): Promise<request.Response> {

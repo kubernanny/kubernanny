@@ -3,7 +3,8 @@
  * the browser never parses markdown.
  */
 import { Marked, Renderer, type Tokens } from 'marked';
-import { rewriteUrl, type RewriteContext } from './doc-paths.ts';
+
+import { type RewriteContext, rewriteUrl } from './doc-paths.ts';
 import { sanitizeRawHtml } from './raw-html.ts';
 
 export interface TocEntry {
@@ -71,7 +72,11 @@ export function truncate(text: string, max = 160): string {
  * HTML alike, and gives images inside `docs/` their intrinsic size (no layout
  * shift) and lazy loading.
  */
-export function rewriteHtml(html: string, ctx: RewriteContext, mediaSize?: MediaSize): { html: string; media: string[] } {
+export function rewriteHtml(
+  html: string,
+  ctx: RewriteContext,
+  mediaSize?: MediaSize,
+): { html: string; media: string[] } {
   const media = new Set<string>();
   let out = html.replace(/\b(href|src)="([^"]*)"/g, (_m, attr: string, value: string) => {
     const decoded = value.replace(/&amp;/g, '&');

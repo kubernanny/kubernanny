@@ -1,11 +1,20 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 import { ActionSheetController, IonButton, ToastController } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
-import { AgentClient, describeError } from '../core/agent-client.service';
+
+import { maintenanceChoices, maintenanceView } from '../cluster/maintenance-view';
 import { ClusterConfig } from '../core/agent.model';
+import { AgentClient, describeError } from '../core/agent-client.service';
 import { StatusStore } from '../core/status-store.service';
 import { LanguageService } from '../i18n/language.service';
-import { maintenanceChoices, maintenanceView } from '../cluster/maintenance-view';
 
 /** Starts and ends a maintenance window, during which the agent sends no notifications. */
 @Component({
@@ -20,10 +29,14 @@ import { maintenanceChoices, maintenanceView } from '../cluster/maintenance-view
         @if (maintenance().active) {
           <div class="maintenance-active">
             <span class="pill tone-warning">{{ maintenance().status }}</span>
-            <ion-button fill="outline" [disabled]="busy()" (click)="end()">{{ t('maintenance.end') }}</ion-button>
+            <ion-button fill="outline" [disabled]="busy()" (click)="end()">{{
+              t('maintenance.end')
+            }}</ion-button>
           </div>
         } @else {
-          <ion-button fill="outline" [disabled]="busy()" (click)="start()">{{ t('maintenance.start') }}</ion-button>
+          <ion-button fill="outline" [disabled]="busy()" (click)="start()">{{
+            t('maintenance.start')
+          }}</ion-button>
         }
       </section>
     </ng-container>
@@ -58,7 +71,11 @@ export class MaintenanceSectionComponent {
   readonly maintenance = computed(() => {
     const id = this.cluster()?.id;
     const override = this.override();
-    const until = override ? override.until : id ? this.status.states()[id]?.snapshot?.maintenanceUntil : null;
+    const until = override
+      ? override.until
+      : id
+        ? this.status.states()[id]?.snapshot?.maintenanceUntil
+        : null;
     return maintenanceView(until, this.now(), this.language.translator());
   });
 
@@ -78,7 +95,10 @@ export class MaintenanceSectionComponent {
     const sheet = await this.sheets.create({
       header: tr.t('maintenance.title'),
       subHeader: tr.t('maintenance.sheetText'),
-      buttons: [...maintenanceChoices(tr).map((c) => ({ text: c.label, data: c.hours })), { text: tr.t('common.cancel'), role: 'cancel' }],
+      buttons: [
+        ...maintenanceChoices(tr).map((c) => ({ text: c.label, data: c.hours })),
+        { text: tr.t('common.cancel'), role: 'cancel' },
+      ],
     });
     await sheet.present();
     const { data } = await sheet.onDidDismiss<number>();
@@ -88,7 +108,9 @@ export class MaintenanceSectionComponent {
     await this.change(async () => {
       const { maintenanceUntil } = await this.client.startMaintenance(cluster, data);
       this.override.set({ until: maintenanceUntil });
-      return tr.t('maintenance.started', { time: maintenanceView(maintenanceUntil, new Date(), tr).time });
+      return tr.t('maintenance.started', {
+        time: maintenanceView(maintenanceUntil, new Date(), tr).time,
+      });
     }, cluster);
   }
 

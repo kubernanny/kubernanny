@@ -1,5 +1,6 @@
-import { DOCUMENT, Injectable, inject } from '@angular/core';
+import { DOCUMENT, inject, Injectable } from '@angular/core';
 import { Meta, Title } from '@angular/platform-browser';
+
 import { SITE } from '../../site.config';
 
 export interface PageMeta {

@@ -1,5 +1,5 @@
 import { ageText } from '../checks/types';
-import { Lang, Text, render, t } from '../i18n/text';
+import { Lang, render, t, Text } from '../i18n/text';
 import type { IssueView } from '../status/status.service';
 
 /** One stretch of time an issue was open. */
@@ -116,7 +116,8 @@ export function weekKey(date: Date): string {
   const day = (d.getDay() + 6) % 7;
   d.setDate(d.getDate() - day + 3);
   const firstThursday = new Date(d.getFullYear(), 0, 4);
-  const week = 1 + Math.round(((d.getTime() - firstThursday.getTime()) / 86_400_000 - 3 + ((firstThursday.getDay() + 6) % 7)) / 7);
+  const week =
+    1 + Math.round(((d.getTime() - firstThursday.getTime()) / 86_400_000 - 3 + ((firstThursday.getDay() + 6) % 7)) / 7);
   return `${d.getFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
@@ -147,7 +148,9 @@ export function formatDigest(
     lines.push(s(t('digest.longest')));
     for (const e of longest) {
       const episode = { title: e.title, duration: ageText((e.end ?? now) - e.start) };
-      lines.push(`${e.severity === 'critical' ? '🔴' : '🟡'} ${s(e.end === null ? t('digest.episodeOpen', episode) : t('digest.episode', episode))}`);
+      lines.push(
+        `${e.severity === 'critical' ? '🔴' : '🟡'} ${s(e.end === null ? t('digest.episodeOpen', episode) : t('digest.episode', episode))}`,
+      );
     }
   }
   return { title, body: lines.join('\n'), priority: open.length > 0 ? 3 : 2, tags: 'calendar' };

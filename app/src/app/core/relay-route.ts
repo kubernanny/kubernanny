@@ -1,5 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { parsePublicKey, relayAgentId } from '@kubernanny/protocol';
+
 import { AgentInfo, ClusterConfig } from './agent.model';
 
 /** How the app reached an agent last: its own address, or the relay (docs/RELAY.md). */
@@ -26,7 +27,10 @@ export function usableRelay(target: RelayTarget): string | null {
 export function relayUrlAllowed(url: string): boolean {
   try {
     const u = new URL(url);
-    return u.protocol === 'https:' || (u.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname));
+    return (
+      u.protocol === 'https:' ||
+      (u.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname))
+    );
   } catch {
     return false;
   }
@@ -46,7 +50,10 @@ export function transportFailure(err: unknown): boolean {
   if (err instanceof Error && err.name === 'TimeoutError') {
     return true;
   }
-  return err instanceof HttpErrorResponse && (err.status === 0 || err.status === 502 || err.status === 503 || err.status === 504);
+  return (
+    err instanceof HttpErrorResponse &&
+    (err.status === 0 || err.status === 502 || err.status === 503 || err.status === 504)
+  );
 }
 
 /** How often the app asks a paired agent in the background which relay it uses. */
@@ -56,7 +63,10 @@ export const RELAY_INFO_EVERY_MS = 60 * 60_000;
  * The relay URL a cluster should store after the agent's sealed /info, or
  * null when nothing changes; an agent with the relay switched off clears it.
  */
-export function adoptedRelay(cluster: Pick<ClusterConfig, 'relayUrl'>, info: Pick<AgentInfo, 'relay'>): { relayUrl: string | undefined } | null {
+export function adoptedRelay(
+  cluster: Pick<ClusterConfig, 'relayUrl'>,
+  info: Pick<AgentInfo, 'relay'>,
+): { relayUrl: string | undefined } | null {
   const url = info.relay && relayUrlAllowed(info.relay.url) ? info.relay.url : undefined;
   return url === cluster.relayUrl ? null : { relayUrl: url };
 }
@@ -71,7 +81,10 @@ export class PathMemory {
   }
 
   set(key: string, path: AgentPath, now: number): void {
-    this.entries.set(key, { path, until: now + (path === 'direct' ? REMEMBER_DIRECT_MS : REMEMBER_RELAY_MS) });
+    this.entries.set(key, {
+      path,
+      until: now + (path === 'direct' ? REMEMBER_DIRECT_MS : REMEMBER_RELAY_MS),
+    });
   }
 
   forget(key: string): void {

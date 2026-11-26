@@ -1,8 +1,16 @@
-import { MessageKey, TextError, t } from '../../i18n/text';
+import { MessageKey, t, TextError } from '../../i18n/text';
 import { keyFigures } from '../details';
 import { Integration } from '../module';
 import { ModuleContext, ModuleResult, Stat } from '../types';
-import { TrivyCollector, VulnerabilityReport, acceptTrivy, total, trivyIssue, workloadFindings, workloadIndex } from './trivy-reports';
+import {
+  acceptTrivy,
+  total,
+  TrivyCollector,
+  trivyIssue,
+  VulnerabilityReport,
+  workloadFindings,
+  workloadIndex,
+} from './trivy-reports';
 
 const REPORTS = '/apis/aquasecurity.github.io/v1alpha1/vulnerabilityreports';
 const CLUSTER_REPORTS = '/apis/aquasecurity.github.io/v1alpha1/clustervulnerabilityreports';
@@ -21,8 +29,16 @@ const CLUSTER_REPORTS = '/apis/aquasecurity.github.io/v1alpha1/clustervulnerabil
 export class TrivyIntegration extends Integration {
   readonly id = 'trivy';
   readonly reads = [
-    { group: 'aquasecurity.github.io', resource: 'vulnerabilityreports', why: "Trivy Operator's scan of each workload's images: counts and the worst advisories" },
-    { group: 'aquasecurity.github.io', resource: 'clustervulnerabilityreports', why: 'the same for cluster-scoped resources, where Trivy Operator writes them' },
+    {
+      group: 'aquasecurity.github.io',
+      resource: 'vulnerabilityreports',
+      why: "Trivy Operator's scan of each workload's images: counts and the worst advisories",
+    },
+    {
+      group: 'aquasecurity.github.io',
+      resource: 'clustervulnerabilityreports',
+      why: 'the same for cluster-scoped resources, where Trivy Operator writes them',
+    },
   ];
 
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
@@ -45,16 +61,36 @@ export class TrivyIntegration extends Integration {
     const rest = items.reduce((n, w) => n + total(w.counts), 0) - sum('critical') - sum('high') - sum('medium');
     const stats: Stat[] = [
       { label: t('trivy.stat.workloads'), value: String(workloads.size) },
-      { label: t('vulnerabilities.stat.critical'), value: String(sum('critical')), tone: sum('critical') ? 'critical' : 'ok' },
+      {
+        label: t('vulnerabilities.stat.critical'),
+        value: String(sum('critical')),
+        tone: sum('critical') ? 'critical' : 'ok',
+      },
       { label: t('vulnerabilities.stat.high'), value: String(sum('high')), tone: sum('high') ? 'warning' : 'ok' },
       { label: t('vulnerabilities.stat.medium'), value: String(sum('medium')), tone: 'muted' },
       { label: t('vulnerabilities.stat.lowOrUnrated'), value: String(rest), tone: 'muted' },
       ...(stale ? [{ label: t('trivy.stat.stale'), value: String(stale), tone: 'muted' as const }] : []),
       ...(unmatched ? [{ label: t('trivy.stat.unmatched'), value: String(unmatched), tone: 'muted' as const }] : []),
-      ...(accepted.length ? [{ label: t('vulnerabilities.stat.accepted'), value: String(accepted.length), tone: 'muted' as const }] : []),
+      ...(accepted.length
+        ? [{ label: t('vulnerabilities.stat.accepted'), value: String(accepted.length), tone: 'muted' as const }]
+        : []),
     ];
-    const summary = issues.length === 0 ? t('trivy.summary.none', { n: workloads.size }) : t('trivy.summary.affected', { n: issues.length });
-    const severities: MessageKey[] = ['vulnerabilities.stat.critical', 'vulnerabilities.stat.high', 'vulnerabilities.stat.medium', 'vulnerabilities.stat.lowOrUnrated'];
-    return { issues, ...keyFigures(stats, severities, t('detail.lookup')), summary, accepted, canAccept: acceptance.allowed };
+    const summary =
+      issues.length === 0
+        ? t('trivy.summary.none', { n: workloads.size })
+        : t('trivy.summary.affected', { n: issues.length });
+    const severities: MessageKey[] = [
+      'vulnerabilities.stat.critical',
+      'vulnerabilities.stat.high',
+      'vulnerabilities.stat.medium',
+      'vulnerabilities.stat.lowOrUnrated',
+    ];
+    return {
+      issues,
+      ...keyFigures(stats, severities, t('detail.lookup')),
+      summary,
+      accepted,
+      canAccept: acceptance.allowed,
+    };
   }
 }

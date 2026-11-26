@@ -9,21 +9,23 @@
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
-import type { Plugin, ViteDevServer } from 'vite';
+
 import { createHighlighter, type Highlighter } from 'shiki';
-import { editUrl, routeForFile, slugForFile, type RewriteContext } from './doc-paths.ts';
+import type { Plugin, ViteDevServer } from 'vite';
+
+import { editUrl, type RewriteContext, routeForFile, slugForFile } from './doc-paths.ts';
 import {
   BRANCH,
-  DOCS_DIR,
-  MEDIA_BASE,
-  REPO_URL,
   buildNav,
+  DOCS_DIR,
   listDocFiles,
+  MEDIA_BASE,
+  type NavEntry,
   parseComponents,
   readDoc,
-  type NavEntry,
+  REPO_URL,
 } from './docs-source.ts';
-import { renderMarkdown, type RenderedDoc } from './markdown.ts';
+import { type RenderedDoc, renderMarkdown } from './markdown.ts';
 
 const INDEX_ID = 'virtual:kubernanny-docs';
 const DOC_PREFIX = 'virtual:kubernanny-doc/';
@@ -94,7 +96,13 @@ async function renderAll(): Promise<Rendered[]> {
     return existsSync(full) ? pngSize(readFileSync(full)) : undefined;
   };
   return files.map((file) => {
-    const ctx: RewriteContext = { docFile: file, knownDocs: known, repoUrl: REPO_URL, branch: BRANCH, mediaBase: MEDIA_BASE };
+    const ctx: RewriteContext = {
+      docFile: file,
+      knownDocs: known,
+      repoUrl: REPO_URL,
+      branch: BRANCH,
+      mediaBase: MEDIA_BASE,
+    };
     return { file, doc: renderMarkdown(readDoc(file), { ctx, highlight, mediaSize }) };
   });
 }
@@ -147,7 +155,10 @@ export function docsPlugin(): Plugin {
 
       if (vid === INDEX_ID) {
         const loaders = all
-          .map((r) => `  ${JSON.stringify(slugForFile(r.file))}: () => import(${JSON.stringify(DOC_PREFIX + slugForFile(r.file))}),`)
+          .map(
+            (r) =>
+              `  ${JSON.stringify(slugForFile(r.file))}: () => import(${JSON.stringify(DOC_PREFIX + slugForFile(r.file))}),`,
+          )
           .join('\n');
         return [
           `export const docNav = ${JSON.stringify(nav)};`,

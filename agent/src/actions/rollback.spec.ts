@@ -1,7 +1,8 @@
-import { HttpError } from '../http/errors';
 import { describe, expect, it, vi } from 'vitest';
+
 import type { ArgoApplication } from '../checks/argocd.check';
 import { rollbackApps, rollbackTarget } from '../checks/argocd-rollback';
+import { HttpError } from '../http/errors';
 import { KubeClient, KubeError } from '../kube/kube-client';
 import type { Notifier } from '../notify/notifier';
 import type { SettingsService } from '../settings/settings.service';
@@ -45,8 +46,19 @@ describe('rollbackTarget (what the route accepts)', () => {
     ['ROLLBACK_CURRENT', argoApp(), 3],
     ['ROLLBACK_REVISION', argoApp({}, { history: [{ id: 1, revision: 'main', source: SOURCE }] }), 1],
     ['ROLLBACK_REVISION', argoApp({}, { history: [{ id: 1, revision: `${SHA('a')}\nx`, source: SOURCE }] }), 1],
-    ['ROLLBACK_OTHER_SOURCE', argoApp({}, { history: [{ id: 1, revision: SHA('a'), source: { ...SOURCE, repoURL: 'https://evil.example/x.git' } }] }), 1],
-    ['ROLLBACK_OTHER_SOURCE', argoApp({}, { history: [{ id: 1, revision: SHA('a'), source: { ...SOURCE, path: 'other' } }] }), 1],
+    [
+      'ROLLBACK_OTHER_SOURCE',
+      argoApp(
+        {},
+        { history: [{ id: 1, revision: SHA('a'), source: { ...SOURCE, repoURL: 'https://evil.example/x.git' } }] },
+      ),
+      1,
+    ],
+    [
+      'ROLLBACK_OTHER_SOURCE',
+      argoApp({}, { history: [{ id: 1, revision: SHA('a'), source: { ...SOURCE, path: 'other' } }] }),
+      1,
+    ],
     ['ROLLBACK_OTHER_SOURCE', argoApp({}, { history: [{ id: 1, revision: SHA('a') }] }), 1],
   ] as const)('refuses with %s', (code, app, id) => {
     expect(rollbackTarget(app, id)).toEqual({ refusal: code });
@@ -54,11 +66,17 @@ describe('rollbackTarget (what the route accepts)', () => {
 
   it('accepts a chart version for a Helm chart source, and nothing looser', () => {
     const chart = { repoURL: 'https://charts.example', chart: 'shop', targetRevision: '1.4.0' };
-    const app = argoApp({ spec: { source: chart } }, { sync: { revision: '1.4.0' }, history: [
-      { id: 1, revision: '1.3.2', source: chart },
-      { id: 2, revision: 'latest', source: chart },
-      { id: 3, revision: '1.4.0', source: chart },
-    ] });
+    const app = argoApp(
+      { spec: { source: chart } },
+      {
+        sync: { revision: '1.4.0' },
+        history: [
+          { id: 1, revision: '1.3.2', source: chart },
+          { id: 2, revision: 'latest', source: chart },
+          { id: 3, revision: '1.4.0', source: chart },
+        ],
+      },
+    );
     expect(rollbackTarget(app, 1)).toMatchObject({ revision: '1.3.2' });
     expect(rollbackTarget(app, 2)).toEqual({ refusal: 'ROLLBACK_REVISION' });
   });
@@ -66,7 +84,11 @@ describe('rollbackTarget (what the route accepts)', () => {
 
 describe('rollbackApps (what the sheet lists)', () => {
   it('lists manual-sync single-source apps with their entries newest first, the current one marked', () => {
-    const apps = rollbackApps([argoApp(), argoApp({ spec: { syncPolicy: { automated: {} } } }), argoApp({ spec: { sources: [SOURCE] } })]);
+    const apps = rollbackApps([
+      argoApp(),
+      argoApp({ spec: { syncPolicy: { automated: {} } } }),
+      argoApp({ spec: { sources: [SOURCE] } }),
+    ]);
     expect(apps).toHaveLength(1);
     expect(apps[0]).toEqual({
       namespace: 'argocd',
@@ -81,7 +103,15 @@ describe('rollbackApps (what the sheet lists)', () => {
   });
 
   it('leaves out entries of another source and apps with nothing to go back to', () => {
-    const foreign = argoApp({}, { history: [{ id: 1, revision: SHA('a'), source: { repoURL: 'https://evil.example' } }, { id: 3, revision: SHA('c'), source: SOURCE }] });
+    const foreign = argoApp(
+      {},
+      {
+        history: [
+          { id: 1, revision: SHA('a'), source: { repoURL: 'https://evil.example' } },
+          { id: 3, revision: SHA('c'), source: SOURCE },
+        ],
+      },
+    );
     expect(rollbackApps([foreign])).toEqual([]);
   });
 });
@@ -106,7 +136,12 @@ function service(opts: { on?: boolean; argocd?: boolean; app?: ArgoApplication |
     }),
   };
   const status = { refresh: vi.fn(async () => undefined) };
-  const svc = new RollbackService(kube as unknown as KubeClient, settings as unknown as SettingsService, status as unknown as StatusService, notifier as unknown as Notifier);
+  const svc = new RollbackService(
+    kube as unknown as KubeClient,
+    settings as unknown as SettingsService,
+    status as unknown as StatusService,
+    notifier as unknown as Notifier,
+  );
   return { svc, kube, notifier, order };
 }
 
@@ -126,7 +161,9 @@ describe('RollbackService', () => {
     const result = await svc.rollback({ namespace: 'argocd', app: 'shop', id: 1 }, who, 1_000_000);
     expect(result.revision).toBe(SHA('a'));
     expect(order).toEqual(['alert', 'patch']);
-    expect(notifier.securityAlert).toHaveBeenCalledWith('Phone', [{ kind: 'rolledBack', app: 'argocd/shop', from: 'ccccccc', to: 'aaaaaaa' }]);
+    expect(notifier.securityAlert).toHaveBeenCalledWith('Phone', [
+      { kind: 'rolledBack', app: 'argocd/shop', from: 'ccccccc', to: 'aaaaaaa' },
+    ]);
     expect(kube.mergePatch).toHaveBeenCalledWith('/apis/argoproj.io/v1alpha1/namespaces/argocd/applications/shop', {
       operation: {
         initiatedBy: { username: 'kubernanny' },
@@ -139,13 +176,21 @@ describe('RollbackService', () => {
   it('refuses before reading anything when the action is off or Argo CD is not checked', async () => {
     for (const opts of [{ on: false }, { argocd: false }]) {
       const { svc, kube } = service(opts);
-      expect(await code(svc.rollback({ namespace: 'argocd', app: 'shop', id: 1 }, who))).toBe(opts.on === false ? 'ACTION_DISABLED' : 'MODULE_OFF');
+      expect(await code(svc.rollback({ namespace: 'argocd', app: 'shop', id: 1 }, who))).toBe(
+        opts.on === false ? 'ACTION_DISABLED' : 'MODULE_OFF',
+      );
       expect(kube.get).not.toHaveBeenCalled();
     }
   });
 
   it('refuses malformed targets, unknown apps and every reason of rollbackTarget without patching', async () => {
-    for (const body of [{}, { namespace: 'argocd', app: 'shop' }, { namespace: 'argocd', app: 'shop', id: '1' }, { namespace: 'Argo CD', app: 'shop', id: 1 }, { namespace: 'argocd', app: 'shop', id: 1.5 }]) {
+    for (const body of [
+      {},
+      { namespace: 'argocd', app: 'shop' },
+      { namespace: 'argocd', app: 'shop', id: '1' },
+      { namespace: 'Argo CD', app: 'shop', id: 1 },
+      { namespace: 'argocd', app: 'shop', id: 1.5 },
+    ]) {
       const { svc, kube } = service();
       expect(await code(svc.rollback(body, who))).toBe('ROLLBACK_TARGET');
       expect(kube.get).not.toHaveBeenCalled();
@@ -153,7 +198,9 @@ describe('RollbackService', () => {
     const missing = service({ app: 'missing' });
     expect(await code(missing.svc.rollback({ namespace: 'argocd', app: 'shop', id: 1 }, who))).toBe('APP_NOT_FOUND');
     const automated = service({ app: argoApp({ spec: { syncPolicy: { automated: {} } } }) });
-    expect(await code(automated.svc.rollback({ namespace: 'argocd', app: 'shop', id: 1 }, who))).toBe('ROLLBACK_AUTOMATED');
+    expect(await code(automated.svc.rollback({ namespace: 'argocd', app: 'shop', id: 1 }, who))).toBe(
+      'ROLLBACK_AUTOMATED',
+    );
     const current = service();
     expect(await code(current.svc.rollback({ namespace: 'argocd', app: 'shop', id: 3 }, who))).toBe('ROLLBACK_CURRENT');
     for (const s of [missing, automated, current]) {
@@ -165,7 +212,9 @@ describe('RollbackService', () => {
   it('rolls one app back at most once in 5 minutes', async () => {
     const { svc, kube } = service();
     await svc.rollback({ namespace: 'argocd', app: 'shop', id: 1 }, who, 0);
-    expect(await code(svc.rollback({ namespace: 'argocd', app: 'shop', id: 2 }, who, ROLLBACK_INTERVAL_MS - 1))).toBe('ROLLBACK_RATE_LIMITED');
+    expect(await code(svc.rollback({ namespace: 'argocd', app: 'shop', id: 2 }, who, ROLLBACK_INTERVAL_MS - 1))).toBe(
+      'ROLLBACK_RATE_LIMITED',
+    );
     // Another app is not held back.
     await svc.rollback({ namespace: 'argocd', app: 'web', id: 1 }, who, 1);
     await svc.rollback({ namespace: 'argocd', app: 'shop', id: 2 }, who, ROLLBACK_INTERVAL_MS);

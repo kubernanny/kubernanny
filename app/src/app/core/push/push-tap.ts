@@ -9,7 +9,10 @@ import { ClusterConfig } from '../agent.model';
  * id) and opens `kubernanny://cluster?id=…`, which goes through
  * `knownClusterId` like a widget tap.
  */
-export function clusterIdForPushKey(kid: unknown, clusters: readonly ClusterConfig[]): string | null {
+export function clusterIdForPushKey(
+  kid: unknown,
+  clusters: readonly ClusterConfig[],
+): string | null {
   if (typeof kid !== 'string' || !/^[A-Za-z0-9_-]{16}$/.test(kid)) {
     return null;
   }
@@ -17,6 +20,9 @@ export function clusterIdForPushKey(kid: unknown, clusters: readonly ClusterConf
 }
 
 /** An id from outside the app (widget, push, link) only counts when it names a cluster in the list. */
-export function knownClusterId(id: string | null, clusters: readonly ClusterConfig[]): string | null {
+export function knownClusterId(
+  id: string | null,
+  clusters: readonly ClusterConfig[],
+): string | null {
   return id !== null && clusters.some((c) => c.id === id) ? id : null;
 }

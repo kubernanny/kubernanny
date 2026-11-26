@@ -62,8 +62,14 @@ export function evaluateGatus(statuses: unknown): UptimeVerdict {
     entry.names.push(String(endpoint.name ?? endpoint.key ?? '?').slice(0, 80));
     // What Gatus itself says went wrong for the first one: an error, else the first condition not met.
     if (entry.names.length === 1) {
-      entry.error = Array.isArray(last.errors) ? last.errors.find((e) => typeof e === 'string')?.slice(0, 200) : undefined;
-      entry.condition = Array.isArray(last.conditionResults) ? last.conditionResults.find((c) => c?.success === false && typeof c.condition === 'string')?.condition?.slice(0, 200) : undefined;
+      entry.error = Array.isArray(last.errors)
+        ? last.errors.find((e) => typeof e === 'string')?.slice(0, 200)
+        : undefined;
+      entry.condition = Array.isArray(last.conditionResults)
+        ? last.conditionResults
+            .find((c) => c?.success === false && typeof c.condition === 'string')
+            ?.condition?.slice(0, 200)
+        : undefined;
     }
     downByGroup.set(group, entry);
   }
@@ -71,7 +77,9 @@ export function evaluateGatus(statuses: unknown): UptimeVerdict {
     id: `gatus/group/${group || '-'}`,
     check: 'gatus',
     severity: 'warning',
-    title: group ? t('gatus.down.title', { group, n: names.length }) : t('gatus.down.titleUngrouped', { n: names.length }),
+    title: group
+      ? t('gatus.down.title', { group, n: names.length })
+      : t('gatus.down.titleUngrouped', { n: names.length }),
     cause: t('gatus.down.cause', { endpoints: names, error, condition }),
     actions: [],
   }));
@@ -95,7 +103,9 @@ const KUMA_UP = 1;
 
 /** Monitors of the status page whose newest heartbeat is "down", one warning per status page group. */
 export function evaluateUptimeKuma(page: unknown, beats: unknown): UptimeVerdict {
-  const groups = Array.isArray((page as KumaStatusPage | null)?.publicGroupList) ? (page as KumaStatusPage).publicGroupList! : [];
+  const groups = Array.isArray((page as KumaStatusPage | null)?.publicGroupList)
+    ? (page as KumaStatusPage).publicGroupList!
+    : [];
   const heartbeats = (beats as KumaHeartbeats | null)?.heartbeatList;
   const issues: Issue[] = [];
   let up = 0;

@@ -1,16 +1,24 @@
 import { generateKeyPair } from '@kubernanny/protocol';
 import { describe, expect, it } from 'vitest';
+
 import { DevicesService } from '../auth/devices.service';
 import { IdentityService } from '../auth/identity.service';
 import { Config, loadConfig } from '../config';
 import { DemoKubeClient } from '../demo/demo-cluster';
-import { IncidentsService } from '../incidents/incidents.service';
 import { raw } from '../i18n/text';
-import { AppPushService, AppPushMessage } from '../push/app-push.service';
+import { IncidentsService } from '../incidents/incidents.service';
+import { AppPushMessage, AppPushService } from '../push/app-push.service';
 import { PushTransport } from '../push/push-transport';
 import { SETTINGS_CONFIGMAP as SETTINGS } from '../settings/settings.service';
 import type { IssueView, Snapshot } from '../status/status.service';
-import { MAX_NOTIFIED, MAX_NOTIFIED_BYTES, NotifiedStore, SETTINGS_CONFIGMAP, parseNotified, serializeNotified } from './notified-store';
+import {
+  MAX_NOTIFIED,
+  MAX_NOTIFIED_BYTES,
+  NotifiedStore,
+  parseNotified,
+  serializeNotified,
+  SETTINGS_CONFIGMAP,
+} from './notified-store';
 import { Notifier, Pushed } from './notifier';
 
 const NOW = new Date('2026-11-24T04:10:00Z');
@@ -28,15 +36,31 @@ const snapshot = (issues: IssueView[]) => ({ cluster: 'home', issues }) as unkno
 
 /** A notifier whose only channel is native push, recording what the devices would get. */
 async function pushOnlyNotifier(kube: DemoKubeClient, overrides: Partial<Config> = {}) {
-  const config: Config = { ...loadConfig(), ntfyUrl: undefined, webhookUrl: undefined, relayUrl: 'wss://relay.example.org', notifyAfterSeconds: 60, ...overrides };
+  const config: Config = {
+    ...loadConfig(),
+    ntfyUrl: undefined,
+    webhookUrl: undefined,
+    relayUrl: 'wss://relay.example.org',
+    notifyAfterSeconds: 60,
+    ...overrides,
+  };
   const devices = new DevicesService(config, kube);
   await devices.onModuleInit();
   const sent: AppPushMessage[] = [];
-  const push = new AppPushService(config, devices, { keyPair: generateKeyPair() } as IdentityService, new PushTransport());
+  const push = new AppPushService(
+    config,
+    devices,
+    { keyPair: generateKeyPair() } as IdentityService,
+    new PushTransport(),
+  );
   push.deliver = async (message) => (sent.push(message), true);
   if (devices.pushTargets().length === 0) {
     const view = await devices.add('Phone', generateKeyPair().publicKey);
-    await devices.setPush(view.id, { token: 'cXVpdGUtYS10b2tlbg:APA91b-test', platform: 'android', key: 'B1UPtjCD2JI3Uq6O-Ka7FdNGOLHHDIUrDtEEm4AXfjs' });
+    await devices.setPush(view.id, {
+      token: 'cXVpdGUtYS10b2tlbg:APA91b-test',
+      platform: 'android',
+      key: 'B1UPtjCD2JI3Uq6O-Ka7FdNGOLHHDIUrDtEEm4AXfjs',
+    });
   }
   return { notifier: new Notifier(config, new IncidentsService(), push, new NotifiedStore(config, kube)), sent };
 }
@@ -58,7 +82,12 @@ describe('notified state', () => {
   });
 
   it('is capped in entries and bytes, keeping the newest', () => {
-    const many = new Map<string, Pushed>(Array.from({ length: 1000 }, (_, i) => [`issue-${i}`, { title: raw('x'.repeat(400)), severity: 'warning' as const }]));
+    const many = new Map<string, Pushed>(
+      Array.from({ length: 1000 }, (_, i) => [
+        `issue-${i}`,
+        { title: raw('x'.repeat(400)), severity: 'warning' as const },
+      ]),
+    );
     const text = serializeNotified(many);
     expect(text.length).toBeLessThanOrEqual(MAX_NOTIFIED_BYTES);
     const back = parseNotified(text);
@@ -94,7 +123,9 @@ describe('notifications across an agent restart (roadmap: persist notification s
     const { notifier, sent } = await pushOnlyNotifier(new DemoKubeClient(), { notifyDetail: 'minimal' });
     expect(notifier.channels).toEqual(['app']);
     await notifier.update(snapshot([issue('pods/secret-ns/Deployment/billing')]), NOW);
-    expect(sent).toMatchObject([{ title: 'home: new problems', body: '1 critical. Details in Kubernanny.', priority: 5 }]);
+    expect(sent).toMatchObject([
+      { title: 'home: new problems', body: '1 critical. Details in Kubernanny.', priority: 5 },
+    ]);
     // The widget's status counts only, no titles, like the text.
     expect(sent[0]!.status).toMatchObject({ c: 1, n: 0 });
     expect(sent[0]!.status!.i).toBeUndefined();

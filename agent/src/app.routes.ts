@@ -1,24 +1,24 @@
-import { BadGatewayError, BadRequestError, ForbiddenError, NotFoundError } from './http/errors';
-import { Route, intQuery, strQuery, uuidParam } from './http/server';
-import { Logger } from './logger';
-import { AGENT_BUILD, AGENT_COMMIT, AGENT_VERSION } from './version';
 import { ActionsService } from './actions/actions.service';
-import { DeviceView, DevicesService, Principal } from './auth/devices.service';
+import { DevicesService, DeviceView, Principal } from './auth/devices.service';
 import { IdentityService } from './auth/identity.service';
 import { IssueActionType } from './checks/types';
-import { Text, t } from './i18n/text';
 import type { Config } from './config';
+import { BadGatewayError, BadRequestError, ForbiddenError, NotFoundError } from './http/errors';
+import { intQuery, Route, strQuery, uuidParam } from './http/server';
+import { t, Text } from './i18n/text';
+import { IncidentsService } from './incidents/incidents.service';
+import { Logger } from './logger';
 import { Notifier } from './notify/notifier';
 import { PairingService } from './pairing/pairing';
 import { RelayClient } from './relay/relay-client';
 import { SettingsPatch, SettingsService, SettingsView } from './settings/settings.service';
 import { SilenceService } from './silence/silence.service';
 import { Snapshot, StatusService } from './status/status.service';
-import { HistoryView, agentHistory, prometheusHistory } from './views/history';
-import { buildEvents, buildNetwork, buildNodes, buildStorage, buildWorkloads } from './views/views';
+import { AGENT_BUILD, AGENT_COMMIT, AGENT_VERSION } from './version';
 import { BackupsView, buildBackups } from './views/backups';
+import { agentHistory, HistoryView, prometheusHistory } from './views/history';
 import { IncidentsView } from './views/incidents';
-import { IncidentsService } from './incidents/incidents.service';
+import { buildEvents, buildNetwork, buildNodes, buildStorage, buildWorkloads } from './views/views';
 
 const RUNNABLE: IssueActionType[] = [
   'argocd-sync',
@@ -35,7 +35,6 @@ const RUNNABLE: IssueActionType[] = [
   'force-delete-terminating',
   'pvc-expand',
 ];
-
 
 export class AppApi {
   private readonly logger = new Logger('audit');
@@ -211,18 +210,15 @@ export class AppApi {
     if (this.historyCache && this.historyCache.key === key && Date.now() - this.historyCache.at < 60_000) {
       return this.historyCache.value;
     }
-    const value = await prometheusHistory(prom, inv, hours).catch(() => agentHistory(this.status.history(), Math.min(hours, 6)));
+    const value = await prometheusHistory(prom, inv, hours).catch(() =>
+      agentHistory(this.status.history(), Math.min(hours, 6)),
+    );
     this.historyCache = { key, at: Date.now(), value };
     return value;
   }
 
   // Issue ids contain slashes, so they travel as a query parameter.
-  run(
-    type: string,
-    issue: string,
-    who: Principal,
-    index?: number,
-  ): Promise<{ done: Text }> {
+  run(type: string, issue: string, who: Principal, index?: number): Promise<{ done: Text }> {
     if (!issue || !RUNNABLE.includes(type as IssueActionType)) {
       throw new BadRequestError({ code: 'ACTION_UNKNOWN', message: t('error.actionUnknown', { type }) });
     }
@@ -246,7 +242,10 @@ export class AppApi {
     try {
       return { channels: await this.notifier.test(this.config.clusterName) };
     } catch (err) {
-      throw new BadGatewayError({ code: 'NOTIFY_FAILED', message: t('error.notifyTestFailed', { error: err instanceof Error ? err.message.slice(0, 300) : String(err) }) });
+      throw new BadGatewayError({
+        code: 'NOTIFY_FAILED',
+        message: t('error.notifyTestFailed', { error: err instanceof Error ? err.message.slice(0, 300) : String(err) }),
+      });
     }
   }
 }
@@ -257,15 +256,54 @@ export function appRoutes(c: AppApi): Route[] {
     // Liveness only, no cluster data: the plain routes besides /readyz, /api/identity and /api/e2e.
     { method: 'GET', path: '/healthz', public: true, handle: () => c.health() },
     { method: 'GET', path: '/api/devices', handle: (r) => c.devices(r.principal) },
-    { method: 'DELETE', write: true, path: '/api/devices/:id', status: 204, handle: (r) => c.revoke(uuidParam(r, 'id'), r.principal) },
+    {
+      method: 'DELETE',
+      write: true,
+      path: '/api/devices/:id',
+      status: 204,
+      handle: (r) => c.revoke(uuidParam(r, 'id'), r.principal),
+    },
     { method: 'POST', write: true, path: '/api/pair/code', handle: (r) => c.newCode(r.principal) },
-    { method: 'POST', write: true, path: '/api/pair/code/banner', textType: 'text/plain; charset=utf-8', handle: (r) => c.newBanner(r.principal) },
+    {
+      method: 'POST',
+      write: true,
+      path: '/api/pair/code/banner',
+      textType: 'text/plain; charset=utf-8',
+      handle: (r) => c.newBanner(r.principal),
+    },
     { method: 'GET', path: '/api/settings', handle: () => c.settingsView() },
-    { method: 'POST', write: true, path: '/api/settings', handle: (r) => c.changeSettings(r.body as SettingsPatch, r.principal) },
-    { method: 'POST', write: true, path: '/api/issues/silence', handle: (r) => c.silence(strQuery(r, 'issue'), intQuery(r, 'hours'), r.principal) },
-    { method: 'POST', write: true, path: '/api/issues/unsilence', status: 204, handle: (r) => c.unsilence(strQuery(r, 'issue'), r.principal) },
-    { method: 'POST', write: true, path: '/api/maintenance', handle: (r) => c.startMaintenance(intQuery(r, 'hours'), r.principal) },
-    { method: 'POST', write: true, path: '/api/maintenance/end', status: 204, handle: (r) => c.endMaintenance(r.principal) },
+    {
+      method: 'POST',
+      write: true,
+      path: '/api/settings',
+      handle: (r) => c.changeSettings(r.body as SettingsPatch, r.principal),
+    },
+    {
+      method: 'POST',
+      write: true,
+      path: '/api/issues/silence',
+      handle: (r) => c.silence(strQuery(r, 'issue'), intQuery(r, 'hours'), r.principal),
+    },
+    {
+      method: 'POST',
+      write: true,
+      path: '/api/issues/unsilence',
+      status: 204,
+      handle: (r) => c.unsilence(strQuery(r, 'issue'), r.principal),
+    },
+    {
+      method: 'POST',
+      write: true,
+      path: '/api/maintenance',
+      handle: (r) => c.startMaintenance(intQuery(r, 'hours'), r.principal),
+    },
+    {
+      method: 'POST',
+      write: true,
+      path: '/api/maintenance/end',
+      status: 204,
+      handle: (r) => c.endMaintenance(r.principal),
+    },
     { method: 'GET', path: '/api/info', handle: () => c.info() },
     { method: 'GET', path: '/api/status', handle: () => c.get() },
     { method: 'POST', path: '/api/status/refresh', handle: () => c.refresh() },
@@ -278,8 +316,17 @@ export function appRoutes(c: AppApi): Route[] {
     { method: 'GET', path: '/api/backups', handle: () => c.backups() },
     { method: 'GET', path: '/api/history', handle: (r) => c.history(intQuery(r, 'hours', true)) },
     // Issue ids contain slashes, so they travel as a query parameter.
-    { method: 'POST', write: true, path: '/api/actions/:type', handle: (r) => c.run(r.params.type, strQuery(r, 'issue'), r.principal, intQuery(r, 'index', true)) },
-    { method: 'GET', path: '/api/logs', handle: (r) => c.logs(strQuery(r, 'issue'), r.principal, intQuery(r, 'index', true)) },
+    {
+      method: 'POST',
+      write: true,
+      path: '/api/actions/:type',
+      handle: (r) => c.run(r.params.type, strQuery(r, 'issue'), r.principal, intQuery(r, 'index', true)),
+    },
+    {
+      method: 'GET',
+      path: '/api/logs',
+      handle: (r) => c.logs(strQuery(r, 'issue'), r.principal, intQuery(r, 'index', true)),
+    },
     { method: 'POST', write: true, path: '/api/notify/test', handle: () => c.testNotification() },
   ];
 }

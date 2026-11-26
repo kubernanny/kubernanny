@@ -24,7 +24,12 @@ export const BASELINE_CAPABILITIES = [
 ] as const;
 
 /** SELinux types baseline allows (besides none). */
-export const BASELINE_SELINUX_TYPES = ['container_t', 'container_init_t', 'container_kvm_t', 'container_engine_t'] as const;
+export const BASELINE_SELINUX_TYPES = [
+  'container_t',
+  'container_init_t',
+  'container_kvm_t',
+  'container_engine_t',
+] as const;
 
 /** The "safe" sysctls baseline allows, up to Kubernetes 1.37. */
 export const BASELINE_SYSCTLS = [
@@ -101,7 +106,11 @@ function contextRisk(sc: SecurityContext | undefined): string | null {
   if (sc.seccompProfile?.type === 'Unconfined') {
     return 'seccompProfile Unconfined';
   }
-  if (sc.appArmorProfile?.type !== undefined && sc.appArmorProfile.type !== 'RuntimeDefault' && sc.appArmorProfile.type !== 'Localhost') {
+  if (
+    sc.appArmorProfile?.type !== undefined &&
+    sc.appArmorProfile.type !== 'RuntimeDefault' &&
+    sc.appArmorProfile.type !== 'Localhost'
+  ) {
     return 'appArmorProfile';
   }
   return null;

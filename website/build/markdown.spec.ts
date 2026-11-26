@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { editUrl, rewriteUrl, routeForFile, slugForFile, type RewriteContext } from './doc-paths.ts';
-import { BRANCH, MEDIA_BASE, REPO_URL, buildNav, listDocFiles, parseComponents, readDoc } from './docs-source.ts';
+
+import { editUrl, type RewriteContext, rewriteUrl, routeForFile, slugForFile } from './doc-paths.ts';
+import { BRANCH, buildNav, listDocFiles, MEDIA_BASE, parseComponents, readDoc, REPO_URL } from './docs-source.ts';
 import { githubSlug, renderMarkdown, rewriteHtml, truncate } from './markdown.ts';
 import { allRoutes } from './routes.ts';
 
-const known = new Set(['README.md', 'PROTOCOL.md', 'SECURITY.md', 'decisions/README.md', 'decisions/0001-noise-ik-per-request.md']);
+const known = new Set([
+  'README.md',
+  'PROTOCOL.md',
+  'SECURITY.md',
+  'decisions/README.md',
+  'decisions/0001-noise-ik-per-request.md',
+]);
 
 function ctx(docFile: string): RewriteContext {
   return { docFile, knownDocs: known, repoUrl: REPO_URL, branch: BRANCH, mediaBase: MEDIA_BASE };
@@ -27,7 +34,9 @@ describe('slugs and routes', () => {
 describe('rewriteUrl', () => {
   it('turns links between docs into routes and keeps the fragment', () => {
     expect(rewriteUrl('PROTOCOL.md', ctx('README.md')).url).toBe('/docs/protocol');
-    expect(rewriteUrl('SECURITY.md#what-the-agent-can-do', ctx('PROTOCOL.md')).url).toBe('/docs/security#what-the-agent-can-do');
+    expect(rewriteUrl('SECURITY.md#what-the-agent-can-do', ctx('PROTOCOL.md')).url).toBe(
+      '/docs/security#what-the-agent-can-do',
+    );
     expect(rewriteUrl('decisions/0001-noise-ik-per-request.md', ctx('PROTOCOL.md')).url).toBe(
       '/docs/decisions/0001-noise-ik-per-request',
     );
@@ -74,7 +83,11 @@ describe('rewriteHtml', () => {
   const size = (file: string) => (file === 'screenshots/a.png' ? { width: 780, height: 1308 } : undefined);
 
   it('rewrites href and src in raw HTML too and sizes images', () => {
-    const { html, media } = rewriteHtml('<p><a href="PROTOCOL.md">p</a></p><img src="screenshots/a.png" alt="A">', ctx('README.md'), size);
+    const { html, media } = rewriteHtml(
+      '<p><a href="PROTOCOL.md">p</a></p><img src="screenshots/a.png" alt="A">',
+      ctx('README.md'),
+      size,
+    );
     expect(html).toContain('href="/docs/protocol"');
     expect(html).toContain('src="/docs-media/screenshots/a.png"');
     expect(html).toContain('width="780" height="1308"');
@@ -173,7 +186,9 @@ describe('the real docs/ folder', () => {
         ctx: { docFile: file, knownDocs, repoUrl: REPO_URL, branch: BRANCH, mediaBase: MEDIA_BASE },
       }),
     }));
-    const ids = new Map(rendered.map((r) => [r.route, new Set([...r.doc.html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]))]));
+    const ids = new Map(
+      rendered.map((r) => [r.route, new Set([...r.doc.html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]))]),
+    );
     for (const { route, doc } of rendered) {
       expect(doc.title, route).not.toBe('');
       // Every raw tag the docs use passes the allowlist (raw-html.ts) instead of showing as text.
@@ -209,14 +224,18 @@ describe('raw HTML in the docs', () => {
   const render = (source: string) => renderMarkdown(source, { ctx: ctx('README.md') }).html;
 
   it('keeps the few tags the docs use, with their allowed attributes', () => {
-    const html = render('<table>\n<tr>\n<td valign="top" width="50%"><img src="https://example.com/a.png" alt="A “quoted” shot" width="300"><br><sub>Caption</sub></td>\n</tr>\n</table>\n');
+    const html = render(
+      '<table>\n<tr>\n<td valign="top" width="50%"><img src="https://example.com/a.png" alt="A “quoted” shot" width="300"><br><sub>Caption</sub></td>\n</tr>\n</table>\n',
+    );
     expect(html).toContain('<td valign="top" width="50%">');
     expect(html).toContain('<img src="https://example.com/a.png" alt="A “quoted” shot" width="300"');
     expect(html).toContain('<br><sub>Caption</sub></td>');
   });
 
   it('escapes everything else, so no markup a doc carries can run', () => {
-    const html = render('Hi <script>alert(1)</script> and <img src="x" onerror="alert(1)"> and <a href="javascript:alert(1)">x</a>\n\n<iframe src="https://evil.example"></iframe>\n\n<img src="javascript:alert(1)">\n');
+    const html = render(
+      'Hi <script>alert(1)</script> and <img src="x" onerror="alert(1)"> and <a href="javascript:alert(1)">x</a>\n\n<iframe src="https://evil.example"></iframe>\n\n<img src="javascript:alert(1)">\n',
+    );
     expect(html).not.toMatch(/<script|<iframe|<a href="javascript|onerror="|<img src="javascript/);
     expect(html).toContain('&lt;script&gt;');
     expect(html).toContain('&lt;iframe');

@@ -1,13 +1,17 @@
-import { Condition, ObjectMeta } from '../checks/types';
 import type { Node } from '../checks/nodes.check';
 import type { Pod } from '../checks/pods.check';
+import { Condition, ObjectMeta } from '../checks/types';
 import { KubeClient } from '../kube/kube-client';
 import { ClusterCache, EVENT_MAX_AGE_MS, EVENT_MAX_ITEMS, WatchedKind } from './cluster-cache';
 import { eventTime } from './strip';
 
 export interface PodSpecLite {
   nodeName?: string;
-  containers?: { name: string; image: string; resources?: { requests?: Record<string, string>; limits?: Record<string, string> } }[];
+  containers?: {
+    name: string;
+    image: string;
+    resources?: { requests?: Record<string, string>; limits?: Record<string, string> };
+  }[];
   initContainers?: { name: string; image: string }[];
   volumes?: { name: string; persistentVolumeClaim?: { claimName: string } }[];
 }
@@ -56,12 +60,22 @@ export interface Workload {
 
 export interface Job {
   metadata: ObjectMeta;
-  status?: { succeeded?: number; failed?: number; startTime?: string; completionTime?: string; conditions?: Condition[] };
+  status?: {
+    succeeded?: number;
+    failed?: number;
+    startTime?: string;
+    completionTime?: string;
+    conditions?: Condition[];
+  };
 }
 
 export interface CronJob {
   metadata: ObjectMeta;
-  spec?: { schedule?: string; suspend?: boolean; jobTemplate?: { spec?: { template?: { metadata?: { labels?: Record<string, string> }; spec?: PodSpecLite } } } };
+  spec?: {
+    schedule?: string;
+    suspend?: boolean;
+    jobTemplate?: { spec?: { template?: { metadata?: { labels?: Record<string, string> }; spec?: PodSpecLite } } };
+  };
   status?: { lastScheduleTime?: string; lastSuccessfulTime?: string };
 }
 
@@ -83,7 +97,12 @@ export interface Ingress {
     tls?: { hosts?: string[]; secretName?: string }[];
     rules?: {
       host?: string;
-      http?: { paths?: { path?: string; backend?: { service?: { name: string; port?: { number?: number; name?: string } } } }[] };
+      http?: {
+        paths?: {
+          path?: string;
+          backend?: { service?: { name: string; port?: { number?: number; name?: string } } };
+        }[];
+      };
     }[];
   };
 }
@@ -91,18 +110,33 @@ export interface Ingress {
 /** Gateway API HTTPRoute (gateway.networking.k8s.io). */
 export interface HttpRoute {
   metadata: ObjectMeta;
-  spec?: { hostnames?: string[]; rules?: { backendRefs?: { name: string; namespace?: string; port?: number; kind?: string }[] }[] };
+  spec?: {
+    hostnames?: string[];
+    rules?: { backendRefs?: { name: string; namespace?: string; port?: number; kind?: string }[] }[];
+  };
 }
 
 /** Traefik's own IngressRoute CRD (traefik.io, formerly traefik.containo.us). */
 export interface IngressRoute {
   metadata: ObjectMeta;
-  spec?: { entryPoints?: string[]; routes?: { match?: string; services?: { name: string; namespace?: string; port?: number | string; kind?: string }[] }[]; tls?: unknown };
+  spec?: {
+    entryPoints?: string[];
+    routes?: {
+      match?: string;
+      services?: { name: string; namespace?: string; port?: number | string; kind?: string }[];
+    }[];
+    tls?: unknown;
+  };
 }
 
 export interface Pvc {
   metadata: ObjectMeta;
-  spec?: { storageClassName?: string; accessModes?: string[]; volumeName?: string; resources?: { requests?: { storage?: string } } };
+  spec?: {
+    storageClassName?: string;
+    accessModes?: string[];
+    volumeName?: string;
+    resources?: { requests?: { storage?: string } };
+  };
   status?: { phase?: string; capacity?: { storage?: string } };
 }
 
@@ -170,7 +204,19 @@ export type InventoryKind = WatchedKind | 'httpRoutes' | 'ingressRoutes';
 // ---- quantities ----
 
 const BIN: Record<string, number> = { Ki: 2 ** 10, Mi: 2 ** 20, Gi: 2 ** 30, Ti: 2 ** 40, Pi: 2 ** 50, Ei: 2 ** 60 };
-const DEC: Record<string, number> = { n: 1e-9, u: 1e-6, m: 1e-3, '': 1, k: 1e3, K: 1e3, M: 1e6, G: 1e9, T: 1e12, P: 1e15, E: 1e18 };
+const DEC: Record<string, number> = {
+  n: 1e-9,
+  u: 1e-6,
+  m: 1e-3,
+  '': 1,
+  k: 1e3,
+  K: 1e3,
+  M: 1e6,
+  G: 1e9,
+  T: 1e12,
+  P: 1e15,
+  E: 1e18,
+};
 
 /** Kubernetes quantity ("1536Mi", "250m", "2", "1.5Gi") to a plain number of base units. */
 export function parseQuantity(q: string | undefined): number {
@@ -209,7 +255,9 @@ export interface GatherOptions {
 /** Newest first, at most EVENT_MAX_ITEMS, none older than EVENT_MAX_AGE_MS: the same bound with or without a watch. */
 function boundEvents(events: KubeEvent[], now: Date): KubeEvent[] {
   const fresh = events.filter((e) => now.getTime() - eventTime(e) <= EVENT_MAX_AGE_MS);
-  return fresh.length <= EVENT_MAX_ITEMS ? fresh : fresh.sort((a, b) => eventTime(b) - eventTime(a)).slice(0, EVENT_MAX_ITEMS);
+  return fresh.length <= EVENT_MAX_ITEMS
+    ? fresh
+    : fresh.sort((a, b) => eventTime(b) - eventTime(a)).slice(0, EVENT_MAX_ITEMS);
 }
 
 export async function gatherInventory(kube: KubeClient, now: Date, options: GatherOptions = {}): Promise<Inventory> {
@@ -240,12 +288,15 @@ export async function gatherInventory(kube: KubeClient, now: Date, options: Gath
         throw err;
       }
       stale.push(kind);
-      return last ?? ((watched?.items() as unknown as T[] | undefined) ?? []);
+      return last ?? (watched?.items() as unknown as T[] | undefined) ?? [];
     }
   }
 
   // Core lists must work, the rest may be missing (404: empty) or fail (stale: the last known objects).
-  const [nodes, pods] = await Promise.all([read<FullNode>('nodes', '/api/v1/nodes', previous?.nodes, true), read<FullPod>('pods', '/api/v1/pods', previous?.pods, true)]);
+  const [nodes, pods] = await Promise.all([
+    read<FullNode>('nodes', '/api/v1/nodes', previous?.nodes, true),
+    read<FullPod>('pods', '/api/v1/pods', previous?.pods, true),
+  ]);
   const lastNamespaces = previous?.namespaces.map((name) => ({ metadata: { name } }));
   const [
     namespaces,
@@ -272,20 +323,35 @@ export async function gatherInventory(kube: KubeClient, now: Date, options: Gath
     read<CronJob>('cronjobs', '/apis/batch/v1/cronjobs', previous?.cronjobs),
     read<Service>('services', '/api/v1/services', previous?.services),
     read<Ingress>('ingresses', '/apis/networking.k8s.io/v1/ingresses', previous?.ingresses),
-    groups.has('gateway.networking.k8s.io') ? read<HttpRoute>('httpRoutes', '/apis/gateway.networking.k8s.io/v1/httproutes', previous?.httpRoutes) : Promise.resolve([] as HttpRoute[]),
+    groups.has('gateway.networking.k8s.io')
+      ? read<HttpRoute>('httpRoutes', '/apis/gateway.networking.k8s.io/v1/httproutes', previous?.httpRoutes)
+      : Promise.resolve([] as HttpRoute[]),
     groups.has('traefik.io')
       ? read<IngressRoute>('ingressRoutes', '/apis/traefik.io/v1alpha1/ingressroutes', previous?.ingressRoutes)
       : groups.has('traefik.containo.us')
-        ? read<IngressRoute>('ingressRoutes', '/apis/traefik.containo.us/v1alpha1/ingressroutes', previous?.ingressRoutes)
+        ? read<IngressRoute>(
+            'ingressRoutes',
+            '/apis/traefik.containo.us/v1alpha1/ingressroutes',
+            previous?.ingressRoutes,
+          )
         : Promise.resolve([] as IngressRoute[]),
     read<Pvc>('pvcs', '/api/v1/persistentvolumeclaims', previous?.pvcs),
     read<StorageClass>('storageClasses', '/apis/storage.k8s.io/v1/storageclasses', previous?.storageClasses),
     read<KubeEvent>('events', '/api/v1/events?fieldSelector=type%3DWarning', previous?.events),
-    groups.has('metrics.k8s.io') ? kube.list<MetricsItem>('/apis/metrics.k8s.io/v1beta1/nodes').catch(() => null) : Promise.resolve(null),
-    groups.has('metrics.k8s.io') ? kube.list<MetricsItem>('/apis/metrics.k8s.io/v1beta1/pods').catch(() => null) : Promise.resolve(null),
+    groups.has('metrics.k8s.io')
+      ? kube.list<MetricsItem>('/apis/metrics.k8s.io/v1beta1/nodes').catch(() => null)
+      : Promise.resolve(null),
+    groups.has('metrics.k8s.io')
+      ? kube.list<MetricsItem>('/apis/metrics.k8s.io/v1beta1/pods').catch(() => null)
+      : Promise.resolve(null),
   ]);
   const nodeUsage = nodeMetrics
-    ? new Map(nodeMetrics.map((m) => [m.metadata.name, { cpuMilli: cpuMilli(m.usage?.cpu), memBytes: parseQuantity(m.usage?.memory) }]))
+    ? new Map(
+        nodeMetrics.map((m) => [
+          m.metadata.name,
+          { cpuMilli: cpuMilli(m.usage?.cpu), memBytes: parseQuantity(m.usage?.memory) },
+        ]),
+      )
     : null;
   const podUsage = podMetrics
     ? new Map(

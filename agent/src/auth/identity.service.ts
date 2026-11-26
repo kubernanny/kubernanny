@@ -1,7 +1,15 @@
-import { Logger } from '../logger';
-import { KeyPair, fingerprint, fromBase64Url, generateKeyPair, keyPairFromSecret, toBase64Url } from '@kubernanny/protocol';
+import {
+  fingerprint,
+  fromBase64Url,
+  generateKeyPair,
+  KeyPair,
+  keyPairFromSecret,
+  toBase64Url,
+} from '@kubernanny/protocol';
+
 import type { Config } from '../config';
 import { KubeClient } from '../kube/kube-client';
+import { Logger } from '../logger';
 import { readAtStartup } from '../util/startup-read';
 
 const IDENTITY_SECRET = 'kubernanny-identity';
@@ -49,9 +57,16 @@ export class IdentityService {
    * agent as "not the pinned agent". Only a missing Secret creates a new key.
    */
   async onModuleInit(): Promise<void> {
-    const secret = await readAtStartup(`Secret ${IDENTITY_SECRET}`, () => this.kube.get<{ data?: { secretKey?: string } }>(`${this.path}/${IDENTITY_SECRET}`), {
-      onRetry: (err, attempt) => this.logger.warn(`cannot read Secret ${IDENTITY_SECRET} (${err instanceof Error ? err.message : err}), attempt ${attempt}; retrying`),
-    });
+    const secret = await readAtStartup(
+      `Secret ${IDENTITY_SECRET}`,
+      () => this.kube.get<{ data?: { secretKey?: string } }>(`${this.path}/${IDENTITY_SECRET}`),
+      {
+        onRetry: (err, attempt) =>
+          this.logger.warn(
+            `cannot read Secret ${IDENTITY_SECRET} (${err instanceof Error ? err.message : err}), attempt ${attempt}; retrying`,
+          ),
+      },
+    );
     if (secret) {
       const stored = Buffer.from(secret.data?.secretKey ?? '', 'base64').toString('utf8');
       this.pair = keyPairFromSecret(fromBase64Url(stored));

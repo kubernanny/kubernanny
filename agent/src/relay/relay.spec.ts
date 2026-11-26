@@ -1,9 +1,10 @@
 import { RelayClose } from '@kubernanny/protocol';
 import { describe, expect, it } from 'vitest';
+
 import { IdentityService } from '../auth/identity.service';
 import { loadConfig } from '../config';
 import { PairingService } from '../pairing/pairing';
-import { RECONNECT_MAX_MS, cleanReason, reconnectDelay } from './relay-client';
+import { cleanReason, RECONNECT_MAX_MS, reconnectDelay } from './relay-client';
 import { checkRelayUrl, relayHttpUrl, relaySocketUrl } from './relay-url';
 
 describe('RELAY_URL', () => {
@@ -61,7 +62,9 @@ describe('reconnectDelay', () => {
 
 describe('close reasons from the relay (review: log forging)', () => {
   it('strips control characters and caps the length', () => {
-    expect(cleanReason('replaced\n[Nest] 1  - LOG [auth] admin signed in')).toBe('replaced [Nest] 1 - LOG [auth] admin signed in');
+    expect(cleanReason('replaced\n[Nest] 1  - LOG [auth] admin signed in')).toBe(
+      'replaced [Nest] 1 - LOG [auth] admin signed in',
+    );
     expect(cleanReason('a\u0000b\u001b[31mc\u202ed')).toBe('a b [31mc d');
     expect(cleanReason('x'.repeat(500))).toHaveLength(100);
   });

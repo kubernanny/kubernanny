@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 import { parseAllDocuments } from 'yaml';
+
 import { BASELINE_CAPABILITIES, BASELINE_SELINUX_TYPES, BASELINE_SYSCTLS } from './actions/pod-security';
 
 /**
@@ -13,14 +15,20 @@ import { BASELINE_CAPABILITIES, BASELINE_SELINUX_TYPES, BASELINE_SYSCTLS } from 
  */
 const DEPLOY = join(__dirname, '../../deploy');
 const chart = (file: string) => readFileSync(join(DEPLOY, 'helm/kubernanny', file), 'utf8');
-const install = parseAllDocuments(readFileSync(join(DEPLOY, 'install.yaml'), 'utf8')).map((d) => d.toJS() as Record<string, any>);
+const install = parseAllDocuments(readFileSync(join(DEPLOY, 'install.yaml'), 'utf8')).map(
+  (d) => d.toJS() as Record<string, any>,
+);
 
 describe('admission policy for the agent (security review M4)', () => {
   const policies = install.filter((d) => d?.kind === 'ValidatingAdmissionPolicy');
   const bindings = install.filter((d) => d?.kind === 'ValidatingAdmissionPolicyBinding');
 
   it('covers every resource a write action patches or creates, for the agent only, failing closed', () => {
-    const resources = policies.flatMap((p) => p.spec.matchConstraints.resourceRules.flatMap((r: { apiGroups: string[]; resources: string[] }) => r.resources.map((x) => `${r.apiGroups[0]}/${x}`)));
+    const resources = policies.flatMap((p) =>
+      p.spec.matchConstraints.resourceRules.flatMap((r: { apiGroups: string[]; resources: string[] }) =>
+        r.resources.map((x) => `${r.apiGroups[0]}/${x}`),
+      ),
+    );
     expect(resources.sort()).toEqual([
       '/nodes',
       '/pods',
@@ -41,7 +49,9 @@ describe('admission policy for the agent (security review M4)', () => {
     ]);
     for (const p of policies) {
       expect(p.spec.failurePolicy).toBe('Fail');
-      expect(p.spec.matchConditions[0].expression).toBe('request.userInfo.username == "system:serviceaccount:kubernanny:kubernanny"');
+      expect(p.spec.matchConditions[0].expression).toBe(
+        'request.userInfo.username == "system:serviceaccount:kubernanny:kubernanny"',
+      );
       for (const rule of p.spec.matchConstraints.resourceRules) {
         expect(rule.operations.sort()).toEqual(['CREATE', 'DELETE', 'UPDATE']);
       }
@@ -71,7 +81,9 @@ describe('admission policy for the agent (security review M4)', () => {
     const pods = JSON.stringify(policies.find((p) => p.metadata.name === 'kubernanny-pods'));
     expect(pods).toContain("oldObject.status.?phase.orValue('') in ['Failed', 'Succeeded']");
     expect(pods).not.toContain('deletionTimestamp');
-    expect(JSON.stringify(policies.find((p) => p.metadata.name === 'kubernanny-argocd-applications'))).not.toContain("optional.of('Terminating')");
+    expect(JSON.stringify(policies.find((p) => p.metadata.name === 'kubernanny-argocd-applications'))).not.toContain(
+      "optional.of('Terminating')",
+    );
     const template = chart('templates/admission-policy.yaml');
     expect(template).toContain('{{- if has "job-rerun" $writes }}');
     expect(template).toContain('{{- if has "pvc-expand" $writes }}');
@@ -79,7 +91,7 @@ describe('admission policy for the agent (security review M4)', () => {
     expect(template).toContain('{{- $terminate := has "argocd-terminate-op" $writes }}');
   });
 
-  it('denies Velero hooks, and anything beyond the baseline Pod Security Standard in a rerun Job, with the agent\'s own lists', () => {
+  it("denies Velero hooks, and anything beyond the baseline Pod Security Standard in a rerun Job, with the agent's own lists", () => {
     const velero = JSON.stringify(policies.find((p) => p.metadata.name === 'kubernanny-velero-backups'));
     for (const field of ['hooks', 'resourcePolicy', 'orderedResources']) {
       expect(velero).toContain(`!has(object.spec.${field})`);
@@ -93,7 +105,7 @@ describe('admission policy for the agent (security review M4)', () => {
       'capabilities.?add.orValue([]).all(x, x in variables.capabilities)',
       "procMount.orValue('Default') == 'Default'",
       "seccompProfile.?type.orValue('') != 'Unconfined'",
-      "p.?hostPort.orValue(0) == 0",
+      'p.?hostPort.orValue(0) == 0',
       'all(s, s.name in variables.sysctls)',
       "!k.startsWith('container.apparmor.security.beta.kubernetes.io/')",
     ]) {
@@ -109,11 +121,11 @@ describe('admission policy for the agent (security review M4)', () => {
 
   it('holds uncordon to spec.unschedulable and a renew to the Issuing condition', () => {
     const nodes = JSON.stringify(policies.find((p) => p.metadata.name === 'kubernanny-nodes'));
-    expect(nodes).toContain("oldObject.spec.?unschedulable.orValue(false) == true");
+    expect(nodes).toContain('oldObject.spec.?unschedulable.orValue(false) == true');
     expect(nodes).toContain('object.spec.?taints == oldObject.spec.?taints');
     const certs = JSON.stringify(policies.find((p) => p.metadata.name === 'kubernanny-certificates'));
     expect(certs).toContain("request.subResource == 'status'");
-    expect(certs).toContain("ManuallyTriggered");
+    expect(certs).toContain('ManuallyTriggered');
   });
 
   it('keeps the rollback branch out of install.yaml (argocd-rollback is off by default) and renders it only on opt-in', () => {
@@ -122,7 +134,7 @@ describe('admission policy for the agent (security review M4)', () => {
     const template = chart('templates/admission-policy.yaml');
     expect(template).toContain('{{- $rollback := has "argocd-rollback" $writes }}');
     expect(template).toContain('{{- if $rollback }} || (');
-    expect(template).toContain("oldObject.?status.?history.orValue([]).exists(h,");
+    expect(template).toContain('oldObject.?status.?history.orValue([]).exists(h,');
     expect(template).toContain('oldObject.?spec.?syncPolicy.?automated == optional.none()');
     const helpers = chart('templates/_helpers.tpl');
     expect(helpers).toContain('define "kubernanny.offActions"');
@@ -132,7 +144,9 @@ describe('admission policy for the agent (security review M4)', () => {
 
   it('is rendered by the chart only on clusters that have the API, and while a write action is on', () => {
     const template = chart('templates/admission-policy.yaml');
-    expect(template).toContain('.Capabilities.APIVersions.Has "admissionregistration.k8s.io/v1/ValidatingAdmissionPolicy"');
+    expect(template).toContain(
+      '.Capabilities.APIVersions.Has "admissionregistration.k8s.io/v1/ValidatingAdmissionPolicy"',
+    );
     expect(template).toContain('.Values.rbac.admissionPolicy.enabled');
     expect(template).toContain('kubernanny.enabledWriteActions');
     expect(chart('values.yaml')).toMatch(/admissionPolicy:\n\s+enabled: true/);
@@ -157,7 +171,9 @@ describe('chart hardening (security review H3, M1, M2, LOW)', () => {
   it('validates the hard switches against the generated lists', () => {
     expect(deployment).toContain('include "kubernanny.validateSwitches"');
     const rbac = JSON.parse(chart('files/rbac.json')) as { knownModules: string[]; actionTypes: string[] };
-    expect(rbac.knownModules).toEqual(expect.arrayContaining(['notifications', 'prometheus', 'vulnerabilities', 'argocd']));
+    expect(rbac.knownModules).toEqual(
+      expect.arrayContaining(['notifications', 'prometheus', 'vulnerabilities', 'argocd']),
+    );
     expect(rbac.actionTypes).toEqual([
       'argocd-refresh',
       'argocd-rollback',

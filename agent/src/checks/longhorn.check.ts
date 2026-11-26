@@ -31,7 +31,10 @@ export function evaluateLonghorn(volumes: LonghornVolume[]): Issue[] {
       check: 'longhorn',
       severity: robustness === 'faulted' ? 'critical' : 'warning',
       title: t('longhorn.volume.title', { volume: label, robustness }),
-      cause: robustness === 'faulted' ? t('longhorn.volume.faulted', { users: users || undefined }) : t('longhorn.volume.degraded', { replicas: String(v.spec?.numberOfReplicas ?? '?') }),
+      cause:
+        robustness === 'faulted'
+          ? t('longhorn.volume.faulted', { users: users || undefined })
+          : t('longhorn.volume.degraded', { replicas: String(v.spec?.numberOfReplicas ?? '?') }),
       actions: [],
     });
   }

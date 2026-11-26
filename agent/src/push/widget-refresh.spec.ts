@@ -1,5 +1,15 @@
-import { PushRequest, PushStatus, decodePushContent, fromBase64Url, generateKeyPair, isStatusOnly, openPush, toBase64Url } from '@kubernanny/protocol';
+import {
+  decodePushContent,
+  fromBase64Url,
+  generateKeyPair,
+  isStatusOnly,
+  openPush,
+  PushRequest,
+  PushStatus,
+  toBase64Url,
+} from '@kubernanny/protocol';
 import { describe, expect, it } from 'vitest';
+
 import { DevicesService, Principal } from '../auth/devices.service';
 import { IdentityService } from '../auth/identity.service';
 import { Config, loadConfig, parseWidgetRefreshMinutes } from '../config';
@@ -31,12 +41,17 @@ async function setup(options: { config?: Partial<Config>; statusPush?: boolean; 
   const clock = { now: 1_800_000_000_000 };
   const transport = new PushTransport();
   const outcome = { value: options.outcome ?? ('sent' as Outcome) };
-  transport.attach({ available: () => true, statusAvailable: () => options.statusPush ?? true, send: async (push) => (sent.push(push), outcome.value) });
+  transport.attach({
+    available: () => true,
+    statusAvailable: () => options.statusPush ?? true,
+    send: async (push) => (sent.push(push), outcome.value),
+  });
   const push = new AppPushService(config, devices, identity, transport, () => clock.now);
   return { config, kube, devices, device, push, sent, clock, outcome };
 }
 
-const opened = (request: PushRequest) => decodePushContent(openPush(pushKey, agentKeys.publicKey, fromBase64Url(request.message)));
+const opened = (request: PushRequest) =>
+  decodePushContent(openPush(pushKey, agentKeys.publicKey, fromBase64Url(request.message)));
 
 describe('WIDGET_REFRESH_MINUTES', () => {
   it('defaults to 60, 0 is off, and below 30 stops the start', () => {
@@ -54,7 +69,9 @@ describe('WIDGET_REFRESH_MINUTES', () => {
 describe('the widget flag at registration', () => {
   it('is stored, refused when it is not a boolean, and an unchanged registration is not written again', async () => {
     const { kube, devices, device, push } = await setup();
-    await expect(push.register(device, { ...registration, widget: 'yes' })).rejects.toMatchObject({ response: { code: 'PUSH_INVALID' } });
+    await expect(push.register(device, { ...registration, widget: 'yes' })).rejects.toMatchObject({
+      response: { code: 'PUSH_INVALID' },
+    });
     await push.register(device, { ...registration, widget: true });
     expect(devices.pushTargets()[0]!.push.widget).toBe(true);
     const writes = kube.writes.length;
@@ -158,7 +175,11 @@ describe('PushTransport.statusAvailable', () => {
 });
 
 describe('Notifier.refreshWidgets', () => {
-  const snapshot = { light: 'green', issues: [], checkedAt: new Date(1_795_000_000_000).toISOString() } as unknown as Snapshot;
+  const snapshot = {
+    light: 'green',
+    issues: [],
+    checkedAt: new Date(1_795_000_000_000).toISOString(),
+  } as unknown as Snapshot;
 
   it('sends the run state, and nothing when notifications are locked in the chart', async () => {
     const { config, device, push, sent, clock } = await setup();

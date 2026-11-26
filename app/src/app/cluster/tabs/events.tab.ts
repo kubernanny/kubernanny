@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
-import { TranslocoDirective } from '@jsverse/transloco';
 import { IonSpinner } from '@ionic/angular/standalone';
+import { TranslocoDirective } from '@jsverse/transloco';
+
 import { EventView } from '../../core/agent.model';
 import { Loadable } from '../../core/cluster-data.store';
 import { duration, relativeTime } from '../../core/format';
@@ -33,8 +34,16 @@ export function eventRows(events: EventView[], now: Date, tr: Translator): Event
       reason: e.reason ?? '',
       object: [e.kind, e.namespace ? `${e.namespace}/${e.name}` : e.name].filter(Boolean).join(' '),
       message: e.message ?? '',
-      workload: e.workload && !(e.workload.kind === e.kind && e.workload.name === e.name) ? tr.t('events.workload', { kind: e.workload.kind, name: e.workload.name }) : '',
-      repeat: e.count > 1 ? (since ? tr.t('events.repeated', { count: e.count, span: since }) : `${e.count}×`) : null,
+      workload:
+        e.workload && !(e.workload.kind === e.kind && e.workload.name === e.name)
+          ? tr.t('events.workload', { kind: e.workload.kind, name: e.workload.name })
+          : '',
+      repeat:
+        e.count > 1
+          ? since
+            ? tr.t('events.repeated', { count: e.count, span: since })
+            : `${e.count}×`
+          : null,
       merged: (e.events ?? 1) > 1 ? tr.t('events.merged', { count: e.events ?? 1 }) : null,
     };
   });
@@ -135,5 +144,7 @@ export class EventsTab {
   readonly events = input.required<Loadable<EventView[]>>();
   readonly now = input.required<Date>();
   private readonly language = inject(LanguageService);
-  readonly rows = computed(() => eventRows(this.events().value ?? [], this.now(), this.language.translator()));
+  readonly rows = computed(() =>
+    eventRows(this.events().value ?? [], this.now(), this.language.translator()),
+  );
 }

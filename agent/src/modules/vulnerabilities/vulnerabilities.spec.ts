@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { de, en } from '../../testing/i18n';
+
+import { affects, DemoVulnDb } from '../../demo/demo-vulns';
 import { CATALOG } from '../../discovery/catalog';
 import { Detected } from '../../discovery/discovery';
 import { emptyInventory } from '../../inventory/inventory';
-import { DemoVulnDb, affects } from '../../demo/demo-vulns';
+import { de, en } from '../../testing/i18n';
 import { ModuleContext } from '../types';
 import { cvss3Score } from './cvss';
 import { Finding, findingsFor, fixedVersion, issueSeverity, levelOf, vulnerabilityIssue } from './evaluate';
 import { OSV_BACKOFF_MS, OSV_TTL_MS, OsvClient, OsvVuln, sanitize } from './osv-client';
-import { VulnerabilitiesCheck, vulnTargets } from './vulnerabilities.check';
 import { compareVersions, isPseudoVersion, osvPackageFor, releaseVersion } from './versions';
+import { VulnerabilitiesCheck, vulnTargets } from './vulnerabilities.check';
 
 const NOW = new Date('2026-11-24T12:00:00Z');
 const CNPG = { ecosystem: 'Go', name: 'github.com/cloudnative-pg/cloudnative-pg' };
@@ -62,7 +63,10 @@ describe('version normalisation', () => {
     const traefik = CATALOG.find((e) => e.id === 'traefik')!.osv!;
     expect(osvPackageFor(traefik, '1.7.34')).toBeNull();
     const gitea = CATALOG.find((e) => e.id === 'gitea')!.osv!;
-    expect(osvPackageFor(gitea, '1.24.0', 'docker.io/gitea/gitea:1.24.0')).toEqual({ ecosystem: 'Go', name: 'code.gitea.io/gitea' });
+    expect(osvPackageFor(gitea, '1.24.0', 'docker.io/gitea/gitea:1.24.0')).toEqual({
+      ecosystem: 'Go',
+      name: 'code.gitea.io/gitea',
+    });
     // Forgejo is the same catalog entry, but its versions are not Gitea's.
     expect(osvPackageFor(gitea, '11.0.0', 'codeberg.org/forgejo/forgejo:11.0.0')).toBeNull();
   });
@@ -94,7 +98,13 @@ describe('CVSS', () => {
   });
 
   it('falls back to the database label without a v3 vector', () => {
-    expect(levelOf({ id: 'a', severity: [{ type: 'CVSS_V4', score: 'CVSS:4.0/…' }], database_specific: { severity: 'HIGH' } })).toEqual({ level: 'high' });
+    expect(
+      levelOf({
+        id: 'a',
+        severity: [{ type: 'CVSS_V4', score: 'CVSS:4.0/…' }],
+        database_specific: { severity: 'HIGH' },
+      }),
+    ).toEqual({ level: 'high' });
     expect(levelOf({ id: 'b', database_specific: { severity: 'MODERATE' } })).toEqual({ level: 'medium' });
     expect(levelOf({ id: 'c' })).toEqual({ level: 'unknown' });
   });
@@ -109,7 +119,21 @@ const ghsa: OsvVuln = {
     { package: CNPG, ranges: [{ type: 'SEMVER', events: [{ introduced: '1.29.0' }, { fixed: '1.29.1' }] }] },
   ],
 };
-const go: OsvVuln = { id: 'GO-2026-5106', aliases: ['CVE-2026-44477', 'GHSA-423p-g724-fr39'], affected: [{ package: CNPG, ranges: [{ type: 'SEMVER', events: [{ introduced: '0' }, { fixed: '1.28.3' }, { introduced: '1.29.0' }, { fixed: '1.29.1' }] }] }] };
+const go: OsvVuln = {
+  id: 'GO-2026-5106',
+  aliases: ['CVE-2026-44477', 'GHSA-423p-g724-fr39'],
+  affected: [
+    {
+      package: CNPG,
+      ranges: [
+        {
+          type: 'SEMVER',
+          events: [{ introduced: '0' }, { fixed: '1.28.3' }, { introduced: '1.29.0' }, { fixed: '1.29.1' }],
+        },
+      ],
+    },
+  ],
+};
 
 describe('findings', () => {
   it('finds the fix of the range the installed version is in', () => {
@@ -119,19 +143,41 @@ describe('findings', () => {
   });
 
   it('knows no fix for an open range, a last_affected range or a pseudo-version', () => {
-    const open: OsvVuln = { id: 'GO-1', affected: [{ package: CNPG, ranges: [{ type: 'SEMVER', events: [{ introduced: '1.3.0' }] }] }] };
-    const last: OsvVuln = { id: 'GO-2', affected: [{ package: CNPG, ranges: [{ type: 'SEMVER', events: [{ introduced: '0' }, { last_affected: '2.0.0' }] }] }] };
-    const pseudo: OsvVuln = { id: 'GO-3', affected: [{ package: CNPG, ranges: [{ type: 'SEMVER', events: [{ introduced: '0' }, { fixed: '1.9.2-0.20260616075434-82ef13993059' }] }] }] };
+    const open: OsvVuln = {
+      id: 'GO-1',
+      affected: [{ package: CNPG, ranges: [{ type: 'SEMVER', events: [{ introduced: '1.3.0' }] }] }],
+    };
+    const last: OsvVuln = {
+      id: 'GO-2',
+      affected: [
+        { package: CNPG, ranges: [{ type: 'SEMVER', events: [{ introduced: '0' }, { last_affected: '2.0.0' }] }] },
+      ],
+    };
+    const pseudo: OsvVuln = {
+      id: 'GO-3',
+      affected: [
+        {
+          package: CNPG,
+          ranges: [{ type: 'SEMVER', events: [{ introduced: '0' }, { fixed: '1.9.2-0.20260616075434-82ef13993059' }] }],
+        },
+      ],
+    };
     expect([open, last, pseudo].map((v) => fixedVersion(v, CNPG, '1.26.1'))).toEqual([null, null, null]);
   });
 
   it('merges alias records into one finding and shows the GHSA id', () => {
     const f = findingsFor([go, ghsa], CNPG, '1.26.1');
-    expect(f).toEqual([{ id: 'GHSA-423p-g724-fr39', level: 'critical', score: 9.9, fixed: '1.28.3', summary: undefined }]);
+    expect(f).toEqual([
+      { id: 'GHSA-423p-g724-fr39', level: 'critical', score: 9.9, fixed: '1.28.3', summary: undefined },
+    ]);
   });
 });
 
-const finding = (level: Finding['level'], fixed: string | null, id = `GHSA-${level}`): Finding => ({ id, level, fixed });
+const finding = (level: Finding['level'], fixed: string | null, id = `GHSA-${level}`): Finding => ({
+  id,
+  level,
+  fixed,
+});
 
 describe('severity of a component', () => {
   it('is critical only for a fixable critical advisory on a component behind an ingress', () => {
@@ -152,24 +198,41 @@ describe('severity of a component', () => {
       name: 'Argo CD',
       version: '2.11.3',
       reachable: true,
-      findings: [{ id: 'GHSA-a', level: 'critical', score: 9.1, fixed: '2.11.7' }, finding('high', '2.11.5', 'GHSA-b'), finding('medium', null, 'GO-c'), finding('low', '2.11.4', 'GHSA-d')],
+      findings: [
+        { id: 'GHSA-a', level: 'critical', score: 9.1, fixed: '2.11.7' },
+        finding('high', '2.11.5', 'GHSA-b'),
+        finding('medium', null, 'GO-c'),
+        finding('low', '2.11.4', 'GHSA-d'),
+      ],
     })!;
     const issue = de(raw);
     expect(issue).toMatchObject({
       id: 'vulnerabilities/argocd',
       severity: 'critical',
       title: 'Argo CD 2.11.3: 4 bekannte Schwachstellen',
-      cause: 'Am schwersten: GHSA-a (kritisch, CVSS 9,1), GHSA-b (hoch), GO-c (mittel). Behoben in 2.11.7, für 1 gibt es noch kein Update. Über einen Ingress von außen erreichbar.',
+      cause:
+        'Am schwersten: GHSA-a (kritisch, CVSS 9,1), GHSA-b (hoch), GO-c (mittel). Behoben in 2.11.7, für 1 gibt es noch kein Update. Über einen Ingress von außen erreichbar.',
       actions: [],
       advisories: ['GHSA-a', 'GHSA-b', 'GO-c', 'GHSA-d'],
     });
     // English writes the score with a point and words the open ones its own way.
     expect(en(raw)).toMatchObject({
       title: 'Argo CD 2.11.3: 4 known vulnerabilities',
-      cause: 'Most severe: GHSA-a (critical, CVSS 9.1), GHSA-b (high), GO-c (medium). Fixed in 2.11.7; 1 has no update yet. Reachable from outside through an ingress.',
+      cause:
+        'Most severe: GHSA-a (critical, CVSS 9.1), GHSA-b (high), GO-c (medium). Fixed in 2.11.7; 1 has no update yet. Reachable from outside through an ingress.',
     });
     expect(vulnerabilityIssue({ key: 'k', name: 'K', version: '1.0.0', reachable: false, findings: [] })).toBeNull();
-    expect(de(vulnerabilityIssue({ key: 'k', name: 'Kubernetes', version: '1.33.4', reachable: false, findings: [finding('low', null, 'GO-x')] })!).cause).toBe('GO-x (niedrig). Noch ist kein Update bekannt, das sie behebt.');
+    expect(
+      de(
+        vulnerabilityIssue({
+          key: 'k',
+          name: 'Kubernetes',
+          version: '1.33.4',
+          reachable: false,
+          findings: [finding('low', null, 'GO-x')],
+        })!,
+      ).cause,
+    ).toBe('GO-x (niedrig). Noch ist kein Update bekannt, das sie behebt.');
   });
 });
 
@@ -185,7 +248,12 @@ describe('targets', () => {
   });
 
   it('looks up Kubernetes and mapped components with a release version, and counts the rest', () => {
-    const { targets, unmatched } = vulnTargets('v1.33.4+rke2r1', [det('argocd', '3.1.2', 'quay.io/argoproj/argocd:v3.1.2', 1), det('grafana', '12.1.0'), det('cnpg', 'latest'), det('gitea', '11.0', 'codeberg.org/forgejo/forgejo:11.0')]);
+    const { targets, unmatched } = vulnTargets('v1.33.4+rke2r1', [
+      det('argocd', '3.1.2', 'quay.io/argoproj/argocd:v3.1.2', 1),
+      det('grafana', '12.1.0'),
+      det('cnpg', 'latest'),
+      det('gitea', '11.0', 'codeberg.org/forgejo/forgejo:11.0'),
+    ]);
     expect(targets.map((t) => [t.key, t.query.name, t.query.version, t.reachable])).toEqual([
       ['kubernetes', 'k8s.io/kubernetes', '1.33.4', false],
       ['argocd', 'github.com/argoproj/argo-cd/v3', '3.1.2', true],
@@ -206,8 +274,14 @@ function fakeOsv(records: OsvVuln[]) {
     }
     if (url.endsWith('/v1/querybatch')) {
       bodies.push(JSON.parse(String(init?.body)));
-      const { queries } = JSON.parse(String(init?.body)) as { queries: { package: { ecosystem: string; name: string }; version: string }[] };
-      const results = queries.map((q) => ({ vulns: records.filter((v) => affects(v, { ...q.package, version: q.version })).map((v) => ({ id: v.id, modified: '2026-11-01T00:00:00Z' })) }));
+      const { queries } = JSON.parse(String(init?.body)) as {
+        queries: { package: { ecosystem: string; name: string }; version: string }[];
+      };
+      const results = queries.map((q) => ({
+        vulns: records
+          .filter((v) => affects(v, { ...q.package, version: q.version }))
+          .map((v) => ({ id: v.id, modified: '2026-11-01T00:00:00Z' })),
+      }));
       return new Response(JSON.stringify({ results }), { status: 200 });
     }
     const id = decodeURIComponent(url.split('/v1/vulns/')[1]);
@@ -226,9 +300,20 @@ describe('OSV client', () => {
     const first = await client.lookup([q, { ...CNPG, version: '1.28.3' }], NOW);
     expect(first.results.map((r) => r.map((v) => v.id).sort())).toEqual([['GHSA-423p-g724-fr39', 'GO-2026-5106'], []]);
     expect(first.staleSince).toBeUndefined();
-    expect(osv.calls).toEqual(['POST https://api.osv.dev/v1/querybatch', 'GET https://api.osv.dev/v1/vulns/GHSA-423p-g724-fr39', 'GET https://api.osv.dev/v1/vulns/GO-2026-5106']);
+    expect(osv.calls).toEqual([
+      'POST https://api.osv.dev/v1/querybatch',
+      'GET https://api.osv.dev/v1/vulns/GHSA-423p-g724-fr39',
+      'GET https://api.osv.dev/v1/vulns/GO-2026-5106',
+    ]);
     // Package and version, nothing about the cluster.
-    expect(osv.bodies).toEqual([{ queries: [{ package: CNPG, version: '1.26.1' }, { package: CNPG, version: '1.28.3' }] }]);
+    expect(osv.bodies).toEqual([
+      {
+        queries: [
+          { package: CNPG, version: '1.26.1' },
+          { package: CNPG, version: '1.28.3' },
+        ],
+      },
+    ]);
     await client.lookup([q], new Date(NOW.getTime() + OSV_TTL_MS - 1));
     expect(osv.calls).toHaveLength(3);
     await client.lookup([q], new Date(NOW.getTime() + OSV_TTL_MS));
@@ -239,7 +324,9 @@ describe('OSV client', () => {
     const osv = fakeOsv([ghsa]);
     const client = new OsvClient('https://osv.example.org', osv.fetchFn);
     osv.setDown(true);
-    await expect(client.lookup([q], NOW)).rejects.toThrow('osv.example.org unreachable: getaddrinfo ENOTFOUND api.osv.dev');
+    await expect(client.lookup([q], NOW)).rejects.toThrow(
+      'osv.example.org unreachable: getaddrinfo ENOTFOUND api.osv.dev',
+    );
     osv.setDown(false);
     const back = new Date(NOW.getTime() + OSV_BACKOFF_MS);
     await client.lookup([q], back);
@@ -265,13 +352,34 @@ describe('OSV client', () => {
   });
 
   it('keeps only well-formed fields of a record from outside the cluster', () => {
-    const v = sanitize({ id: 'x', aliases: ['CVE-1', '<script>', 3], summary: 'a'.repeat(500), severity: [{ type: 'CVSS_V3', score: 1 }], affected: 'nope' }, 'GHSA-1');
-    expect(v).toEqual({ id: 'GHSA-1', aliases: ['CVE-1'], summary: 'a'.repeat(200), severity: [], database_specific: undefined, affected: [] });
+    const v = sanitize(
+      {
+        id: 'x',
+        aliases: ['CVE-1', '<script>', 3],
+        summary: 'a'.repeat(500),
+        severity: [{ type: 'CVSS_V3', score: 1 }],
+        affected: 'nope',
+      },
+      'GHSA-1',
+    );
+    expect(v).toEqual({
+      id: 'GHSA-1',
+      aliases: ['CVE-1'],
+      summary: 'a'.repeat(200),
+      severity: [],
+      database_specific: undefined,
+      affected: [],
+    });
   });
 
   it('drops malformed ids from querybatch', async () => {
     const fetchFn = async (url: string) =>
-      new Response(url.endsWith('querybatch') ? JSON.stringify({ results: [{ vulns: [{ id: '../../etc' }, { id: 'GHSA-ok12-ok12-ok12' }] }] }) : JSON.stringify({ id: 'GHSA-ok12-ok12-ok12' }), { status: 200 });
+      new Response(
+        url.endsWith('querybatch')
+          ? JSON.stringify({ results: [{ vulns: [{ id: '../../etc' }, { id: 'GHSA-ok12-ok12-ok12' }] }] })
+          : JSON.stringify({ id: 'GHSA-ok12-ok12-ok12' }),
+        { status: 200 },
+      );
     const res = await new OsvClient('https://api.osv.dev', fetchFn).lookup([q], NOW);
     expect(res.results[0].map((v) => v.id)).toEqual(['GHSA-ok12-ok12-ok12']);
   });
@@ -282,9 +390,26 @@ describe('vulnerabilities check', () => {
   const ctx = (vulnDb: ModuleContext['vulnDb'], detected: Detected[]): ModuleContext => {
     const inv = emptyInventory(NOW);
     inv.version = { gitVersion: 'v1.33.4+rke2r1' } as typeof inv.version;
-    return { inv, kube: {} as ModuleContext['kube'], config: { vulnDbUrl: 'https://api.osv.dev' } as ModuleContext['config'], now: NOW, prom: null, data: {}, detected, vulnDb };
+    return {
+      inv,
+      kube: {} as ModuleContext['kube'],
+      config: { vulnDbUrl: 'https://api.osv.dev' } as ModuleContext['config'],
+      now: NOW,
+      prom: null,
+      data: {},
+      detected,
+      vulnDb,
+    };
   };
-  const cnpg: Detected = { entry: CATALOG.find((e) => e.id === 'cnpg')!, namespace: 'cnpg-system', version: '1.26.1', image: 'ghcr.io/cloudnative-pg/cloudnative-pg:1.26.1', workloads: [], services: [], links: [] };
+  const cnpg: Detected = {
+    entry: CATALOG.find((e) => e.id === 'cnpg')!,
+    namespace: 'cnpg-system',
+    version: '1.26.1',
+    image: 'ghcr.io/cloudnative-pg/cloudnative-pg:1.26.1',
+    workloads: [],
+    services: [],
+    links: [],
+  };
 
   it('is off by default and says what leaves the cluster', () => {
     expect(check.defaultOff).toBe(true);
@@ -292,24 +417,40 @@ describe('vulnerabilities check', () => {
     expect(de(check.privacy({ vulnDbUrl: 'https://api.osv.dev' } as ModuleContext['config']))).toBe(
       'Schickt Namen und Versionen der Komponenten an api.osv.dev (Google). Keine Clusterdaten, keine Namen von Workloads.',
     );
-    expect(de(check.privacy({ vulnDbUrl: 'https://osv.mirror.svc' } as ModuleContext['config']))).toContain('an osv.mirror.svc.');
+    expect(de(check.privacy({ vulnDbUrl: 'https://osv.mirror.svc' } as ModuleContext['config']))).toContain(
+      'an osv.mirror.svc.',
+    );
   });
 
   it('reports the demo database answer as a warning on the component', async () => {
     const result = de(await check.run(ctx(new DemoVulnDb(), [cnpg]), () => true));
-    expect(result.issues.map((i) => [i.id, i.severity, i.title])).toEqual([['vulnerabilities/cnpg', 'warning', 'CloudNativePG 1.26.1: 1 bekannte Schwachstelle']]);
+    expect(result.issues.map((i) => [i.id, i.severity, i.title])).toEqual([
+      ['vulnerabilities/cnpg', 'warning', 'CloudNativePG 1.26.1: 1 bekannte Schwachstelle'],
+    ]);
     expect(result.summary).toBe('1 Komponente mit bekannten Schwachstellen');
-    expect(result.stats.find((s) => s.label === 'Kritisch')).toEqual({ label: 'Kritisch', value: '1', tone: 'critical' });
+    expect(result.stats.find((s) => s.label === 'Kritisch')).toEqual({
+      label: 'Kritisch',
+      value: '1',
+      tone: 'critical',
+    });
   });
 
   it('fails (module error, not a red light) when the database is unreachable', async () => {
-    const down = { host: 'api.osv.dev', lookup: async () => Promise.reject(new Error('api.osv.dev unreachable: timeout')) };
+    const down = {
+      host: 'api.osv.dev',
+      lookup: async () => Promise.reject(new Error('api.osv.dev unreachable: timeout')),
+    };
     await expect(check.run(ctx(down, [cnpg]), () => true)).rejects.toThrow('api.osv.dev unreachable');
   });
 
   it('says so when it shows older answers', async () => {
-    const stale = { host: 'api.osv.dev', lookup: async () => ({ results: [[], []], staleSince: new Date(NOW.getTime() - 3 * 3_600_000) }) };
+    const stale = {
+      host: 'api.osv.dev',
+      lookup: async () => ({ results: [[], []], staleSince: new Date(NOW.getTime() - 3 * 3_600_000) }),
+    };
     const result = de(await check.run(ctx(stale, [cnpg]), () => true));
-    expect(result.summary).toBe('Keine bekannten Schwachstellen in 2 Versionen, nur Kubernetes und erkannte Komponenten (Stand vor 3 h, api.osv.dev gerade nicht erreichbar)');
+    expect(result.summary).toBe(
+      'Keine bekannten Schwachstellen in 2 Versionen, nur Kubernetes und erkannte Komponenten (Stand vor 3 h, api.osv.dev gerade nicht erreichbar)',
+    );
   });
 });

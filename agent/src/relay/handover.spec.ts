@@ -1,7 +1,16 @@
 import { AddressInfo } from 'node:net';
-import { FrameType, RegistrationChallenge, decodeFrame, encodeFrame, generateKeyPair, randomBytes } from '@kubernanny/protocol';
+
+import {
+  decodeFrame,
+  encodeFrame,
+  FrameType,
+  generateKeyPair,
+  randomBytes,
+  RegistrationChallenge,
+} from '@kubernanny/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocketServer } from 'ws';
+
 import { IdentityService } from '../auth/identity.service';
 import { Config } from '../config';
 import { E2eService } from '../e2e/e2e.service';
@@ -39,7 +48,11 @@ describe('relay connection across a handover', () => {
 
   it('closes with 1001 on handOver, stays away, and connects again when in charge again', async () => {
     const r = relay();
-    const client = new RelayClient({ relayUrl: r.url } as Config, { keyPair: generateKeyPair() } as IdentityService, { handle: async () => ({ kind: 'plain', status: 400, code: 'X' }) } as unknown as E2eService);
+    const client = new RelayClient(
+      { relayUrl: r.url } as Config,
+      { keyPair: generateKeyPair() } as IdentityService,
+      { handle: async () => ({ kind: 'plain', status: 400, code: 'X' }) } as unknown as E2eService,
+    );
     client.onApplicationBootstrap();
     await until(() => client.status()?.connected === true, 5000);
     client.handOver();

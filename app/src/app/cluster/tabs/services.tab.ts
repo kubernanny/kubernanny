@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { IonIcon } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
+
 import { CategoryGroup } from '../cluster-view';
 
 @Component({
@@ -12,11 +13,17 @@ import { CategoryGroup } from '../cluster-view';
       <p class="muted intro">{{ t('services.intro') }}</p>
       @for (group of groups(); track group.category) {
         <section>
-          <h2>{{ group.label }} <span class="count">{{ group.rows.length }}</span></h2>
+          <h2>
+            {{ group.label }} <span class="count">{{ group.rows.length }}</span>
+          </h2>
           <ul>
             @for (row of group.rows; track row.module.id) {
               <li>
-                <button type="button" [class]="'tone-' + row.tone" (click)="open.emit(row.module.id)">
+                <button
+                  type="button"
+                  [class]="'tone-' + row.tone"
+                  (click)="open.emit(row.module.id)"
+                >
                   <span class="icon"><ion-icon [name]="row.module.icon" aria-hidden="true" /></span>
                   <span class="text">
                     <span class="name">

@@ -1,12 +1,12 @@
 import { ActionType, OPT_IN_ACTIONS } from '../checks/types';
-import { CATALOG } from '../discovery/catalog';
 import type { Config } from '../config';
+import { CATALOG } from '../discovery/catalog';
 import { render } from '../i18n/text';
 import { CORE_CHECKS } from '../modules/core';
 import { INTEGRATIONS } from '../modules/integrations';
 import { CheckModule, CoreCheck } from '../modules/module';
 import { INVENTORY_READS, NAMESPACE_ROLE, NEVER, WRITE_EFFECTS, WriteActionType } from './permissions';
-import { Rule, WRITE_ACTIONS, rbacExport } from './rules';
+import { rbacExport, Rule, WRITE_ACTIONS } from './rules';
 import { SWITCHES } from './switches';
 
 /**
@@ -52,7 +52,9 @@ function outboundOf(m: CheckModule): string | undefined {
     const privacy = m.privacy(DOC_CONFIG);
     return privacy ? render(privacy, 'en') : undefined;
   }
-  return 'untrusted' in m && m.untrusted ? `plain HTTP GET to ${moduleName(m)} over cluster DNS; its answers never carry actions` : undefined;
+  return 'untrusted' in m && m.untrusted
+    ? `plain HTTP GET to ${moduleName(m)} over cluster DNS; its answers never carry actions`
+    : undefined;
 }
 
 function moduleName(m: CheckModule): string {
@@ -75,14 +77,18 @@ function impossible(type: ActionType): string {
   // Opt-in actions are off unless enabled, so they keep a shared rule only when someone switched them on.
   const sharedOn = shared.filter((s) => !OPT_IN_ACTIONS.includes(s));
   const sharedOptIn = shared.filter((s) => OPT_IN_ACTIONS.includes(s));
-  const optInNote = sharedOptIn.length ? ` (and ${sharedOptIn.map(code).join(', ')} not named in ${code('actions.enabled')}, as by default)` : '';
+  const optInNote = sharedOptIn.length
+    ? ` (and ${sharedOptIn.map(code).join(', ')} not named in ${code('actions.enabled')}, as by default)`
+    : '';
   const rule = sharedOn.length
     ? `removes the rule only together with ${sharedOn.map((s) => code(`actions.disabled: [${s}]`)).join(', ')}${optInNote}, or with ${code('checks.disabled')} for ${modules}`
     : shared.length
       ? `removes the rule${optInNote}; so does ${code('checks.disabled')} for ${modules}`
-    : `removes the rule; so does ${code('checks.disabled')} for ${grant.modules.length > 1 ? `all of ${modules}` : modules}`;
+      : `removes the rule; so does ${code('checks.disabled')} for ${grant.modules.length > 1 ? `all of ${modules}` : modules}`;
   const all = WRITE_ACTIONS.includes(type) ? `, or ${code('rbac.allowActions: false')} for every write action` : '';
-  const optIn = OPT_IN_ACTIONS.includes(type) ? `Off by default: leave it out of ${code('actions.enabled')} (the default). Also ` : '';
+  const optIn = OPT_IN_ACTIONS.includes(type)
+    ? `Off by default: leave it out of ${code('actions.enabled')} (the default). Also `
+    : '';
   return `${optIn}${code(`actions.disabled: [${type}]`)}: the route answers 403 and ${rule}${all}`;
 }
 
@@ -100,29 +106,64 @@ function writeTable(): string {
 
 function moduleTable(): string {
   const rows = [...CORE_CHECKS, ...INTEGRATIONS].map((m) => {
-    const onByDefault = m instanceof CoreCheck ? (m.defaultOff ? 'no (switch on in the app or Helm)' : 'yes') : 'when detected';
-    const reads = m.reads.length ? m.reads.map((r) => `get, list ${resource(r.group, r.resource)}: ${r.why}`).join('<br>') : 'nothing of its own (the inventory)';
+    const onByDefault =
+      m instanceof CoreCheck ? (m.defaultOff ? 'no (switch on in the app or Helm)' : 'yes') : 'when detected';
+    const reads = m.reads.length
+      ? m.reads.map((r) => `get, list ${resource(r.group, r.resource)}: ${r.why}`).join('<br>')
+      : 'nothing of its own (the inventory)';
     const other = [outboundOf(m)].filter((o) => o !== undefined);
     const actions = m.actions.length ? m.actions.map(code).join(', ') : '';
-    const sole = (Object.entries(rbacExport().actions) as [ActionType, { modules: string[] }][]).filter(([, g]) => g.modules.length === 1 && g.modules[0] === m.id).map(([type]) => code(type));
-    const removed = [m.reads.length ? 'its RBAC rules' : '', sole.length ? `the permissions of ${sole.join(', ')}` : '', other.length ? 'its outbound requests' : '', 'its issues'].filter(Boolean).join(', ');
+    const sole = (Object.entries(rbacExport().actions) as [ActionType, { modules: string[] }][])
+      .filter(([, g]) => g.modules.length === 1 && g.modules[0] === m.id)
+      .map(([type]) => code(type));
+    const removed = [
+      m.reads.length ? 'its RBAC rules' : '',
+      sole.length ? `the permissions of ${sole.join(', ')}` : '',
+      other.length ? 'its outbound requests' : '',
+      'its issues',
+    ]
+      .filter(Boolean)
+      .join(', ');
     return `| ${code(m.id)} | ${moduleName(m)} | ${onByDefault} | ${reads} | ${actions} | ${other.join('; ')} | ${code(`checks.disabled: [${m.id}]`)}: not run; removes ${removed} |`;
   });
-  return ['| Id | Module | On by default | Reads, and why | Offers | Other access | How to make it impossible |', '|---|---|---|---|---|---|---|', ...rows].join('\n');
+  return [
+    '| Id | Module | On by default | Reads, and why | Offers | Other access | How to make it impossible |',
+    '|---|---|---|---|---|---|---|',
+    ...rows,
+  ].join('\n');
 }
 
 function inventoryTable(): string {
-  return ['| Resources | Verbs | Why |', '|---|---|---|', ...INVENTORY_READS.map((r) => `| ${r.resources.map((x) => resource(r.group, x)).join(', ')} | ${r.verbs.join(', ')} | ${r.why} |`)].join('\n');
+  return [
+    '| Resources | Verbs | Why |',
+    '|---|---|---|',
+    ...INVENTORY_READS.map(
+      (r) => `| ${r.resources.map((x) => resource(r.group, x)).join(', ')} | ${r.verbs.join(', ')} | ${r.why} |`,
+    ),
+  ].join('\n');
 }
 
 function roleTable(): string {
-  return ['| Resources | Names | Verbs | What for |', '|---|---|---|---|', ...NAMESPACE_ROLE.map((r) => `| ${r.resources.map((x) => (r.group ? `${r.group}/${x}` : x)).join(', ')} | ${r.names.map(code).join(', ') || 'any (see why)'} | ${r.verbs.join(', ')} | ${r.holds} |`)].join('\n');
+  return [
+    '| Resources | Names | Verbs | What for |',
+    '|---|---|---|---|',
+    ...NAMESPACE_ROLE.map(
+      (r) =>
+        `| ${r.resources.map((x) => (r.group ? `${r.group}/${x}` : x)).join(', ')} | ${r.names.map(code).join(', ') || 'any (see why)'} | ${r.verbs.join(', ')} | ${r.holds} |`,
+    ),
+  ].join('\n');
 }
 
 function switchMatrix(valuesPaths: ReadonlySet<string>): string {
-  const head = ['| Switch | Hard | RBAC removed | Routes refused | Outbound removed | Other |', '|---|---|---|---|---|---|'];
+  const head = [
+    '| Switch | Hard | RBAC removed | Routes refused | Outbound removed | Other |',
+    '|---|---|---|---|---|---|',
+  ];
   const cell = (s?: string) => s ?? '';
-  const general = SWITCHES.filter((s) => valuesPaths.has(s.value)).map((s) => `| ${code(s.set)} | ${s.hard ? 'yes' : 'no'} | ${cell(s.rbac)} | ${cell(s.routes)} | ${cell(s.outbound)} | ${cell(s.other)} |`);
+  const general = SWITCHES.filter((s) => valuesPaths.has(s.value)).map(
+    (s) =>
+      `| ${code(s.set)} | ${s.hard ? 'yes' : 'no'} | ${cell(s.rbac)} | ${cell(s.routes)} | ${cell(s.outbound)} | ${cell(s.other)} |`,
+  );
   const exported = rbacExport();
   const actions = (Object.keys(exported.actions) as ActionType[]).map((type) => {
     const shared = sharedWith(type);

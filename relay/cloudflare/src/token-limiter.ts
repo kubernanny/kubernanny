@@ -6,8 +6,9 @@
  * pushed to; the token itself is never stored or sent there.
  */
 import { pushTokenDigest } from '@kubernanny/protocol';
+
 import { BucketState } from '../../src/core/limits';
-import { TokenGate, parsePushConfig, tokenBucket } from '../../src/core/push';
+import { parsePushConfig, tokenBucket, TokenGate } from '../../src/core/push';
 import { stringVars } from './agent-object';
 
 export interface TokenLimiterStorage {
@@ -39,7 +40,11 @@ export class TokenLimiterCore {
   async fetch(request?: { url: string }): Promise<Response> {
     const now = this.now();
     const status = request !== undefined && new URL(request.url).pathname === '/take-status';
-    const bucket = tokenBucket(status ? this.statusPerHour : this.perHour, now, await this.storage.get<BucketState>('bucket'));
+    const bucket = tokenBucket(
+      status ? this.statusPerHour : this.perHour,
+      now,
+      await this.storage.get<BucketState>('bucket'),
+    );
     const allowed = bucket.takeExact(1, now);
     if (allowed) {
       await this.storage.put('bucket', bucket.state());
@@ -60,7 +65,9 @@ export function durableTokenGate(namespace: TokenLimiterNamespace): TokenGate {
     async take(token, silent) {
       const digest = pushTokenDigest(token);
       const res = silent
-        ? await namespace.get(namespace.idFromName(`status:${digest}`)).fetch('https://token-limiter/take-status', { method: 'POST' })
+        ? await namespace
+            .get(namespace.idFromName(`status:${digest}`))
+            .fetch('https://token-limiter/take-status', { method: 'POST' })
         : await namespace.get(namespace.idFromName(digest)).fetch('https://token-limiter/take', { method: 'POST' });
       return res.status === 204;
     },

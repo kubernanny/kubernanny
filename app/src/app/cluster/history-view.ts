@@ -1,4 +1,4 @@
-import { IncidentView, IncidentsView, ModuleView, Tone } from '../core/agent.model';
+import { IncidentsView, IncidentView, ModuleView, Tone } from '../core/agent.model';
 import { clockTime, dateTime, span, startOfDay } from '../core/format';
 import { Translator } from '../i18n/translator';
 
@@ -65,11 +65,19 @@ function dayLabel(dayStart: number, today: number, tr: Translator): string {
   if (dayStart === startOfDay(today - DAY / 2)) {
     return tr.t('history.yesterday');
   }
-  return new Date(dayStart).toLocaleDateString(tr.locale, { weekday: 'short', day: 'numeric', month: 'numeric' });
+  return new Date(dayStart).toLocaleDateString(tr.locale, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'numeric',
+  });
 }
 
 /** Groups rows by start day, keeping their order (newest first). */
-function byDay(rows: { row: IncidentRow; day: number }[], today: number, tr: Translator): IncidentDay[] {
+function byDay(
+  rows: { row: IncidentRow; day: number }[],
+  today: number,
+  tr: Translator,
+): IncidentDay[] {
   const groups: IncidentDay[] = [];
   for (const { row, day } of rows) {
     const last = groups[groups.length - 1];
@@ -88,7 +96,12 @@ function byDay(rows: { row: IncidentRow; day: number }[], today: number, tr: Tra
  * incidents are measured to `now`, not taken from the answer, so they keep
  * counting between polls.
  */
-export function historyView(view: IncidentsView | null, modules: ModuleView[], now: Date, tr: Translator): HistoryVM {
+export function historyView(
+  view: IncidentsView | null,
+  modules: ModuleView[],
+  now: Date,
+  tr: Translator,
+): HistoryVM {
   const incidents = view?.incidents ?? [];
   const t = now.getTime();
   const today = startOfDay(t);
@@ -99,17 +112,33 @@ export function historyView(view: IncidentsView | null, modules: ModuleView[], n
   for (let back = 6; back >= 0; back--) {
     const from = startOfDay(today - back * DAY + DAY / 2);
     const to = startOfDay(from + DAY * 1.5);
-    const label = from === today ? tr.t('history.today') : new Date(from).toLocaleDateString(tr.locale, { weekday: 'short' });
+    const label =
+      from === today
+        ? tr.t('history.today')
+        : new Date(from).toLocaleDateString(tr.locale, { weekday: 'short' });
     const long = dayLabel(from, today, tr);
     const touching = incidents.filter((i) => touches(i, from, to, t));
     const unwatched = to <= covered;
-    const tone: Tone = unwatched ? 'muted' : touching.some((i) => i.severity === 'critical') ? 'critical' : touching.length ? 'warning' : 'ok';
+    const tone: Tone = unwatched
+      ? 'muted'
+      : touching.some((i) => i.severity === 'critical')
+        ? 'critical'
+        : touching.length
+          ? 'warning'
+          : 'ok';
     const title = unwatched
       ? tr.t('history.dayUnknown', { day: long })
       : touching.length
         ? tr.n('history.dayIssues', touching.length, { day: long })
         : tr.t('history.dayNone', { day: long });
-    days.push({ key: from, label: label.replace(/\.$/, ''), tone, count: touching.length, title, today: from === today });
+    days.push({
+      key: from,
+      label: label.replace(/\.$/, ''),
+      tone,
+      count: touching.length,
+      title,
+      today: from === today,
+    });
   }
 
   const rows = incidents.map((i) => {
@@ -121,7 +150,9 @@ export function historyView(view: IncidentsView | null, modules: ModuleView[], n
       tone: i.severity,
       icon: i.severity === 'critical' ? 'alert-circle' : 'warning',
       meta: [names.get(i.module) ?? i.module, clockTime(start, tr.lang)].join(', '),
-      duration: open ? tr.t('history.stillOpen', { span: span(t - start, tr.lang) }) : span(i.durationMs, tr.lang),
+      duration: open
+        ? tr.t('history.stillOpen', { span: span(t - start, tr.lang) })
+        : span(i.durationMs, tr.lang),
       open,
       silenced: i.silenced,
     };
@@ -135,6 +166,9 @@ export function historyView(view: IncidentsView | null, modules: ModuleView[], n
     preview: byDay(rows.slice(0, HISTORY_PREVIEW), today, tr),
     total: incidents.length,
     summary: incidents.length ? tr.n('history.total', incidents.length) : tr.t('history.none'),
-    coveredNote: view && covered > windowStart ? tr.t('history.coveredSince', { when: dateTime(view.coveredSince, tr.lang) }) : null,
+    coveredNote:
+      view && covered > windowStart
+        ? tr.t('history.coveredSince', { when: dateTime(view.coveredSince, tr.lang) })
+        : null,
   };
 }

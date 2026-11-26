@@ -1,8 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
-import { translatorFor } from '../i18n/translator';
+
 import { buildClusterView } from '../cluster/cluster-view';
+import { translatorFor } from '../i18n/translator';
 import { Snapshot } from './agent.model';
 import { KNOWN_AGENT_VERSION, olderThan } from './version';
 
@@ -20,9 +22,30 @@ describe('agent version', () => {
   });
 
   it('suggests an update only for an older agent', () => {
-    const base = { cluster: 'c', light: 'green', score: 100, checkedAt: new Date().toISOString(), durationMs: 1, agentVersion: '0.3.0', kubernetes: null, overview: null, modules: [], issues: [] } as Snapshot;
-    expect(buildClusterView({ ...base, agentVersion: '0.2.0' }, null, new Date(), translatorFor('de')).update?.command).toContain('helm upgrade');
-    expect(buildClusterView({ ...base, agentVersion: KNOWN_AGENT_VERSION }, null, new Date(), translatorFor('de')).update).toBeNull();
+    const base = {
+      cluster: 'c',
+      light: 'green',
+      score: 100,
+      checkedAt: new Date().toISOString(),
+      durationMs: 1,
+      agentVersion: '0.3.0',
+      kubernetes: null,
+      overview: null,
+      modules: [],
+      issues: [],
+    } as Snapshot;
+    expect(
+      buildClusterView({ ...base, agentVersion: '0.2.0' }, null, new Date(), translatorFor('de'))
+        .update?.command,
+    ).toContain('helm upgrade');
+    expect(
+      buildClusterView(
+        { ...base, agentVersion: KNOWN_AGENT_VERSION },
+        null,
+        new Date(),
+        translatorFor('de'),
+      ).update,
+    ).toBeNull();
     expect(buildClusterView(base, null, new Date(), translatorFor('de')).update).toBeNull();
   });
 });

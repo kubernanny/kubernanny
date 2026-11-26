@@ -1,7 +1,8 @@
 import { DEADMAN_GRACE_MINUTES } from '@kubernanny/protocol';
+
+import { Translator } from '../../i18n/translator';
 import { AgentPushView } from '../agent.model';
 import { NativePushStatus } from './push-native';
-import { Translator } from '../../i18n/translator';
 
 export interface PushVM {
   /** Shown at all: only in a build that can push, for a real cluster whose agent answered. */
@@ -31,17 +32,42 @@ export interface DeadmanVM {
   note: string;
 }
 
-const HIDDEN: PushVM = { visible: false, locked: false, note: '', action: null, actionLabel: '', canTest: false, markerLine: '', markerActionLabel: '', deadman: null };
+const HIDDEN: PushVM = {
+  visible: false,
+  locked: false,
+  note: '',
+  action: null,
+  actionLabel: '',
+  canTest: false,
+  markerLine: '',
+  markerActionLabel: '',
+  deadman: null,
+};
 
 /** The dead man's switch row of a device with push on (docs/NOTIFICATIONS.md, "When the agent goes silent"). */
 export function deadmanView(agent: AgentPushView, tr: Translator, fallbackGrace = 15): DeadmanVM {
-  const graces = DEADMAN_GRACE_MINUTES.map((minutes) => ({ minutes, label: tr.t('push.deadmanMinutes', { n: minutes }) }));
+  const graces = DEADMAN_GRACE_MINUTES.map((minutes) => ({
+    minutes,
+    label: tr.t('push.deadmanMinutes', { n: minutes }),
+  }));
   const d = agent.deadman;
   if (d.state === 'locked') {
-    return { editable: false, on: false, grace: fallbackGrace, graces, note: tr.t('push.deadmanLocked') };
+    return {
+      editable: false,
+      on: false,
+      grace: fallbackGrace,
+      graces,
+      note: tr.t('push.deadmanLocked'),
+    };
   }
   const on = d.grace !== null;
-  return { editable: true, on, grace: d.grace ?? fallbackGrace, graces, note: tr.t(d.state === 'relay' ? 'push.deadmanRelay' : 'push.deadmanHint') };
+  return {
+    editable: true,
+    on,
+    grace: d.grace ?? fallbackGrace,
+    graces,
+    note: tr.t(d.state === 'relay' ? 'push.deadmanRelay' : 'push.deadmanHint'),
+  };
 }
 
 /**
@@ -49,7 +75,15 @@ export function deadmanView(agent: AgentPushView, tr: Translator, fallbackGrace 
  * the registration: when it forgot the token (FCM dropped it, the deployment
  * switched push off and back on) the button offers to turn push on again.
  */
-export function pushView(input: { demo: boolean; native: NativePushStatus | null; agent: AgentPushView | null; marker?: string | null }, tr: Translator): PushVM {
+export function pushView(
+  input: {
+    demo: boolean;
+    native: NativePushStatus | null;
+    agent: AgentPushView | null;
+    marker?: string | null;
+  },
+  tr: Translator,
+): PushVM {
   const { demo, native, agent, marker } = input;
   if (demo || !native?.available || !agent) {
     return HIDDEN;
@@ -73,5 +107,11 @@ export function pushView(input: { demo: boolean; native: NativePushStatus | null
       deadman: deadmanView(agent, tr),
     };
   }
-  return { ...HIDDEN, visible: true, note: tr.t('push.hint'), action: 'enable', actionLabel: tr.t('push.enable') };
+  return {
+    ...HIDDEN,
+    visible: true,
+    note: tr.t('push.hint'),
+    action: 'enable',
+    actionLabel: tr.t('push.enable'),
+  };
 }

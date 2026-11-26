@@ -44,7 +44,11 @@ export function runTiming(r: RunTimingInput): DetailSection[] {
   const queries: DetailRow[] = [...(r.prometheus ?? [])]
     .sort((a, b) => b.ms - a.ms)
     .slice(0, 4)
-    .map((q) => ({ name: raw(q.expr.length > 90 ? `${q.expr.slice(0, 89)}…` : q.expr), value: ms(q.ms), tone: 'muted' }));
+    .map((q) => ({
+      name: raw(q.expr.length > 90 ? `${q.expr.slice(0, 89)}…` : q.expr),
+      value: ms(q.ms),
+      tone: 'muted',
+    }));
   return [
     { title: t('timing.title'), kind: 'list', rows: phases },
     ...(modules.length ? [{ title: t('timing.slowestModules'), kind: 'list' as const, rows: modules }] : []),

@@ -1,12 +1,36 @@
-import { FrameType, PushRequest, decodeFrame, decodePushResult, encodeFrame, encodePushRequest, toBase64Url } from '@kubernanny/protocol';
+import {
+  decodeFrame,
+  decodePushResult,
+  encodeFrame,
+  encodePushRequest,
+  FrameType,
+  PushRequest,
+  toBase64Url,
+} from '@kubernanny/protocol';
 import { describe, expect, it, vi } from 'vitest';
+
 import { AgentLink, LinkPush, LinkSocket } from '../src/core/agent-link';
 import { DEFAULT_LIMITS } from '../src/core/limits';
+import {
+  FcmClient,
+  fcmMessage,
+  memoryTokenGate,
+  outcomeOf,
+  parsePushConfig,
+  parseServiceAccount,
+  pushSender,
+  ServiceAccount,
+  TokenLimiter,
+} from '../src/core/push';
 import { AgentPushPolicy, PENALTY } from '../src/core/push-policy';
-import { FcmClient, ServiceAccount, TokenLimiter, fcmMessage, memoryTokenGate, outcomeOf, parsePushConfig, parseServiceAccount, pushSender } from '../src/core/push';
 
 const accountJson = (overrides: Record<string, unknown> = {}) =>
-  JSON.stringify({ client_email: 'relay@kubernanny-test.iam.gserviceaccount.com', private_key: '-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n', project_id: 'kubernanny-test', ...overrides });
+  JSON.stringify({
+    client_email: 'relay@kubernanny-test.iam.gserviceaccount.com',
+    private_key: '-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n',
+    project_id: 'kubernanny-test',
+    ...overrides,
+  });
 
 const request = (overrides: Partial<PushRequest> = {}): PushRequest => ({
   token: 'dGVzdC10b2tlbi1mb3ItZmNt:APA91bHPRgkF',
@@ -28,7 +52,9 @@ describe('push configuration', () => {
 
   it('fails the start on a broken key file or switch, and has fair-use defaults', () => {
     expect(() => parsePushConfig({ FCM_SERVICE_ACCOUNT: '{nope' })).toThrow(/JSON/);
-    expect(() => parsePushConfig({ FCM_SERVICE_ACCOUNT: accountJson({ project_id: undefined }) })).toThrow(/project_id/);
+    expect(() => parsePushConfig({ FCM_SERVICE_ACCOUNT: accountJson({ project_id: undefined }) })).toThrow(
+      /project_id/,
+    );
     expect(() => parsePushConfig({ RELAY_PUSH: 'maybe' })).toThrow(/RELAY_PUSH/);
     expect(parsePushConfig({})).toMatchObject({ agentBurst: 20, agentPerHour: 60, tokenPerHour: 30 });
     expect(parsePushConfig({ RELAY_PUSHES_PER_HOUR: '10' }).agentPerHour).toBe(10);
@@ -38,20 +64,33 @@ describe('push configuration', () => {
   });
 
   it('only ever sends the assertion to Google, whatever the key file says', () => {
-    expect(parseServiceAccount(accountJson({ token_uri: 'https://evil.example/token' })).tokenUri).toBe('https://oauth2.googleapis.com/token');
+    expect(parseServiceAccount(accountJson({ token_uri: 'https://evil.example/token' })).tokenUri).toBe(
+      'https://oauth2.googleapis.com/token',
+    );
   });
 });
 
 describe('the FCM message', () => {
   it('is data only on Android: key id and sealed bytes, nothing else', () => {
-    expect(fcmMessage(request())).toEqual({ message: { token: request().token, data: { k: request().kid, m: request().message }, android: { priority: 'HIGH', ttl: '86400s' } } });
+    expect(fcmMessage(request())).toEqual({
+      message: {
+        token: request().token,
+        data: { k: request().kid, m: request().message },
+        android: { priority: 'HIGH', ttl: '86400s' },
+      },
+    });
   });
 
   it('is a generic, mutable alert on iOS, in the agent language', () => {
-    const message = fcmMessage(request({ platform: 'ios', lang: 'de' })) as { message: { apns: { payload: { aps: Record<string, unknown> } }; data: unknown } };
+    const message = fcmMessage(request({ platform: 'ios', lang: 'de' })) as {
+      message: { apns: { payload: { aps: Record<string, unknown> } }; data: unknown };
+    };
     expect(message.message.data).toEqual({ k: request().kid, m: request().message });
     expect(message.message.apns.payload.aps['mutable-content']).toBe(1);
-    expect(message.message.apns.payload.aps['alert']).toEqual({ title: 'Kubernanny', body: expect.stringContaining('Öffne Kubernanny') });
+    expect(message.message.apns.payload.aps['alert']).toEqual({
+      title: 'Kubernanny',
+      body: expect.stringContaining('Öffne Kubernanny'),
+    });
   });
 
   // A `notification` block would be shown by Android without the app's code, and an APNs alert
@@ -60,7 +99,12 @@ describe('the FCM message', () => {
   it('never carries a notification block, and the iOS alert always goes through the extension', () => {
     for (const platform of ['android', 'ios'] as const) {
       for (const lang of [undefined, 'en', 'de'] as const) {
-        const message = fcmMessage(request({ platform, ...(lang ? { lang } : {}) })) as { message: Record<string, unknown> & { android?: Record<string, unknown>; apns?: { payload: { aps: Record<string, unknown> } } } };
+        const message = fcmMessage(request({ platform, ...(lang ? { lang } : {}) })) as {
+          message: Record<string, unknown> & {
+            android?: Record<string, unknown>;
+            apns?: { payload: { aps: Record<string, unknown> } };
+          };
+        };
         expect(message.message).not.toHaveProperty('notification');
         expect(Object.keys(message.message.data as object).sort()).toEqual(['k', 'm']);
         if (platform === 'android') {
@@ -81,7 +125,9 @@ describe('the FCM message', () => {
   it('maps FCM answers to outcomes', () => {
     expect(outcomeOf(200, null)).toBe('sent');
     expect(outcomeOf(404, null)).toBe('unregistered');
-    expect(outcomeOf(400, { error: { status: 'INVALID_ARGUMENT', details: [{ errorCode: 'UNREGISTERED' }] } })).toBe('unregistered');
+    expect(outcomeOf(400, { error: { status: 'INVALID_ARGUMENT', details: [{ errorCode: 'UNREGISTERED' }] } })).toBe(
+      'unregistered',
+    );
     expect(outcomeOf(429, null)).toBe('rate_limited');
     expect(outcomeOf(503, null)).toBe('unavailable');
     expect(outcomeOf(400, { error: { status: 'INVALID_ARGUMENT' } })).toBe('invalid');
@@ -91,7 +137,11 @@ describe('the FCM message', () => {
 
 /** A fake Google: checks the signed assertion with the account's public key, then takes messages. */
 async function fakeGoogle() {
-  const keys = (await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify'])) as CryptoKeyPair;
+  const keys = (await crypto.subtle.generateKey(
+    { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+    true,
+    ['sign', 'verify'],
+  )) as CryptoKeyPair;
   const pkcs8 = Buffer.from(await crypto.subtle.exportKey('pkcs8', keys.privateKey)).toString('base64');
   const account: ServiceAccount = {
     clientEmail: `relay-${Math.random().toString(36).slice(2)}@kubernanny-test.iam.gserviceaccount.com`,
@@ -109,19 +159,46 @@ async function fakeGoogle() {
       tokenRequests++;
       const assertion = new URLSearchParams(init.body).get('assertion')!;
       const [header, claims, signature] = assertion.split('.');
-      const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', keys.publicKey, Buffer.from(signature!, 'base64url'), new TextEncoder().encode(`${header}.${claims}`));
+      const valid = await crypto.subtle.verify(
+        'RSASSA-PKCS1-v1_5',
+        keys.publicKey,
+        Buffer.from(signature!, 'base64url'),
+        new TextEncoder().encode(`${header}.${claims}`),
+      );
       const parsed = JSON.parse(Buffer.from(claims!, 'base64url').toString()) as Record<string, unknown>;
-      const ok = valid && parsed['iss'] === account.clientEmail && parsed['scope'] === 'https://www.googleapis.com/auth/firebase.messaging' && parsed['aud'] === account.tokenUri;
-      return { status: ok ? 200 : 400, json: async () => (ok ? { access_token: 'ya29.test', expires_in: 3599 } : { error: 'invalid_grant' }) };
+      const ok =
+        valid &&
+        parsed['iss'] === account.clientEmail &&
+        parsed['scope'] === 'https://www.googleapis.com/auth/firebase.messaging' &&
+        parsed['aud'] === account.tokenUri;
+      return {
+        status: ok ? 200 : 400,
+        json: async () => (ok ? { access_token: 'ya29.test', expires_in: 3599 } : { error: 'invalid_grant' }),
+      };
     }
     messages.push({ url, auth: init.headers['authorization']!, body: JSON.parse(init.body) });
     const status = fcmStatus;
     if (queued.length) {
       fcmStatus = queued.shift()!;
     }
-    return { status, json: async () => (status === 200 ? { name: 'projects/x/messages/1' } : status === 401 ? { error: { status: 'UNAUTHENTICATED' } } : { error: { status: 'NOT_FOUND', details: [{ errorCode: 'UNREGISTERED' }] } }) };
+    return {
+      status,
+      json: async () =>
+        status === 200
+          ? { name: 'projects/x/messages/1' }
+          : status === 401
+            ? { error: { status: 'UNAUTHENTICATED' } }
+            : { error: { status: 'NOT_FOUND', details: [{ errorCode: 'UNREGISTERED' }] } },
+    };
   });
-  return { account, messages, fetchFn, tokens: () => tokenRequests, answer: (status: number) => (fcmStatus = status), answerOnce: (status: number) => queued.push(status) };
+  return {
+    account,
+    messages,
+    fetchFn,
+    tokens: () => tokenRequests,
+    answer: (status: number) => (fcmStatus = status),
+    answerOnce: (status: number) => queued.push(status),
+  };
 }
 
 describe('FcmClient', () => {
@@ -154,11 +231,19 @@ describe('FcmClient', () => {
 
 describe('the FCM message of a status push', () => {
   it('is data only at normal priority on Android', () => {
-    expect(fcmMessage(request({ silent: true }))).toEqual({ message: { token: request().token, data: { k: request().kid, m: request().message }, android: { priority: 'NORMAL', ttl: '3600s' } } });
+    expect(fcmMessage(request({ silent: true }))).toEqual({
+      message: {
+        token: request().token,
+        data: { k: request().kid, m: request().message },
+        android: { priority: 'NORMAL', ttl: '3600s' },
+      },
+    });
   });
 
   it('is a background push on iOS: content-available, priority 5, no alert, no sound, no mutable-content', () => {
-    const message = fcmMessage(request({ platform: 'ios', silent: true })) as { message: { apns: { headers: Record<string, string>; payload: { aps: Record<string, unknown> } }; data: unknown } };
+    const message = fcmMessage(request({ platform: 'ios', silent: true })) as {
+      message: { apns: { headers: Record<string, string>; payload: { aps: Record<string, unknown> } }; data: unknown };
+    };
     expect(message.message.data).toEqual({ k: request().kid, m: request().message });
     expect(message.message.apns.headers['apns-push-type']).toBe('background');
     expect(message.message.apns.headers['apns-priority']).toBe('5');
@@ -181,7 +266,11 @@ describe('the per-token limit', () => {
     let now = 0;
     const gate = memoryTokenGate(parsePushConfig({}), () => now);
     const sent: PushRequest[] = [];
-    const send = pushSender(parsePushConfig({ FCM_SERVICE_ACCOUNT: accountJson() }), { send: async (r: PushRequest) => (sent.push(r), 'sent' as const) } as unknown as FcmClient, gate)!;
+    const send = pushSender(
+      parsePushConfig({ FCM_SERVICE_ACCOUNT: accountJson() }),
+      { send: async (r: PushRequest) => (sent.push(r), 'sent' as const) } as unknown as FcmClient,
+      gate,
+    )!;
     expect(await send(request({ silent: true }))).toBe('sent');
     expect(await send(request({ silent: true }))).toBe('rate_limited'); // burst 1 of the hourly 2
     // The alerts' budget is untouched by status pushes.
@@ -198,7 +287,11 @@ describe('the per-token limit', () => {
   it('holds across every agent of the relay', async () => {
     const tokens = new TokenLimiter(30, () => 0);
     const sent: string[] = [];
-    const send = pushSender(parsePushConfig({ FCM_SERVICE_ACCOUNT: accountJson() }), { send: async (r: PushRequest) => (sent.push(r.token), 'sent' as const) } as unknown as FcmClient, tokens)!;
+    const send = pushSender(
+      parsePushConfig({ FCM_SERVICE_ACCOUNT: accountJson() }),
+      { send: async (r: PushRequest) => (sent.push(r.token), 'sent' as const) } as unknown as FcmClient,
+      tokens,
+    )!;
     const outcomes = [];
     for (let i = 0; i < 8; i++) {
       outcomes.push(await send(request()));
@@ -212,10 +305,18 @@ describe('the per-token limit', () => {
 describe('AgentLink and Push frames', () => {
   const socket = () => {
     const sent: Uint8Array[] = [];
-    const s: LinkSocket & { sent: Uint8Array[] } = { sent, send: (b, done) => (sent.push(b.slice()), done?.()), close: () => undefined };
+    const s: LinkSocket & { sent: Uint8Array[] } = {
+      sent,
+      send: (b, done) => (sent.push(b.slice()), done?.()),
+      close: () => undefined,
+    };
     return s;
   };
-  const results = (s: { sent: Uint8Array[] }) => s.sent.map(decodeFrame).filter((f) => f.type === FrameType.PushResult).map((f) => [f.callId, decodePushResult(f.payload)]);
+  const results = (s: { sent: Uint8Array[] }) =>
+    s.sent
+      .map(decodeFrame)
+      .filter((f) => f.type === FrameType.PushResult)
+      .map((f) => [f.callId, decodePushResult(f.payload)]);
   const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   it('answers disabled and says push: false on a relay without push', async () => {
@@ -230,7 +331,9 @@ describe('AgentLink and Push frames', () => {
     const s = socket();
     const send = vi.fn(async () => 'sent' as const);
     const done = vi.fn();
-    const link = new AgentLink(s, DEFAULT_LIMITS, { push: { send, policy: policy(20), maxInFlight: 4, done } satisfies LinkPush });
+    const link = new AgentLink(s, DEFAULT_LIMITS, {
+      push: { send, policy: policy(20), maxInFlight: 4, done } satisfies LinkPush,
+    });
     expect(link.info().push).toBe(true);
     link.onFrame(decodeFrame(encodePushRequest(9, request())));
     link.onFrame(decodeFrame(encodePushRequest(9, request()))); // same id while it waits: ignored
@@ -251,7 +354,9 @@ describe('AgentLink and Push frames', () => {
     expect(link.info().statusPush).toBe(true);
     link.onFrame(decodeFrame(encodePushRequest(11, request({ platform: 'ios', silent: true }))));
     await vi.waitFor(() => expect(results(s)).toEqual([[11, 'sent']]));
-    const apns = (google.messages[0]!.body as { message: { apns: { headers: Record<string, string>; payload: unknown } } }).message.apns;
+    const apns = (
+      google.messages[0]!.body as { message: { apns: { headers: Record<string, string>; payload: unknown } } }
+    ).message.apns;
     expect(apns.headers['apns-push-type']).toBe('background');
     expect(apns.payload).toEqual({ aps: { 'content-available': 1 } });
   });
@@ -287,10 +392,16 @@ describe('AgentLink and Push frames', () => {
   it('keeps the allowance in the policy, so a new link (reconnect, woken object) does not refill it', () => {
     const s = socket();
     const shared = policy(1, 1);
-    const link = new AgentLink(s, DEFAULT_LIMITS, { now: () => 0, push: { send: async () => 'sent', policy: shared, maxInFlight: 4 } });
+    const link = new AgentLink(s, DEFAULT_LIMITS, {
+      now: () => 0,
+      push: { send: async () => 'sent', policy: shared, maxInFlight: 4 },
+    });
     link.onFrame(decodeFrame(encodePushRequest(1, request())));
     const restored = new AgentPushPolicy({ burst: 1, perHour: 1, tokensPerDay: 32 }, 0, shared.state());
-    const again = new AgentLink(s, DEFAULT_LIMITS, { now: () => 0, push: { send: async () => 'sent', policy: restored, maxInFlight: 4 } });
+    const again = new AgentLink(s, DEFAULT_LIMITS, {
+      now: () => 0,
+      push: { send: async () => 'sent', policy: restored, maxInFlight: 4 },
+    });
     again.onFrame(decodeFrame(encodePushRequest(2, request())));
     expect(results(s)).toContainEqual([2, 'rate_limited']);
   });
@@ -308,7 +419,10 @@ describe('AgentLink and Push frames', () => {
     const s = socket();
     const send = vi.fn(async () => 'sent' as const);
     const p = policy(20);
-    const link = new AgentLink(s, DEFAULT_LIMITS, { now: () => 0, push: { send, policy: p, gate: { allows: () => false, charge: () => undefined }, maxInFlight: 4 } });
+    const link = new AgentLink(s, DEFAULT_LIMITS, {
+      now: () => 0,
+      push: { send, policy: p, gate: { allows: () => false, charge: () => undefined }, maxInFlight: 4 },
+    });
     link.onFrame(decodeFrame(encodePushRequest(1, request())));
     expect(results(s)).toEqual([[1, 'rate_limited']]);
     expect(send).not.toHaveBeenCalled();
@@ -344,7 +458,11 @@ describe('push policy per agent (review M3)', () => {
     const p = new AgentPushPolicy({ burst: 2, perHour: 2, tokensPerDay: 32 }, 0);
     p.charge('a', 0);
     p.settle('b', 'invalid', 0);
-    const q = new AgentPushPolicy({ burst: 2, perHour: 2, tokensPerDay: 32 }, 10, JSON.parse(JSON.stringify(p.state())) as ReturnType<typeof p.state>);
+    const q = new AgentPushPolicy(
+      { burst: 2, perHour: 2, tokensPerDay: 32 },
+      10,
+      JSON.parse(JSON.stringify(p.state())) as ReturnType<typeof p.state>,
+    );
     expect(q.allows('b', 10)).toBe(false);
     expect(q.isIdle(10)).toBe(false);
   });
@@ -363,20 +481,37 @@ describe('per-token limiter that cannot be emptied by eviction (review M3)', () 
   });
 
   it('fails closed when the limiter cannot be asked', async () => {
-    const send = pushSender(parsePushConfig({ FCM_SERVICE_ACCOUNT: accountJson() }), { send: async () => 'sent' } as unknown as FcmClient, {
-      take: async () => {
-        throw new Error('down');
+    const send = pushSender(
+      parsePushConfig({ FCM_SERVICE_ACCOUNT: accountJson() }),
+      { send: async () => 'sent' } as unknown as FcmClient,
+      {
+        take: async () => {
+          throw new Error('down');
+        },
       },
-    })!;
+    )!;
     expect(await send(request())).toBe('unavailable');
   });
 });
 
 describe('FCM answers and tokens (review L6)', () => {
   it('maps a dead or foreign token to unregistered and a malformed message to invalid', () => {
-    expect(outcomeOf(403, { error: { status: 'PERMISSION_DENIED', details: [{ errorCode: 'SENDER_ID_MISMATCH' }] } })).toBe('unregistered');
-    expect(outcomeOf(400, { error: { status: 'INVALID_ARGUMENT', details: [{ fieldViolations: [{ field: 'message.token', description: 'Invalid registration token' }] }] } })).toBe('unregistered');
-    expect(outcomeOf(400, { error: { status: 'INVALID_ARGUMENT', details: [{ fieldViolations: [{ field: 'message.apns.headers' }] }] } })).toBe('invalid');
+    expect(
+      outcomeOf(403, { error: { status: 'PERMISSION_DENIED', details: [{ errorCode: 'SENDER_ID_MISMATCH' }] } }),
+    ).toBe('unregistered');
+    expect(
+      outcomeOf(400, {
+        error: {
+          status: 'INVALID_ARGUMENT',
+          details: [{ fieldViolations: [{ field: 'message.token', description: 'Invalid registration token' }] }],
+        },
+      }),
+    ).toBe('unregistered');
+    expect(
+      outcomeOf(400, {
+        error: { status: 'INVALID_ARGUMENT', details: [{ fieldViolations: [{ field: 'message.apns.headers' }] }] },
+      }),
+    ).toBe('invalid');
     expect(outcomeOf(500, { error: { status: 'INTERNAL' } })).toBe('unavailable');
   });
 

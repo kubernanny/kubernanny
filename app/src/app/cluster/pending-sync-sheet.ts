@@ -1,8 +1,20 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
-import { AlertController, IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonSpinner, IonToolbar, ModalController, ToastController } from '@ionic/angular/standalone';
+import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
+import {
+  AlertController,
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonIcon,
+  IonSpinner,
+  IonToolbar,
+  ModalController,
+  ToastController,
+} from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
-import { AgentClient, describeError } from '../core/agent-client.service';
+
 import { ClusterConfig, PendingSync } from '../core/agent.model';
+import { AgentClient, describeError } from '../core/agent-client.service';
 import { LanguageService } from '../i18n/language.service';
 import { PendingSyncRow, pendingSyncRows } from './pending-syncs';
 
@@ -10,7 +22,16 @@ import { PendingSyncRow, pendingSyncRows } from './pending-syncs';
 @Component({
   selector: 'app-pending-sync-sheet',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, IonHeader, IonToolbar, IonButtons, IonButton, IonContent, IonIcon, IonSpinner],
+  imports: [
+    TranslocoDirective,
+    IonHeader,
+    IonToolbar,
+    IonButtons,
+    IonButton,
+    IonContent,
+    IonIcon,
+    IonSpinner,
+  ],
   template: `
     <ng-container *transloco="let t">
       <ion-header>
@@ -54,14 +75,18 @@ import { PendingSyncRow, pendingSyncRows } from './pending-syncs';
                 @if (r.revisions) {
                   <div>
                     <dt>{{ t('pendingSync.revisions') }}</dt>
-                    <dd><code>{{ r.revisions }}</code></dd>
+                    <dd>
+                      <code>{{ r.revisions }}</code>
+                    </dd>
                   </div>
                 }
                 @if (r.images.length > 0) {
                   <div>
                     <dt>{{ t('pendingSync.images') }}</dt>
                     @for (i of r.images; track i) {
-                      <dd><code>{{ i }}</code></dd>
+                      <dd>
+                        <code>{{ i }}</code>
+                      </dd>
                     }
                   </div>
                 }

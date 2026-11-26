@@ -1,20 +1,39 @@
 import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
-import { HttpTestingController, TestRequest, provideHttpClientTesting } from '@angular/common/http/testing';
+import {
+  HttpTestingController,
+  provideHttpClientTesting,
+  TestRequest,
+} from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { generateKeyPair, openRequest, peekEphemeral, relayAgentId, toBase64Url } from '@kubernanny/protocol';
+import {
+  generateKeyPair,
+  openRequest,
+  peekEphemeral,
+  relayAgentId,
+  toBase64Url,
+} from '@kubernanny/protocol';
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import { pairingRoute } from '../app';
-import { ClusterConfig } from './agent.model';
 import { translatorFor } from '../i18n/translator';
+import { ClusterConfig } from './agent.model';
 import { AgentClient, describeError } from './agent-client.service';
-import { PathMemory, REMEMBER_RELAY_MS, relayCallUrl, transportFailure, usableRelay } from './relay-route';
+import {
+  PathMemory,
+  relayCallUrl,
+  REMEMBER_RELAY_MS,
+  transportFailure,
+  usableRelay,
+} from './relay-route';
 
 const json = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
 
 describe('relay route helpers', () => {
   it('uses a relay only when known, switched on and https (or local http)', () => {
     expect(usableRelay({})).toBeNull();
-    expect(usableRelay({ relayUrl: 'https://relay.kubernanny.app/' })).toBe('https://relay.kubernanny.app');
+    expect(usableRelay({ relayUrl: 'https://relay.kubernanny.app/' })).toBe(
+      'https://relay.kubernanny.app',
+    );
     expect(usableRelay({ relayUrl: 'https://relay.kubernanny.app', relayOff: true })).toBeNull();
     expect(usableRelay({ relayUrl: 'http://relay.example.com' })).toBeNull();
     expect(usableRelay({ relayUrl: 'http://localhost:8090' })).toBe('http://localhost:8090');
@@ -23,7 +42,9 @@ describe('relay route helpers', () => {
 
   it('addresses the agent by the hash of its pinned key', () => {
     const agent = generateKeyPair();
-    expect(relayCallUrl('https://r.example', toBase64Url(agent.publicKey))).toBe(`https://r.example/v1/agents/${relayAgentId(agent.publicKey)}/e2e`);
+    expect(relayCallUrl('https://r.example', toBase64Url(agent.publicKey))).toBe(
+      `https://r.example/v1/agents/${relayAgentId(agent.publicKey)}/e2e`,
+    );
   });
 
   it('counts only unanswered calls as transport failures', () => {
@@ -42,9 +63,21 @@ describe('relay route helpers', () => {
 
   it('takes the relay from a pairing link only next to the key', () => {
     const key = 'A'.repeat(43);
-    expect(pairingRoute(`kubernanny://pair?url=http%3A%2F%2F10.0.0.5&code=C&key=${key}&relay=https%3A%2F%2Frelay.kubernanny.app`)).toMatchObject({ key, relay: 'https://relay.kubernanny.app' });
-    expect(pairingRoute('kubernanny://pair?url=http%3A%2F%2F10.0.0.5&code=C&relay=https%3A%2F%2Frelay.kubernanny.app')).not.toHaveProperty('relay');
-    expect(pairingRoute(`kubernanny://pair?url=http%3A%2F%2F10.0.0.5&code=C&key=${key}&relay=http%3A%2F%2Fevil.example`)).not.toHaveProperty('relay');
+    expect(
+      pairingRoute(
+        `kubernanny://pair?url=http%3A%2F%2F10.0.0.5&code=C&key=${key}&relay=https%3A%2F%2Frelay.kubernanny.app`,
+      ),
+    ).toMatchObject({ key, relay: 'https://relay.kubernanny.app' });
+    expect(
+      pairingRoute(
+        'kubernanny://pair?url=http%3A%2F%2F10.0.0.5&code=C&relay=https%3A%2F%2Frelay.kubernanny.app',
+      ),
+    ).not.toHaveProperty('relay');
+    expect(
+      pairingRoute(
+        `kubernanny://pair?url=http%3A%2F%2F10.0.0.5&code=C&key=${key}&relay=http%3A%2F%2Fevil.example`,
+      ),
+    ).not.toHaveProperty('relay');
   });
 
   it('explains relay refusals', () => {
@@ -73,7 +106,9 @@ describe('AgentClient direct first, relay as fallback', () => {
   let http: HttpTestingController;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
     client = TestBed.inject(AgentClient);
     http = TestBed.inject(HttpTestingController);
   });
@@ -87,7 +122,12 @@ describe('AgentClient direct first, relay as fallback', () => {
       }
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
-    throw new Error(`no request to ${url}; open: ${http.match(() => true).map((r) => r.request.url).join(', ')}`);
+    throw new Error(
+      `no request to ${url}; open: ${http
+        .match(() => true)
+        .map((r) => r.request.url)
+        .join(', ')}`,
+    );
   }
 
   function unreachable(req: TestRequest) {
@@ -133,14 +173,18 @@ describe('AgentClient direct first, relay as fallback', () => {
     const firstEphemeral = peekEphemeral(new Uint8Array(lost.request.body as ArrayBuffer));
     unreachable(lost);
     const retry = await next(viaRelay);
-    expect(peekEphemeral(new Uint8Array(retry.request.body as ArrayBuffer))).not.toEqual(firstEphemeral);
+    expect(peekEphemeral(new Uint8Array(retry.request.body as ArrayBuffer))).not.toEqual(
+      firstEphemeral,
+    );
     answer(retry, { light: 'green' });
     expect(await pending).toEqual({ light: 'green' });
     expect(client.paths()[cluster.agentKey]).toBe('relay');
   });
 
   it('never sends an action twice: a lost direct POST fails instead of going to the relay', async () => {
-    const pending = client.runAction(cluster, 'pods/default/Deployment/web', 'restart', 0).catch((e: unknown) => e);
+    const pending = client
+      .runAction(cluster, 'pods/default/Deployment/web', 'restart', 0)
+      .catch((e: unknown) => e);
     (await next(probe)).flush('{"ok":true}');
     unreachable(await next(direct));
     expect(await pending).toBeInstanceOf(HttpErrorResponse);
@@ -160,7 +204,11 @@ describe('AgentClient direct first, relay as fallback', () => {
     const pending = client.pair(cluster.url, cluster.agentKey, 'ABCDE23456', 'iPhone', relayUrl);
     unreachable(await next(probe));
     const request = answer(await next(viaRelay), { deviceId: 'd9', cluster: 'home' });
-    expect(request).toMatchObject({ method: 'POST', path: '/pair', body: { code: 'ABCDE23456', name: 'iPhone' } });
+    expect(request).toMatchObject({
+      method: 'POST',
+      path: '/pair',
+      body: { code: 'ABCDE23456', name: 'iPhone' },
+    });
     expect(await pending).toMatchObject({ deviceId: 'd9', relayUrl, agentKey: cluster.agentKey });
   });
 });
