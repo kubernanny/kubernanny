@@ -394,7 +394,9 @@ spec:
           object.operation.?sync.?syncStrategy.?apply == optional.none() &&
           object.operation.?sync.?prune.orValue(false) == false &&
           object.operation.?sync.?dryRun.orValue(false) == false &&
-          object.operation.?sync.?syncOptions == optional.none() &&
+          object.operation.?sync.?syncOptions.orValue([]).all(o,
+            o == 'ServerSideApply=true' ||
+            o in oldObject.?spec.?syncPolicy.?syncOptions.orValue([])) &&
           object.operation.?sync.?autoHealAttemptsCount == optional.none() &&
           object.operation.?sync.?revision == optional.none() &&
           object.operation.?sync.?revisions == optional.none() &&
@@ -404,8 +406,9 @@ spec:
           object.operation.?sync.?resources == optional.none()
         )
       # An allowlist of the one operation the agent sends (actions.service.ts): a hook sync of
-      # the Application as it is, by kubernanny, without prune, force, dry run, options, retry,
-      # another revision, source, manifests or a resource subset. Every field of Argo CD's
+      # the Application as it is, by kubernanny, without prune, force, dry run, retry, another
+      # revision, source, manifests or a resource subset; sync options only the app's own and
+      # ServerSideApply=true (prune and Replace=true are opt-in, see the chart). Every field of Argo CD's
       # Operation schema is named here; a field a later Argo CD adds is not covered until listed.
       # With actions.enabled: [argocd-rollback] (and only then) the second branch also lets
       # the agent roll a manual-sync, single-source app back: the same hook sync, with

@@ -165,6 +165,12 @@ actions:
   #   is in fact alive.
   # - argocd-terminate-op: end an Argo CD sync running for over 30 minutes.
   #   No new RBAC verb, an extra admission branch.
+  # - argocd-sync-prune: let a sync from the app delete what is no longer in
+  #   Git (prune), after listing each resource and asking twice. No new RBAC
+  #   verb, an extra admission branch.
+  # - argocd-sync-replace: let a sync whose patch Kubernetes refused replace
+  #   the app's objects instead (Replace=true, kubectl replace): fields other
+  #   managers set are lost. No new RBAC verb, an extra admission branch.
   # - pvc-expand: grow an almost full volume by a quarter. Cannot be undone.
   # - config-change-hint: no button. Lets a crash loop's restart offer check
   #   whether a ConfigMap of its environment changed after the start. Needs

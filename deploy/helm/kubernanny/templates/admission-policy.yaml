@@ -6,7 +6,10 @@ ServiceAccount may only
   - on Deployments, StatefulSets, DaemonSets: change the pod template annotation
     kubectl.kubernetes.io/restartedAt (a restart), nothing else;
   - on Argo CD Applications: set `operation` to a plain sync (no other
-    revision, source or manifests) and the refresh annotation, nothing else;
+    revision, source or manifests; sync options only the app's own and
+    ServerSideApply=true) and the refresh annotation, nothing else; only with
+    actions.enabled: [argocd-sync-prune] also with prune, while the app lists
+    a resource to prune, and only with [argocd-sync-replace] also Replace=true;
     only with actions.enabled: [argocd-rollback], also a sync of a manual-sync,
     single-source app to a revision from its own status.history;
   - on CNPG Backups: create one that names only a cluster;
@@ -98,6 +101,8 @@ spec:
 {{- end }}
 {{- $rollback := has "argocd-rollback" $writes }}
 {{- $terminate := has "argocd-terminate-op" $writes }}
+{{- $prune := has "argocd-sync-prune" $writes }}
+{{- $replace := has "argocd-sync-replace" $writes }}
 {{- if or (has "argocd-sync" $writes) (has "argocd-refresh" $writes) $rollback $terminate }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
@@ -184,9 +189,16 @@ spec:
           object.operation.?sync.?syncStrategy.?hook.hasValue() &&
           object.operation.?sync.?syncStrategy.?hook.?force.orValue(false) == false &&
           object.operation.?sync.?syncStrategy.?apply == optional.none() &&
+          {{- if $prune }}
+          (object.operation.?sync.?prune.orValue(false) == false ||
+            oldObject.?status.?resources.orValue([]).exists(r, r.?requiresPruning.orValue(false))) &&
+          {{- else }}
           object.operation.?sync.?prune.orValue(false) == false &&
+          {{- end }}
           object.operation.?sync.?dryRun.orValue(false) == false &&
-          object.operation.?sync.?syncOptions == optional.none() &&
+          object.operation.?sync.?syncOptions.orValue([]).all(o,
+            o == 'ServerSideApply=true' ||{{ if $replace }} o == 'Replace=true' ||{{ end }}
+            o in oldObject.?spec.?syncPolicy.?syncOptions.orValue([])) &&
           object.operation.?sync.?autoHealAttemptsCount == optional.none() &&
           object.operation.?sync.?revision == optional.none() &&
           object.operation.?sync.?revisions == optional.none() &&
@@ -224,8 +236,11 @@ spec:
         )
         {{- end }}
       # An allowlist of the one operation the agent sends (actions.service.ts): a hook sync of
-      # the Application as it is, by kubernanny, without prune, force, dry run, options, retry,
-      # another revision, source, manifests or a resource subset. Every field of Argo CD's
+      # the Application as it is, by kubernanny, without force, dry run, retry, another revision,
+      # source, manifests or a resource subset. Sync options: the app's own (spec.syncPolicy.syncOptions,
+      # which Argo CD's Sync button copies too) and ServerSideApply=true; Replace=true only with
+      # actions.enabled: [argocd-sync-replace]. Prune only with actions.enabled: [argocd-sync-prune],
+      # and only while the stored status lists a resource that requires pruning. Every field of Argo CD's
       # Operation schema is named here; a field a later Argo CD adds is not covered until listed.
       # With actions.enabled: [argocd-rollback] (and only then) the second branch also lets
       # the agent roll a manual-sync, single-source app back: the same hook sync, with

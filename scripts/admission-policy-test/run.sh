@@ -34,7 +34,13 @@ kubectl apply --server-side -f "$WORK/crds" >/dev/null
 kubectl create namespace kubernanny >/dev/null
 # Every action on, the opt-in ones included.
 helm template kubernanny "$ROOT/deploy/helm/kubernanny" -n kubernanny --api-versions admissionregistration.k8s.io/v1/ValidatingAdmissionPolicy \
-  --set 'actions.enabled={job-rerun,force-delete-terminating,argocd-terminate-op,pvc-expand,argocd-rollback,config-change-hint}' | kubectl apply -f - >/dev/null
+  --set 'actions.enabled={job-rerun,force-delete-terminating,argocd-terminate-op,pvc-expand,argocd-rollback,config-change-hint,argocd-sync-prune,argocd-sync-replace}' | kubectl apply -f - >/dev/null
 sleep 2
 KUBECONFIG="$WORK/kubeconfig" ./requests.sh | tee "$WORK/out.txt"
+# Again with the other opt-ins only: the sync may not prune or replace (the other sections run once more, unchanged).
+helm template kubernanny "$ROOT/deploy/helm/kubernanny" -n kubernanny --api-versions admissionregistration.k8s.io/v1/ValidatingAdmissionPolicy \
+  --set 'actions.enabled={job-rerun,force-delete-terminating,argocd-terminate-op,pvc-expand,argocd-rollback,config-change-hint}' | kubectl apply -f - >/dev/null
+sleep 2
+KUBECONFIG="$WORK/kubeconfig" R=$(($(date +%s) + 7)) SYNC_OPTIONS_LOCKED=1 ./requests.sh | tee -a "$WORK/out.txt"
 ! grep -q '^FAIL' "$WORK/out.txt"
+

@@ -171,6 +171,40 @@ k -n $AR patch application shop --type=merge -p '{"status":{"operationState":{"p
 expect deny  "end it and change the sync status" ka -n $AR patch application shop --type=merge -p '{"status":{"operationState":{"phase":"Terminating"},"sync":{"status":"Synced"}}}'
 expect allow "a plain sync" ka -n $AR patch application shop --type=merge -p '{"operation":{"initiatedBy":{"username":"kubernanny"},"sync":{"syncStrategy":{"hook":{}}}}}'
 expect deny  "a sync with another source" ka -n $AR patch application shop --type=merge -p '{"operation":{"initiatedBy":{"username":"kubernanny"},"sync":{"syncStrategy":{"hook":{}},"source":{"repoURL":"https://evil.example/x.git"}}}}'
+# Sync options: the app's own, ServerSideApply=true, and (opt-in) Replace=true and prune while the app lists a resource to prune.
+k apply -f - >/dev/null <<Y
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: { name: web, namespace: $AR }
+spec: { project: default, destination: { namespace: $SH, server: https://kubernetes.default.svc }, source: { repoURL: https://git.example/x.git, path: web, targetRevision: main }, syncPolicy: { syncOptions: [CreateNamespace=true, ServerSideApply=true] } }
+status: { sync: { status: OutOfSync }, resources: [ { kind: CronJob, group: batch, version: v1, name: cleanup, namespace: $SH, status: OutOfSync, requiresPruning: true } ] }
+Y
+reset() { k -n $AR patch application "$1" --type=json -p '[{"op":"remove","path":"/operation"}]' >/dev/null 2>&1 || true; }
+sync() { # app sync-json-fields
+  ka -n $AR patch application "$1" --type=merge -p "{\"operation\":{\"initiatedBy\":{\"username\":\"kubernanny\"},\"info\":[{\"name\":\"Reason\",\"value\":\"Sync from the Kubernanny app\"}],\"sync\":{\"syncStrategy\":{\"hook\":{}}$2}}}"
+}
+syncs() { # allow|deny description app sync-json-fields: one request on a fresh operation
+  reset "$3"; expect "$1" "$2" sync "$3" "$4"
+}
+syncs allow "a sync with the app's own options" web ',"syncOptions":["CreateNamespace=true","ServerSideApply=true"]'
+syncs allow "a sync with ServerSideApply=true on an app without options" shop ',"syncOptions":["ServerSideApply=true"]'
+syncs deny  "a sync with an option the app does not name (PruneLast)" shop ',"syncOptions":["PruneLast=true"]'
+syncs deny  "a sync with Force=true" web ',"syncOptions":["CreateNamespace=true","Force=true"]'
+syncs deny  "a sync with Validate=false" web ',"syncOptions":["Validate=false"]'
+syncs deny  "ServerSideApply=false smuggled as another value" shop ',"syncOptions":["ServerSideApply=false"]'
+if [ "${SYNC_OPTIONS_LOCKED:-0}" = 1 ]; then
+  # Rendered without actions.enabled: [argocd-sync-prune, argocd-sync-replace].
+  syncs deny  "prune while argocd-sync-prune is not enabled" web ',"prune":true'
+  syncs deny  "Replace=true while argocd-sync-replace is not enabled" shop ',"syncOptions":["Replace=true"]'
+else
+  syncs allow "prune on an app that lists a resource to prune" web ',"prune":true'
+  syncs allow "prune with the app's options and Replace=true" web ',"prune":true,"syncOptions":["CreateNamespace=true","ServerSideApply=true","Replace=true"]'
+  syncs deny  "prune on an app with nothing to prune" shop ',"prune":true'
+  syncs allow "Replace=true" shop ',"syncOptions":["Replace=true"]'
+  syncs deny  "Replace=true with Force=true" shop ',"syncOptions":["Replace=true","Force=true"]'
+  syncs deny  "prune as a dry run" web ',"prune":true,"dryRun":true'
+fi
+reset web; reset shop
 # ---- restart
 k -n $SH create deployment web --image=busybox >/dev/null 2>&1
 expect allow "restart a Deployment" ka -n $SH patch deployment web --type=merge -p '{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":"2026-11-26T06:00:00Z"}}}}}'
