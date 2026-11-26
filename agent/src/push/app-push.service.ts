@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '../http/errors';
 import { Logger } from '../logger';
-import { PUSH_PLATFORMS, PushContent, PushOutcome, PushPlatform, PushStatus, encodePushContent, isPushToken, parsePublicKey, sealPush, statusPushContent, toBase64Url } from '@kubernanny/protocol';
+import { DEADMAN_GRACE_MINUTES, PUSH_PLATFORMS, PushContent, PushOutcome, PushPlatform, PushStatus, encodePushContent, isPushToken, parsePublicKey, sealPush, statusPushContent, toBase64Url } from '@kubernanny/protocol';
 import { DevicesService, Principal, PushTarget, validKey } from '../auth/devices.service';
 import { IdentityService } from '../auth/identity.service';
 import type { Config } from '../config';
@@ -21,6 +21,13 @@ export interface AppPushView {
   relay: boolean;
   /** This device has push registered. */
   registered: boolean;
+  /**
+   * The dead man's switch (docs/NOTIFICATIONS.md, "When the agent goes
+   * silent"). `state` on: available; locked: DEADMAN=off in the deployment;
+   * relay: the connected relay does not hold deposits. `grace`: this
+   * device's choice in minutes, null when off. Absent from older agents.
+   */
+  deadman: { state: 'on' | 'locked' | 'relay'; grace: number | null };
 }
 
 export interface AppPushMessage {
@@ -93,7 +100,10 @@ export class AppPushService {
 
   view(who: Principal): AppPushView {
     const state = this.state();
-    return { state, relay: state === 'on' && this.transport.available(), registered: state !== 'locked' && who.kind === 'device' && this.devices.hasPush(who.id) };
+    const relay = state === 'on' && this.transport.available();
+    const own = who.kind === 'device' ? this.devices.pushTargets().find((t) => t.deviceId === who.id) : undefined;
+    const deadmanState = this.config.deadman === false ? 'locked' : relay && !this.transport.deadmanAvailable() ? 'relay' : 'on';
+    return { state, relay, registered: state !== 'locked' && own !== undefined, deadman: { state: deadmanState, grace: own?.push.deadman ?? null } };
   }
 
   /** The routes call this first: with APP_PUSH off nothing past it runs. */
@@ -111,21 +121,28 @@ export class AppPushService {
     if (!this.config.relayUrl) {
       throw new ConflictException({ code: 'PUSH_NO_RELAY', message: t('error.pushNoRelay') });
     }
-    const { token, platform, key, widget } = (body ?? {}) as { token?: unknown; platform?: unknown; key?: unknown; widget?: unknown };
-    // `widget` is optional (apps before it never send it); anything but a boolean is a malformed call.
-    if (!isPushToken(token) || !PUSH_PLATFORMS.includes(platform as PushPlatform) || !validKey(key) || (widget !== undefined && typeof widget !== 'boolean')) {
+    const { token, platform, key, widget, deadman } = (body ?? {}) as { token?: unknown; platform?: unknown; key?: unknown; widget?: unknown; deadman?: unknown };
+    // `widget` and `deadman` are optional (apps before them never send them); anything else of the wrong type is a malformed call.
+    const deadmanOk = deadman === undefined || deadman === false || (typeof deadman === 'number' && DEADMAN_GRACE_MINUTES.includes(deadman));
+    if (!isPushToken(token) || !PUSH_PLATFORMS.includes(platform as PushPlatform) || !validKey(key) || (widget !== undefined && typeof widget !== 'boolean') || !deadmanOk) {
       throw new BadRequestException({ code: 'PUSH_INVALID', message: t('error.pushInvalid') });
     }
-    if (!(await this.devices.setPush(who.id, { token, platform: platform as PushPlatform, key, widget: widget === true }))) {
+    const grace = typeof deadman === 'number' ? deadman : undefined;
+    if (!(await this.devices.setPush(who.id, { token, platform: platform as PushPlatform, key, widget: widget === true, ...(grace ? { deadman: grace } : {}) }))) {
       throw new NotFoundException({ code: 'DEVICE_UNKNOWN', message: t('error.pushDeviceOnly') });
     }
-    this.audit.log(`push registered for "${who.name}" (${who.id}), ${platform}${widget === true ? ', with a widget' : ''}`);
+    this.audit.log(`push registered for "${who.name}" (${who.id}), ${platform}${widget === true ? ', with a widget' : ''}${grace ? `, dead man's switch after ${grace} min` : ''}`);
+    this.onChange?.();
   }
+
+  /** Called after a registration changed (the dead man's switch deposits again at once). */
+  onChange?: () => void;
 
   async unregister(who: Principal): Promise<void> {
     this.assertEnabled();
     if (who.kind === 'device' && (await this.devices.clearPush([who.id])) > 0) {
       this.audit.log(`push removed for "${who.name}" (${who.id})`);
+      this.onChange?.();
     }
   }
 
@@ -187,6 +204,11 @@ export class AppPushService {
     const sent = outcomes.filter((o) => o === 'sent').length;
     this.logger.log(`widget status push: ${sent} of ${due.length} device(s)`);
     return { due: due.length, sent };
+  }
+
+  /** One message to the given devices only (the dead man's switch's "reachable again"); the outcomes in their order. */
+  async deliverTo(deviceIds: readonly string[], message: AppPushMessage): Promise<PushOutcome[]> {
+    return this.sendTo(this.config.appPush ? this.devices.pushTargets().filter((t) => deviceIds.includes(t.deviceId)) : [], message);
   }
 
   /** Status pushes by outcome since start (metrics). */

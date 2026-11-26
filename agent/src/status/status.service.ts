@@ -375,6 +375,10 @@ export class StatusService {
     if (this.notifies() && this.settings.notificationsOn()) {
       await this.notifier.refreshWidgets(snapshot);
     }
+    // The dead man's switch: deposited while notifications are on, cleared while they are paused.
+    if (this.notifies()) {
+      await this.notifier.refreshDeadman(snapshot, this.settings.notificationsOn());
+    }
   }
 
   private record(now: Date, o: Overview): void {

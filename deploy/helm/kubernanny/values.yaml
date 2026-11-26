@@ -61,6 +61,14 @@ notifications:
     # least 30 otherwise (WIDGET_REFRESH_MINUTES). Also during a maintenance
     # window; not while notifications are paused.
     widgetRefreshMinutes: 60
+    # The dead man's switch (docs/NOTIFICATIONS.md, "When the agent goes
+    # silent"): for every phone that asks for it in the app, the agent seals
+    # an "agent silent" message ahead of time and leaves it with the relay,
+    # which sends it when the agent stays away longer than the phone's grace
+    # (10 to 60 min). false (DEADMAN=off): nothing is left with the relay and
+    # the app shows the switch as off.
+    deadman:
+      enabled: true
 
 # Time zone for the weekly report and log times, e.g. Europe/Berlin. Empty: UTC.
 timezone: ""

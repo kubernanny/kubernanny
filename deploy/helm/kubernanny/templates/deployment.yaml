@@ -163,6 +163,10 @@ spec:
             - name: APP_PUSH
               value: "off"
             {{- end }}
+            {{- if not (dig "deadman" "enabled" true .Values.notifications.appPush) }}
+            - name: DEADMAN
+              value: "off"
+            {{- end }}
             {{- $widgetRefresh := .Values.notifications.appPush.widgetRefreshMinutes }}
             {{- if and (not (kindIs "invalid" $widgetRefresh)) (ne (int $widgetRefresh) 60) }}
             - name: WIDGET_REFRESH_MINUTES

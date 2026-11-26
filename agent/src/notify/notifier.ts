@@ -4,6 +4,7 @@ import { render, t } from '../i18n/text';
 import type { Snapshot } from '../status/status.service';
 import { IncidentsService } from '../incidents/incidents.service';
 import { AppPushService } from '../push/app-push.service';
+import type { DeadmanService } from '../push/deadman.service';
 import { pushStatus } from '../push/push-status';
 import { digestDue, formatDigest, weekKey } from './digest';
 import { NotifyPlan, Push, Pushed, SecurityEvent, formatPush, formatSecurityAlert, planNotifications } from './format';
@@ -192,6 +193,26 @@ export class Notifier {
     } catch (err) {
       this.logger.warn(`widget status push failed: ${err instanceof Error ? err.message : err}`);
     }
+  }
+
+  /** The dead man's switch (set by the agent; absent in tests that do not care). */
+  deadman?: DeadmanService;
+
+  /**
+   * Ticks the dead man's switch after each run on the pod holding the lease:
+   * armed while notifications reach phones (not paused in the app, not
+   * locked in the chart), holding off through a maintenance window. Never throws.
+   */
+  async refreshDeadman(snapshot: Snapshot, notificationsOn: boolean): Promise<void> {
+    if (!this.deadman) {
+      return;
+    }
+    const holdUntil = snapshot.maintenanceUntil ? Date.parse(snapshot.maintenanceUntil) : null;
+    await this.deadman.tick({
+      armed: notificationsOn && !this.locked,
+      holdUntil: holdUntil !== null && Number.isFinite(holdUntil) ? holdUntil : null,
+      status: pushStatus(snapshot, this.config.notifyDetail, this.config.language),
+    });
   }
 
   /**

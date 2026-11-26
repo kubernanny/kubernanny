@@ -73,7 +73,7 @@ describe('push registration', () => {
     const listed = devices.list();
     expect(listed[0]!.push).toBe(true);
     expect(JSON.stringify(listed)).not.toContain(TOKEN);
-    expect(push.view(device)).toEqual({ state: 'on', relay: true, registered: true });
+    expect(push.view(device)).toEqual({ state: 'on', relay: true, registered: true, deadman: { state: 'relay', grace: null } });
 
     expect(await push.deliver(message)).toBe(true);
     expect(sent).toHaveLength(1);
@@ -144,7 +144,7 @@ describe('APP_PUSH=off: switched off for good, not just hidden', () => {
     await expect(controller.test(device)).rejects.toBeInstanceOf(NotFoundException);
     expect(kube.writes.length).toBe(writes);
     expect(devices.pushTargets()).toEqual([]);
-    expect(controller.view(device)).toEqual({ state: 'locked', relay: false, registered: false });
+    expect(controller.view(device)).toEqual({ state: 'locked', relay: false, registered: false, deadman: { state: 'on', grace: null } });
   });
 
   it('deletes tokens stored while it was on, at start', async () => {

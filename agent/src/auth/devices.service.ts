@@ -35,6 +35,13 @@ export interface DevicePush {
    * older apps, which never get one.
    */
   widget?: boolean;
+  /**
+   * The dead man's switch for this device (docs/NOTIFICATIONS.md, "When the
+   * agent goes silent"): the grace in minutes (10, 15, 30 or 60) after which
+   * the relay sends it a deposited "agent silent" message. Absent: off, and
+   * from apps before it, which do not know the message.
+   */
+  deadman?: number;
 }
 
 /** A device to push to: its id and push registration. */
@@ -185,11 +192,11 @@ export class DevicesService {
       const kid = pushKeyId(parsePublicKey(push.key));
       const before = device.push;
       // The app says again when only its widget changed: an unchanged registration is not written again.
-      if (before && before.token === push.token && before.platform === push.platform && before.key === push.key && (before.widget === true) === (push.widget === true)) {
+      if (before && before.token === push.token && before.platform === push.platform && before.key === push.key && (before.widget === true) === (push.widget === true) && before.deadman === push.deadman) {
         return true;
       }
-      const { widget, ...rest } = push;
-      const entry: DevicePush = { ...rest, kid, since: new Date().toISOString(), ...(widget ? { widget: true } : {}) };
+      const { widget, deadman, ...rest } = push;
+      const entry: DevicePush = { ...rest, kid, since: new Date().toISOString(), ...(widget ? { widget: true } : {}), ...(deadman ? { deadman } : {}) };
       await this.save(this.devices.map((d) => (d.id === id ? { ...d, push: entry } : d)));
       return true;
     });

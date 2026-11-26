@@ -15,6 +15,7 @@ import { HttpException } from './http/errors';
 import { Reply, Route, createHttpHandler } from './http/server';
 import { t } from './i18n/text';
 import { Leader, LeaderElection, SoleLeader } from './lease/leader';
+import { DeadmanService } from './push/deadman.service';
 import { Logger } from './logger';
 import { IncidentsService } from './incidents/incidents.service';
 import { KubeClient } from './kube/kube-client';
@@ -60,6 +61,7 @@ export class Agent {
   readonly incidents: IncidentsService;
   readonly pushTransport: PushTransport;
   readonly appPush: AppPushService;
+  readonly deadman: DeadmanService;
   readonly notifiedStore: NotifiedStore;
   readonly notifier: Notifier;
   readonly settings: SettingsService;
@@ -106,6 +108,8 @@ export class Agent {
     this.appPush = new AppPushService(config, this.devices, this.identity, this.pushTransport);
     this.notifiedStore = new NotifiedStore(config, kube);
     this.notifier = options.notifier ?? new Notifier(config, this.incidents, this.appPush, this.notifiedStore);
+    this.deadman = new DeadmanService(config, this.devices, this.identity, this.pushTransport, this.appPush);
+    this.notifier.deadman ??= this.deadman;
     this.settings = new SettingsService(config, kube, this.notifier);
     this.silences = new SilenceService(config, kube, this.notifier);
     this.acceptance = new AcceptanceService(config, kube, this.settings, this.notifier);

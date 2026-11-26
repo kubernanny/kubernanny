@@ -127,6 +127,16 @@ export function parseAppPush(raw: string | undefined): boolean {
 }
 
 /**
+ * DEADMAN: the dead man's switch (docs/NOTIFICATIONS.md, "When the agent
+ * goes silent"). On by default; off, false or 0 deposits nothing with the
+ * relay (and clears what an earlier run deposited), and the app shows it as
+ * switched off.
+ */
+export function parseDeadman(raw: string | undefined): boolean {
+  return parseSwitch('DEADMAN', raw, true);
+}
+
+/**
  * WIDGET_REFRESH_MINUTES: how often a device with a home-screen widget gets a
  * silent status push when nothing else was pushed to it (docs/NOTIFICATIONS.md,
  * "The home-screen widget"). Default 60; 0 switches these pushes off; below 30
@@ -240,6 +250,8 @@ export interface Config {
   appPush: boolean;
   /** WIDGET_REFRESH_MINUTES: silent status push to devices with a widget when nothing else went to them for this long; 0 off. */
   widgetRefreshMinutes?: number;
+  /** DEADMAN: deposit "agent silent" messages with the relay for devices that ask for them. Absent counts as on. */
+  deadman?: boolean;
   /** UPTIME_KUMA_STATUS_PAGE: slug of a published Uptime Kuma status page whose monitors the `uptime-kuma` module reads. */
   uptimeKumaStatusPage?: string;
   /** PAIRING_LOG: print a pairing code and QR code to the log on start (default on). */
@@ -319,6 +331,7 @@ export function loadConfig(): Config {
     relayUrl: checkRelayUrl(process.env.RELAY_URL || undefined),
     appPush: parseAppPush(process.env.APP_PUSH),
     widgetRefreshMinutes: parseWidgetRefreshMinutes(process.env.WIDGET_REFRESH_MINUTES),
+    deadman: parseDeadman(process.env.DEADMAN),
     // The demo cluster publishes a status page under this slug, so the module has something to show.
     uptimeKumaStatusPage: checkStatusPageSlug(process.env.UPTIME_KUMA_STATUS_PAGE || (demo ? 'homelab' : undefined)),
     pairingLog: parseSwitch('PAIRING_LOG', process.env.PAIRING_LOG, true),

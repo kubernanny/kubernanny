@@ -170,7 +170,7 @@ describe('reconnect backoff after a silent drop (review)', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const c = client as any;
     let terminated = false;
-    const session = { socket: { terminate: () => (terminated = true), readyState: 1 }, answered: true, readyAt: Date.now() - 120_000, inFlight: new Set(), cancelled: new Set(), push: false, pushes: new Map() };
+    const session = { socket: { terminate: () => (terminated = true), readyState: 1 }, answered: true, readyAt: Date.now() - 120_000, inFlight: new Set(), cancelled: new Set(), push: false, pushes: new Map(), deadman: false, deposits: new Map() };
     c.session = session;
     c.attempt = 7;
     c.lastHeard = Date.now() - 120_000;

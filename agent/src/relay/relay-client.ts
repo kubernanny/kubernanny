@@ -4,12 +4,16 @@ import {
   HEARTBEAT_PING,
   MAX_SEALED_REQUEST,
   RelayClose,
+  DeadmanDeposit,
+  DepositOutcome,
   PushOutcome,
   PushRequest,
   RelayFrameError,
   answerChallenge,
   decodeFrame,
+  decodeDepositResult,
   decodePushResult,
+  encodeDeposit,
   encodePushRequest,
   encodeReply,
   relayAgentId,
@@ -19,7 +23,7 @@ import { RawData, WebSocket } from 'ws';
 import { IdentityService } from '../auth/identity.service';
 import type { Config } from '../config';
 import { E2eService } from '../e2e/e2e.service';
-import { PushCarrier, PushTransport } from '../push/push-transport';
+import { PushCarrier, PushTransport, RelayReady } from '../push/push-transport';
 import { relayHttpUrl, relaySocketUrl } from './relay-url';
 
 export const RECONNECT_MIN_MS = 1_000;
@@ -83,6 +87,10 @@ interface Session {
   statusPush: boolean;
   /** Pushes sent on this connection, waiting for their PushResult. */
   pushes: Map<number, (outcome: PushOutcome) => void>;
+  /** The relay holds dead man's switch deposits (`deadman`). */
+  deadman: boolean;
+  /** Deposits sent on this connection, waiting for their DepositResult. */
+  deposits: Map<number, (outcome: DepositOutcome) => void>;
 }
 
 /**
@@ -110,6 +118,8 @@ export class RelayClient implements PushCarrier {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeat: ReturnType<typeof setInterval> | null = null;
   private nextPushId = 0;
+  private connections = 0;
+  private readonly readyListeners: ((event: RelayReady) => void)[] = [];
 
   constructor(
     private readonly config: Config,
@@ -176,6 +186,54 @@ export class RelayClient implements PushCarrier {
     return Boolean(this.session?.readyAt && this.session.push && this.session.statusPush);
   }
 
+  /** Whether the live connection holds dead man's switch deposits. */
+  deadmanAvailable(): boolean {
+    return Boolean(this.session?.readyAt && this.session.push && this.session.deadman);
+  }
+
+  onReady(listener: (event: RelayReady) => void): void {
+    this.readyListeners.push(listener);
+  }
+
+  /**
+   * Hands the dead man's switch messages to the relay (docs/RELAY.md, "Dead
+   * man's switch"). Never throws; `disabled` where the relay does not hold
+   * them, `unavailable`-like failures read as `full` (try later).
+   */
+  deposit(deposit: DeadmanDeposit): Promise<DepositOutcome> {
+    const session = this.session;
+    if (!this.config.appPush || !session?.readyAt || !session.push || !session.deadman) {
+      return Promise.resolve('disabled');
+    }
+    if (session.socket.readyState !== WebSocket.OPEN || session.deposits.size >= 4) {
+      return Promise.resolve('full');
+    }
+    const id = this.nextId(session);
+    return new Promise<DepositOutcome>((resolve) => {
+      const timer = setTimeout(() => finish('full'), PUSH_TIMEOUT_MS);
+      timer.unref();
+      const finish = (outcome: DepositOutcome) => {
+        clearTimeout(timer);
+        session.deposits.delete(id);
+        resolve(outcome);
+      };
+      session.deposits.set(id, finish);
+      try {
+        session.socket.send(encodeDeposit(id, deposit));
+      } catch {
+        finish('full');
+      }
+    });
+  }
+
+  /** An id for a Push or Deposit frame not waiting for an answer on this connection. */
+  private nextId(session: Session): number {
+    do {
+      this.nextPushId = this.nextPushId >= 0xffffffff ? 1 : this.nextPushId + 1;
+    } while (session.pushes.has(this.nextPushId) || session.deposits.has(this.nextPushId));
+    return this.nextPushId;
+  }
+
   /**
    * Hands one sealed push to the relay (docs/RELAY.md, "Native push").
    * Never throws: without a connection, a relay without push or APP_PUSH off
@@ -197,10 +255,7 @@ export class RelayClient implements PushCarrier {
     if (session.pushes.size >= MAX_PUSHES_IN_FLIGHT) {
       return Promise.resolve('rate_limited');
     }
-    do {
-      this.nextPushId = this.nextPushId >= 0xffffffff ? 1 : this.nextPushId + 1;
-    } while (session.pushes.has(this.nextPushId));
-    const id = this.nextPushId;
+    const id = this.nextId(session);
     return new Promise<PushOutcome>((resolve) => {
       const timer = setTimeout(() => finish('unavailable'), PUSH_TIMEOUT_MS);
       timer.unref();
@@ -231,7 +286,7 @@ export class RelayClient implements PushCarrier {
     }
     const agentId = relayAgentId(this.identity.keyPair.publicKey);
     const socket = new WebSocket(relaySocketUrl(this.config.relayUrl!, agentId), { maxPayload: MAX_RELAY_MESSAGE, perMessageDeflate: false, handshakeTimeout: 10_000 });
-    const session: Session = { socket, answered: false, readyAt: 0, inFlight: new Set(), cancelled: new Set(), push: false, statusPush: false, pushes: new Map() };
+    const session: Session = { socket, answered: false, readyAt: 0, inFlight: new Set(), cancelled: new Set(), push: false, statusPush: false, pushes: new Map(), deadman: false, deposits: new Map() };
     this.session = session;
     this.lastHeard = Date.now();
     // Every handler checks that it still belongs to the current session (isCurrent): a dead one may report late.
@@ -283,8 +338,17 @@ export class RelayClient implements PushCarrier {
           session.readyAt = Date.now();
           session.push = readyOffersPush(frame.payload);
           session.statusPush = session.push && readyFlag(frame.payload, 'statusPush');
+          session.deadman = session.push && readyFlag(frame.payload, 'deadman');
           this.connected = true;
           this.logger.log(`connected to the relay ${relayHttpUrl(this.config.relayUrl!)}`);
+          const event: RelayReady = { connection: ++this.connections, deadman: session.deadman, fired: session.deadman ? readyFired(frame.payload) : null };
+          for (const listener of this.readyListeners) {
+            try {
+              listener(event);
+            } catch {
+              // a listener's failure is its own
+            }
+          }
         }
         return;
       case FrameType.Call:
@@ -295,6 +359,9 @@ export class RelayClient implements PushCarrier {
       case FrameType.PushResult:
         // Only an id this connection sent and still waits for; anything else is ignored.
         session.pushes.get(frame.callId)?.(decodePushResult(frame.payload));
+        return;
+      case FrameType.DepositResult:
+        session.deposits.get(frame.callId)?.(decodeDepositResult(frame.payload));
         return;
       case FrameType.Cancel:
         // Only a call in flight can be cancelled; any other id is ignored, so the set is bounded by MAX_IN_FLIGHT.
@@ -386,6 +453,9 @@ export class RelayClient implements PushCarrier {
     for (const finish of [...session.pushes.values()]) {
       finish('unavailable');
     }
+    for (const finish of [...session.deposits.values()]) {
+      finish('full');
+    }
     this.clearTimers();
     if (this.stopped) {
       return;
@@ -428,11 +498,27 @@ function readyOffersPush(payload: Uint8Array): boolean {
 }
 
 /** A flag of the Ready payload; a relay that does not say so does not offer it. */
-function readyFlag(payload: Uint8Array, name: 'push' | 'statusPush'): boolean {
+function readyFlag(payload: Uint8Array, name: 'push' | 'statusPush' | 'deadman'): boolean {
   try {
     return (JSON.parse(new TextDecoder().decode(payload)) as Record<string, unknown> | null)?.[name] === true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * The Ready payload's `deadmanFired`: key ids (at most 64, each a key id's
+ * shape) and the time away. The relay is not trusted: it can only make the
+ * agent send a "reachable again" push to its own devices, sealed by the agent.
+ */
+function readyFired(payload: Uint8Array): { kids: string[]; awayMs: number } | null {
+  try {
+    const fired = (JSON.parse(new TextDecoder().decode(payload)) as { deadmanFired?: { k?: unknown; m?: unknown } } | null)?.deadmanFired;
+    const kids = Array.isArray(fired?.k) ? fired.k.filter((k): k is string => typeof k === 'string' && /^[A-Za-z0-9_-]{16}$/.test(k)).slice(0, 64) : [];
+    const awayMs = typeof fired?.m === 'number' && Number.isFinite(fired.m) && fired.m >= 0 ? Math.min(fired.m, 30 * 86_400_000) : 0;
+    return kids.length > 0 ? { kids, awayMs } : null;
+  } catch {
+    return null;
   }
 }
 
