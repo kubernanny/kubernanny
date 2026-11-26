@@ -21,7 +21,6 @@ public class WidgetBridgePlugin: CAPPlugin, CAPBridgedPlugin {
     /// Keep in step with `WidgetData.swift` in the widget extension.
     static let appGroup = "group.app.kubernanny"
     static let key = "kubernanny.widget.clusters.v1"
-    static let widgetKind = "KubernannyClusters"
 
     /// nil when the App Group is missing from the signing (a build without the capability).
     private var defaults: UserDefaults? { UserDefaults(suiteName: Self.appGroup) }
@@ -58,7 +57,9 @@ public class WidgetBridgePlugin: CAPPlugin, CAPBridgedPlugin {
             }
             defaults.set(json, forKey: Self.key)
         }
-        WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind)
+        // Every kind reads this key (the overview and the one-cluster widget),
+        // so reload all of them, not only the overview.
+        WidgetCenter.shared.reloadAllTimelines()
         call.resolve()
     }
 }
