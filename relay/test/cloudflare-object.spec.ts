@@ -1,4 +1,4 @@
-import { FrameType, KeyPair, answerChallenge, decodeFrame, decodePushResult, encodePushRequest, encodeReply, generateKeyPair, relayAgentId, toBase64Url } from '@kubernanny/protocol';
+import { DeadmanDeposit, decodeDepositResult, encodeDeposit, FrameType, KeyPair, answerChallenge, decodeFrame, decodePushResult, encodePushRequest, encodeReply, generateKeyPair, relayAgentId, toBase64Url } from '@kubernanny/protocol';
 import type { PushSender, TokenGate } from '../src/core/push';
 import { TokenLimiterCore, durableTokenGate } from '../cloudflare/src/token-limiter';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,7 +29,15 @@ class FakeState implements AgentObjectState {
   sockets: FakeSocket[] = [];
   stored = new Map<string, unknown>();
   writes = 0;
+  alarm: number | null = null;
+  heard = new Map<HibernatableSocket, number>();
   storage = {
+    setAlarm: async (at: number) => {
+      this.alarm = at;
+    },
+    deleteAlarm: async () => {
+      this.alarm = null;
+    },
     get: async <T,>(key: string) => structuredClone(this.stored.get(key)) as T | undefined,
     put: async <T,>(key: string, value: T) => {
       this.writes++;
@@ -43,8 +51,9 @@ class FakeState implements AgentObjectState {
     return [...this.sockets];
   }
   setWebSocketAutoResponse(): void {}
-  getWebSocketAutoResponseTimestamp(): Date | null {
-    return null;
+  getWebSocketAutoResponseTimestamp(socket: HibernatableSocket): Date | null {
+    const at = this.heard.get(socket);
+    return at === undefined ? null : new Date(at);
   }
 }
 
@@ -321,6 +330,105 @@ describe('Cloudflare agent object', () => {
       await vi.advanceTimersByTimeAsync(0);
       expect(results(socket)).toEqual(['sent', 'rate_limited']);
       expect(send).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("dead man's switch", () => {
+    const fcm = JSON.stringify({ client_email: 'r@x.iam.gserviceaccount.com', private_key: '-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n', project_id: 'kubernanny-test' });
+    const MIN = 60_000;
+    const held: DeadmanDeposit = { validitySeconds: 3 * 3600, holdSeconds: 0, items: [{ token: 'device-token-0123456789:APA91b', platform: 'ios', kid: 'AbCdEfGhIjKlMnOp', message: toBase64Url(new Uint8Array(120)), graceMinutes: 15 }] };
+    const readyOf = (socket: FakeSocket) => JSON.parse(new TextDecoder().decode(decodeFrame(socket.sent[1] as Uint8Array).payload)) as Record<string, unknown>;
+    const depositResults = (socket: FakeSocket) =>
+      socket.sent
+        .filter((m): m is Uint8Array => typeof m !== 'string')
+        .map((m) => decodeFrame(m))
+        .filter((f) => f.type === FrameType.DepositResult)
+        .map((f) => decodeDepositResult(f.payload));
+    const setup = async (env: Record<string, string> = {}) => {
+      const send = vi.fn<PushSender>(async () => 'sent');
+      object = wake({ FCM_SERVICE_ACCOUNT: fcm, ...env }, send);
+      const socket = await connect();
+      await prove(socket);
+      await object.webSocketMessage(socket, encodeDeposit(1, held).slice().buffer);
+      await vi.advanceTimersByTimeAsync(0);
+      return { send, socket };
+    };
+
+    it('says deadman in Ready, stores the deposit and checks on the agent every 5 minutes while it is connected', async () => {
+      const { socket } = await setup();
+      expect(readyOf(socket).deadman).toBe(true);
+      expect(depositResults(socket)).toEqual(['stored']);
+      expect(state.stored.get('deadman')).toMatchObject({ items: [{ kid: 'AbCdEfGhIjKlMnOp', graceMs: 15 * MIN }], lostAt: null });
+      expect(state.alarm).toBe(5 * MIN);
+    });
+
+    it('is off with RELAY_DEADMAN=off and without push', async () => {
+      object = wake({ FCM_SERVICE_ACCOUNT: fcm, RELAY_DEADMAN: 'off' }, vi.fn<PushSender>(async () => 'sent'));
+      const socket = await connect();
+      await prove(socket);
+      expect(readyOf(socket).deadman).toBe(false);
+      await object.webSocketMessage(socket, encodeDeposit(1, held).slice().buffer);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(depositResults(socket)).toEqual(['disabled']);
+    });
+
+    it('fires once after the grace when the socket closes, across a hibernation, and reports it on the next Ready', async () => {
+      const { send, socket } = await setup();
+      state.heard.set(socket, 2 * MIN);
+      vi.setSystemTime(3 * MIN);
+      await object.webSocketClose(socket);
+      expect(state.alarm).toBe(17 * MIN); // last heard + 15 min
+      vi.setSystemTime(17 * MIN);
+      object = wake({ FCM_SERVICE_ACCOUNT: fcm }, send);
+      await object.alarm();
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(send.mock.calls[0]![0]).toMatchObject({ kid: 'AbCdEfGhIjKlMnOp', platform: 'ios' });
+      expect(send.mock.calls[0]![0].silent).toBeUndefined();
+      await object.alarm();
+      expect(send).toHaveBeenCalledTimes(1);
+      vi.setSystemTime(40 * MIN);
+      const again = await connect();
+      await prove(again);
+      expect(readyOf(again).deadmanFired).toEqual({ k: ['AbCdEfGhIjKlMnOp'], m: 38 * MIN });
+    });
+
+    it('notices an agent that vanished without a close (no heartbeat past the idle timeout)', async () => {
+      const { send, socket } = await setup();
+      state.heard.set(socket, MIN);
+      vi.setSystemTime(5 * MIN);
+      await object.alarm();
+      expect(socket.closed).toBe(4008);
+      expect(state.alarm).toBe(16 * MIN);
+      vi.setSystemTime(16 * MIN);
+      await object.alarm();
+      expect(send).toHaveBeenCalledTimes(1);
+    });
+
+    it('a handover within seconds sends nothing; the replaced socket does not arm it', async () => {
+      const { send, socket } = await setup();
+      const next = await connect();
+      await prove(next); // the old socket is replaced
+      await object.webSocketClose(socket);
+      expect((state.stored.get('deadman') as { lostAt: number | null }).lostAt).toBeNull();
+      await object.webSocketClose(next);
+      vi.setSystemTime(5_000);
+      const third = await connect();
+      await prove(third);
+      expect(readyOf(third).deadmanFired).toBeUndefined();
+      vi.setSystemTime(60 * MIN);
+      state.heard.set(third, 60 * MIN - 20_000); // its heartbeat
+      await object.alarm();
+      expect(send).not.toHaveBeenCalled();
+      expect(state.alarm).toBe(65 * MIN);
+    });
+
+    it('never fires an expired deposit', async () => {
+      const { send, socket } = await setup();
+      await object.webSocketClose(socket);
+      vi.setSystemTime(4 * 3600_000);
+      await object.alarm();
+      expect(send).not.toHaveBeenCalled();
+      expect(state.alarm).toBeNull();
     });
   });
 });

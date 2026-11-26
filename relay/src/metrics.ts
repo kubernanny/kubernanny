@@ -15,6 +15,9 @@ export class RelayMetrics {
   private readonly calls = new Map<CallOutcome, number>();
   private readonly registrations = new Map<RegistrationOutcome, number>();
   private readonly pushes = new Map<string, number>();
+  private readonly deadman = new Map<string, number>();
+  /** Agents with a dead man's switch deposit held. */
+  deadmanDeposits = 0;
   private bytesIn = 0;
   private bytesOut = 0;
   private durationSum = 0;
@@ -37,6 +40,11 @@ export class RelayMetrics {
     this.pushes.set(outcome, (this.pushes.get(outcome) ?? 0) + 1);
   }
 
+  /** A dead man's switch event: `deposit_<outcome>` or `fired_<push outcome>`; never with a token or agent id. */
+  deadmanEvent(event: string): void {
+    this.deadman.set(event, (this.deadman.get(event) ?? 0) + 1);
+  }
+
   render(): string {
     const lines = [
       '# HELP kubernanny_relay_agents Agents connected and registered.',
@@ -54,6 +62,12 @@ export class RelayMetrics {
       '# HELP kubernanny_relay_pushes_total Native pushes by outcome.',
       '# TYPE kubernanny_relay_pushes_total counter',
       ...[...this.pushes].map(([outcome, n]) => `kubernanny_relay_pushes_total{outcome="${outcome}"} ${n}`),
+      '# HELP kubernanny_relay_deadman_deposits Agents whose dead man\'s switch deposit the relay holds.',
+      '# TYPE kubernanny_relay_deadman_deposits gauge',
+      `kubernanny_relay_deadman_deposits ${this.deadmanDeposits}`,
+      '# HELP kubernanny_relay_deadman_total Dead man\'s switch deposits by outcome (deposit_*) and messages sent by push outcome (fired_*).',
+      '# TYPE kubernanny_relay_deadman_total counter',
+      ...[...this.deadman].map(([event, n]) => `kubernanny_relay_deadman_total{event="${event}"} ${n}`),
       '# HELP kubernanny_relay_bytes_total Bytes carried, request (in) and response (out).',
       '# TYPE kubernanny_relay_bytes_total counter',
       `kubernanny_relay_bytes_total{direction="in"} ${this.bytesIn}`,

@@ -11,6 +11,7 @@ import { clientAddress } from './core/limits';
 import { PushSender, pushSender } from './core/push';
 import { Session, endSession, openSession, proveSession } from './core/session';
 import { RELAY_CONFIG, RelayConfig } from './config';
+import { DeadmanRegistry } from './deadman-registry';
 import { RelayMetrics } from './metrics';
 
 interface Connection {
@@ -49,6 +50,8 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
   /** One sender for every agent, so the per-token limit spans them all; null without push. */
   private readonly send: PushSender | null;
   private warnedNoOrigin = false;
+  /** The dead man's switch per agent id, in memory (deadman-registry.ts). */
+  private readonly deadmen: DeadmanRegistry;
 
   constructor(
     @Inject(HttpAdapterHost) private readonly adapterHost: HttpAdapterHost,
@@ -64,12 +67,16 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
           return outcome;
         }
       : null;
+    this.deadmen = new DeadmanRegistry(config.deadman, this.send, this.admission, metrics, (line) => this.logger.log(line), (agentId) => this.agents.has(agentId));
   }
 
   onApplicationBootstrap(): void {
     const server = this.adapterHost.httpAdapter.getHttpServer() as Server;
     server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => this.upgrade(req, socket, head));
     this.logger.log(this.send ? `native push on (FCM project ${this.config.push.account!.projectId})` : 'native push off');
+    if (this.send) {
+      this.logger.log(this.config.deadman.enabled ? "dead man's switch on (deposits are held in memory: a restart of the relay forgets them)" : "dead man's switch off");
+    }
     this.logger.log(this.config.publicOrigin ? `agents register for ${this.config.publicOrigin}` : 'RELAY_PUBLIC_URL unset: only agents dialling a loopback address can register');
     const every = Math.max(1000, Math.min(30_000, this.config.limits.idleTimeoutMs / 3));
     this.sweeper = setInterval(() => this.sweep(Date.now()), every);
@@ -94,6 +101,7 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
     this.agents.clear();
     this.pendingConnections.clear();
     this.admission.clear();
+    this.deadmen.clear();
   }
 
   /** Forwards one sealed call from `caller` (the client address) to the agent, or says why not. */
@@ -221,6 +229,7 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
       if (this.agents.get(agentId) === connection) {
         this.agents.delete(agentId);
         this.admission.pushPolicyLeft(agentId, Date.now());
+        this.deadmen.lost(agentId, connection.lastSeen);
         this.logger.log(`agent ${idPrefix(agentId)} disconnected`);
       }
       this.metrics.pending = this.pendingConnections.size;
@@ -266,9 +275,14 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
         isOpen: () => socket.readyState === WebSocket.OPEN,
       },
       limits,
-      { parent: budget, push: this.send && policy ? { send: this.send, policy, gate: this.admission.pushGate(address), maxInFlight: this.config.push.maxInFlight } : null },
+      {
+        parent: budget,
+        push: this.send && policy ? { send: this.send, policy, gate: this.admission.pushGate(address), maxInFlight: this.config.push.maxInFlight } : null,
+        deadman: this.send && this.config.deadman.enabled ? { deposit: (deposit) => (this.agents.get(agentId) === connection ? this.deadmen.deposit(agentId, deposit) : 'disabled') } : null,
+      },
     );
     this.agents.set(agentId, connection);
+    const fired = this.deadmen.back(agentId);
     if (previous) {
       // Newest wins: after a restart the old socket may linger half-open until the idle timeout.
       this.admission.leave(previous.address, previous);
@@ -276,7 +290,7 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
       previous.link?.shutdown();
       previous.socket.close(RelayClose.Replaced, 'replaced');
     }
-    socket.send(encodeFrame(FrameType.Ready, 0, new TextEncoder().encode(JSON.stringify(connection.link.info()))));
+    socket.send(encodeFrame(FrameType.Ready, 0, new TextEncoder().encode(JSON.stringify({ ...connection.link.info(), ...(fired ? { deadmanFired: fired } : {}) }))));
     this.metrics.registration('ok');
     this.metrics.pending = this.pendingConnections.size;
     this.metrics.agents = this.agents.size;
@@ -288,6 +302,7 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
     if (this.agents.get(connection.agentId) === connection) {
       this.agents.delete(connection.agentId);
       this.admission.pushPolicyLeft(connection.agentId, Date.now());
+      this.deadmen.lost(connection.agentId, connection.lastSeen);
     }
     connection.session = endSession(connection.session);
     connection.link?.shutdown();
@@ -304,5 +319,6 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
       }
     }
     this.admission.prune(now);
+    this.deadmen.sweep(now);
   }
 }

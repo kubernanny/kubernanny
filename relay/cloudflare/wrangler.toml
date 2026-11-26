@@ -14,6 +14,9 @@ class_name = "TokenLimiter"
 
 # SQLite-backed Durable Objects. AgentObject holds the agent's WebSocket; its session and rate limits live in
 # the socket's attachment, and it writes one storage row, the agent's push allowance, only after a push.
+# With a dead man's switch deposit (docs/RELAY.md, "Dead man's switch") it also stores that deposit (row
+# "deadman") and sets an alarm: every 5 minutes while the agent is connected, to notice one that vanished
+# without a close, and once per message when the agent is away.
 # Unproven connections cost no storage write (their timeout is an in-memory timer). TokenLimiter stores one
 # bucket per token that was pushed to.
 [[migrations]]
@@ -34,6 +37,11 @@ RELAY_CALL_TIMEOUT_MS = "25000"
 # Native push is off unless the secret FCM_SERVICE_ACCOUNT is set (docs/RELAY.md, "Native push"):
 #   npx wrangler secret put FCM_SERVICE_ACCOUNT < service-account.json
 # RELAY_PUSH = "off"   # turns it off even with the secret
+# The dead man's switch is on wherever push is:
+# RELAY_DEADMAN = "off"
+# RELAY_DEADMAN_MAX_DEPOSITS = "8"          # messages per agent (one per device)
+# RELAY_DEADMAN_MAX_BYTES = "1024"          # one sealed message, base64url characters
+# RELAY_DEADMAN_DEPOSITS_PER_HOUR = "30"
 
 # Your own domain instead of *.workers.dev:
 # routes = [{ pattern = "relay.example.com", custom_domain = true }]

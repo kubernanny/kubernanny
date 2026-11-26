@@ -1,4 +1,4 @@
-import { Frame, FrameType, RelayClose, RelayFrameError, RelayLimitsInfo, decodePushRequest, decodeReplyEnd, encodeFrame, encodePushResult, pushTokenDigest } from '@kubernanny/protocol';
+import { DeadmanDeposit, DepositOutcome, Frame, FrameType, RelayClose, RelayFrameError, RelayLimitsInfo, decodeDeposit, decodePushRequest, decodeReplyEnd, encodeDepositResult, encodeFrame, encodePushResult, pushTokenDigest } from '@kubernanny/protocol';
 import { RelayErrorCode, checkAgentReply } from './http';
 import { BucketState, BudgetHolder, ByteBudget, CallerLimiter, RelayLimits, TokenBucket, shareBytes } from './limits';
 import { PushSender } from './push';
@@ -37,6 +37,12 @@ export interface LinkPush {
   done?: () => void;
 }
 
+/** The dead man's switch for this agent (core/deadman.ts): where a Deposit frame goes. */
+export interface LinkDeadman {
+  /** `null`: the frame did not parse (answered `invalid` after the platform had its say, e.g. charging the allowance). */
+  deposit(deposit: DeadmanDeposit | null): DepositOutcome | Promise<DepositOutcome>;
+}
+
 export interface LinkOptions {
   now?: () => number;
   /** The budget above this agent's own share: its address' share or the relay's total; a total of its own when not given (tests, one Durable Object per agent). */
@@ -45,6 +51,8 @@ export interface LinkOptions {
   rates?: LinkRates;
   /** Native push; without it Push frames are answered `disabled` and Ready says `push: false`. */
   push?: LinkPush | null;
+  /** The dead man's switch; without it Deposit frames are answered `disabled` and Ready says `deadman: false`. */
+  deadman?: LinkDeadman | null;
 }
 
 export type CallResult = { kind: 'reply'; status: number; body: Uint8Array } | { kind: 'error'; code: RelayErrorCode };
@@ -83,14 +91,18 @@ export class AgentLink {
   private readonly queued = new Map<object, number>();
   /** Push ids waiting for FCM: each answered once, and their number is capped. */
   private readonly pushesInFlight = new Set<number>();
+  private readonly deadman: LinkDeadman | null;
+  /** Deposits being stored: one at a time, the next one waits (each replaces the one before). */
+  private depositing: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly socket: LinkSocket,
     private readonly limits: RelayLimits,
-    { now = Date.now, parent = new ByteBudget(limits.maxInflightBytes), rates, push = null }: LinkOptions = {},
+    { now = Date.now, parent = new ByteBudget(limits.maxInflightBytes), rates, push = null, deadman = null }: LinkOptions = {},
   ) {
     this.now = now;
     this.push = push;
+    this.deadman = deadman;
     this.callers = new CallerLimiter(limits);
     this.budget = new ByteBudget(Math.min(limits.maxConcurrent * limits.maxResponseBytes, shareBytes(limits)), parent);
     this.calls = new TokenBucket(limits.callBurst, limits.callsPerMinute / 60_000, now(), rates?.calls);
@@ -115,6 +127,7 @@ export class AgentLink {
       callTimeoutMs: this.limits.callTimeoutMs,
       push: this.push !== null,
       statusPush: this.push !== null,
+      deadman: this.deadman !== null,
     };
   }
 
@@ -173,6 +186,10 @@ export class AgentLink {
   onFrame(frame: Frame): void {
     if (frame.type === FrameType.Push) {
       this.onPush(frame.callId, frame.payload);
+      return;
+    }
+    if (frame.type === FrameType.Deposit) {
+      this.onDeposit(frame.callId, frame.payload);
       return;
     }
     if (frame.type !== FrameType.ReplyChunk && frame.type !== FrameType.ReplyEnd) {
@@ -260,6 +277,35 @@ export class AgentLink {
         }
         done?.();
       });
+  }
+
+  /**
+   * The agent's dead man's switch messages (docs/RELAY.md, "Dead man's
+   * switch"): handed to the platform, which stores them (memory or the
+   * object's storage), and answered once with what became of them. In
+   * order: a later deposit always replaces an earlier one.
+   */
+  private onDeposit(id: number, payload: Uint8Array): void {
+    if (this.closed) {
+      return;
+    }
+    const deadman = this.deadman;
+    if (!deadman) {
+      this.trySend(encodeDepositResult(id, 'disabled'));
+      return;
+    }
+    const deposit = decodeDeposit(payload);
+    this.depositing = this.depositing.then(async () => {
+      let outcome: DepositOutcome;
+      try {
+        outcome = await deadman.deposit(deposit);
+      } catch {
+        outcome = 'full'; // could not be stored: the previous deposit stays, the agent tries again later
+      }
+      if (!this.closed) {
+        this.trySend(encodeDepositResult(id, outcome));
+      }
+    });
   }
 
   /** Every part is checked before it is kept: the answer's size, this agent's byte budget, the relay's memory. */

@@ -122,6 +122,11 @@ export class Admission<T> {
     }
   }
 
+  /** This agent id's push allowance if it has one, without marking the agent as back (the dead man's switch fires while it is away). */
+  existingPushPolicy(agentId: string): AgentPushPolicy | null {
+    return this.pushPolicies.get(agentId)?.policy ?? null;
+  }
+
   /** Drops push allowances of agents gone for an hour, and earlier ones that have nothing left to remember. */
   prune(now: number): void {
     for (const [agentId, entry] of this.pushPolicies) {
