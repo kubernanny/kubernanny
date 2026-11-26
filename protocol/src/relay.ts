@@ -1,5 +1,5 @@
 /**
- * The relay's wire format (docs/RELAY.md, decisions/0005-relay-protocol.md).
+ * The relay's wire format (docs/PROTOCOL.md, "The relay"; decisions/0005-relay-protocol.md).
  *
  * The relay never sees a Noise key or a plaintext: it carries the sealed
  * bodies of docs/PROTOCOL.md between an HTTP client and the WebSocket an

@@ -1,3 +1,5 @@
+import { WRITE_ACTIONS } from './rules';
+
 /**
  * The deployment-level switches of the Helm chart that are not per module or
  * per action (those rows are generated from files/rbac.json), and what each
@@ -26,8 +28,7 @@ export const SWITCHES: readonly HardSwitch[] = [
     set: 'rbac.allowActions: false',
     hard: true,
     rbac: 'every `patch` and `create` in the ClusterRole (every write action is added to `actions.disabled`, `argocd-rollback` too, whatever `actions.enabled` says)',
-    routes:
-      '`POST /api/actions/<type>` answers 403 `ACTION_DISABLED` for restart, argocd-sync, argocd-refresh, cnpg-backup; `POST /api/argocd/rollback` likewise',
+    routes: `\`POST /api/actions/<type>\` answers 403 \`ACTION_DISABLED\` for ${WRITE_ACTIONS.filter((a) => a !== 'argocd-rollback').join(', ')}; \`POST /api/argocd/rollback\` likewise`,
     other: 'the app shows those action switches as locked',
   },
   {

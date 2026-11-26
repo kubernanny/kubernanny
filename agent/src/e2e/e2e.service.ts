@@ -369,7 +369,7 @@ export function tunnelsIntoItself(path: string): boolean {
   try {
     decoded = decodeURIComponent(path.split('?')[0]!);
   } catch {
-    // Not decodable: Express would answer 400, never the e2e route.
+    // Not decodable: compared as it came.
   }
   return /^\/+e2e(\/|\?|$)/i.test(decoded) || /^\/+e2e(\/|\?|$)/i.test(path);
 }

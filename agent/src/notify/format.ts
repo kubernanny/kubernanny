@@ -98,7 +98,7 @@ export function formatPush(
 
 /**
  * A change that could blind or lock out the owner if a stolen device made it
- * (docs/SECURITY.md, "A stolen device key"). Each one is announced through
+ * (docs/SECURITY.md, "Threats": a stolen device key). Each one is announced through
  * every channel, even with notifications switched off in the app or during a
  * maintenance window; only `checks.disabled: [notifications]` in Helm silences them.
  */
