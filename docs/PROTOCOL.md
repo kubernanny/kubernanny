@@ -1,6 +1,6 @@
 # The Kubernanny protocol (version 1)
 
-How the app talks to an agent. Every API call is end-to-end encrypted and authenticated between the device and the agent, whatever carries it: an ingress with TLS, a plain-HTTP LAN, a VPN, and later a relay. Nothing in between can read a request or an answer, change one without it being rejected, or replay one.
+How the app talks to an agent. Every API call is end-to-end encrypted and authenticated between the device and the agent, whatever carries it: an ingress with TLS, a plain-HTTP LAN, a VPN or the relay ([RELAY.md](RELAY.md)). Nothing in between can read a request or an answer, change one without it being rejected, or replay one.
 
 The implementation is `protocol/` (TypeScript, about 650 lines with comments, shared by agent and app). This page is precise enough to write another one; the [test vectors](#test-vectors) check it byte for byte.
 

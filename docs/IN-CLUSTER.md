@@ -9,12 +9,12 @@ Everything Kubernanny puts into your cluster, everything it may do there, every 
 | Workloads | **one** Deployment, one replica, one container (`ghcr.io/kubernanny/agent`) |
 | Runs as | uid 1000, non-root, read-only root filesystem, no capabilities, no privilege escalation, `RuntimeDefault` seccomp |
 | Writes to disk | nothing; a 1 MiB in-memory `/tmp` holds one Unix socket |
-| Kubernetes access | read-only across the cluster, plus four optional write actions, each bound to an open issue, and one opt-in action (`argocd-rollback`, off unless `actions.enabled` names it) |
+| Kubernetes access | read-only across the cluster, plus a few write actions, each bound to an open issue and each switchable, some off until you opt in ([PERMISSIONS.md](PERMISSIONS.md#write-access-at-a-glance)) |
 | Secrets it can read | **only its own two**, by name, in its own namespace |
 | Stores | two Secrets and one ConfigMap it creates itself, nothing else |
 | Inbound | port 8080 (web UI and the end-to-end encrypted API), port 9100 (numbers for Prometheus) |
 | Outbound, always | the Kubernetes API; Prometheus, Alertmanager, Grafana, Loki, Gatus and Uptime Kuma inside the cluster (GET only), when found |
-| Outbound, only if you configure it | your notification URLs; the relay (which also carries native push); OSV.dev for the vulnerability check |
+| Outbound, only if you configure it | your notification URLs; the relay (which also carries native push); OSV.dev for the vulnerability check; public container registries for available image updates ([the full list](#outbound)) |
 | Default memory | requests 128 Mi, limit 256 Mi (about 100 MB used on a 3-node homelab) |
 
 ```mermaid
@@ -31,11 +31,11 @@ flowchart LR
   end
   api["Kubernetes API"]
   mon["Prometheus · Alertmanager<br/>Grafana · Loki<br/>Gatus · Uptime Kuma"]
-  pod -- "get, list (read-only)<br/>+ 4 optional actions" --> api
+  pod -- "get, list (read-only)<br/>+ the enabled actions" --> api
   pod -- "GET only, cluster DNS" --> mon
   app["App / browser"] -- ":8080 /api/e2e<br/>end-to-end encrypted" --> pod
   prom["your Prometheus"] -. ":9100 /metrics" .-> pod
-  pod -. "only if configured" .-> out["ntfy / webhook<br/>relay<br/>OSV.dev"]
+  pod -. "only if configured" .-> out["ntfy / webhook<br/>relay<br/>OSV.dev<br/>container registries"]
 ```
 
 Solid lines happen in every install, dotted ones only when you set them up.
@@ -89,7 +89,7 @@ sequenceDiagram
 
 An action never names its target in the request: the app says "run `restart` for issue X", and the agent takes namespace, kind and name from its own check result. It can only touch what is broken right now. For an Argo CD Application the restart targets are not taken from the Application's `status` (anyone who can edit an Application writes that), only workloads the agent's own inventory shows not ready, in the Application's destination namespace. The one exception is the opt-in Argo CD rollback (`actions.enabled: [argocd-rollback]`, off by default): it names an app and an entry of its history, works without an open issue, and only on apps with manual sync and a single source. The agent re-reads the Application and rolls back only to a revision recorded for the app's own repository and path or chart (a commit SHA or chart version), never to another source, at most once per app in 5 minutes, announced through the notification channels first. It adds no RBAC verb; the admission policy gains a branch that allows exactly that sync and nothing else.
 
-That binding lives in the agent's code. Should the pod itself be compromised, RBAC alone would let it use the cluster-wide `patch` for anything on those objects. On Kubernetes 1.30+ the chart therefore also installs ValidatingAdmissionPolicies that deny the agent's ServiceAccount every change but the restart annotation on workloads, a plain sync or refresh on Applications, and a plain Backup on CNPG ([PERMISSIONS.md](PERMISSIONS.md#admission-policy)). Check them with `kubectl get validatingadmissionpolicies | grep kubernanny`, and try one: `kubectl set image deploy/<any> '*=busybox' --as=system:serviceaccount:kubernanny:kubernanny --dry-run=server` must be refused. Every action and every log read is written to the agent's log with the device that asked (`kubectl -n kubernanny logs deploy/kubernanny | grep audit`).
+That binding lives in the agent's code. Should the pod itself be compromised, RBAC alone would let it use the cluster-wide `patch` for anything on those objects. On Kubernetes 1.30+ the chart therefore also installs ValidatingAdmissionPolicies that deny the agent's ServiceAccount every change beyond what each action sends, for example anything but the restart annotation on a workload or a plain sync or refresh on an Application ([PERMISSIONS.md](PERMISSIONS.md#admission-policy)). Check them with `kubectl get validatingadmissionpolicies | grep kubernanny`, and try one: `kubectl set image deploy/<any> '*=busybox' --as=system:serviceaccount:kubernanny:kubernanny --dry-run=server` must be refused. Every action and every log read is written to the agent's log with the device that asked (`kubectl -n kubernanny logs deploy/kubernanny | grep audit`).
 
 Check it yourself, as the agent's ServiceAccount:
 
@@ -109,7 +109,7 @@ kubectl auth can-i create pods/exec -n default --as=$SA  # no
 | Port | Path | Who | Protection |
 |---|---|---|---|
 | 8080 | `/` | anyone who reaches it | the web UI as static files; Content Security Policy, no inline scripts |
-| 8080 | `/healthz` | kubelet probes | `{"ok":true}`, no cluster data |
+| 8080 | `/healthz`, `/readyz` | kubelet probes | `{"ok":true}` (`/readyz`: 503 until the first run is in memory and again on shutdown), no cluster data |
 | 8080 | `/api/identity` | the app when pairing by hand | the agent's public key; public by nature |
 | 8080 | `/api/e2e` | the app | one Noise IK handshake per call: device authenticated, request and answer encrypted ([PROTOCOL.md](PROTOCOL.md)) |
 | 8080 | any other `/api/*` | | 401: only reachable through `/api/e2e`, over the Unix socket below |

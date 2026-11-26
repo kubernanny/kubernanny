@@ -28,7 +28,7 @@ flowchart LR
   scrape["Your Prometheus"] -. ":9100/metrics" .-> agent
 ```
 
-Nothing leaves your network except the notifications you configure. There is no account, no telemetry and no server operated by us.
+With the default values nothing leaves your network except the notifications you configure; the relay, native push, the vulnerability lookup and image updates reach out only when you switch them on (every outbound connection: [IN-CLUSTER.md](IN-CLUSTER.md#outbound)). There is no account and no telemetry; the only server we run is the optional public relay.
 
 ## Contents
 
@@ -76,8 +76,10 @@ agent/src
 ├── status/                 the run loop (status.service), running modules and merging issues (run-modules), snapshot types, light and score (snapshot)
 ├── views/                  nodes, workloads, storage, network, events, backups, incidents, history for the detail tabs
 ├── incidents/              the episode log: incident history (GET /incidents) and the weekly report's data
-├── actions/                the issue actions (nine on by default, four opt-in), logs, the opt-in Argo CD rollback
+├── actions/                the issue actions (some opt-in, docs/PERMISSIONS.md), logs, the opt-in Argo CD rollback
+├── silence/                silenced issues and their end times (ConfigMap kubernanny-settings)
 ├── notify/                 when to notify, and the body for ntfy, Discord, Slack, Gotify, JSON
+├── push/                   native push: registration, sealing per device, widget status pushes, the dead man's switch deposits
 ├── settings/               what runs: module, action and notification switches (Helm + app)
 ├── rbac/                   the permissions each module and action needs; feeds the chart
 ├── auth/                   agent key pair, paired device keys, the guard for internal calls
@@ -86,6 +88,8 @@ agent/src
 ├── i18n/                   texts in English and German: catalogs, Text values, rendering per request (decisions/0006)
 ├── relay/                  RELAY_URL: the outbound WebSocket to the relay, calls into E2eService (docs/RELAY.md)
 ├── metrics/                Prometheus text format for kubernanny_* metrics
+├── security/               HTTP security headers (CSP), which hosts plain HTTP may go to (localhost, `*.svc`)
+├── util/                   small helpers: capped reads, serial queues, log-safe strings, start-up reads
 └── demo/                   a made-up cluster in three scenarios (DEMO=broken|warning|healthy)
 ```
 
@@ -200,7 +204,7 @@ History (`views/history.ts`) comes from Prometheus when one was found: cluster C
 
 ### Actions
 
-Thirteen actions that change something are bound to open issues. Nine are on by default:
+The actions that change something are bound to open issues. These are on by default:
 
 - Argo CD **sync** and **hard refresh**;
 - **restart** of a Deployment/StatefulSet/DaemonSet (the same patch as `kubectl rollout restart`). On a crash loop it comes second, after the logs, with a hint that it only helps once the cause is gone; after an OOMKill it is not offered at all (the cause names the memory limit to raise); with the opt-in `config-change-hint`, when a ConfigMap the pod reads through env/envFrom changed after its last start it comes first, as the fix;
@@ -209,7 +213,7 @@ Thirteen actions that change something are bound to open issues. Nine are on by 
 - **uncordon** a Ready node cordoned for over 30 minutes that no kured reboot or drain is working on;
 - **clean up** finished pods (Failed, evicted, or Succeeded without their Job) of a namespace.
 
-Four are off until the deployment names them in `actions.enabled` (as is `config-change-hint`, the ConfigMap read behind the restart offer), because the permission each needs reaches further than the action if the pod were compromised: **run a failed Job again** (`job-rerun`: `create` on Jobs), **force-delete** a pod stuck in Terminating on a lost node (`force-delete-terminating`), **end** an Argo CD sync running for over 30 minutes (`argocd-terminate-op`) and **grow** an almost full volume by a quarter (`pvc-expand`). Logs of a pod (including the previous, crashed container) are read the same way, as an action of their own. The last of the fifteen action types, the Argo CD **rollback**, is the one exception to that binding and off by default too (below). The per-action table of what each one changes is in [CHECKS.md](CHECKS.md#actions) and [PERMISSIONS.md](PERMISSIONS.md).
+Others are off until the deployment names them in `actions.enabled` (as is `config-change-hint`, the ConfigMap read behind the restart offer), because the permission each needs reaches further than the action if the pod were compromised: **run a failed Job again** (`job-rerun`: `create` on Jobs), **force-delete** a pod stuck in Terminating on a lost node (`force-delete-terminating`), **end** an Argo CD sync running for over 30 minutes (`argocd-terminate-op`) and **grow** an almost full volume by a quarter (`pvc-expand`). Logs of a pod (including the previous, crashed container) are read the same way, as an action of their own. The Argo CD **rollback** is the one exception to that binding and off by default too (below). The complete list, with what each one changes, is generated in [PERMISSIONS.md](PERMISSIONS.md#write-access-at-a-glance); when each is offered: [CHECKS.md](CHECKS.md#actions).
 
 ```mermaid
 sequenceDiagram
@@ -381,7 +385,7 @@ flowchart LR
 | An hour without a push (a widget placed, push on) | The agent sends a silent status push, the state only ([NOTIFICATIONS.md](NOTIFICATIONS.md#the-home-screen-widget)). iOS: a background push the app opens in `AppDelegate` (`StatusPush.swift`, compiled into the app and the extension), when iOS delivers it; Android: the messaging service. Both write the entry as above and redraw, with no notification. The app tells the agent whether a widget is placed (`WidgetBridge.placed()`, `widget` on `POST /push/register`) on start and on every resume. |
 | Nothing happens (no push gets through, app closed) | Nothing new can arrive: the widget cannot reach an agent. It shows its age instead: iOS ticks "2 min ago" from timeline entries made in advance (every minute for an hour, then sparser, for a day), Android shows the time of the check. After 2 hours without a check (one missed status push is not enough) a cluster turns grey and says "Not current" with "Open Kubernanny" under it, or under a list whose every cluster is grey (iOS: a timeline entry at that moment; Android: an alarm that does not wake the device, plus `updatePeriodMillis` every 30 minutes). After an app update Android redraws at once (`MY_PACKAGE_REPLACED`). |
 
-No periodic background refresh: it would need the device key and the Noise protocol in Swift and Kotlin, and a heartbeat push would cost a relay request and an FCM message per device and interval while iOS shows every push that reaches the extension as a notification (silent pushes wake the app only at the system's discretion). An entry the app has no answer for keeps its last state; `keepFresher` keeps a state a push stored if it is newer than the app's.
+The app never refreshes the widget in the background itself: that would need the device key and the Noise protocol in Swift and Kotlin. The silent status push is the periodic refresh instead: `AppPushService.refreshWidgets` (`agent/src/push/app-push.service.ts`) runs after each check on the pod holding the lease and sends the state, sealed and without text, to every device that registered with a widget and got no push of any kind for `WIDGET_REFRESH_MINUTES` (default 60, 0 off, never below 30), only through a relay whose `Ready` said `statusPush` ([PROTOCOL.md](PROTOCOL.md#status-pushes)). A push the relay refuses is tried again ten minutes later. An entry the app has no answer for keeps its last state; `keepFresher` keeps a state a push stored if it is newer than the app's.
 
 - **Switches.** Per cluster in its settings ("Show this cluster on the home-screen widget", `ClusterConfig.widgetOff`) and for all clusters on the cluster list (`widgetsOff` in Preferences). Off removes the entries from the shared storage before the switch's promise resolves, and nothing is written for them afterwards, by the app or by a push (a push only updates an entry that is there). Both are shown only in the native apps.
 - **Code.** TypeScript: `app/src/app/core/widget/` (pure `widgetCluster` / `nextWidgetList` / `keepFresher`, unit-tested with a fake bridge; the web implementation of the plugin is a no-op). Plugin: `app/native/widget-bridge/`, a local npm package that `npx cap sync` wires in like any Capacitor plugin (Swift package `KubernannyWidgetBridge`, Android library with both widget providers, `WidgetRender`, the refresh receiver, layouts and resources, which the manifest merger adds to the app). From a push: `WidgetPushStatus.swift` in the push extension, `WidgetPushStatus.java` in `app/native/push`. iOS widget extension: `app/ios/App/KubernannyWidget/`; its Xcode target is set up by a script ([RELEASING.md](RELEASING.md#widgets)).
