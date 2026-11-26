@@ -57,13 +57,10 @@ async function phoneDark(browser, L) {
   await shot(page, '61-history');
   await page.locator('app-history-section button', { hasText: L.showAll }).first().click().catch(() => {});
   await page.waitForTimeout(600);
-  await shot(page, '62-history-all');
   await scroll(page, 4300);
   await shot(page, '07-overview-charts');
   await scroll(page, 5600);
-  await shot(page, '08-overview-more-charts');
   await scroll(page, 7400);
-  await shot(page, '09-overview-kpis');
   // Use, requests and limits per node, under the cluster's figures.
   const perNode = page.locator('app-overview-tab .per-node').last();
   if ((await perNode.count()) > 0) {
@@ -115,17 +112,13 @@ async function phoneDark(browser, L) {
   await tab(page, L.services);
   await shot(page, '13-services');
   await scroll(page, 1500);
-  await shot(page, '14-services-monitoring');
   await scroll(page, 3200);
-  await shot(page, '15-services-apps');
   await scroll(page, 0);
   await page.locator('app-services-tab button', { hasText: 'Argo CD' }).first().click();
   await page.waitForTimeout(1100);
   await shot(page, '16-sheet-argocd');
   await page.locator('app-module-sheet ion-content').evaluate((el) => el.scrollToPoint(0, 900));
   await page.waitForTimeout(500);
-  await shot(page, '17-sheet-argocd-issues');
-  await detailShot(page, '77-sheet-argocd-apps');
   await closeSheet(page, L);
   for (const [name, file] of [
     ['Longhorn', '18-sheet-longhorn'],
@@ -135,9 +128,9 @@ async function phoneDark(browser, L) {
     ['kured', '22-sheet-kured'],
     ['Known vulnerabilities', '64-sheet-vulnerabilities'],
     ['Security', '65-sheet-security'],
-    ['Alertmanager', '80-sheet-alertmanager'],
-    ['Redis / Valkey', '81-sheet-redis'],
-    ['Kubernanny', '92-sheet-kubernanny'],
+    ['Alertmanager', 'raw-sheet-alertmanager'],
+    ['Redis / Valkey', 'raw-sheet-redis'],
+    ['Kubernanny', 'raw-sheet-kubernanny'],
   ]) {
     await scroll(page, 0);
     // By the row's own name: another row's summary may mention it (Known vulnerabilities names CloudNativePG).
@@ -150,14 +143,7 @@ async function phoneDark(browser, L) {
     await target.click();
     await page.waitForTimeout(1100);
     await shot(page, file);
-    const details = {
-      '18-sheet-longhorn': '76-sheet-longhorn-volumes',
-      '19-sheet-cnpg': '75-sheet-cnpg-clusters',
-      '20-sheet-prometheus': '78-sheet-prometheus-targets',
-      '80-sheet-alertmanager': '82-sheet-alertmanager-alerts',
-      '81-sheet-redis': '83-sheet-redis-pods',
-      '92-sheet-kubernanny': '93-sheet-kubernanny-timing',
-    }[file];
+    const details = { 'raw-sheet-kubernanny': '93-sheet-kubernanny-timing' }[file];
     if (details) {
       await detailShot(page, details);
     }
@@ -175,41 +161,24 @@ async function phoneDark(browser, L) {
   await shot(page, '26-workloads');
   await page.locator('app-workloads-tab .row').first().click();
   await page.waitForTimeout(600);
-  await shot(page, '27-workloads-expanded');
   await page.locator('app-workloads-tab .filters button', { hasText: L.problems }).click();
   await page.waitForTimeout(600);
   await shot(page, '28-workloads-problems');
-  // Restarted: why and when the last run ended, an OOMKill with its limit, requests and limits.
-  await page.locator('app-workloads-tab .filters button', { hasText: L.restarted }).click();
-  await page.waitForTimeout(400);
-  const oom = page.locator('app-workloads-tab li', { has: page.locator('.restart.oom') }).first();
-  if ((await oom.count()) > 0) {
-    await oom.locator('.row').click();
-    await page.waitForTimeout(500);
-    await oom.scrollIntoViewIfNeeded();
-    await shot(page, '79-workloads-restarts');
-  } else {
-    errors.push('no OOMKilled workload for 79-workloads-restarts');
-  }
   await page.locator('app-workloads-tab .filters button', { hasText: L.all }).click();
   await page.locator('app-workloads-tab input[type=search]').fill('grafana');
   await page.waitForTimeout(600);
-  await shot(page, '29-workloads-search');
 
   await tab(page, L.storage);
   await shot(page, '30-storage');
   await scroll(page, 900);
-  await shot(page, '31-storage-volumes');
 
   await tab(page, L.backups);
   await shot(page, '66-backups');
   await scroll(page, 1400);
-  await shot(page, '67-backups-more');
 
   await tab(page, L.network);
   await shot(page, '32-network');
   await scroll(page, 2400);
-  await shot(page, '33-network-loadbalancer');
 
   await tab(page, L.events);
   await shot(page, '34-events');
@@ -237,18 +206,15 @@ async function phoneDark(browser, L) {
   await openCluster(page, 'staging');
   await shot(page, '38-overview-green');
   await scroll(page, 600);
-  await shot(page, '39-overview-green-charts');
   await ctx.close();
 }
 
 async function phoneLight(browser, L) {
   const { ctx, page } = await context(browser, { ...PHONE, colorScheme: 'light' }, 'light');
   await pairAll(page);
-  await shot(page, '40-light-clusters');
   await openCluster(page, 'homelab');
   await shot(page, '41-light-overview');
   await tab(page, L.nodes);
-  await shot(page, '42-light-nodes');
   await ctx.close();
 }
 
@@ -265,13 +231,10 @@ async function demo(browser) {
 async function german(browser, L) {
   const { ctx, page } = await context(browser, { ...PHONE, colorScheme: 'dark', locale: 'de-DE' }, 'german');
   await pairAll(page);
-  await shot(page, '70-de-clusters');
   await openCluster(page, 'homelab');
   await shot(page, '71-de-overview');
   await scroll(page, 1100);
-  await shot(page, '72-de-issues');
   await tab(page, L.backups);
-  await shot(page, '73-de-backups');
   await ctx.close();
 }
 
@@ -281,7 +244,6 @@ async function tablet(browser, L) {
   await openCluster(page, 'homelab');
   await shot(page, '43-tablet-overview');
   await tab(page, L.storage);
-  await shot(page, '44-tablet-storage');
   await ctx.close();
 }
 
@@ -289,18 +251,16 @@ async function desktop(browser, L, scheme) {
   const { ctx, page } = await context(browser, { viewport: { width: 1440, height: 960 }, deviceScaleFactor: 2, colorScheme: scheme }, `desktop-${scheme}`);
   await pairAll(page);
   const p = scheme === 'dark' ? 'desktop' : 'desktop-light';
-  await shot(page, `${scheme === 'dark' ? 45 : 54}-${p}-clusters`);
   await openCluster(page, 'homelab');
   await shot(page, `${scheme === 'dark' ? 46 : 55}-${p}-overview`);
   if (scheme === 'dark') {
     // The rail at a full-HD width too, and the eye with its countdown ring close up.
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.waitForTimeout(500);
-    await shot(page, '85-desktop-1920-overview');
-    await page.locator('.hero').last().screenshot({ path: `${OUT}/86-hero-ring.png` });
+    await shot(page, 'raw-desktop-1920-overview');
+    await page.locator('.hero').last().screenshot({ path: `${OUT}/raw-hero-ring.png` });
     await page.setViewportSize({ width: 1440, height: 960 });
     await scroll(page, 2200);
-    await shot(page, '47-desktop-charts');
     // A range change on a slow connection: the charts keep their frame and shimmer until the data is there.
     await page.route('**/api/e2e', async (route) => {
       await new Promise((r) => setTimeout(r, 3000));
@@ -308,22 +268,11 @@ async function desktop(browser, L, scheme) {
     });
     await page.locator('app-overview-tab .range button').last().click();
     await page.waitForTimeout(600);
-    await shot(page, '91-desktop-charts-loading');
+    await shot(page, 'raw-desktop-charts-loading');
     await page.unroute('**/api/e2e');
     await page.waitForTimeout(3500);
-    for (const [label, file] of [
-      [L.services, '48-desktop-services'],
-      [L.nodes, '49-desktop-nodes'],
-      [L.workloads, '50-desktop-workloads'],
-      [L.storage, '51-desktop-storage'],
-      [L.network, '52-desktop-network'],
-      [L.backups, '74-desktop-backups'],
-    ]) {
-      await tab(page, label);
-      await shot(page, file);
-    }
-    await openCluster(page, 'staging');
-    await shot(page, '53-desktop-green');
+    await tab(page, L.nodes);
+    await shot(page, '49-desktop-nodes');
   }
   await ctx.close();
 }
@@ -336,9 +285,9 @@ async function largeText(browser, L) {
   await openCluster(page, 'homelab');
   await page.addStyleTag({ content: 'html { font-size: 23px !important; }' });
   await page.waitForTimeout(500);
-  await shot(page, '87-phone-23px-overview');
+  await shot(page, 'raw-phone-23px-overview');
   await tab(page, L.nodes);
-  await shot(page, '88-phone-23px-nodes');
+  await shot(page, 'raw-phone-23px-nodes');
   await ctx.close();
 }
 

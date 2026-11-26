@@ -6,7 +6,6 @@ const dir = process.env.OUT ?? 'raw';
 const shots = [
   ['56-terminal-pairing', '$ kubectl -n kubernanny logs deploy/kubernanny', fs.readFileSync(`${dir}/term-pairing.txt`, 'utf8'), 760],
   ['57-terminal-metrics', '$ curl -s kubernanny.kubernanny.svc:9100/metrics', fs.readFileSync(`${dir}/term-metrics.txt`, 'utf8'), 900],
-  ['58-terminal-api', '$ GET /status   # one sealed call, exactly as the app makes it (Noise IK, device key)', fs.readFileSync(`${dir}/term-api.txt`, 'utf8'), 860],
 ];
 (async () => {
   const b = await chromium.launch();
