@@ -15,6 +15,7 @@ import { AgentPushView, ClusterConfig } from '../core/agent.model';
 import { AgentClient, describeError } from '../core/agent-client.service';
 import { NativePushStatus, PushNative } from '../core/push/push-native';
 import { PushRegistration } from '../core/push/push-registration.service';
+import { pushTestResult } from '../core/push/push-test-result';
 import { pushView } from '../core/push/push-view';
 import { LanguageService } from '../i18n/language.service';
 import { PushMarkerPickerComponent } from './push-marker-picker.component';
@@ -268,7 +269,7 @@ export class PushSectionComponent {
       await this.native.setMarker(marker);
       this.marker.set(marker);
     } catch (err) {
-      await this.toast(describeError(err, tr));
+      await this.toast(describeError(err, tr), 'danger');
       return;
     }
     if (enable && this.view().action === 'enable') {
@@ -303,7 +304,7 @@ export class PushSectionComponent {
       }
       await this.load(cluster);
     } catch (err) {
-      await this.toast(describeError(err, tr));
+      await this.toast(describeError(err, tr), 'danger');
     } finally {
       this.busy.set(false);
     }
@@ -324,7 +325,7 @@ export class PushSectionComponent {
         deadman === false ? tr.t('push.deadmanOff') : tr.t('push.deadmanOn', { n: deadman }),
       );
     } catch (err) {
-      await this.toast(describeError(err, tr));
+      await this.toast(describeError(err, tr), 'danger');
     } finally {
       this.busy.set(false);
     }
@@ -339,18 +340,22 @@ export class PushSectionComponent {
     this.busy.set(true);
     try {
       const { outcome } = await this.client.testPush(cluster);
-      await this.toast(
-        outcome === 'sent' ? tr.t('push.testSent') : tr.t('push.testFailed', { outcome }),
-      );
+      const result = pushTestResult(outcome, cluster.relayUrl, tr);
+      await this.toast(result.message, result.color);
     } catch (err) {
-      await this.toast(describeError(err, tr));
+      await this.toast(describeError(err, tr), 'danger');
     } finally {
       this.busy.set(false);
     }
   }
 
-  private async toast(message: string): Promise<void> {
-    const toast = await this.toasts.create({ message, duration: 3000, position: 'bottom' });
+  private async toast(message: string, color?: 'success' | 'danger'): Promise<void> {
+    const toast = await this.toasts.create({
+      message,
+      duration: 3000,
+      position: 'bottom',
+      ...(color ? { color } : {}),
+    });
     await toast.present();
   }
 }

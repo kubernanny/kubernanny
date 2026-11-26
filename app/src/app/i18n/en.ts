@@ -489,7 +489,31 @@ export const en: Dictionary = {
     enabled: 'Push is on. A test message is on its way.',
     disabled: 'Push is off for this device.',
     testSent: 'Test push sent.',
-    testFailed: 'The relay did not take the test push ({{outcome}}).',
+    testFailed: "The relay did not take the test push ({{outcome}}). The relay's logs say why.",
+    testOutcome: {
+      unregistered: 'Firebase no longer knows this device: turn push off and on again.',
+      rateLimited: 'Too many pushes in a short time. Try again later.',
+      unavailable: 'Firebase or the relay cannot be reached right now. Try again in a few minutes.',
+      invalid:
+        'The relay refused the message as malformed. Update the agent to the latest version.',
+      disabled:
+        'The relay does not deliver pushes right now: the agent is not connected, or the relay has no push set up.',
+      fcmPermission:
+        'Firebase refuses to send: the relay lacks the permission (Firebase Cloud Messaging API not enabled or role missing).',
+      fcmAuth:
+        "Google does not accept the relay's service account: its key was deleted, disabled or is wrong.",
+      apnsAuth: 'The Apple key is missing in Firebase, so Firebase cannot reach iPhones.',
+    },
+    testFixOwn: {
+      fcmPermission:
+        'In the relay\'s Firebase project, enable the "Firebase Cloud Messaging API" and give the service account the role "Firebase Cloud Messaging API Admin".',
+      fcmAuth:
+        'Create a new key for the service account in the Google Cloud console and give it to the relay as FCM_SERVICE_ACCOUNT.',
+      apnsAuth:
+        'In the Firebase console, under Project settings, Cloud Messaging, upload an APNs key from Apple.',
+    },
+    testFixPublic:
+      "This is the public relay's problem, not your cluster's: the relay's operator has to fix it.",
     markerTitle: 'Your sign for pushes',
     markerExplain:
       'Every push Kubernanny opens on this device starts with this sign. A push without it did not come from your cluster. Three random emoji are hard to guess; take a new draw if you like, or an own word of at least three characters.',

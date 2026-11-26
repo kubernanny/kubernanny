@@ -492,7 +492,34 @@ export const de = {
     enabled: 'Push ist eingeschaltet. Eine Testnachricht ist unterwegs.',
     disabled: 'Push ist für dieses Gerät ausgeschaltet.',
     testSent: 'Test-Push gesendet.',
-    testFailed: 'Das Relay hat den Test-Push nicht angenommen ({{outcome}}).',
+    testFailed:
+      'Das Relay hat den Test-Push nicht angenommen ({{outcome}}). Den Grund nennen die Logs des Relays.',
+    testOutcome: {
+      unregistered:
+        'Dieses Gerät ist bei Firebase nicht mehr bekannt: Push aus- und wieder einschalten.',
+      rateLimited: 'Zu viele Pushes in kurzer Zeit. Versuch es später noch einmal.',
+      unavailable:
+        'Firebase oder das Relay ist gerade nicht erreichbar. Versuch es in ein paar Minuten noch einmal.',
+      invalid:
+        'Das Relay hat die Nachricht als fehlerhaft abgelehnt. Bring den Agenten auf die neueste Version.',
+      disabled:
+        'Das Relay stellt gerade keine Pushes zu: Der Agent ist nicht verbunden, oder das Relay hat keinen Push eingerichtet.',
+      fcmPermission:
+        'Firebase lehnt den Versand ab: Beim Relay fehlt die Berechtigung (Firebase Cloud Messaging API nicht aktiviert oder Rolle fehlt).',
+      fcmAuth:
+        'Google nimmt das Dienstkonto des Relays nicht an: Der Schlüssel ist gelöscht, gesperrt oder falsch.',
+      apnsAuth: 'Apple-Schlüssel fehlt in Firebase: Firebase kann iPhones darum nicht erreichen.',
+    },
+    testFixOwn: {
+      fcmPermission:
+        'Schalte im Firebase-Projekt des Relays die „Firebase Cloud Messaging API“ ein und gib dem Dienstkonto die Rolle „Firebase Cloud Messaging API Admin“.',
+      fcmAuth:
+        'Erzeuge in der Google Cloud Console einen neuen Schlüssel für das Dienstkonto und hinterlege ihn beim Relay als FCM_SERVICE_ACCOUNT.',
+      apnsAuth:
+        'Lade in der Firebase-Konsole unter Projekteinstellungen, Cloud Messaging, einen APNs-Schlüssel von Apple hoch.',
+    },
+    testFixPublic:
+      'Das liegt am öffentlichen Relay, nicht an deinem Cluster: Das muss der Betreiber des Relays beheben.',
     markerTitle: 'Dein Zeichen für Pushes',
     markerExplain:
       'Jeder Push, den Kubernanny auf diesem Gerät öffnet, beginnt mit diesem Zeichen. Ein Push ohne dein Zeichen kommt nicht von deinem Cluster. Drei zufällige Emoji sind schwer zu erraten; zieh gern neu oder nimm ein eigenes Wort mit mindestens drei Zeichen.',
