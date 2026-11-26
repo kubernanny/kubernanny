@@ -194,7 +194,7 @@ export interface RollbackApp {
 
 /** A security hint a workload accepts in Git (agent/src/modules/security/evaluate.ts): counted nowhere, listed folded. */
 export interface AcceptedFinding {
-  /** The annotation key: root, host-access, no-memory-limit, mutable-image. */
+  /** The annotation key: root, host-access, no-memory-limit, mutable-image, cpu-throttled. */
   key: string;
   /** What was found, in words. */
   finding: string;

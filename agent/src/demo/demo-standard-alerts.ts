@@ -3,7 +3,9 @@
  * (`modules/core/standard-alerts`): a sound cluster in every scenario, except
  * that etcd on rke2-node-1 reaches rke2-node-5 slowly in `warning` and `broken`
  * (where Alertmanager fires etcdMemberCommunicationSlow for the same pair, so
- * the demo shows the two merged), and CoreDNS answers 4.2 % SERVFAIL in `broken`.
+ * the demo shows the two merged), shop-api-pg runs against its CPU limit of one
+ * core in `warning` and `broken` (cpu-throttled), and CoreDNS answers 4.2 %
+ * SERVFAIL in `broken`.
  * Matched by the exact query strings of the rule table, so no other module's
  * query is answered from here. Node RAID, kubelet certificate rotation and
  * resource quotas do not exist in the demo: those rules show as not checked.
@@ -60,6 +62,16 @@ function answers(scenario: Scenario): Record<string, Sample[] | Record<string, S
     return { namespace: namespace!, persistentvolumeclaim: persistentvolumeclaim! };
   });
   const dnsErrors = scenario === 'broken' ? 0.042 : 0;
+  // Throttled share per container: shop-api-pg's primary at its limit, the rest well below the 25 % line.
+  const throttled = (hour: boolean): Sample[] => [
+    {
+      metric: { namespace: 'default', pod: 'shop-api-pg-1', container: 'postgres' },
+      value: slow ? (hour ? 0.4 : 0.31) : 0.02,
+    },
+    { metric: { namespace: 'default', pod: 'shop-api-pg-2', container: 'postgres' }, value: 0.03 },
+    { metric: { namespace: 'infisical', pod: 'infisical-pg-1', container: 'postgres' }, value: 0.01 },
+    { metric: { namespace: 'discourse', pod: 'discourse-pg-1', container: 'postgres' }, value: hour ? 0.12 : 0.04 },
+  ];
   return {
     'etcd-peer-rtt': { main: peers(false), now: peers(true) },
     'etcd-fsync': etcd(() => 0.0042),
@@ -94,6 +106,7 @@ function answers(scenario: Scenario): Record<string, Sample[] | Record<string, S
       metric: { job: 'apiserver', instance: `${n.ip}:6443` },
       value: 287 * 86_400,
     })),
+    'cpu-throttled': { main: throttled(false), hour: throttled(true) },
     'api-errors': {
       main: [{ metric: {}, value: 0.0004 }],
       m5: [{ metric: {}, value: 0 }],

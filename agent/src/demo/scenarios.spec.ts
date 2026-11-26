@@ -41,10 +41,21 @@ describe('demo scenarios', () => {
     ).toEqual([
       'certificates/weblate/weblate-tls',
       'cnpg/default/shop-api-pg/backup',
+      'standard-alerts/cpu-throttled/default/Cluster/shop-api-pg',
       'standard-alerts/etcd-peer-rtt/rke2-node-1/rke2-node-5',
     ]);
     expect(s.issues.find((i) => i.id.startsWith('standard-alerts/'))?.title).toBe(
       'etcd rke2-node-1 → rke2-node-5: Netzwerk-Laufzeit 243 ms',
+    );
+    // A database at its CPU limit: a hint with the fix and the line to accept it, never a warning.
+    const throttled = s.issues.find((i) => i.id.startsWith('standard-alerts/cpu-throttled/'));
+    expect([throttled?.severity, throttled?.title]).toEqual([
+      'info',
+      'default/shop-api-pg wird gedrosselt: 40 % der Zeit am CPU-Limit von 1 Kern',
+    ]);
+    expect(throttled?.cause).toMatch(/^Der Kernel hält den Container postgres in 40 % seiner CPU-Perioden/);
+    expect(throttled?.cause).toMatch(
+      /Bewusst so\? Am Workload die Annotation kubernanny\.io\/accept: "cpu-throttled: <Grund>" setzen\.$/,
     );
   });
 

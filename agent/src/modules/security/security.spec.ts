@@ -307,7 +307,7 @@ describe('accepting hints in the kubernanny.io/accept annotation', () => {
     ]);
     expect(out.issues[1].title).toBe('forum: kubernanny.io/accept bei 1 Workload nicht verstanden');
     expect(out.issues[1].cause).toBe(
-      'agent: unbekannter Schlüssel writable-root-fs. agent: privileged lässt sich nicht akzeptieren, ein privilegierter Container bleibt eine Warnung. Erlaubte Schlüssel: host-access, root, no-memory-limit, mutable-image. Jeder Eintrag braucht einen Grund, etwa "root: das Image startet als root und gibt die Rechte selbst ab".',
+      'agent: unbekannter Schlüssel writable-root-fs. agent: privileged lässt sich nicht akzeptieren, ein privilegierter Container bleibt eine Warnung. Erlaubte Schlüssel: host-access, root, no-memory-limit, mutable-image, cpu-throttled. Jeder Eintrag braucht einen Grund, etwa "root: das Image startet als root und gibt die Rechte selbst ab".',
     );
   });
 

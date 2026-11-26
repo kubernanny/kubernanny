@@ -1,8 +1,11 @@
 import { Issue, IssueSeverity } from '../../../checks/types';
 import { raw, t, Text } from '../../../i18n/text';
-import { Inventory } from '../../../inventory/inventory';
+import { cpuMilli, Inventory } from '../../../inventory/inventory';
 import { listSection, sections } from '../../details';
 import { CoreCheck } from '../../module';
+import { ACCEPT_ANNOTATION, mergeAccept } from '../../security/accept-annotation';
+import { AcceptedFinding, SecurityPod, workloadOf } from '../../security/evaluate';
+import { cronOfJobs, workloadAcceptAnnotations } from '../../security/workload-accept';
 import { Prometheus, PromSample } from '../../service-proxy';
 import { DetailRow, DetailSection, ModuleContext, ModuleResult, Stat, Tone } from '../../types';
 import { nodeOf } from '../node-clocks';
@@ -15,7 +18,7 @@ import {
   overcommit,
   spare,
 } from './inventory-rules';
-import { Area, ETCD_PEER_RTT_WARNING_S, Finding, label, Names, PROM_RULES, PromRule } from './rules';
+import { Area, ETCD_PEER_RTT_WARNING_S, Finding, label, Names, PROM_RULES, PromRule, WorkloadRef } from './rules';
 
 const ID = 'standard-alerts';
 /** Queries in flight at once: a run asks some 40, and Prometheus need not see them all together. */
@@ -33,6 +36,8 @@ export interface PromOutcome {
   states: RuleState[];
   /** etcd peer round trips: from node, to node, p99 now (s). */
   peers: { from: string; to: string; p99: number }[];
+  /** Hints the workload accepts in its `kubernanny.io/accept` annotation: in no issue, listed on the sheet. */
+  accepted: AcceptedFinding[];
 }
 
 async function pool<T, R>(items: T[], fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -50,6 +55,32 @@ async function pool<T, R>(items: T[], fn: (item: T) => Promise<R>): Promise<R[]>
 
 const keyOf = (labels: Record<string, string>, by: readonly string[]) => by.map((l) => labels[l] ?? '').join('\u0000');
 
+/** A series' `namespace`/`pod` as its workload, from the pods the run read. */
+function workloadsOf(inv: Inventory): Names['workload'] {
+  let pods: Map<string, SecurityPod> | null = null;
+  let cronOfJob: Map<string, string> | null = null;
+  return (labels) => {
+    pods ??= new Map(
+      inv.pods.map((p) => [`${p.metadata.namespace ?? 'default'}/${p.metadata.name}`, p as SecurityPod]),
+    );
+    cronOfJob ??= cronOfJobs(inv);
+    const pod = pods.get(`${labels.namespace ?? ''}/${labels.pod ?? ''}`);
+    if (!pod) {
+      return undefined;
+    }
+    const w = workloadOf(pod, cronOfJob);
+    const [namespace, kind, ...rest] = w.key.split('/');
+    const limit = pod.spec?.containers?.find((c) => c.name === labels.container)?.resources?.limits?.cpu;
+    const ref: WorkloadRef = { key: w.key, namespace: namespace!, kind: kind!, name: rest.join('/') || w.label };
+    const podAccept = pod.metadata.annotations?.[ACCEPT_ANNOTATION];
+    return {
+      ...ref,
+      ...(podAccept ? { podAccept } : {}),
+      ...(limit ? { cpuLimit: cpuMilli(limit) } : {}),
+    };
+  };
+}
+
 /** Instance labels, node labels and etcd member ids as node names. */
 function namesFor(inv: Inventory, members: PromSample[]): Names {
   const node = (labels: Record<string, string>) =>
@@ -64,6 +95,7 @@ function namesFor(inv: Inventory, members: PromSample[]): Names {
       const m = byId.get(id);
       return m ? node(m) : id.slice(0, 32);
     },
+    workload: workloadsOf(inv),
   };
 }
 
@@ -96,7 +128,8 @@ export async function runPromRules(
     }),
   ]);
   const n = namesFor(inv, members);
-  const out: PromOutcome = { issues: [], matches: [], states: [], peers: [] };
+  let workloadAccept: Map<string, string> | null = null;
+  const out: PromOutcome = { issues: [], matches: [], states: [], peers: [], accepted: [] };
   for (const rule of rules) {
     if (!applicable.includes(rule)) {
       out.states.push({ rule, state: 'not-applicable' });
@@ -128,6 +161,9 @@ export async function runPromRules(
         p99: f.extra.now ?? f.value,
       }));
     }
+    if (rule.worstFirst) {
+      findings.sort((a, b) => b.value - a.value);
+    }
     const seen = new Set<string>();
     for (const f of findings) {
       const severity = rule.judge(f);
@@ -135,12 +171,43 @@ export async function runPromRules(
         continue;
       }
       const d = rule.describe(f, n, severity);
+      if (!d) {
+        continue;
+      }
       const id = `${ID}/${rule.key}/${d.where}`;
       if (seen.has(id)) {
         continue;
       }
       seen.add(id);
-      out.issues.push({ id, check: ID, severity, title: d.title, cause: d.cause, actions: [] });
+      let cause = d.cause;
+      if (rule.accept && d.workload && severity === 'info') {
+        // A hint the workload accepts in Git counts nowhere; one that can be accepted says how (as the security hints).
+        workloadAccept ??= workloadAcceptAnnotations(inv);
+        const w = d.workload;
+        const accept = mergeAccept(workloadAccept.get(w.key), w.podAccept);
+        const reason = accept.accepted.get(rule.accept);
+        if (reason !== undefined) {
+          out.accepted.push({
+            key: rule.accept,
+            finding: d.short ?? d.title,
+            namespace: w.namespace,
+            kind: w.kind,
+            name: w.name,
+            reason,
+            source: accept.source.get(rule.accept) ?? 'workload',
+          });
+          continue;
+        }
+        cause = t('common.sentences', {
+          parts: [
+            cause,
+            accept.missingReason.has(rule.accept)
+              ? t('security.accept.noReason', { names: w.name, key: rule.accept })
+              : t('security.accept.how', { key: rule.accept }),
+          ],
+        });
+      }
+      out.issues.push({ id, check: ID, severity, title: d.title, cause, actions: [] });
       const labels = Object.fromEntries(
         (rule.match ?? rule.by).filter((l) => f.labels[l] !== undefined).map((l) => [l, f.labels[l]!]),
       );
@@ -238,6 +305,7 @@ export class StandardAlertsCheck extends CoreCheck {
           issues: [],
           matches: [],
           peers: [],
+          accepted: [],
           states: PROM_RULES.map((rule) => ({ rule, state: 'no-prometheus' as const })),
         };
     // A flapping node that someone cordoned is being worked on (kured, upgrades): not reported, as upstream.
@@ -295,6 +363,9 @@ export class StandardAlertsCheck extends CoreCheck {
       ),
       listSection(t('std.detail.notApplying'), ruleRows(prom.states.filter(notApplying), issues), false),
     );
-    return { issues, stats, details, summary };
+    const accepted = [...prom.accepted].sort(
+      (a, b) => a.namespace.localeCompare(b.namespace) || a.name.localeCompare(b.name),
+    );
+    return { issues, stats, details, summary, ...(accepted.length ? { acceptedFindings: accepted } : {}) };
   }
 }

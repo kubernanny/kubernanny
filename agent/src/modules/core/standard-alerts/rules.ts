@@ -22,6 +22,7 @@
  */
 import { IssueSeverity } from '../../../checks/types';
 import { t, Text } from '../../../i18n/text';
+import type { AcceptKey } from '../../security/accept-annotation';
 
 export type Area = 'etcd' | 'nodes' | 'kubernetes' | 'dns' | 'prometheus';
 
@@ -33,10 +34,25 @@ export interface Finding {
   extra: Record<string, number | undefined>;
 }
 
+/** The workload a container series belongs to (a pod's owner: Deployment, StatefulSet, CNPG Cluster, …). */
+export interface WorkloadRef {
+  /** "ns/Kind/name", the key of the workload's `kubernanny.io/accept` annotation. */
+  key: string;
+  namespace: string;
+  kind: string;
+  name: string;
+  /** The pod template's `kubernanny.io/accept`, as it arrives on the pod. */
+  podAccept?: string;
+  /** The CPU limit of the series' `container`, in millicores; absent when it sets none. */
+  cpuLimit?: number;
+}
+
 /** Turns label values into names people know: a node instead of `10.0.0.5:9100`, an etcd member instead of its hex id. */
 export interface Names {
   node(labels: Record<string, string>): string;
   etcdMember(id: string): string;
+  /** The workload of `namespace`/`pod`; undefined when the pod is gone (replaced since). */
+  workload(labels: Record<string, string>): WorkloadRef | undefined;
 }
 
 export interface Described {
@@ -44,6 +60,10 @@ export interface Described {
   where: string;
   title: Text;
   cause: Text;
+  /** For a rule that can be accepted (`accept`): the workload whose annotation decides. */
+  workload?: WorkloadRef;
+  /** What was found, in a few words, for the list of accepted hints ("throttled at its CPU limit"). */
+  short?: Text;
 }
 
 export interface PromRule {
@@ -69,8 +89,16 @@ export interface PromRule {
   match?: readonly string[];
   /** Only checked when this holds (e.g. an Alertmanager exists). */
   when?: (env: { alertmanager: boolean }) => boolean;
+  /**
+   * A hint the workload can accept in its `kubernanny.io/accept` annotation under this key
+   * (docs/SECURITY-CHECKS.md): `describe` names the workload, and an accepted one is listed apart.
+   */
+  accept?: AcceptKey;
+  /** Several series end in the same issue (the containers of a workload's pods): the highest value speaks for it. */
+  worstFirst?: boolean;
   judge(f: Finding): IssueSeverity | null;
-  describe(f: Finding, names: Names, severity: IssueSeverity): Described;
+  /** null: nothing to report after all (the pod of the series is gone). */
+  describe(f: Finding, names: Names, severity: IssueSeverity): Described | null;
 }
 
 /** Fires when the value is above the thresholds (strictly, as upstream's `>`). */
@@ -100,6 +128,17 @@ export const label = (labels: Record<string, string>, name: string) => (labels[n
 const ms = (seconds: number) => Math.round(seconds * 1000 * 10) / 10;
 const pct = (ratio: number) => Math.round(ratio * 1000) / 10;
 const days = (seconds: number) => Math.max(0, Math.floor(seconds / 86_400));
+
+/** Share of CFS periods a container spends throttled, held for 30 min and over the last hour: the `cpu-throttled` hint. */
+export const CPU_THROTTLED_SHARE = 0.25;
+/** Throttled share per container: periods in which the kernel stopped it at its CPU quota, over all periods it ran. */
+const throttledShare = (fn: 'rate' | 'increase', window: string) => {
+  const c = 'container!="",container!="POD"';
+  return (
+    `sum by (namespace, pod, container) (${fn}(container_cpu_cfs_throttled_periods_total{${c}}[${window}])) / ` +
+    `sum by (namespace, pod, container) (${fn}(container_cpu_cfs_periods_total{${c}}[${window}]))`
+  );
+};
 
 /** `etcd_network_peer_round_trip_time_seconds` p99 above this for 10 min: etcd-mixin's etcdMemberCommunicationSlow. */
 export const ETCD_PEER_RTT_WARNING_S = 0.15;
@@ -618,6 +657,43 @@ export const PROM_RULES: readonly PromRule[] = [
         where: 'cluster',
         title: t('std.apiErrors.title', { pct: pct(share) }),
         cause: t('std.apiErrors.cause'),
+      };
+    },
+  },
+
+  {
+    // CPUThrottlingHigh: throttled / all CFS periods > 25 % (5m rate) for 15m, info, per container. Noisy upstream:
+    // any container that bursts against its limit for a moment fires. Here the share must hold for 30 minutes
+    // and over the whole last hour, one hint per workload (its worst container), and the workload can accept it.
+    key: 'cpu-throttled',
+    area: 'kubernetes',
+    alerts: ['CPUThrottlingHigh'],
+    needs: ['container_cpu_cfs_throttled_periods_total', 'container_cpu_cfs_periods_total'],
+    query: `max by (namespace, pod, container) (min_over_time((${throttledShare('rate', '5m')})[30m:1m]))`,
+    extra: { hour: throttledShare('increase', '1h') },
+    by: ['namespace', 'pod', 'container'],
+    accept: 'cpu-throttled',
+    worstFirst: true,
+    judge: ({ value, extra: e }) =>
+      value > CPU_THROTTLED_SHARE && (e.hour ?? value) > CPU_THROTTLED_SHARE ? 'info' : null,
+    describe: (f, n) => {
+      const w = n.workload(f.labels);
+      if (!w) {
+        return null;
+      }
+      const what = `${w.namespace}/${w.name}`;
+      const share = Math.round((f.extra.hour ?? f.value) * 100);
+      const cores = w.cpuLimit === undefined ? undefined : w.cpuLimit / 1000;
+      return {
+        where: `${w.namespace}/${w.kind}/${w.name}`,
+        title: t('std.cpuThrottled.title', { what, pct: share, ...(cores === undefined ? {} : { cores }) }),
+        cause: t('std.cpuThrottled.cause', {
+          container: label(f.labels, 'container'),
+          pct: share,
+          threshold: Math.round(CPU_THROTTLED_SHARE * 100),
+        }),
+        workload: w,
+        short: t('std.cpuThrottled.short', { pct: share }),
       };
     },
   },

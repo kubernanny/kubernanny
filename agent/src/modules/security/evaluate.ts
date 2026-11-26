@@ -2,7 +2,14 @@ import { podOwner } from '../../checks/pods.check';
 import { Issue, IssueSeverity, ObjectMeta } from '../../checks/types';
 import { imageVersion } from '../../discovery/discovery';
 import { raw, t, Text } from '../../i18n/text';
-import { ACCEPT_ANNOTATION, ACCEPTABLE_KEYS, AcceptSource, mergeAccept, ParsedAccept } from './accept-annotation';
+import {
+  ACCEPT_ANNOTATION,
+  ACCEPTABLE_KEYS,
+  AcceptKey,
+  AcceptSource,
+  mergeAccept,
+  MergedAccept,
+} from './accept-annotation';
 
 /** The fields of a pod spec the posture check reads; the inventory holds the full objects. */
 export interface SecurityContextLite {
@@ -167,12 +174,13 @@ export function cronJobTemplatePods(
     }));
 }
 
-const ORDER: (FindingType | 'accept-annotation')[] = [
+const ORDER: (AcceptKey | 'privileged' | 'accept-annotation')[] = [
   'privileged',
   'host-access',
   'root',
   'no-memory-limit',
   'mutable-image',
+  'cpu-throttled',
   'accept-annotation',
 ];
 
@@ -189,8 +197,8 @@ export interface SecurityInput {
 
 /** A hint someone accepted in the workload's annotation: left out of the issues, listed on the module sheet. */
 export interface AcceptedFinding {
-  /** The annotation key: `root`, `host-access`, … */
-  key: FindingType;
+  /** The annotation key: `root`, `host-access`, `cpu-throttled`, … */
+  key: AcceptKey;
   /** What was found, in words ("may run as root"). */
   finding: Text;
   namespace: string;
@@ -229,7 +237,7 @@ export function evaluateSecurityPosture(input: SecurityInput): SecurityOutcome {
   const accepted = new Map<string, AcceptedFinding>();
   /** Per namespace, per workload: what its annotation names that cannot count. */
   const misread = new Map<string, Map<string, { unknown: Set<string>; refused: Set<string> }>>();
-  const acceptOf = new Map<string, ParsedAccept & { source: Map<FindingType, AcceptSource> }>();
+  const acceptOf = new Map<string, MergedAccept>();
   for (const pod of input.pods) {
     const ns = pod.metadata.namespace ?? 'default';
     if (input.systemNamespaces.has(ns) || pod.status?.phase === 'Succeeded') {

@@ -141,6 +141,137 @@ describe('standard alerts from Prometheus', () => {
   });
 });
 
+describe('CPU throttling (cpu-throttled)', () => {
+  const NAMES = ['container_cpu_cfs_throttled_periods_total', 'container_cpu_cfs_periods_total'];
+  const apiPod = (name: string, annotations?: Record<string, string>) => ({
+    metadata: {
+      name,
+      namespace: 'shop',
+      labels: { 'pod-template-hash': '7d9f' },
+      ownerReferences: [{ kind: 'ReplicaSet', name: 'api-7d9f' }],
+      ...(annotations ? { annotations } : {}),
+    },
+    spec: {
+      containers: [
+        { name: 'api', image: 'api:1', resources: { limits: { cpu: '500m', memory: '256Mi' } } },
+        { name: 'sidecar', image: 'proxy:1' },
+      ],
+    },
+  });
+  const deployment = (annotations?: Record<string, string>) => ({
+    metadata: { name: 'api', namespace: 'shop', ...(annotations ? { annotations } : {}) },
+  });
+  const world = (opts: { deploy?: Record<string, string>; pod?: Record<string, string> } = {}) =>
+    inv({
+      pods: [apiPod('api-7d9f-a', opts.pod), apiPod('api-7d9f-b', opts.pod)],
+      deployments: [deployment(opts.deploy)],
+      statefulsets: [],
+      daemonsets: [],
+      cronjobs: [],
+      jobs: [],
+    } as unknown as Partial<Inventory>);
+  const series = (pod: string, container: string, value: number) => ({
+    metric: { namespace: 'shop', pod, container },
+    value,
+  });
+  const answers = (window: number, hour: number): Record<string, PromSample[]> => ({
+    [rule('cpu-throttled').query]: [
+      series('api-7d9f-a', 'api', window),
+      series('api-7d9f-b', 'api', window - 0.1),
+      series('api-7d9f-a', 'sidecar', 0.9),
+      series('gone-pod', 'api', 0.9),
+    ],
+    [rule('cpu-throttled').extra!.hour!]: [
+      series('api-7d9f-a', 'api', hour),
+      series('api-7d9f-b', 'api', hour - 0.1),
+      series('api-7d9f-a', 'sidecar', 0.2),
+      series('gone-pod', 'api', 0.9),
+    ],
+  });
+
+  it('is one hint per workload, from its worst container, with the share of the last hour and its limit', async () => {
+    const { prom } = fakeProm(NAMES, {
+      ...answers(0.3, 0.42),
+      [rule('cpu-throttled').query]: answers(0.3, 0.42)[rule('cpu-throttled').query]!.filter(
+        (x) => x.metric.container === 'api',
+      ),
+    });
+    const out = await runPromRules(prom, world(), { alertmanager: false });
+    expect(out.issues.map((i) => [i.id, i.severity])).toEqual([
+      ['standard-alerts/cpu-throttled/shop/Deployment/api', 'info'],
+    ]);
+    const issue = out.issues[0]!;
+    expect(render(issue.title, 'de')).toBe('shop/api wird gedrosselt: 42 % der Zeit am CPU-Limit von 0,5 Kernen');
+    expect(render(issue.title, 'en')).toBe('shop/api is throttled: 42 % of the time at its CPU limit of 0.5 cores');
+    expect(render(issue.cause, 'en')).toMatch(/^The kernel stops the container api in 42 % of its CPU periods/);
+    expect(render(issue.cause, 'en')).toMatch(
+      /Deliberate\? Set the annotation kubernanny\.io\/accept: "cpu-throttled: <reason>" on the workload\.$/,
+    );
+    expect(out.matches).toContainEqual({
+      issueId: issue.id,
+      alerts: ['CPUThrottlingHigh'],
+      labels: { namespace: 'shop', pod: 'api-7d9f-a', container: 'api' },
+    });
+  });
+
+  it('says nothing for a burst (the 30-minute minimum) or a quiet hour, nor for a pod that is gone', async () => {
+    const only = (a: Record<string, PromSample[]>) => {
+      const strip = (l: PromSample[]) => l.filter((x) => x.metric.container === 'api' && x.metric.pod !== 'gone-pod');
+      return Object.fromEntries(Object.entries(a).map(([k, v]) => [k, strip(v)]));
+    };
+    for (const [window, hour] of [
+      [0.2, 0.6],
+      [0.6, 0.2],
+    ] as const) {
+      const out = await runPromRules(fakeProm(NAMES, only(answers(window, hour))).prom, world(), {
+        alertmanager: false,
+      });
+      expect(out.issues).toEqual([]);
+    }
+    const gone = await runPromRules(
+      fakeProm(NAMES, {
+        [rule('cpu-throttled').query]: [series('gone-pod', 'api', 0.9)],
+        [rule('cpu-throttled').extra!.hour!]: [series('gone-pod', 'api', 0.9)],
+      }).prom,
+      world(),
+      { alertmanager: false },
+    );
+    expect(gone.issues).toEqual([]);
+  });
+
+  it("is accepted in the workload's kubernanny.io/accept, and says so when the reason is missing", async () => {
+    const reason = 'batch import, the limit protects the other tenants';
+    const accepted = await runPromRules(
+      fakeProm(NAMES, answers(0.5, 0.5)).prom,
+      world({ deploy: { 'kubernanny.io/accept': `root: runit, cpu-throttled: ${reason}` } }),
+      { alertmanager: false },
+    );
+    expect(accepted.issues).toEqual([]);
+    expect(accepted.matches).toEqual([]);
+    expect(accepted.accepted).toMatchObject([
+      { key: 'cpu-throttled', namespace: 'shop', kind: 'Deployment', name: 'api', reason, source: 'workload' },
+    ]);
+    expect(render(accepted.accepted[0]!.finding, 'de')).toBe('am CPU-Limit gedrosselt (50 %)');
+
+    const fromTemplate = await runPromRules(
+      fakeProm(NAMES, answers(0.5, 0.5)).prom,
+      world({ pod: { 'kubernanny.io/accept': `cpu-throttled: ${reason}` } }),
+      { alertmanager: false },
+    );
+    expect(fromTemplate.accepted.map((a) => a.source)).toEqual(['pod-template']);
+
+    const noReason = await runPromRules(
+      fakeProm(NAMES, answers(0.5, 0.5)).prom,
+      world({ deploy: { 'kubernanny.io/accept': 'cpu-throttled:' } }),
+      { alertmanager: false },
+    );
+    expect(noReason.accepted).toEqual([]);
+    expect(render(noReason.issues[0]!.cause, 'en')).toMatch(
+      /kubernanny\.io\/accept on api names cpu-throttled without a reason, so it still counts\./,
+    );
+  });
+});
+
 describe('standard alerts from the inventory', () => {
   const pod = (cpu: string, memory: string, phase = 'Running') => ({
     metadata: { name: 'p' },

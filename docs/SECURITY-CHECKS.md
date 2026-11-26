@@ -55,6 +55,7 @@ The keys, written as `kubernanny.io/accept: "<key>: <reason>"` on the workload:
 | `root` | yes | `security/<ns>/root` |
 | `no-memory-limit` | yes | `security/<ns>/no-memory-limit` |
 | `mutable-image` | yes | `security/<ns>/mutable-image` |
+| `cpu-throttled` | yes | `standard-alerts/cpu-throttled/<ns>/<Kind>/<workload>`: the workload runs against its CPU limit ([CHECKS.md](CHECKS.md#standard-alerts-standard-alerts)). For a database that should stay capped, a batch job that may take longer |
 | `privileged` | **never** | `security/<ns>/privileged` is a warning: whoever takes over that container has the node |
 
 Every hint that can be accepted ends with the line for its key, as plain text like the rest of the hint: `Deliberate? Set the annotation kubernanny.io/accept: "root: <reason>" on the workload.` (German: `Bewusst so? Am Workload die Annotation kubernanny.io/accept: "root: <Grund>" setzen.`). A hint whose workload already names the key without a reason says what is missing instead.
@@ -70,13 +71,13 @@ metadata:
     kubernanny.io/accept: "root: the official discourse image boots runit as root and drops privileges itself"
 ```
 
-- **Where**: on the Deployment, StatefulSet, DaemonSet or CronJob, or on its pod template (`spec.template.metadata.annotations`, for a CronJob `spec.jobTemplate.spec.template.metadata.annotations`). The pod template also works for pods of an operator's resource (a CNPG `Cluster`) whose own object Kubernanny does not read. Both are merged; for a key in both, the workload's entry counts.
+- **Where**: on the Deployment, StatefulSet, DaemonSet or CronJob, or on its pod template (`spec.template.metadata.annotations`, for a CronJob `spec.jobTemplate.spec.template.metadata.annotations`). The pod template also works for pods of an operator's resource (a CNPG `Cluster`, through `spec.inheritedMetadata.annotations`) whose own object Kubernanny does not read. Both are merged; for a key in both, the workload's entry counts.
 - **Format**: entries `<key>: <reason>`, separated by commas or line breaks (`root: runit drops privileges, no-memory-limit: sized by the operator`). A comma inside a reason is fine unless what follows looks like another `key:`. Keys are case-insensitive. A reason is cleaned (control characters removed, whitespace collapsed) and cut at 200 characters.
 - **A reason is required.** `root:` with nothing after it accepts nothing: the hint stays, and its text says "kubernanny.io/accept on discourse names root without a reason, so it still counts".
 - **Unknown keys and `privileged`** turn into a hint of their own, `security/<ns>/accept-annotation`, naming the workload, the key, and the allowed keys.
 - **Per workload, per finding**: accepting `root` on discourse leaves `root` counting on every other workload of the namespace, and every other finding on discourse.
 - **Accepted hints count nowhere**: not in the hint list, not in the module's numbers or summary. The module's sheet lists them folded under the issues as "N bewusst akzeptiert" / "N accepted": the workload, the finding, the reason, and that it comes from the annotation on the workload or on its pod template. When nothing else remains the summary says "Nothing stands out, 1 accepted".
-- **Only hints**, never a warning or anything critical, and only the security posture's findings: nothing that endangers availability can be hidden this way. A crash loop, a full volume or a known vulnerability is not affected by the annotation (vulnerabilities have their own [per-advisory acceptance](#does-not-apply-here-accepting-one-advisory), with an expiry).
+- **Only hints**, never a warning or anything critical: the security posture's findings and the standard alerts' CPU throttling hint (listed folded on the standard alerts' sheet). Nothing that endangers availability can be hidden this way. A crash loop, a full volume or a known vulnerability is not affected by the annotation (vulnerabilities have their own [per-advisory acceptance](#does-not-apply-here-accepting-one-advisory), with an expiry).
 - **No new permissions**: the agent already reads these objects (their annotations are kept in its cache for exactly this key). Anyone who can set the annotation can change the pod spec itself, so the annotation hands nobody a new power; it is visible in Git, in `kubectl describe`, and in the app.
 
 The broken demo cluster runs Discourse as root with this annotation, so its security sheet shows one accepted hint.

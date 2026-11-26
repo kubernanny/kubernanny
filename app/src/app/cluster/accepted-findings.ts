@@ -16,7 +16,7 @@ export interface AcceptedFindingRow {
   source: string;
 }
 
-/** The security sheet's folded list of hints accepted in Git, every value worked out once. */
+/** The folded list of hints accepted in Git (security, standard alerts), every value worked out once. */
 export function acceptedFindingRows(m: ModuleView, tr: Translator): AcceptedFindingRow[] {
   return (m.acceptedFindings ?? []).map((a) => ({
     key: `${a.namespace}/${a.kind}/${a.name}/${a.key}`,

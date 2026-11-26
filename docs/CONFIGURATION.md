@@ -120,7 +120,7 @@ Invalid values fail the start with a clear message instead of running with a sur
 
 ## Accepting hints
 
-A deliberate security hint (`host-access`, `root`, `no-memory-limit`, `mutable-image`; `privileged` never) is accepted with the annotation `kubernanny.io/accept: "<key>: <reason>"` on the workload, not with a Helm value: [SECURITY-CHECKS.md](SECURITY-CHECKS.md#accepting-a-hint-in-git-kubernannyioaccept).
+A deliberate hint (security: `host-access`, `root`, `no-memory-limit`, `mutable-image`; standard alerts: `cpu-throttled`; `privileged` never) is accepted with the annotation `kubernanny.io/accept: "<key>: <reason>"` on the workload, not with a Helm value: [SECURITY-CHECKS.md](SECURITY-CHECKS.md#accepting-a-hint-in-git-kubernannyioaccept).
 
 ## The app
 

@@ -103,6 +103,14 @@ export const standardAlertsDe = {
   'std.apiErrors.title': (p: { pct: number }) => `API-Server: ${dec(p.pct)} % der Anfragen scheitern`,
   'std.apiErrors.cause':
     'Der API-Server beantwortet so viele Anfragen mit 5xx, dass das Fehlerbudget von 1 % schnell aufgebraucht ist. Häufig sind ein nicht erreichbarer Aggregated API (metrics-server), ein überlastetes etcd oder ein fehlerhafter Webhook schuld. Die Logs des API-Servers zeigen, welche Anfragen scheitern.',
+  'std.cpuThrottled.title': (p: { what: string; pct: number; cores?: number }) =>
+    `${p.what} wird gedrosselt: ${p.pct} % der Zeit am CPU-Limit` +
+    (p.cores === undefined ? '' : ` von ${dec(p.cores)} ${p.cores === 1 ? 'Kern' : 'Kernen'}`),
+  'std.cpuThrottled.cause': (p: { container: string; pct: number; threshold: number }) =>
+    `Der Kernel hält den Container ${p.container} in ${p.pct} % seiner CPU-Perioden der letzten Stunde an, weil er sein CPU-Limit ausgeschöpft hat, seit mindestens 30 Minuten durchgehend in über ${p.threshold} %. ` +
+    'Er wird dadurch langsam (längere Antwortzeiten, Zeitüberschreitungen, verpasste Health-Checks), aber nicht beendet; das gilt auch, wenn der Node gerade freie Kerne hat. ' +
+    'CPU-Limit erhöhen oder ganz entfernen: der Request sichert ihm seinen Anteil, ohne Limit nimmt er sich freie Kerne dazu. Datenbanken und Laufzeiten mit Garbage Collector (Java, Go, Node) leiden am meisten.',
+  'std.cpuThrottled.short': (p: { pct: number }) => `am CPU-Limit gedrosselt (${p.pct} %)`,
   'std.dnsErrors.title': (p: { pct: number }) => `DNS: ${dec(p.pct)} % der Antworten sind SERVFAIL`,
   'std.dnsErrors.cause':
     'CoreDNS kann seit 10 Minuten einen Teil der Namen nicht auflösen. Meist erreicht es seine Upstream-Resolver nicht (Forward in der Corefile) oder ein Plugin scheitert. Die Logs der CoreDNS-Pods zeigen die betroffenen Namen.',

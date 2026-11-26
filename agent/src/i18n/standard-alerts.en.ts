@@ -92,6 +92,14 @@ export const standardAlertsEn: Catalog = {
   'std.apiErrors.title': (p) => `API server: ${dec(p.pct)} % of requests fail`,
   'std.apiErrors.cause':
     'The API server answers so many requests with 5xx that the 1 % error budget burns fast. Often an unreachable aggregated API (metrics-server), an overloaded etcd or a broken webhook is to blame. The API server logs show which requests fail.',
+  'std.cpuThrottled.title': (p) =>
+    `${p.what} is throttled: ${p.pct} % of the time at its CPU limit` +
+    (p.cores === undefined ? '' : ` of ${dec(p.cores)} ${p.cores === 1 ? 'core' : 'cores'}`),
+  'std.cpuThrottled.cause': (p) =>
+    `The kernel stops the container ${p.container} in ${p.pct} % of its CPU periods of the last hour because it used up its CPU limit, above ${p.threshold} % without a break for at least 30 minutes. ` +
+    'That makes it slow (longer responses, timeouts, missed health checks), but does not kill it, even while the node has idle cores. ' +
+    'Raise the CPU limit or remove it: the request guarantees its share, and without a limit it takes idle cores on top. Databases and runtimes with a garbage collector (Java, Go, Node) suffer most.',
+  'std.cpuThrottled.short': (p) => `throttled at its CPU limit (${p.pct} %)`,
   'std.dnsErrors.title': (p) => `DNS: ${dec(p.pct)} % of answers are SERVFAIL`,
   'std.dnsErrors.cause':
     'For 10 minutes CoreDNS has failed to resolve part of the names. Usually it cannot reach its upstream resolvers (forward in the Corefile) or a plugin fails. The logs of the CoreDNS pods name the affected names.',

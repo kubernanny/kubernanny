@@ -1,7 +1,6 @@
 import { t } from '../../i18n/text';
 import { CoreCheck } from '../module';
 import { ModuleContext, ModuleResult } from '../types';
-import { ACCEPT_ANNOTATION } from './accept-annotation';
 import {
   cronJobTemplatePods,
   evaluateSecurityPosture,
@@ -9,6 +8,7 @@ import {
   SecurityPod,
   SYSTEM_NAMESPACES,
 } from './evaluate';
+import { cronOfJobs, workloadAcceptAnnotations } from './workload-accept';
 
 /** Security posture from the pod specs the run already read: no extra API calls, no extra RBAC. */
 export class SecurityCheck extends CoreCheck {
@@ -19,13 +19,7 @@ export class SecurityCheck extends CoreCheck {
   readonly reads = [];
 
   protected async check(ctx: ModuleContext): Promise<ModuleResult> {
-    const cronOfJob = new Map<string, string>();
-    for (const job of ctx.inv.jobs) {
-      const cron = job.metadata.ownerReferences?.find((o) => o.kind === 'CronJob');
-      if (cron) {
-        cronOfJob.set(`${job.metadata.namespace}/${job.metadata.name}`, cron.name);
-      }
-    }
+    const cronOfJob = cronOfJobs(ctx.inv);
     const hostLevel = new Set(
       (ctx.detected ?? [])
         .filter((d) => HOST_LEVEL_COMPONENTS.has(d.entry.id))
@@ -34,20 +28,7 @@ export class SecurityCheck extends CoreCheck {
     const systemNamespaces = new Set([...SYSTEM_NAMESPACES, ...ctx.config.securitySystemNamespaces]);
     const pods = [...(ctx.inv.pods as SecurityPod[]), ...cronJobTemplatePods(ctx.inv.cronjobs)];
     // The workloads' own annotations; their pod templates' arrive on the pods.
-    const workloadAccept = new Map<string, string>();
-    for (const [kind, list] of [
-      ['Deployment', ctx.inv.deployments],
-      ['StatefulSet', ctx.inv.statefulsets],
-      ['DaemonSet', ctx.inv.daemonsets],
-      ['CronJob', ctx.inv.cronjobs],
-    ] as const) {
-      for (const w of list) {
-        const value = w.metadata.annotations?.[ACCEPT_ANNOTATION];
-        if (value) {
-          workloadAccept.set(`${w.metadata.namespace ?? 'default'}/${kind}/${w.metadata.name}`, value);
-        }
-      }
-    }
+    const workloadAccept = workloadAcceptAnnotations(ctx.inv);
     const { issues, accepted } = evaluateSecurityPosture({
       pods,
       cronOfJob,

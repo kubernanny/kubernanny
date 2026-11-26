@@ -78,7 +78,7 @@ export interface ModuleResult {
   /** Vulnerabilities only: advisories someone marked as not applicable, shown on the module sheet. */
   accepted?: AcceptedAdvisory[];
   canAccept?: boolean;
-  /** Security posture only: hints accepted in the workloads' `kubernanny.io/accept` annotation, listed folded on the sheet. */
+  /** Security posture and standard alerts: hints accepted in the workloads' `kubernanny.io/accept` annotation, listed folded on the sheet. */
   acceptedFindings?: AcceptedFinding[];
   /** Argo CD only, while `argocd-rollback` is on: manual-sync apps and the earlier deployments they can go back to. */
   rollbacks?: RollbackApp[];
@@ -189,7 +189,7 @@ export interface ModuleView {
   accepted?: AcceptedAdvisory[];
   /** Vulnerabilities only: advisories can be accepted (not locked in Helm). */
   canAccept?: boolean;
-  /** Security posture only: hints accepted in the workloads' `kubernanny.io/accept` annotation. */
+  /** Security posture and standard alerts: hints accepted in the workloads' `kubernanny.io/accept` annotation. */
   acceptedFindings?: AcceptedFinding[];
   /** Argo CD only, while `argocd-rollback` is on. */
   rollbacks?: RollbackApp[];

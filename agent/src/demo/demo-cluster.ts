@@ -353,10 +353,14 @@ const W: WorkloadSpec[] = [
   },
 ];
 
+/**
+ * The CPU limits add up to more than rke2-node-5 has (throttled, not killed), and
+ * shop-api-pg runs against its limit of one core (standard-alerts/cpu-throttled).
+ */
 const CNPG = [
-  { ns: 'default', name: 'shop-api-pg', instances: 2, ready: 2, backupHoursAgo: 31, archiving: true },
-  { ns: 'infisical', name: 'infisical-pg', instances: 2, ready: 2, backupHoursAgo: 9, archiving: true },
-  { ns: 'discourse', name: 'discourse-pg', instances: 2, ready: 1, backupHoursAgo: 10, archiving: true },
+  { ns: 'default', name: 'shop-api-pg', instances: 2, ready: 2, backupHoursAgo: 31, archiving: true, cpuLimit: '1' },
+  { ns: 'infisical', name: 'infisical-pg', instances: 2, ready: 2, backupHoursAgo: 9, archiving: true, cpuLimit: '2' },
+  { ns: 'discourse', name: 'discourse-pg', instances: 2, ready: 1, backupHoursAgo: 10, archiving: true, cpuLimit: '2' },
 ];
 
 /** The manual-sync app of the demo with three deployments in its history (argocd-rollback). */
@@ -847,7 +851,10 @@ function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): Map<str
             {
               name: 'postgres',
               image: 'ghcr.io/cloudnative-pg/postgis:17-3.5',
-              resources: { requests: { cpu: '100m', memory: '512Mi' }, limits: { memory: '1Gi' } },
+              resources: {
+                requests: { cpu: '100m', memory: '512Mi' },
+                limits: { cpu: c.cpuLimit, memory: '1Gi' },
+              },
             },
           ],
           volumes: [{ name: 'pgdata', persistentVolumeClaim: { claimName: name } }],
