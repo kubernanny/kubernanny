@@ -16,7 +16,7 @@ export interface Episode {
   silenced: boolean;
 }
 
-export const WEEK = 7 * 86_400_000;
+const WEEK = 7 * 86_400_000;
 /** Ended episodes kept per issue: a flapping issue opens one every time it comes back (once a minute at worst). */
 export const MAX_EPISODES_PER_ISSUE = 100;
 /** Episodes kept in all; past it the oldest ended ones go first. */

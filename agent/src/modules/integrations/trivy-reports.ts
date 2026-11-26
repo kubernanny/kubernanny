@@ -32,7 +32,7 @@ export interface TrivyVulnerability {
 }
 
 /** Reports older than this are ignored: Trivy Operator rescans daily by default (`scannerReportTTL`). */
-export const MAX_REPORT_AGE_DAYS = 14;
+const MAX_REPORT_AGE_DAYS = 14;
 /** Advisories kept per workload: the worst ten, plus the worst ten with a fix (they decide the severity). */
 export const KEEP = 10;
 
@@ -142,7 +142,7 @@ export function sameImage(running: string, artifact: { repository?: string; tag?
 }
 
 /** Trivy's own label; a score only where it says UNKNOWN. */
-export function levelOfTrivy(v: TrivyVulnerability): Level {
+function levelOfTrivy(v: TrivyVulnerability): Level {
   const s = v.severity?.toUpperCase();
   if (s === 'CRITICAL' || s === 'HIGH' || s === 'MEDIUM' || s === 'LOW') {
     return s.toLowerCase() as Level;
@@ -180,7 +180,7 @@ export interface ContainerScan {
   findings: TrivyFinding[];
 }
 
-export function digestReport(r: VulnerabilityReport, container: string, scannedAt: number): ContainerScan {
+function digestReport(r: VulnerabilityReport, container: string, scannedAt: number): ContainerScan {
   const s = r.report?.summary;
   const counts: Counts = { critical: s?.criticalCount ?? 0, high: s?.highCount ?? 0, medium: s?.mediumCount ?? 0, low: s?.lowCount ?? 0, unknown: s?.unknownCount ?? 0 };
   const findings = keepTop(
@@ -279,7 +279,7 @@ export interface WorkloadFindings {
 }
 
 /** Has a Service an Ingress, HTTPRoute or IngressRoute points at: reachable from outside the cluster network. */
-export function reachable(inv: Inventory, w: TrivyWorkload): boolean {
+function reachable(inv: Inventory, w: TrivyWorkload): boolean {
   return w.podLabels !== undefined && ingressUrls(inv, servicesOf(inv, w.namespace, w.podLabels)).length > 0;
 }
 

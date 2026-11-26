@@ -24,7 +24,7 @@ export function grownSize(current: string): string | null {
  * resize it back or fight it), so the hint points there instead. A claim made
  * from a StatefulSet's volumeClaimTemplates grows, but the template stays.
  */
-export function expansion(inv: Inventory, pvc: Pvc): { actions: IssueAction[]; cnpg?: string } {
+function expansion(inv: Inventory, pvc: Pvc): { actions: IssueAction[]; cnpg?: string } {
   const ns = pvc.metadata.namespace ?? 'default';
   const name = pvc.metadata.name;
   const cnpg = pvc.metadata.ownerReferences?.find((o) => o.kind === 'Cluster' && (o.apiVersion ?? '').startsWith('postgresql.cnpg.io/'));

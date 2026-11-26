@@ -90,15 +90,6 @@ export interface Issue {
   advisories?: string[];
 }
 
-export interface CheckResult {
-  id: CheckId;
-  label: Text;
-  status: CheckStatus;
-  issues: Issue[];
-  /** Set when status is `error`: the check itself failed (API unreachable, RBAC). */
-  error?: Text;
-}
-
 export interface CheckContext {
   now: Date;
 }

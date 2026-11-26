@@ -8,7 +8,7 @@ const SA_DIR = '/var/run/secrets/kubernetes.io/serviceaccount';
  * are paged with `listEach`; anything past this is refused, not buffered
  * into a pod with a 256 MiB limit.
  */
-export const MAX_KUBE_RESPONSE = 64 * 1024 * 1024;
+const MAX_KUBE_RESPONSE = 64 * 1024 * 1024;
 /** Largest error body read for its message: a Status object is a few hundred bytes. */
 export const MAX_KUBE_ERROR_BODY = 64 * 1024;
 

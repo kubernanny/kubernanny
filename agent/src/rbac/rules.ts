@@ -46,7 +46,7 @@ export const ACTION_PERMISSIONS: Record<ActionType, Rule[]> = {
 };
 
 /** "notifications" is not a module but switches every channel off (checks.disabled). */
-export const NOTIFICATIONS_ID = 'notifications';
+const NOTIFICATIONS_ID = 'notifications';
 
 /** Every id `checks.disabled` (DISABLED_MODULES) and ENABLED_MODULES may name; custom components add `custom:<id>`. */
 export function knownModuleIds(): string[] {

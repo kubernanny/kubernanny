@@ -43,7 +43,7 @@ export class AlertmanagerIntegration extends Integration {
 }
 
 /** Alerts read: plenty for a homelab, and a forged answer of millions costs nothing past it. */
-export const MAX_ALERTS = 2000;
+const MAX_ALERTS = 2000;
 
 /** Alertmanager's answer as alerts with string labels and annotations only. */
 export function parseAlerts(answer: unknown): AmAlert[] {
@@ -56,7 +56,7 @@ export function parseAlerts(answer: unknown): AmAlert[] {
 const SEVERITY_TONE: Record<string, Tone> = { critical: 'critical', warning: 'warning' };
 
 /** Firing alerts grouped by name (how many, which severity, where), and the active silences with who set them and until when. */
-export function alertmanagerDetails(firing: AmAlert[], silences: Record<string, unknown>[], now: Date): DetailSection[] {
+function alertmanagerDetails(firing: AmAlert[], silences: Record<string, unknown>[], now: Date): DetailSection[] {
   const groups = new Map<string, AmAlert[]>();
   for (const a of firing) {
     const name = a.labels.alertname ?? '?';

@@ -71,5 +71,4 @@ export const UnauthorizedException = of(401);
 export const ForbiddenException = of(403);
 export const NotFoundException = of(404);
 export const ConflictException = of(409);
-export const PayloadTooLargeException = of(413);
 export const BadGatewayException = of(502);

@@ -37,7 +37,7 @@ const JOB_CONTROLLER_LABELS = ['controller-uid', 'batch.kubernetes.io/controller
 const CREATED_BY = { 'app.kubernetes.io/created-by': 'kubernanny' };
 
 /** Fields of a Velero backup spec the admission policy denies to the agent; a schedule using them is not backed up from the app. */
-export const VELERO_REFUSED = ['hooks', 'resourcePolicy', 'orderedResources'] as const;
+const VELERO_REFUSED = ['hooks', 'resourcePolicy', 'orderedResources'] as const;
 
 const enc = encodeURIComponent;
 /** The newest part of a pod's log the app shows: Kubernetes cuts it (`limitBytes`), and the client refuses anything larger. */

@@ -25,7 +25,7 @@ const MAX_TAGS = 20_000;
 const MAX_REDIRECTS = 3;
 const USER_AGENT = 'kubernanny-agent';
 /** One page of 1000 tags is ~30 KB; a token answer a few KB. */
-export const REGISTRY_MAX_RESPONSE = 2 * 1024 * 1024;
+const REGISTRY_MAX_RESPONSE = 2 * 1024 * 1024;
 /** Repositories remembered; a cluster has far fewer distinct images. */
 const MAX_CACHED = 2000;
 

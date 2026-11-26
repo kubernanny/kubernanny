@@ -1,7 +1,7 @@
 import { KubeError } from '../kube/kube-client';
 
 /** Waits between attempts: about half a minute in all, short enough for a pod start, long enough for an API server restart. */
-export const STARTUP_READ_DELAYS_MS: readonly number[] = [500, 1_000, 2_000, 4_000, 8_000, 15_000];
+const STARTUP_READ_DELAYS_MS: readonly number[] = [500, 1_000, 2_000, 4_000, 8_000, 15_000];
 
 export interface StartupReadOptions {
   delaysMs?: readonly number[];

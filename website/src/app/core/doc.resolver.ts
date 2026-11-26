@@ -3,7 +3,7 @@ import { RedirectCommand, Router, type ResolveFn } from '@angular/router';
 import { loadDoc } from 'virtual:kubernanny-docs';
 import type { DocPage } from './docs.types';
 
-/** `/docs/decisions/0001-x#y` -> `decisions/0001-x` (mirrors build/doc-paths.ts). */
+/** `/docs/decisions/0001-x#y` -> `decisions/0001-x`. */
 export function docSlugFromUrl(url: string): string {
   return url
     .split(/[?#]/)[0]

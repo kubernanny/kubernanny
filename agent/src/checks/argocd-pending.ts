@@ -66,7 +66,7 @@ function splitImage(image: string): { repo: string; tag: string } | null {
 }
 
 /** Images Git asks for: Helm `image.repository|name` + `image.tag` parameters (any prefix), Kustomize `images` overrides. */
-export function desiredImages(app: ArgoApplication): string[] {
+function desiredImages(app: ArgoApplication): string[] {
   const sources = [app.spec?.source, ...(app.spec?.sources ?? [])].filter((s): s is SourceWithOverrides => s !== undefined);
   const out: string[] = [];
   for (const s of sources) {

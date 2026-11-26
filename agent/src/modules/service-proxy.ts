@@ -43,7 +43,7 @@ export class ServiceHttp {
 }
 
 /** In-cluster services answer with a few KB; anything far beyond that is refused rather than buffered. */
-export const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 export { readCapped };
 
@@ -81,7 +81,7 @@ export interface PromSeries {
 }
 
 /** Series one query may return; a homelab's queries stay far below, a forged answer is cut here. */
-export const MAX_PROM_SERIES = 10_000;
+const MAX_PROM_SERIES = 10_000;
 /** Points per series of a range query (168 h at a 5 min step is ~2000). */
 const MAX_PROM_POINTS = 5_000;
 

@@ -35,7 +35,7 @@ const RUNNABLE: IssueActionType[] = [
   'force-delete-terminating',
   'pvc-expand',
 ];
-export { AGENT_VERSION };
+
 
 export class AppController {
   private readonly logger = new Logger('audit');

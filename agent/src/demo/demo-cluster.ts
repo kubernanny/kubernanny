@@ -20,10 +20,6 @@ type Obj = Record<string, unknown>;
  */
 export type DemoScenario = 'broken' | 'warning' | 'healthy';
 
-export function demoScenario(value: string | undefined): DemoScenario {
-  return value === 'warning' || value === 'healthy' ? value : 'broken';
-}
-
 const NODES = [
   { name: 'rke2-node-1', ip: '10.0.0.1', cpu: '4', mem: '15Gi', usedCpu: 1730, usedMem: 11.2 },
   { name: 'rke2-node-4', ip: '10.0.0.4', cpu: '8', mem: '31Gi', usedCpu: 2410, usedMem: 18.9 },
@@ -217,7 +213,7 @@ const hash = (s: string) => {
   return h;
 };
 
-export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): Map<string, unknown> {
+function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): Map<string, unknown> {
   const broken = scenario === 'broken';
   const warn = scenario !== 'healthy';
   const iso = (msAgo: number) => new Date(now.getTime() - msAgo).toISOString();

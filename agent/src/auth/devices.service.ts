@@ -6,7 +6,7 @@ import { KubeClient, KubeError } from '../kube/kube-client';
 import { Serial } from '../util/serial';
 import { NotLoadedError, readAtStartup } from '../util/startup-read';
 
-export const DEVICES_SECRET = 'kubernanny-devices';
+const DEVICES_SECRET = 'kubernanny-devices';
 export const MAX_DEVICES = 50;
 
 export interface Device {
@@ -271,7 +271,7 @@ export function validKey(key: unknown): key is string {
  * A device name for logs and the device list: printable and short. Control
  * characters (line breaks!) become spaces, so a name can never forge a log line.
  */
-export function cleanName(name: string): string {
+function cleanName(name: string): string {
   const cleaned = name
     .replace(/\p{C}/gu, ' ')
     .replace(/[^\p{L}\p{N} .,()_'-]/gu, '')

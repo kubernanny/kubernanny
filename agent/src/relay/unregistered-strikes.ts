@@ -1,7 +1,7 @@
 import { pushTokenDigest } from '@kubernanny/protocol';
 
 /** Strikes before a token is forgotten, and the least time between two of them. */
-export const UNREGISTERED_STRIKES = 3;
+const UNREGISTERED_STRIKES = 3;
 export const STRIKE_GAP_MS = 3_600_000;
 const MAX_TRACKED = 1024;
 

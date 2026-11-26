@@ -22,12 +22,6 @@ export function routeForFile(file: string): string {
   return routeForSlug(slugForFile(file));
 }
 
-/** The slug of a docs URL path, e.g. `/docs/decisions/0001-x#y` -> `decisions/0001-x`. */
-export function slugFromUrl(url: string): string {
-  const path = url.split(/[?#]/)[0].replace(/\/+$/, '');
-  return path.replace(/^\/docs\/?/, '');
-}
-
 const MEDIA = /\.(png|jpe?g|gif|svg|webp|avif)$/i;
 
 export interface RewriteContext {

@@ -28,7 +28,7 @@ export const FAILURE_WINDOW_MS = 10 * 60_000;
 export type RedeemResult = 'ok' | 'invalid' | 'throttled';
 
 /** Draws the pairing link as a large QR code in the browser; the link stays in the fragment (docs/PROTOCOL.md#pairing). */
-export const QR_PAGE = 'https://kubernanny.app/qr';
+const QR_PAGE = 'https://kubernanny.app/qr';
 /** Light modules around the code: the QR standard asks for four. */
 const QUIET_ZONE = 4;
 

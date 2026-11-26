@@ -9,7 +9,7 @@ import { compareVersions, isPseudoVersion } from './versions';
 export type Level = 'critical' | 'high' | 'medium' | 'low' | 'unknown';
 
 export const LEVEL_RANK: Record<Level, number> = { critical: 4, high: 3, medium: 2, low: 1, unknown: 0 };
-export const LEVEL_LABEL: Record<Level, Text> = {
+const LEVEL_LABEL: Record<Level, Text> = {
   critical: t('vulnerabilities.level.critical'),
   high: t('vulnerabilities.level.high'),
   medium: t('vulnerabilities.level.medium'),

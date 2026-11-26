@@ -4,7 +4,7 @@ import { KUBERNETES_EOL } from './releases';
 
 const DAY = 86_400_000;
 /** Warning this close to the end of life, a hint from HINT_DAYS on. */
-export const WARN_DAYS = 60;
+const WARN_DAYS = 60;
 export const HINT_DAYS = 120;
 
 export interface SupportState {

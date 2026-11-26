@@ -4,7 +4,7 @@ import type { Config } from '../config';
 import { KubeClient } from '../kube/kube-client';
 import { readAtStartup } from '../util/startup-read';
 
-export const IDENTITY_SECRET = 'kubernanny-identity';
+const IDENTITY_SECRET = 'kubernanny-identity';
 
 /**
  * The agent's static X25519 key pair: what every device pins at pairing and

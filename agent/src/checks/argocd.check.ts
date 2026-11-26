@@ -42,7 +42,7 @@ export interface ArgoApplication {
 }
 
 /** How long a running operation may take before ending it is offered. */
-export const OPERATION_STUCK_MS = 30 * 60_000;
+const OPERATION_STUCK_MS = 30 * 60_000;
 
 const RESTARTABLE = new Set<string>(['Deployment', 'StatefulSet', 'DaemonSet']);
 
@@ -54,7 +54,7 @@ const RESTARTABLE = new Set<string>(['Deployment', 'StatefulSet', 'DaemonSet']);
  * restart at any workload in the cluster (kube-system/cilium); the inventory
  * and the destination are what the agent believes.
  */
-export function restartTargets(app: ArgoApplication, broken: AppResource[], inv: Inventory | undefined): IssueAction[] {
+function restartTargets(app: ArgoApplication, broken: AppResource[], inv: Inventory | undefined): IssueAction[] {
   const destination = app.spec?.destination?.namespace;
   if (!inv || !destination) {
     return [];

@@ -159,16 +159,3 @@ export const CATALOG: CatalogEntry[] = [
   { id: 'mealie', name: 'Mealie', category: 'apps', icon: 'restaurant-outline', images: img('hay-kot/mealie', 'mealie-recipes/mealie'), description: t('component.mealie') },
 ];
 
-export const CATEGORY_LABEL: Record<Category, string> = {
-  storage: 'Speicher',
-  gitops: 'GitOps',
-  database: 'Datenbanken',
-  certificates: 'Zertifikate',
-  observability: 'Monitoring',
-  networking: 'Netzwerk',
-  security: 'Sicherheit',
-  maintenance: 'Wartung',
-  backup: 'Backups',
-  platform: 'Plattform',
-  apps: 'Apps',
-};

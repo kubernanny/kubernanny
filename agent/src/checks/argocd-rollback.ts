@@ -34,7 +34,7 @@ const GIT_SHA = /^[0-9a-f]{40}$/;
 /** A Helm chart version (SemVer, optional leading v), short. */
 const CHART_VERSION = /^v?\d{1,6}\.\d{1,6}\.\d{1,6}(?:-[0-9A-Za-z.-]{1,40})?(?:\+[0-9A-Za-z.-]{1,40})?$/;
 /** Argo CD keeps 10 entries by default (`revisionHistoryLimit`); more are never listed. */
-export const MAX_ENTRIES = 10;
+const MAX_ENTRIES = 10;
 const MAX_APPS = 50;
 
 export type RollbackRefusal =
@@ -65,7 +65,7 @@ export interface RollbackApp {
   entries: RollbackEntry[];
 }
 
-export function plausibleRevision(revision: unknown, source: ArgoSource): revision is string {
+function plausibleRevision(revision: unknown, source: ArgoSource): revision is string {
   return typeof revision === 'string' && (source.chart ? CHART_VERSION : GIT_SHA).test(revision);
 }
 
@@ -74,12 +74,12 @@ export function shortRevision(revision: string): string {
 }
 
 /** Same repository and the same path or chart; the target revision may differ (that is the point). */
-export function sameSource(a: ArgoSource | undefined, b: ArgoSource): boolean {
+function sameSource(a: ArgoSource | undefined, b: ArgoSource): boolean {
   return a !== undefined && typeof a.repoURL === 'string' && a.repoURL === b.repoURL && (a.path ?? '') === (b.path ?? '') && (a.chart ?? '') === (b.chart ?? '');
 }
 
 /** Why the app as a whole cannot be rolled back by Kubernanny, or null. */
-export function appRefusal(app: ArgoApplication): RollbackRefusal | null {
+function appRefusal(app: ArgoApplication): RollbackRefusal | null {
   // Argo CD itself refuses a rollback with auto-sync on: it would sync straight back to Git.
   if (app.spec?.syncPolicy?.automated !== undefined && app.spec.syncPolicy.automated !== null) {
     return 'ROLLBACK_AUTOMATED';
@@ -97,7 +97,7 @@ export function appRefusal(app: ArgoApplication): RollbackRefusal | null {
 }
 
 /** Why this history entry is no rollback target, or null; `id` comes from the request. */
-export function entryRefusal(app: ArgoApplication, entry: ArgoHistoryEntry | undefined): RollbackRefusal | null {
+function entryRefusal(app: ArgoApplication, entry: ArgoHistoryEntry | undefined): RollbackRefusal | null {
   const source = app.spec!.source!;
   if (!entry) {
     return 'ROLLBACK_HISTORY_NOT_FOUND';

@@ -57,10 +57,10 @@ const STALE_MAX_MS = 7 * 24 * 3_600_000;
 export const OSV_BACKOFF_MS = 15 * 60_000;
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{1,80}$/;
 /** An answer from the database is read up to this size; OSV records are a few KB, a batch answer of ids a few hundred. */
-export const OSV_MAX_RESPONSE = 4 * 1024 * 1024;
+const OSV_MAX_RESPONSE = 4 * 1024 * 1024;
 /** Advisory ids taken per queried version, and records fetched per lookup: a hostile mirror cannot make the check fetch thousands. */
 export const OSV_MAX_IDS_PER_QUERY = 200;
-export const OSV_MAX_IDS_PER_LOOKUP = 1000;
+const OSV_MAX_IDS_PER_LOOKUP = 1000;
 /** Entries kept in memory; past the stale window they are useless anyway. */
 const MAX_QUERIES = 2000;
 const MAX_VULNS = 5000;

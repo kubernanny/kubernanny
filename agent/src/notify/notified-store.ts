@@ -9,7 +9,7 @@ import type { Pushed } from './notifier';
 /** SETTINGS_CONFIGMAP of settings.service, spelled out: importing it would close a cycle through the notifier (checked in the spec). */
 export const SETTINGS_CONFIGMAP = 'kubernanny-settings';
 /** The key in `kubernanny-settings`, next to `settings` and `silenced`. */
-export const NOTIFIED_KEY = 'notified';
+const NOTIFIED_KEY = 'notified';
 /** Issues remembered at most; past it the oldest go first (a resolution for them is then not sent after a restart). */
 export const MAX_NOTIFIED = 300;
 /** A ConfigMap holds 1 MiB in all; this key keeps well below a tenth of it. */

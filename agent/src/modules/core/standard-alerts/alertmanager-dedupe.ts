@@ -80,7 +80,7 @@ function podIssue(l: Record<string, string>, inv: Inventory): string | undefined
 }
 
 /** The issue an alert duplicates and the (trusted) alert name to mention, if any. */
-export function coveringIssue(alert: AmAlert, found: AlertMatch[], inv: Inventory, ids: ReadonlySet<string>): { issueId: string; alert: string } | undefined {
+function coveringIssue(alert: AmAlert, found: AlertMatch[], inv: Inventory, ids: ReadonlySet<string>): { issueId: string; alert: string } | undefined {
   const name = alert.labels.alertname;
   for (const m of found) {
     const known = m.alerts.find((a) => a === name);

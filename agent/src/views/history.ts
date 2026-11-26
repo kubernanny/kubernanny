@@ -36,7 +36,7 @@ const NODE_QUERIES: { id: string; label: Text; expr: string }[] = [
 ];
 
 /** Maps node-exporter's `instance` ("10.0.0.4:9100" or a name) to the node name. */
-export function nodeResolver(inv: Inventory): (instance: string) => string {
+function nodeResolver(inv: Inventory): (instance: string) => string {
   const byAddress = new Map<string, string>();
   for (const n of inv.nodes) {
     byAddress.set(n.metadata.name, n.metadata.name);

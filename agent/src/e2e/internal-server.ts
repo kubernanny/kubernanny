@@ -6,14 +6,14 @@ import type { Config } from '../config';
 import { Logger } from '../logger';
 
 /** Largest response the internal routes may produce; the views stay far below. */
-export const MAX_INTERNAL_RESPONSE = 8 * 1024 * 1024;
+const MAX_INTERNAL_RESPONSE = 8 * 1024 * 1024;
 const TIMEOUT_MS = 30_000;
 /**
  * Calls dispatched at once. Each paired device is rate-limited, but a dozen
  * devices each asking for logs or history could still stack up dozens of
  * slow calls; past this one the caller gets a busy answer at once.
  */
-export const MAX_DISPATCH_IN_FLIGHT = 16;
+const MAX_DISPATCH_IN_FLIGHT = 16;
 
 export class DispatchBusyError extends Error {
   constructor() {

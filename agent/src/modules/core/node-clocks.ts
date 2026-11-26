@@ -17,8 +17,8 @@ import { ModuleContext, ModuleResult } from '../types';
  *   freshly issued certificate is "not yet valid" on a slow node, and the
  *   API server accepts JWT times only within a minute of its own clock).
  */
-export const CLOCK_WARNING_S = 0.5;
-export const CLOCK_CRITICAL_S = 5;
+const CLOCK_WARNING_S = 0.5;
+const CLOCK_CRITICAL_S = 5;
 
 export interface NodeClock {
   node: string;
@@ -62,7 +62,7 @@ export function nodeOf(inv: Inventory, s: PromSample): string | undefined {
   return undefined;
 }
 
-export async function readNodeClocks(ctx: ModuleContext): Promise<NodeClock[]> {
+async function readNodeClocks(ctx: ModuleContext): Promise<NodeClock[]> {
   const prom = ctx.prom!;
   const [timex, ntp, status, maxError, estimated] = await Promise.all([
     prom.query('max by (instance) (node_timex_offset_seconds)').catch(() => []),

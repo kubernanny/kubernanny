@@ -13,9 +13,9 @@ import { upsertConfigMapData } from '../kube/configmap';
 import { NotLoadedError, readAtStartup } from '../util/startup-read';
 
 /** The durations the app offers; anything else is refused, so nobody silences an issue for a year by accident. */
-export const SILENCE_HOURS = [1, 8, 24, 168] as const;
+const SILENCE_HOURS = [1, 8, 24, 168] as const;
 /** A maintenance window: no notifications at all, for planned work on the cluster. */
-export const MAINTENANCE_HOURS = [1, 2, 4, 8, 24] as const;
+const MAINTENANCE_HOURS = [1, 2, 4, 8, 24] as const;
 const MAX_SILENCED = 500;
 const RANK: Record<IssueSeverity, number> = { info: 0, warning: 1, critical: 2 };
 

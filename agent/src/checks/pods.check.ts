@@ -212,7 +212,7 @@ export function evaluatePods(pods: Pod[], now: Date, changed: Map<string, string
 }
 
 /** How long a pod may hang in Terminating on a lost node before force-deleting it is offered. */
-export const TERMINATING_GRACE_MS = 10 * 60_000;
+const TERMINATING_GRACE_MS = 10 * 60_000;
 
 /**
  * Pods stuck in Terminating whose node is NotReady or gone: the kubelet that
@@ -243,7 +243,7 @@ export function evaluateStuckTerminating(pods: Pod[], nodes: { metadata: { name:
 }
 
 /** Failed pods (evicted ones included) older than this are offered for cleanup. */
-export const CLEANUP_AFTER_MS = 60 * 60_000;
+const CLEANUP_AFTER_MS = 60 * 60_000;
 
 /**
  * Finished pods nobody needs: Failed (evicted, OOM-killed for good, an error)

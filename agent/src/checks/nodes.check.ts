@@ -8,7 +8,7 @@ export interface Node {
 }
 
 /** How long a Ready node may stay cordoned before uncordoning it is offered. */
-export const CORDONED_AFTER_MS = 30 * 60_000;
+const CORDONED_AFTER_MS = 30 * 60_000;
 
 /**
  * When the node was cordoned: the newest managedFields entry that owns

@@ -29,10 +29,10 @@ export interface CephCluster {
  * is close to the point where Ceph stops writes. Ceph's own OSD_NEARFULL /
  * OSD_FULL health checks still come through `status.ceph.health`.
  */
-export const CEPH_USED_WARNING = 0.75;
-export const CEPH_USED_CRITICAL = 0.85;
+const CEPH_USED_WARNING = 0.75;
+const CEPH_USED_CRITICAL = 0.85;
 /** Rook refreshes `status.ceph` every 60 s; this much older and the operator has stopped looking. */
-export const CEPH_STALE_MS = 15 * 60_000;
+const CEPH_STALE_MS = 15 * 60_000;
 const MAX_DETAILS = 3;
 
 /** Health, capacity and the operator's view of every CephCluster. */

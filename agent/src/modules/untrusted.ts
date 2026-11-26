@@ -12,7 +12,7 @@ import type { DetailSection, Stat } from './types';
 import type { Text } from '../i18n/text';
 
 /** Longest string kept from an untrusted answer (names, states, messages). */
-export const MAX_FIELD = 300;
+const MAX_FIELD = 300;
 /** Issues one untrusted integration may report; the rest become one summary issue. */
 export const MAX_ISSUES_PER_MODULE = 50;
 
@@ -91,7 +91,7 @@ export function boundStats(stats: Stat[]): Stat[] {
 }
 
 /** Rows one section of an untrusted integration may show. */
-export const MAX_DETAIL_ROWS = 50;
+const MAX_DETAIL_ROWS = 50;
 
 function cell(value: unknown, max = 120): string | Text {
   return typeof value === 'string' ? (str(value, max) ?? '?') : isText(value) ? value : '?';

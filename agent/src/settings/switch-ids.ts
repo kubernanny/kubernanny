@@ -2,7 +2,7 @@ import { ActionType, OPT_IN_ACTIONS } from '../checks/types';
 import type { Config } from '../config';
 import { ACTION_PERMISSIONS, knownModuleIds } from '../rbac/rules';
 
-export const ACTION_TYPE_IDS = Object.keys(ACTION_PERMISSIONS) as ActionType[];
+const ACTION_TYPE_IDS = Object.keys(ACTION_PERMISSIONS) as ActionType[];
 
 /**
  * Fails the start on an id no module or action has. A hard switch that names

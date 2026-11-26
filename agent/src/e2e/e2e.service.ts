@@ -17,7 +17,7 @@ export const WRITE_CLOCK_WINDOW_MS = 60_000;
 const REPLAY_TTL_MS = 2 * CLOCK_WINDOW_MS;
 const REPLAY_CAPACITY = 20_000;
 /** Requests dated further ahead than the replay TTL covers, remembered until their own window has passed. */
-export const FUTURE_CAPACITY = 1_000;
+const FUTURE_CAPACITY = 1_000;
 /**
  * Of those, at most this many per paired device: one device with a broken
  * clock (or a stolen key) cannot fill the map and leave every other
@@ -48,10 +48,10 @@ export const FUTURE_PER_PRINCIPAL = 50;
  */
 export const OPEN_LIMIT = { capacity: 300, perSecond: 150 };
 export const OPEN_RESERVE = { capacity: 100, perSecond: 50 };
-export const RELAY_OPEN_LIMIT = { capacity: 400, perSecond: 200 };
+const RELAY_OPEN_LIMIT = { capacity: 400, perSecond: 200 };
 export const SOURCE_LIMIT = { capacity: 100, perSecond: 50 };
-export const SOURCE_KEYS = 4096;
-export const TRUSTED_SOURCE_MS = 10 * 60_000;
+const SOURCE_KEYS = 4096;
+const TRUSTED_SOURCE_MS = 10 * 60_000;
 export const DEVICE_LIMIT = { capacity: 60, perSecond: 20 };
 export const STRANGER_LIMIT = { capacity: 20, perSecond: 2 };
 /**
@@ -59,7 +59,7 @@ export const STRANGER_LIMIT = { capacity: 20, perSecond: 2 };
  * restart would pass again after it. Requests dated before the process
  * started (minus this margin for clock jitter) are refused.
  */
-export const START_MARGIN_MS = 5_000;
+const START_MARGIN_MS = 5_000;
 
 export type E2eResult = { kind: 'sealed'; body: Uint8Array } | { kind: 'plain'; status: number; code: string };
 

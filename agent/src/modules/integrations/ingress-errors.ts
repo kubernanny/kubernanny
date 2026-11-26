@@ -17,11 +17,11 @@ import { Stat } from '../types';
  * - critical above 25 %: one in four fails, which people notice; typically a
  *   backend down behind the route, or one of few replicas broken.
  */
-export const ERROR_WINDOW = '15m';
-export const MIN_REQUESTS = 200;
-export const MIN_ERRORS = 10;
-export const ERROR_WARNING = 0.05;
-export const ERROR_CRITICAL = 0.25;
+const ERROR_WINDOW = '15m';
+const MIN_REQUESTS = 200;
+const MIN_ERRORS = 10;
+const ERROR_WARNING = 0.05;
+const ERROR_CRITICAL = 0.25;
 
 export interface RouteTraffic {
   route: string;

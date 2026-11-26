@@ -16,7 +16,7 @@ import { WorkloadsCheck } from './workloads';
 export { evaluateNodeUsage } from './nodes';
 export { evaluateVolumes } from './volumes';
 export { evaluateJobs, evaluateWorkloads } from './workloads';
-export { bytes, pct } from '../format';
+export { bytes } from '../format';
 
 /**
  * The checks of Kubernetes itself, one file each; every one can be switched

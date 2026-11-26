@@ -16,12 +16,12 @@ import { parseQuantity } from '../inventory/inventory';
 import type { DetailMeta, DetailRow, DetailSection, LonghornNode, Stat, Tone } from './types';
 
 /** Rows one section carries at most; the app folds healthy rows anyway. */
-export const MAX_ROWS = 200;
+const MAX_ROWS = 200;
 
 const RANK: Record<Tone, number> = { critical: 0, warning: 1, muted: 2, ok: 3 };
 
 /** Problems first, then by name; the order within a tone stays stable. */
-export function problemsFirst<T extends { tone: Tone }>(rows: T[], name?: (r: T) => string): T[] {
+function problemsFirst<T extends { tone: Tone }>(rows: T[], name?: (r: T) => string): T[] {
   return rows
     .map((r, i) => ({ r, i }))
     .sort((a, b) => RANK[a.r.tone] - RANK[b.r.tone] || (name ? name(a.r).localeCompare(name(b.r)) : 0) || a.i - b.i)
@@ -304,7 +304,7 @@ export function prometheusDetails(jobs: { job: string; total: number }[], down: 
  * (Flux, External Secrets), else Infisical's LastReconcileStatus. The time of
  * the last successful reconcile, when the operator records one.
  */
-export function reconcileState(conditions: Condition[] | undefined, type = 'Ready'): { state?: Condition; lastAt: number } {
+function reconcileState(conditions: Condition[] | undefined, type = 'Ready'): { state?: Condition; lastAt: number } {
   const state = conditions?.find((c) => c.type === type);
   const success = conditions?.find((c) => c.type.endsWith('/LastSuccessfulReconcileAt'));
   const fromMessage = Date.parse(success?.message ?? '');

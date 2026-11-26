@@ -11,7 +11,7 @@
 type Obj = Record<string, unknown>;
 
 /** The annotations anything in the agent reads. */
-export const KEPT_ANNOTATIONS = ['kubernetes.io/ingress.class', 'storageclass.kubernetes.io/is-default-class', 'weave.works/kured-node-lock'] as const;
+const KEPT_ANNOTATIONS = ['kubernetes.io/ingress.class', 'storageclass.kubernetes.io/is-default-class', 'weave.works/kured-node-lock'] as const;
 
 /** Longest event message kept (a stuck pod's scheduler message can be long). */
 const MAX_EVENT_MESSAGE = 1024;
@@ -31,7 +31,7 @@ function pick(o: unknown, keys: readonly string[]): Obj | undefined {
   return out;
 }
 
-export function stripMeta(meta: unknown): Obj {
+function stripMeta(meta: unknown): Obj {
   const m = isObj(meta) ? meta : {};
   const out = pick(m, ['name', 'namespace', 'uid', 'resourceVersion', 'generation', 'creationTimestamp', 'deletionTimestamp', 'labels', 'ownerReferences'])!;
   if (isObj(m.annotations)) {
@@ -88,7 +88,7 @@ function stripContainers(list: unknown): unknown {
 }
 
 /** A pod spec as the checks read it: containers' image, resources and security context, volumes by claim or host path, host namespaces. */
-export function stripPodSpec(spec: unknown): Obj | undefined {
+function stripPodSpec(spec: unknown): Obj | undefined {
   if (!isObj(spec)) {
     return undefined;
   }

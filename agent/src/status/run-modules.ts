@@ -38,7 +38,7 @@ async function safe(fn: () => Promise<ModuleResult>): Promise<ModuleResult & { e
  * title, plus how many more there are. Its own summary stays when nothing is
  * wrong or it already names the problem (the same text as an issue title).
  */
-export function summaryFor(summary: Text, issues: Pick<Issue, 'severity' | 'title'>[]): Text {
+function summaryFor(summary: Text, issues: Pick<Issue, 'severity' | 'title'>[]): Text {
   const problems = issues.filter((i) => i.severity !== 'info').sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'critical' ? -1 : 1));
   if (problems.length === 0 || problems.some((p) => JSON.stringify(p.title) === JSON.stringify(summary))) {
     return problems.length > 1 && problems.some((p) => JSON.stringify(p.title) === JSON.stringify(summary)) ? t('module.summary.more', { first: summary, n: problems.length - 1 }) : summary;

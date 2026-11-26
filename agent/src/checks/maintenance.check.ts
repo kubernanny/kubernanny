@@ -228,7 +228,7 @@ export interface LonghornBackupVolume {
 }
 
 /** `namespace/pvc` for a volume a PVC uses, else the Longhorn volume name (pvc-<uuid>). */
-export function longhornVolumeLabel(v: LonghornBackupVolume): string {
+function longhornVolumeLabel(v: LonghornBackupVolume): string {
   const k8s = v.status?.kubernetesStatus;
   return k8s?.pvcName ? `${k8s.namespace ?? 'default'}/${k8s.pvcName}` : v.metadata.name;
 }

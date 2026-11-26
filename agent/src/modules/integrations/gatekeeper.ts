@@ -24,7 +24,7 @@ export interface Constraint {
 }
 
 /** `deny` is Gatekeeper's default: the constraint blocks requests; `dryrun` and `warn` only report. */
-export const denies = (c: Constraint) => (c.spec?.enforcementAction ?? 'deny').toLowerCase() === 'deny';
+const denies = (c: Constraint) => (c.spec?.enforcementAction ?? 'deny').toLowerCase() === 'deny';
 
 const firstError = (byPod: ByPod[] | undefined) => byPod?.flatMap((p) => p.errors ?? []).find((e) => e.message || e.code);
 

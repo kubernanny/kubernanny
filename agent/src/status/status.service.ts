@@ -31,9 +31,9 @@ export const UNREACHABLE_ISSUE_ID = 'agent/cluster-unreachable';
 /** One failed run is a blip (an API server restart); this many in a row are an outage worth a red light and a notification. */
 export const UNREACHABLE_AFTER_RUNS = 3;
 /** A relevant change (a pod into CrashLoopBackOff, a node NotReady) starts a run after this quiet time … */
-export const EARLY_RUN_DEBOUNCE_MS = 3_000;
+const EARLY_RUN_DEBOUNCE_MS = 3_000;
 /** … but never sooner than this after the previous run started, so a rollout of fifty pods costs a few runs, not fifty. */
-export const EARLY_RUN_MIN_GAP_MS = 15_000;
+const EARLY_RUN_MIN_GAP_MS = 15_000;
 
 export class StatusService {
   private readonly logger = new Logger(StatusService.name);

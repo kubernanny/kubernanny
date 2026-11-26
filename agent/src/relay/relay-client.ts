@@ -26,7 +26,7 @@ import { E2eService } from '../e2e/e2e.service';
 import { PushCarrier, PushTransport, RelayReady } from '../push/push-transport';
 import { relayHttpUrl, relaySocketUrl } from './relay-url';
 
-export const RECONNECT_MIN_MS = 1_000;
+const RECONNECT_MIN_MS = 1_000;
 export const RECONNECT_MAX_MS = 60_000;
 /** After "replaced" another instance holds the id (two replicas, or a stale one): back off, so they do not take turns every second. */
 const REPLACED_MIN_MS = 30_000;
@@ -34,7 +34,7 @@ const PING_EVERY_MS = 25_000;
 /** No message at all (a pong at least) for this long: the connection is dead even if TCP has not noticed. */
 const DEAD_AFTER_MS = 60_000;
 /** The largest message the relay may send: a Call frame around the largest sealed request (the same cap as POST /api/e2e). Anything bigger is refused before it is buffered. */
-export const MAX_RELAY_MESSAGE = MAX_SEALED_REQUEST + 64;
+const MAX_RELAY_MESSAGE = MAX_SEALED_REQUEST + 64;
 /**
  * Calls handled at once. The relay forwards at most its own per-agent
  * concurrency (4 by default, RELAY_MAX_CONCURRENT); more come only from a relay that misbehaves,

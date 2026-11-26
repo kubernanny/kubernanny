@@ -19,10 +19,10 @@ import type { DetailMeta, DetailRow, DetailSection, RunData, Stat, Tone } from '
 
 const BROKEN = new Set(['CrashLoopBackOff', 'ImagePullBackOff', 'ErrImagePull', 'CreateContainerConfigError', 'CreateContainerError', 'RunContainerError']);
 
-export const cores = (milli: number): Text => t('detail.cores', { milli: Math.round(milli) });
+const cores = (milli: number): Text => t('detail.cores', { milli: Math.round(milli) });
 
 /** The pods of a detected component's workloads. */
-export function podsOf(inv: Inventory, d: Pick<Detected, 'workloads'>): FullPod[] {
+function podsOf(inv: Inventory, d: Pick<Detected, 'workloads'>): FullPod[] {
   const keys = new Set(d.workloads.map((w) => `${w.namespace}/${w.kind}/${w.name}`));
   return inv.pods.filter((p) => {
     const o = podOwner(p);
@@ -31,7 +31,7 @@ export function podsOf(inv: Inventory, d: Pick<Detected, 'workloads'>): FullPod[
 }
 
 /** "OOMKilled at the limit of 512 MiB, exit code 137, 3 h ago". */
-export function terminationMeta(term: { reason?: string; exitCode?: number; finishedAt?: string; memLimit?: number }, now: Date): DetailMeta {
+function terminationMeta(term: { reason?: string; exitCode?: number; finishedAt?: string; memLimit?: number }, now: Date): DetailMeta {
   const at = Date.parse(term.finishedAt ?? '');
   const when = Number.isFinite(at) ? t('common.ago', { age: ageText(Math.max(0, now.getTime() - at)) }) : undefined;
   if (term.reason === 'OOMKilled') {
