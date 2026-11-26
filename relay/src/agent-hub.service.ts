@@ -20,7 +20,7 @@ import { Admission } from './core/admission';
 import { AgentLink, CallResult } from './core/agent-link';
 import { idPrefix, parseRoute, pathOf, registrationOrigin, toBytes } from './core/http';
 import { clientAddress } from './core/limits';
-import { PushSender, pushSender } from './core/push';
+import { FcmClient, GoogleErrorLog, PushSender, pushSender } from './core/push';
 import { endSession, openSession, proveSession, Session } from './core/session';
 import { DeadmanRegistry } from './deadman-registry';
 import { RelayMetrics } from './metrics';
@@ -74,7 +74,11 @@ export class AgentHub implements OnApplicationBootstrap, BeforeApplicationShutdo
     @Inject(RELAY_CONFIG) private readonly config: RelayConfig,
     @Inject(RelayMetrics) private readonly metrics: RelayMetrics,
   ) {
-    const send = pushSender(config.push);
+    // Google's refusals in the relay's own log format (docs/RELAY.md, "Logs").
+    const fcm = config.push.account
+      ? new FcmClient(config.push.account, undefined, undefined, new GoogleErrorLog((line) => this.logger.warn(line)))
+      : null;
+    const send = pushSender(config.push, fcm);
     this.admission = new Admission(config.limits, send ? config.push : null, Date.now());
     this.send = send
       ? async (request) => {

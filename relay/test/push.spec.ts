@@ -14,12 +14,14 @@ import { DEFAULT_LIMITS } from '../src/core/limits';
 import {
   FcmClient,
   fcmMessage,
+  GoogleErrorLog,
   memoryTokenGate,
   outcomeOf,
   parsePushConfig,
   parseServiceAccount,
   pushSender,
   ServiceAccount,
+  shortErrorMessage,
   TokenLimiter,
 } from '../src/core/push';
 import { AgentPushPolicy, PENALTY } from '../src/core/push-policy';
@@ -131,7 +133,18 @@ describe('the FCM message', () => {
     expect(outcomeOf(429, null)).toBe('rate_limited');
     expect(outcomeOf(503, null)).toBe('unavailable');
     expect(outcomeOf(400, { error: { status: 'INVALID_ARGUMENT' } })).toBe('invalid');
-    expect(outcomeOf(403, null)).toBe('failed');
+    expect(outcomeOf(403, null)).toBe('fcm_permission');
+    expect(outcomeOf(418, null)).toBe('failed');
+  });
+
+  it("names what is wrong with the relay's Firebase setup", () => {
+    expect(outcomeOf(403, { error: { status: 'PERMISSION_DENIED', message: 'API has not been used' } })).toBe(
+      'fcm_permission',
+    );
+    expect(
+      outcomeOf(401, { error: { status: 'UNAUTHENTICATED', details: [{ errorCode: 'THIRD_PARTY_AUTH_ERROR' }] } }),
+    ).toBe('apns_auth');
+    expect(outcomeOf(401, { error: { status: 'UNAUTHENTICATED' } })).toBe('fcm_auth');
   });
 });
 
@@ -524,7 +537,7 @@ describe('FCM answers and tokens (review L6)', () => {
     expect(await client.send(request())).toBe('sent');
     expect(google.tokens()).toBe(2);
     google.answer(401);
-    expect(await client.send(request())).toBe('unavailable');
+    expect(await client.send(request())).toBe('fcm_auth');
   });
 
   it('fetches one access token for many pushes at once', async () => {
@@ -533,5 +546,110 @@ describe('FCM answers and tokens (review L6)', () => {
     const outcomes = await Promise.all(Array.from({ length: 5 }, () => client.send(request())));
     expect(outcomes).toEqual(['sent', 'sent', 'sent', 'sent', 'sent']);
     expect(google.tokens()).toBe(1);
+  });
+});
+
+describe("the relay's log of Google's refusals", () => {
+  const token = request().token;
+
+  function client(answer: (url: string) => { status: number; json: () => Promise<unknown> }) {
+    const lines: string[] = [];
+    let now = 1_000_000;
+    const log = new GoogleErrorLog((line) => lines.push(line));
+    const make = async () => {
+      const google = await fakeGoogle();
+      return new FcmClient(
+        google.account,
+        async (url, init) => (url.startsWith('https://fcm.') ? answer(url) : google.fetchFn(url, init as never)),
+        () => now,
+        log,
+      );
+    };
+    return { lines, make, advance: (ms: number) => (now += ms) };
+  }
+
+  it('logs a 403 once a minute with status, error status, code and message, never the token', async () => {
+    const message = `Firebase Cloud Messaging API has not been used in project 123 before or it is disabled. Token ${token}${'x'.repeat(40)}`;
+    const env = client(() => ({
+      status: 403,
+      json: async () => ({ error: { code: 403, status: 'PERMISSION_DENIED', message } }),
+    }));
+    const fcm = await env.make();
+    expect(await fcm.send(request())).toBe('fcm_permission');
+    expect(await fcm.send(request())).toBe('fcm_permission');
+    expect(env.lines).toHaveLength(1);
+    expect(env.lines[0]).toContain('HTTP 403, status PERMISSION_DENIED, errorCode -');
+    expect(env.lines[0]).toContain('Firebase Cloud Messaging API has not been used in project 123');
+    expect(env.lines[0]).toContain('-> fcm_permission');
+    expect(env.lines[0]).not.toContain(token);
+    expect(env.lines[0]).not.toContain(request().message);
+    env.advance(61_000);
+    expect(await fcm.send(request())).toBe('fcm_permission');
+    expect(env.lines).toHaveLength(2);
+    expect(env.lines[1]).toContain('and 1 more like it');
+  });
+
+  it('logs each kind of answer on its own: the APNs key, a dead token', async () => {
+    let next: { status: number; body: unknown } = {
+      status: 401,
+      body: { error: { status: 'UNAUTHENTICATED', details: [{ errorCode: 'THIRD_PARTY_AUTH_ERROR' }] } },
+    };
+    const env = client(() => ({ status: next.status, json: async () => next.body }));
+    const fcm = await env.make();
+    expect(await fcm.send(request({ platform: 'ios' }))).toBe('apns_auth');
+    next = { status: 404, body: { error: { status: 'NOT_FOUND', details: [{ errorCode: 'UNREGISTERED' }] } } };
+    expect(await fcm.send(request())).toBe('unregistered');
+    expect(env.lines).toHaveLength(2);
+    expect(env.lines[0]).toContain('errorCode THIRD_PARTY_AUTH_ERROR');
+    expect(env.lines[0]).toContain('-> apns_auth');
+    expect(env.lines[1]).toContain('HTTP 404, status NOT_FOUND, errorCode UNREGISTERED');
+  });
+
+  it('answers fcm_auth and logs it when Google refuses the service account', async () => {
+    const google = await fakeGoogle();
+    const lines: string[] = [];
+    const fcm = new FcmClient(
+      google.account,
+      async (url) =>
+        url === google.account.tokenUri
+          ? { status: 400, json: async () => ({ error: 'invalid_grant', error_description: 'Invalid JWT Signature.' }) }
+          : { status: 200, json: async () => ({}) },
+      Date.now,
+      new GoogleErrorLog((line) => lines.push(line)),
+    );
+    expect(await fcm.send(request())).toBe('fcm_auth');
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('HTTP 400, error invalid_grant: Invalid JWT Signature. -> fcm_auth');
+    expect(lines[0]).toContain(google.account.clientEmail);
+  });
+
+  it('answers unavailable when the token endpoint fails on its side or cannot be reached', async () => {
+    const google = await fakeGoogle();
+    const lines: string[] = [];
+    let reachable = true;
+    const fcm = new FcmClient(
+      google.account,
+      async () => {
+        if (!reachable) {
+          throw new Error('getaddrinfo ENOTFOUND oauth2.googleapis.com');
+        }
+        return { status: 503, json: async () => ({ error: 'backend_error' }) };
+      },
+      Date.now,
+      new GoogleErrorLog((line) => lines.push(line)),
+    );
+    expect(await fcm.send(request())).toBe('unavailable');
+    reachable = false;
+    expect(await fcm.send(request())).toBe('unavailable');
+    expect(lines).toEqual([
+      expect.stringContaining('HTTP 503, error backend_error'),
+      expect.stringContaining('could not be asked for an access token: getaddrinfo ENOTFOUND'),
+    ]);
+  });
+
+  it('shortens messages and drops anything as long as a token', () => {
+    expect(shortErrorMessage(undefined)).toBe('-');
+    expect(shortErrorMessage(`bad ${token}`)).toBe('bad …');
+    expect(shortErrorMessage('a '.repeat(300))).toHaveLength(240);
   });
 });

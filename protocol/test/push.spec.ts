@@ -288,6 +288,17 @@ describe('push frames on the relay socket', () => {
     expect(decodePushRequest(enc({ t: request.token, o: 'ios', k: request.kid, m: request.message, q: 0 }))).toBeNull();
   });
 
+  it('carry the Firebase setup outcomes, which an older agent reads as failed', () => {
+    for (const outcome of ['fcm_permission', 'fcm_auth', 'apns_auth'] as const) {
+      expect(decodePushResult(decodeFrame(encodePushResult(3, outcome)).payload)).toBe(outcome);
+    }
+    // What an agent built before them did with any value it did not know (its PUSH_OUTCOMES had only the first seven).
+    const older = ['sent', 'unregistered', 'rate_limited', 'unavailable', 'invalid', 'failed', 'disabled'];
+    const payload = decodeFrame(encodePushResult(3, 'fcm_permission')).payload;
+    const s = JSON.parse(new TextDecoder().decode(payload)) as { s: string };
+    expect(older.includes(s.s) ? s.s : 'failed').toBe('failed');
+  });
+
   it('refuse malformed requests and read unknown results as failed', () => {
     const enc = (v: unknown) => text.encode(JSON.stringify(v));
     expect(decodePushRequest(enc({ t: 'short', o: 'ios', k: request.kid, m: request.message }))).toBeNull();

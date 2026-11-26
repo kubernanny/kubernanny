@@ -198,16 +198,19 @@ export function fcmMessage(push: PushRequest): unknown {
  * INVALID_ARGUMENT when its BadRequest details name the field
  * `message.token`. Any other INVALID_ARGUMENT is a malformed message
  * (`invalid`), which is the relay's or the agent's fault, not the token's.
+ *
+ * The relay's own Firebase setup gets outcomes of its own, so the app can
+ * say what to fix (docs/NOTIFICATIONS.md, "Test push fails"):
+ * THIRD_PARTY_AUTH_ERROR is the APNs key in Firebase (`apns_auth`), any
+ * other 403 (PERMISSION_DENIED: the API is not enabled, the service account
+ * lacks the role) is `fcm_permission`, and a 401 for our own access token is
+ * `fcm_auth` (send() only lets it through after a fresh token was refused too).
  */
 export function outcomeOf(status: number, body: unknown): PushOutcome {
   if (status >= 200 && status < 300) {
     return 'sent';
   }
-  const error = (
-    body as {
-      error?: { details?: { errorCode?: unknown; fieldViolations?: { field?: unknown }[] }[]; status?: unknown };
-    } | null
-  )?.error;
+  const error = fcmError(body);
   const code = error?.details?.find((d) => typeof d?.errorCode === 'string')?.errorCode ?? error?.status;
   const tokenField =
     error?.details?.some((d) => d?.fieldViolations?.some((v) => v?.field === 'message.token')) ?? false;
@@ -219,6 +222,15 @@ export function outcomeOf(status: number, body: unknown): PushOutcome {
   ) {
     return 'unregistered';
   }
+  if (code === 'THIRD_PARTY_AUTH_ERROR') {
+    return 'apns_auth';
+  }
+  if (status === 403 || code === 'PERMISSION_DENIED') {
+    return 'fcm_permission';
+  }
+  if (status === 401 || code === 'UNAUTHENTICATED') {
+    return 'fcm_auth';
+  }
   if (status === 429 || code === 'QUOTA_EXCEEDED') {
     return 'rate_limited';
   }
@@ -229,6 +241,77 @@ export function outcomeOf(status: number, body: unknown): PushOutcome {
     return 'invalid';
   }
   return 'failed';
+}
+
+interface FcmErrorBody {
+  details?: { errorCode?: unknown; fieldViolations?: { field?: unknown }[] }[];
+  status?: unknown;
+  message?: unknown;
+}
+
+function fcmError(body: unknown): FcmErrorBody | undefined {
+  const error = (body as { error?: unknown } | null)?.error;
+  return error && typeof error === 'object' ? (error as FcmErrorBody) : undefined;
+}
+
+/**
+ * Google's error text, short and without anything that could be a token:
+ * FCM tokens and keys are long runs of base64url, which no error message
+ * needs in order to be understood.
+ */
+export function shortErrorMessage(message: unknown, max = 240): string {
+  if (typeof message !== 'string' || message.trim() === '') {
+    return '-';
+  }
+  const clean = message
+    .replace(/[A-Za-z0-9_:+/=-]{32,}/g, '…')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
+}
+
+/**
+ * The relay's log of refusals by Google (docs/RELAY.md, "Logs"): every
+ * non-2xx answer of FCM or of the OAuth token endpoint, but each distinct
+ * kind (endpoint, HTTP status, error code) at most once a minute, with the
+ * number of the same answers held back since. Status, error status, error
+ * code and a shortened message only: never a token, a payload or anything
+ * about a device. Shared by every client in the process or isolate.
+ */
+export class GoogleErrorLog {
+  private readonly last = new Map<string, { at: number; held: number }>();
+
+  constructor(
+    private readonly write: (line: string) => void = (line) => console.warn(line),
+    private readonly everyMs = 60_000,
+    private readonly maxKinds = 64,
+  ) {}
+
+  report(kind: string, line: string, now: number): void {
+    const seen = this.last.get(kind);
+    if (seen && now - seen.at < this.everyMs) {
+      seen.held++;
+      return;
+    }
+    this.last.delete(kind);
+    if (this.last.size >= this.maxKinds) {
+      this.last.delete(this.last.keys().next().value!);
+    }
+    this.last.set(kind, { at: now, held: 0 });
+    this.write(seen?.held ? `${line} (and ${seen.held} more like it since the last line)` : line);
+  }
+}
+
+const sharedErrorLog = new GoogleErrorLog();
+
+/** Google's token endpoint refused or could not be asked; `status` 0 when it was not reached. */
+class AccessTokenError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
 }
 
 type Fetch = (
@@ -249,16 +332,21 @@ export class FcmClient {
     private readonly account: ServiceAccount,
     private readonly fetchFn: Fetch = (url, init) => fetch(url, init),
     private readonly now: () => number = Date.now,
+    private readonly errors: GoogleErrorLog = sharedErrorLog,
   ) {}
 
-  /** One push; a 401 for our own access token (expired early, revoked) gets a fresh token and one more try. */
+  /**
+   * One push; a 401 for our own access token (expired early, revoked) gets a
+   * fresh token and one more try. A token endpoint that refuses the service
+   * account is `fcm_auth`; one that cannot be reached is `unavailable`.
+   */
   async send(push: PushRequest): Promise<PushOutcome> {
     for (let attempt = 0; ; attempt++) {
       let token: string;
       try {
         token = await this.accessToken();
-      } catch {
-        return 'unavailable';
+      } catch (err) {
+        return err instanceof AccessTokenError && err.status >= 400 && err.status < 500 ? 'fcm_auth' : 'unavailable';
       }
       try {
         const res = await this.fetchFn(
@@ -277,15 +365,36 @@ export class FcmClient {
             accessTokens.delete(this.account.clientEmail);
           }
           if (attempt === 0) {
-            continue;
+            continue; // an access token that expired early is routine: logged only if the fresh one is refused too
           }
-          return 'unavailable';
         }
-        return outcomeOf(res.status, body);
-      } catch {
+        const outcome = outcomeOf(res.status, body);
+        if (outcome !== 'sent') {
+          this.logFcmError(res.status, body, outcome);
+        }
+        return outcome;
+      } catch (err) {
+        this.errors.report(
+          'fcm:network',
+          `FCM could not be reached: ${shortErrorMessage(err instanceof Error ? err.message : String(err))} -> unavailable`,
+          this.now(),
+        );
         return 'unavailable';
       }
     }
+  }
+
+  /** One line per kind of FCM refusal and minute; never the token or the message. */
+  private logFcmError(status: number, body: unknown, outcome: PushOutcome): void {
+    const error = fcmError(body);
+    const errorStatus = typeof error?.status === 'string' ? error.status : '-';
+    const errorCode = error?.details?.find((d) => typeof d?.errorCode === 'string')?.errorCode;
+    const code = typeof errorCode === 'string' ? errorCode : '-';
+    this.errors.report(
+      `fcm:${status}:${errorStatus}:${code}`,
+      `FCM refused a push: HTTP ${status}, status ${errorStatus}, errorCode ${code}, project ${this.account.projectId}: ${shortErrorMessage(error?.message)} -> ${outcome}`,
+      this.now(),
+    );
   }
 
   /** An OAuth access token from a signed JWT assertion (RFC 7523), cached until five minutes before it expires. */
@@ -303,16 +412,35 @@ export class FcmClient {
   }
 
   private async fetchAccessToken(): Promise<string> {
-    const assertion = await this.assertion();
-    const res = await this.fetchFn(this.account.tokenUri, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: `grant_type=${encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer')}&assertion=${assertion}`,
-      signal: AbortSignal.timeout(10_000),
-    });
-    const body = (await res.json()) as { access_token?: unknown; expires_in?: unknown };
-    if (res.status !== 200 || typeof body.access_token !== 'string') {
-      throw new Error(`token endpoint answered ${res.status}`);
+    let res: Awaited<ReturnType<Fetch>>;
+    try {
+      const assertion = await this.assertion();
+      res = await this.fetchFn(this.account.tokenUri, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: `grant_type=${encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer')}&assertion=${assertion}`,
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch (err) {
+      const why = shortErrorMessage(err instanceof Error ? err.message : String(err));
+      this.errors.report('oauth:network', `Google OAuth could not be asked for an access token: ${why}`, this.now());
+      throw new AccessTokenError(0, why);
+    }
+    const body = (await res.json().catch(() => ({}))) as {
+      access_token?: unknown;
+      expires_in?: unknown;
+      error?: unknown;
+      error_description?: unknown;
+    } | null;
+    if (res.status !== 200 || typeof body?.access_token !== 'string') {
+      const error = typeof body?.error === 'string' ? body.error : '-';
+      const outcome = res.status >= 400 && res.status < 500 ? 'fcm_auth' : 'unavailable';
+      this.errors.report(
+        `oauth:${res.status}:${error}`,
+        `Google OAuth refused the service account ${this.account.clientEmail}: HTTP ${res.status}, error ${error}: ${shortErrorMessage(body?.error_description)} -> ${outcome}`,
+        this.now(),
+      );
+      throw new AccessTokenError(res.status, `token endpoint answered ${res.status}`);
     }
     const lifetime = typeof body.expires_in === 'number' ? body.expires_in : 3600;
     accessTokens.set(this.account.clientEmail, {

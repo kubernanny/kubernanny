@@ -48,9 +48,9 @@ Optional on the relay too: on only with a Firebase service account (`FCM_SERVICE
 | whole relay | `RELAY_PUSHES_TOTAL_PER_HOUR` 20 000 | what the relay hands to FCM at most, however many ids and addresses are used (Node only) |
 | per push | the sealed message at most 2048 bytes of plaintext (about 2.8 KiB on the wire), the frame at most 8 KiB | anything malformed is `invalid` |
 
-Why so many: registering an agent id is free, so the per-agent limit alone would make the relay a sender of Kubernanny's generic alert to any FCM token someone knows. The per-token limit bounds what one phone can get, the per-address and relay-wide budgets bound the total (on the Node relay), and the distinct-token and refused-token rules make probing tokens slow and costly. A 401 for the relay's own access token gets a fresh token and one more try.
+Why so many: registering an agent id is free, so the per-agent limit alone would make the relay a sender of Kubernanny's generic alert to any FCM token someone knows. The per-token limit bounds what one phone can get, the per-address and relay-wide budgets bound the total (on the Node relay), and the distinct-token and refused-token rules make probing tokens slow and costly. A 401 for the relay's own access token gets a fresh token and one more try; if that one is refused too, the push is `fcm_auth`.
 
-**What the relay learns from push**: each registered device's FCM token and platform, a push key id, when and how large each push is, and whether it is a status push (so which phones have a widget). Not a word of the message: it is sealed for the device's push key. The Node relay logs no token and no key id; metrics count pushes by outcome only (`kubernanny_relay_pushes_total{outcome}`). A relay with push needs outbound HTTPS to `oauth2.googleapis.com` and `fcm.googleapis.com`. What its operator could do with the service account: [SECURITY.md](SECURITY.md#threats).
+**What the relay learns from push**: each registered device's FCM token and platform, a push key id, when and how large each push is, and whether it is a status push (so which phones have a widget). Not a word of the message: it is sealed for the device's push key. The relay logs no token and no key id ([Logs](#logs)); metrics count pushes by outcome only (`kubernanny_relay_pushes_total{outcome}`). A relay with push needs outbound HTTPS to `oauth2.googleapis.com` and `fcm.googleapis.com`. What its operator could do with the service account: [SECURITY.md](SECURITY.md#threats).
 
 ### Your own Firebase project
 
@@ -167,6 +167,21 @@ Settings (environment variables of the Node relay, `[vars]` of the Worker):
 | `RELAY_DEADMAN_MAX_TOTAL_BYTES` | 16777216 | deposits held for all agents (Node only) |
 
 **`TRUST_PROXY` only helps if the proxy owns the header.** The per-address limits (unproven connections, registered agents, the share of the answer budget) are only as good as the address they read. The proxy in front must set the header itself from the connecting address, overwriting anything the client sent (`cf-connecting-ip` behind Cloudflare, `x-real-ip` behind most reverse proxies), or append to `x-forwarded-for`. A proxy that passes a client's own `x-forwarded-for` through unchanged lets every client pick its address, and with it a fresh set of limits. Prefer `cf-connecting-ip` or `x-real-ip` where the proxy sets them; check with a request carrying a made-up header that the relay does not see it.
+
+### Logs
+
+The Node relay writes one line per event to stdout (`LOG_LEVEL`, default `log`); the Worker writes to its Workers logs (`wrangler tail`). Neither logs a token, a push key id, a message or anything about a device; agents appear by the first characters of their id.
+
+Every refusal from Google is logged, so a relay whose pushes fail says why: each answer of FCM that is not 2xx, and each failed request for an OAuth access token. One line per kind of answer (endpoint, HTTP status, error code) and minute; when the same answer came again within that minute, the next line says how many times (`and 41 more like it since the last line`). A line names the HTTP status, Google's `error.status` and `errorCode`, the service account's project and a shortened `error.message` (anything as long as a token cut out), and the outcome the agent got:
+
+```
+WARN [relay] FCM refused a push: HTTP 403, status PERMISSION_DENIED, errorCode -, project my-project: Firebase Cloud Messaging API has not been used in project 123456789 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/fcm.googleapis.com/overview?project=123456789 then retry. … -> fcm_permission
+WARN [relay] Google OAuth refused the service account relay@my-project.iam.gserviceaccount.com: HTTP 400, error invalid_grant: Invalid JWT Signature. -> fcm_auth
+WARN [relay] FCM refused a push: HTTP 401, status UNAUTHENTICATED, errorCode THIRD_PARTY_AUTH_ERROR, project my-project: … -> apns_auth
+WARN [relay] FCM refused a push: HTTP 404, status NOT_FOUND, errorCode UNREGISTERED, project my-project: Requested entity was not found. -> unregistered
+```
+
+What each outcome means and how to fix it: [NOTIFICATIONS.md, Test push fails](NOTIFICATIONS.md#test-push-fails). `unregistered` lines are normal now and then: a phone that uninstalled the app leaves its token behind until the agent forgets it.
 
 Metrics of the Node relay: `kubernanny_relay_agents`, `kubernanny_relay_deadman_deposits`, `kubernanny_relay_deadman_total{event}`, `kubernanny_relay_pending_registrations`, `kubernanny_relay_calls_total{outcome}`, `kubernanny_relay_pushes_total{outcome}`, `kubernanny_relay_registrations_total{outcome}`, `kubernanny_relay_bytes_total{direction}`, `kubernanny_relay_call_duration_seconds`, `process_resident_memory_bytes`.
 

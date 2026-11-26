@@ -144,8 +144,29 @@ export interface PushRequest {
  * sent: FCM took it. unregistered: FCM says the token is gone (the agent forgets it).
  * rate_limited, unavailable: try a later message. invalid: the request was malformed.
  * failed: anything else. disabled: this relay has no push.
+ *
+ * Why the relay's own Firebase setup refused it, so the app can say what to fix
+ * (docs/NOTIFICATIONS.md, "Test push fails"): fcm_permission: FCM answered 403
+ * PERMISSION_DENIED (the Firebase Cloud Messaging API is not enabled in the
+ * project, or the service account lacks the role). fcm_auth: Google's OAuth
+ * refused the service account (invalid_grant and the like: a deleted or
+ * revoked key, a wrong clock). apns_auth: THIRD_PARTY_AUTH_ERROR, the APNs key
+ * is missing or wrong in Firebase (iOS only).
+ *
+ * Added later: an agent that does not know a value reads it as `failed`
+ * (decodePushResult), so a relay may send them to any agent.
  */
-export type PushOutcome = 'sent' | 'unregistered' | 'rate_limited' | 'unavailable' | 'invalid' | 'failed' | 'disabled';
+export type PushOutcome =
+  | 'sent'
+  | 'unregistered'
+  | 'rate_limited'
+  | 'unavailable'
+  | 'invalid'
+  | 'failed'
+  | 'disabled'
+  | 'fcm_permission'
+  | 'fcm_auth'
+  | 'apns_auth';
 export const PUSH_OUTCOMES: readonly PushOutcome[] = [
   'sent',
   'unregistered',
@@ -154,6 +175,9 @@ export const PUSH_OUTCOMES: readonly PushOutcome[] = [
   'invalid',
   'failed',
   'disabled',
+  'fcm_permission',
+  'fcm_auth',
+  'apns_auth',
 ];
 /** The largest Push frame payload either side accepts: a token, a sealed MAX_PUSH_PLAINTEXT in base64url and the JSON around it. */
 export const MAX_PUSH_FRAME = 8 * 1024;
