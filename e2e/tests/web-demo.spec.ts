@@ -13,7 +13,7 @@ test.describe('web demo (no agent, nothing leaves the browser)', () => {
     for (const [name, headline] of [
       ['homelab', /Ausfälle/],
       ['office', /Warnung/],
-      ['staging', /Alles läuft/],
+      ['staging', /Läuft alles/],
     ] as const) {
       const card = page.locator('app-clusters a', { hasText: name }).first();
       await expect(card).toBeVisible();

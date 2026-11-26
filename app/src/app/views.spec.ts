@@ -164,7 +164,7 @@ describe('buildClusterView', () => {
     expect(v.hints.map((h) => [h.issue.id, h.tone, h.icon])).toEqual([
       ['argocd/weblate/sync', 'muted', 'information-circle-outline'],
     ]);
-    expect(v.headline).toBe('Alles läuft');
+    expect(v.headline).toBe('Läuft alles');
   });
 
   it('reads the same in English, with English plurals and number formats', () => {
@@ -208,7 +208,7 @@ describe('formatting', () => {
     expect(cores(250, 'de')).toBe('250m');
     expect(formatValue(0.0061, 'seconds', 'de')).toBe('6,1 ms');
     expect(formatValue(2.4e6, 'bytesPerSecond', 'de')).toBe('2,3 MiB/s');
-    expect(headline('green', 0, 0, de)).toBe('Alles läuft');
+    expect(headline('green', 0, 0, de)).toBe('Läuft alles');
     expect(headline('yellow', 0, 0, de)).toBe('Läuft, aber nicht alles ist prüfbar');
   });
 });

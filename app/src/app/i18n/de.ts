@@ -88,7 +88,7 @@ export const de = {
     headline: {
       noConnection: 'Keine Verbindung zum Agent',
       checking: 'Wird geprüft…',
-      allGood: 'Alles läuft',
+      allGood: 'Läuft alles',
       partlyCheckable: 'Läuft, aber nicht alles ist prüfbar',
       outages: { one: '{{count}} Ausfall', other: '{{count}} Ausfälle' },
       warnings: { one: '{{count}} Warnung', other: '{{count}} Warnungen' },

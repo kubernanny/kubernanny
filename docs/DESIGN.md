@@ -4,7 +4,7 @@ Kubernanny is looked at in two situations: a glance to confirm all is well, and 
 
 ## Principles
 
-1. **One answer first.** The top of every cluster says, in one sentence, whether something needs you ("3 Ausfälle und 13 Warnungen", "Alles läuft"). Everything else is below the fold.
+1. **One answer first.** The top of every cluster says, in one sentence, whether something needs you ("3 Ausfälle und 13 Warnungen", "Läuft alles"). Everything else is below the fold.
 2. **Only what is broken.** The overview lists problems, not resources. Healthy components appear in the Dienste tab, quietly.
 3. **Cause and remedy together.** Every problem says why, and offers the one action that usually fixes it right where it is described.
 4. **Colour repeats, never carries.** Status is always also a word or an icon. The nanny's eye has an accessible label.

@@ -20,6 +20,6 @@
 "widget.demo" = "Demo";
 "widget.asOf" = "Stand %@";
 "widget.notChecked" = "Noch nicht geprüft";
-"widget.allGood" = "Alles läuft";
+"widget.allGood" = "Läuft alles";
 "widget.partly" = "Läuft, aber nicht alles ist prüfbar";
 "widget.both" = "%1$@ und %2$@";

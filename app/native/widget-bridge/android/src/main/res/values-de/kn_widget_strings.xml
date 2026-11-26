@@ -13,7 +13,7 @@
     <string name="kn_widget_demo">Demo</string>
     <string name="kn_widget_as_of">Stand %1$s</string>
     <string name="kn_widget_not_checked">Noch nicht geprüft</string>
-    <string name="kn_widget_all_good">Alles läuft</string>
+    <string name="kn_widget_all_good">Läuft alles</string>
     <string name="kn_widget_partly">Läuft, aber nicht alles ist prüfbar</string>
     <string name="kn_widget_both">%1$s und %2$s</string>
     <string name="kn_widget_no_problems">Keine offenen Probleme</string>
