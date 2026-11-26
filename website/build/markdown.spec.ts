@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -267,5 +268,76 @@ describe('pages that left the site', () => {
       '/docs /docs/x 301',
     ]);
     expect(brokenRedirects('/old /docs/missing 301', ['/docs'])).toEqual(['/old /docs/missing 301']);
+  });
+});
+
+describe('the READMEs outside docs/', () => {
+  const repo = resolve(import.meta.dirname, '../..');
+  const files = [
+    'README.md',
+    'CONTRIBUTING.md',
+    'SECURITY.md',
+    'CHANGELOG.md',
+    'agent/README.md',
+    'app/README.md',
+    'relay/cloudflare/README.md',
+    'deploy/relay/README.md',
+    'deploy/helm/kubernanny/README.md',
+    'website/README.md',
+    'fastlane/README.md',
+  ];
+  /** Heading ids of a markdown file as GitHub makes them. */
+  const anchors = (file: string): Set<string> => {
+    const seen = new Map<string, number>();
+    const ids = new Set<string>();
+    let fenced = false;
+    for (const line of readFileSync(file, 'utf8').split('\n')) {
+      if (line.startsWith('```')) {
+        fenced = !fenced;
+      }
+      const heading = fenced ? null : /^#{1,6}\s+(.+?)\s*$/.exec(line);
+      if (heading) {
+        ids.add(githubSlug(heading[1]!, seen));
+      }
+    }
+    return ids;
+  };
+
+  it('link only to files and headings that exist', () => {
+    const broken: string[] = [];
+    for (const file of files) {
+      const full = join(repo, file);
+      const text = readFileSync(full, 'utf8').replace(/```[\s\S]*?```/g, '');
+      const targets = [
+        ...[...text.matchAll(/\]\(([^)\s]+)\)/g)].map((m) => m[1]!),
+        ...[...text.matchAll(/\b(?:href|src)="([^"]+)"/g)].map((m) => m[1]!),
+      ];
+      for (const target of targets) {
+        if (/^[a-z]+:/i.test(target) || target.startsWith('//')) {
+          continue;
+        }
+        const [path, fragment] = target.split('#');
+        const resolved = path ? resolve(dirname(full), path) : full;
+        if (!existsSync(resolved)) {
+          broken.push(`${file} -> ${target}`);
+        } else if (fragment && resolved.endsWith('.md') && !anchors(resolved).has(fragment)) {
+          broken.push(`${file} -> ${target} (no such heading)`);
+        }
+      }
+    }
+    expect(broken).toEqual([]);
+  });
+
+  it('leave no screenshot that nothing shows', () => {
+    const shots = readdirSync(join(repo, 'docs/screenshots')).filter((f) => f.endsWith('.png'));
+    const readers = [
+      ...listDocFiles().map((f) => join(repo, 'docs', f)),
+      join(repo, 'README.md'),
+      join(repo, 'website/src/app/landing/screenshots.ts'),
+    ];
+    const text = readers.map((f) => readFileSync(f, 'utf8')).join('\n');
+    expect(
+      shots.filter((f) => !text.includes(f)).map((f) => relative(repo, join(repo, 'docs/screenshots', f))),
+    ).toEqual([]);
   });
 });

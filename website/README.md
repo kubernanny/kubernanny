@@ -9,7 +9,7 @@ npm ci
 npm run dev           # http://localhost:5173, live reload on changes in ../docs too
 npm run build         # prerenders every route into dist/analog/public
 npm run preview       # serves the build like Cloudflare Pages does (port 4321)
-npm test              # markdown rendering, link rewriting, and a check of every link in docs/
+npm test              # markdown rendering, link rewriting, every link in docs/ and the READMEs, unused screenshots
 npm run typecheck
 npm run screenshots   # after a build: / and /docs/protocol at 390 and 1440 px, dark and light -> screenshots/
 npm run brand         # re-renders public/og.png, apple-touch-icon.png, favicon-32.png from branding/
