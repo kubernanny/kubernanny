@@ -63,12 +63,13 @@ describe('incident history', () => {
     const count = (scenario: 'healthy' | 'warning' | 'broken') =>
       new IncidentsService(new DemoKubeClient(undefined, scenario)).view(7, Date.now());
     const healthy = count('healthy');
-    expect(healthy.incidents.length).toBe(2);
+    expect(healthy.incidents.length).toBe(3);
+    expect(healthy.incidents.find((i) => i.flaps)).toMatchObject({ issueId: 'nodes/rke2-node-2/not-ready', flaps: 4 });
     expect(healthy.incidents.every((i) => i.end !== null)).toBe(true);
     expect(Date.now() - Date.parse(healthy.coveredSince)).toBeGreaterThanOrEqual(7 * D - 60_000);
-    expect(count('warning').incidents.length).toBe(4);
+    expect(count('warning').incidents.length).toBe(5);
     const broken = de(count('broken'));
-    expect(broken.incidents.length).toBe(7);
+    expect(broken.incidents.length).toBe(8);
     expect(broken.incidents.some((i) => i.silenced)).toBe(true);
     expect(broken.incidents.map((i) => i.title)).toContain('Node rke2-node-5 NotReady');
     expect(buildIncidents([], 0, 1, 1).incidents).toEqual([]);

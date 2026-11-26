@@ -18,6 +18,8 @@ export interface IncidentView {
   durationMs: number;
   /** Someone silenced the issue during the episode. */
   silenced: boolean;
+  /** Flapping: the issue came and went this many times, each time shorter than a notification waits. */
+  flaps?: number;
 }
 
 export interface IncidentsView {
@@ -46,6 +48,7 @@ export function buildIncidents(episodes: readonly Episode[], since: number, now:
       end: e.end === null ? null : new Date(e.end).toISOString(),
       durationMs: Math.max(0, (e.end ?? now) - e.start),
       silenced: e.silenced,
+      ...(e.flaps ? { flaps: e.flaps } : {}),
     }));
   return { coveredSince: new Date(since).toISOString(), days, incidents };
 }

@@ -679,6 +679,8 @@ export const de = {
   'digest.longest': 'Am längsten:',
   'digest.episode': (p: { title: string; duration: string }) => `${p.title} (${p.duration})`,
   'digest.episodeOpen': (p: { title: string; duration: string }) => `${p.title} (${p.duration}, noch offen)`,
+  'digest.episodeFlapping': (p: { title: string; duration: string; n: number }) =>
+    `${p.title} (flattert: ${p.n}-mal in ${p.duration})`,
 
   // ---------- Kubernetes support (end of life) ----------
   'module.kubernetes-support.name': 'Kubernetes-Version',

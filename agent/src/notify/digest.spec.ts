@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import { raw } from '../i18n/text';
 import { IssueView } from '../status/status.service';
-import { digestDue, EpisodeLog, formatDigest, MAX_EPISODES, MAX_EPISODES_PER_ISSUE, weekKey } from './digest';
+import {
+  digestDue,
+  EpisodeLog,
+  FLAP_WINDOW_MS,
+  formatDigest,
+  MAX_EPISODES,
+  MAX_EPISODES_PER_ISSUE,
+  weekKey,
+} from './digest';
 
 const hour = 3_600_000;
 const issue = (id: string, severity: IssueView['severity'], since: number): IssueView => ({
@@ -100,6 +108,79 @@ describe('weekly report', () => {
     expect(english.title).toBe('homelab: weekly report');
     expect(english.body).toContain('2 problems in the last 7 days, 1 of them critical. Open now: 1.');
     expect(english.body).toContain('Node down (3 h, still open)');
+  });
+
+  it('drops episodes shorter than the notify delay, and counts an open one once it lasted that long', () => {
+    const second = 1000;
+    const log = new EpisodeLog(0, null, 300 * second);
+    // A rollout: Argo CD Degraded and the HPA without metrics for 23 s, then a real outage.
+    const t0 = 9 * hour;
+    log.record([issue('argocd', 'critical', t0), issue('hpa', 'warning', t0)], t0);
+    expect(log.lastWeek(t0 + 10 * second)).toEqual([]);
+    log.record([], t0 + 23 * second);
+    expect(log.all()).toEqual([]);
+    log.record([issue('down', 'critical', 10 * hour)], 10 * hour);
+    expect(log.lastWeek(10 * hour + 299 * second)).toEqual([]);
+    expect(log.lastWeek(10 * hour + 300 * second).map((e) => e.id)).toEqual(['down']);
+    log.record([], 11 * hour);
+    expect(log.lastWeek(11 * hour)).toMatchObject([{ id: 'down', start: 10 * hour, end: 11 * hour }]);
+    expect(log.lastWeek(11 * hour)[0]).not.toHaveProperty('flaps');
+  });
+
+  it('keeps an issue that blips three times within an hour as one flapping episode, and extends it', () => {
+    const minute = 60_000;
+    const log = new EpisodeLog(0, null, 5 * minute);
+    const blip = (at: number, severity: IssueView['severity'] = 'warning') => {
+      log.record([issue('x', severity, at)], at);
+      log.record([], at + minute);
+    };
+    blip(0);
+    blip(20 * minute);
+    // Two blips are no problem yet, and nothing of them is stored.
+    expect(log.all()).toEqual([]);
+    blip(50 * minute, 'critical');
+    expect(log.lastWeek(hour)).toEqual([
+      {
+        id: 'x',
+        title: raw('Problem x'),
+        severity: 'critical',
+        module: 'pods',
+        start: 0,
+        end: 51 * minute,
+        silenced: false,
+        flaps: 3,
+      },
+    ]);
+    // A fourth within the hour after the last one extends it; one much later starts counting again.
+    blip(51 * minute + FLAP_WINDOW_MS - minute);
+    blip(10 * hour);
+    blip(10 * hour + 5 * minute);
+    expect(log.lastWeek(11 * hour)).toMatchObject([{ id: 'x', start: 0, end: 51 * minute + FLAP_WINDOW_MS, flaps: 4 }]);
+    // Blips of different issues never add up.
+    const other = new EpisodeLog(0, null, 5 * minute);
+    for (const [i, id] of ['a', 'b', 'c'].entries()) {
+      other.record([issue(id, 'warning', i * minute)], i * minute);
+      other.record([], i * minute + 30_000);
+    }
+    expect(other.all()).toEqual([]);
+  });
+
+  it('names a flapping episode as such in the weekly report', () => {
+    const now = 10 * 24 * hour;
+    const flapping = {
+      id: 'n',
+      title: raw('Node rke2-node-2 NotReady'),
+      severity: 'critical' as const,
+      module: 'nodes',
+      start: now - 5 * hour,
+      end: now - 4 * hour,
+      silenced: false,
+      flaps: 4,
+    };
+    expect(formatDigest('homelab', [flapping], now, 0, 'full', 'de').body).toContain(
+      'Node rke2-node-2 NotReady (flattert: 4-mal in 1 h)',
+    );
+    expect(formatDigest('homelab', [flapping], now, 0, 'full', 'en').body).toContain('1 problem in the last 7 days');
   });
 
   it('is due from the configured hour on the configured weekday, once per ISO week', () => {

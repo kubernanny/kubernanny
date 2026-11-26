@@ -33,6 +33,8 @@ interface StoredEpisode {
   b?: number;
   /** Silenced at some point. */
   q?: 1;
+  /** Flapping: how many short blips the episode stands for (Episode.flaps; earlier agents ignore it). */
+  f?: number;
 }
 
 interface StoredEpisodes {
@@ -56,6 +58,9 @@ export function serializeEpisodes(since: number, episodes: readonly Episode[]): 
     }
     if (e.silenced) {
       s.q = 1;
+    }
+    if (e.flaps) {
+      s.f = e.flaps;
     }
     return { open: e.end === null, json: JSON.stringify(s) };
   });
@@ -107,7 +112,7 @@ export function parseEpisodes(text: string): { since: number; episodes: Episode[
     ) {
       continue;
     }
-    episodes.push({
+    const episode: Episode = {
       id: e.i,
       title: reviveText(e.t) ?? raw(e.i),
       severity: e.s === 'c' ? 'critical' : 'warning',
@@ -115,7 +120,11 @@ export function parseEpisodes(text: string): { since: number; episodes: Episode[
       start: e.a!,
       end: e.b ?? null,
       silenced: e.q === 1,
-    });
+    };
+    if (Number.isInteger(e.f) && e.f! > 0 && e.f! <= 1_000_000) {
+      episode.flaps = e.f!;
+    }
+    episodes.push(episode);
   }
   return { since: stored.since!, episodes: episodes.sort((a, b) => a.start - b.start) };
 }

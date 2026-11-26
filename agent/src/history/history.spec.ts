@@ -106,10 +106,66 @@ describe('episode log in the ConfigMap', () => {
         silenced: true,
       },
       { id: 'pods/x', title: raw('x'), severity: 'warning', module: 'pods', start: 2000, end: null, silenced: false },
+      {
+        id: 'hpa/a/b',
+        title: raw('b'),
+        severity: 'warning',
+        module: 'hpa',
+        start: 3000,
+        end: 9000,
+        silenced: false,
+        flaps: 4,
+      },
     ];
     const text = serializeEpisodes(42, episodes);
     expect(JSON.parse(text)).toMatchObject({ v: 1, since: 42 });
+    expect(JSON.parse(text).e[2]).toMatchObject({ f: 4 });
     expect(parseEpisodes(text)).toEqual({ since: 42, episodes });
+    // A count that is not one is ignored, the episode kept.
+    expect(parseEpisodes(text.replace('"f":4', '"f":"x"'))!.episodes[2]).not.toHaveProperty('flaps');
+  });
+
+  it('drops the short blips an older agent stored when it reads them, keeps long and flapping episodes', () => {
+    const stored = {
+      since: 0,
+      episodes: [
+        {
+          id: 'argocd/x/health',
+          title: raw('Degraded'),
+          severity: 'critical',
+          module: 'argocd',
+          start: H,
+          end: H + 23_000,
+          silenced: false,
+        },
+        { id: 'pods/y', title: raw('y'), severity: 'warning', module: 'pods', start: H, end: 2 * H, silenced: false },
+        {
+          id: 'hpa/z',
+          title: raw('z'),
+          severity: 'warning',
+          module: 'hpa',
+          start: H,
+          end: H + 60_000,
+          silenced: false,
+          flaps: 3,
+        },
+        {
+          id: 'nodes/n',
+          title: raw('n'),
+          severity: 'critical',
+          module: 'nodes',
+          start: 3 * H,
+          end: null,
+          silenced: false,
+        },
+      ] satisfies Episode[],
+    };
+    const service = new IncidentsService(undefined, 300_000);
+    service.merge(stored, 3 * H + 60_000);
+    expect(service.all().map((e) => e.id)).toEqual(['pods/y', 'hpa/z', 'nodes/n']);
+    // The open one is kept, and counts once it has lasted the notify delay.
+    expect(service.lastWeek(3 * H + 60_000).map((e) => e.id)).toEqual(['pods/y', 'hpa/z']);
+    expect(service.lastWeek(3 * H + 300_000).map((e) => e.id)).toEqual(['pods/y', 'hpa/z', 'nodes/n']);
   });
 
   it('drops the oldest ended episodes past the size cap, never the open ones', () => {

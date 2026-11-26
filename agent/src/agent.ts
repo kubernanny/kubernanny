@@ -114,7 +114,7 @@ export class Agent {
     this.identity = new IdentityService(config, kube);
     this.devices = new DevicesService(config, kube);
     this.internal = new InternalServer(config);
-    this.incidents = new IncidentsService(kube);
+    this.incidents = new IncidentsService(kube, config.notifyAfterSeconds * 1000);
     // Native push to the app through the relay (docs/NOTIFICATIONS.md); APP_PUSH=off refuses it entirely.
     this.pushTransport = new PushTransport();
     this.appPush = new AppPushService(config, this.devices, this.identity, this.pushTransport);

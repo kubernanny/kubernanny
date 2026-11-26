@@ -14,6 +14,12 @@ export interface Episode {
   end: number | null;
   /** Someone silenced the issue at some point during this episode. */
   silenced: boolean;
+  /**
+   * Set when the episode stands for short blips of one issue that came back
+   * again and again (FLAP_COUNT within FLAP_WINDOW_MS): how many, from the
+   * first one's start to the last one's end.
+   */
+  flaps?: number;
 }
 
 const WEEK = 7 * 86_400_000;
@@ -21,19 +27,51 @@ const WEEK = 7 * 86_400_000;
 export const MAX_EPISODES_PER_ISSUE = 100;
 /** Episodes kept in all; past it the oldest ended ones go first. */
 export const MAX_EPISODES = 5_000;
+/** Short blips of one issue within this long of each other count as flapping. */
+export const FLAP_WINDOW_MS = 3_600_000;
+/** From this many short blips within FLAP_WINDOW_MS on, one issue is flapping. */
+export const FLAP_COUNT = 3;
+
+/** One short blip, kept in memory only while it may still join a flapping episode. */
+interface Blip {
+  start: number;
+  end: number;
+  severity: Episode['severity'];
+  silenced: boolean;
+}
+
+/** Whether an episode was too short to count: ended (or open for) less than `briefUnderMs`, and not flapping. */
+export function isBrief(e: Episode, briefUnderMs: number, now: number): boolean {
+  return !e.flaps && (e.end ?? now) - e.start < briefUnderMs;
+}
 
 /**
  * Follows issues from run to run and keeps the episodes of the last week
  * (hints never count). Kept in memory and, with `history.persist` on, in the
  * ConfigMap `kubernanny-history` (history/history-store.ts), so a restart
  * continues the week instead of starting it again.
+ *
+ * Only what lasted as long as a notification waits (`briefUnderMs`,
+ * NOTIFY_AFTER_SECONDS) is a problem: a shorter episode is dropped when it
+ * ends (a rollout's few seconds of Degraded), and an open one counts once it
+ * passes that time. An issue that blips FLAP_COUNT times within
+ * FLAP_WINDOW_MS is kept as one flapping episode over that span instead,
+ * which further blips within the window extend; until then only the blips'
+ * times are counted, in memory.
  */
 export class EpisodeLog {
   private readonly episodes: Episode[];
   /** When the agent first started watching (the stored value after a restart); `history` lets the demo pretend a week. */
   private sinceValue: number;
+  /** Short blips per issue within the last FLAP_WINDOW_MS, not yet flapping. */
+  private readonly blips = new Map<string, Blip[]>();
 
-  constructor(now: number, history: { since: number; episodes: Episode[] } | null = null) {
+  constructor(
+    now: number,
+    history: { since: number; episodes: Episode[] } | null = null,
+    /** Shorter episodes are not kept (0: every episode counts). */
+    private readonly briefUnderMs = 0,
+  ) {
     this.sinceValue = history?.since ?? now;
     this.episodes = history ? history.episodes.map((e) => ({ ...e })) : [];
   }
@@ -60,6 +98,10 @@ export class EpisodeLog {
     const mine = new Map(this.episodes.map((e) => [`${e.id}@${e.start}`, e]));
     const openHere = new Map(this.episodes.filter((e) => e.end === null).map((e) => [e.id, e]));
     for (const s of stored.episodes) {
+      if (s.end !== null && isBrief(s, this.briefUnderMs, now)) {
+        // Written by an earlier agent, which kept every blip.
+        continue;
+      }
       // Both pods saw the issue open, each since its own first sight: one episode, from the earlier start.
       const same = s.end === null ? openHere.get(s.id) : undefined;
       const own = mine.get(`${s.id}@${s.start}`) ?? same;
@@ -85,11 +127,15 @@ export class EpisodeLog {
 
   record(issues: IssueView[], now: number): void {
     const current = new Map(issues.filter((i) => i.severity !== 'info').map((i) => [i.id, i]));
+    const brief: Episode[] = [];
     for (const e of this.episodes) {
       if (e.end === null) {
         const issue = current.get(e.id);
         if (!issue) {
           e.end = now;
+          if (isBrief(e, this.briefUnderMs, now)) {
+            brief.push(e);
+          }
         } else {
           if (issue.severity === 'critical') {
             e.severity = 'critical';
@@ -113,8 +159,70 @@ export class EpisodeLog {
         silenced: Boolean(issue.silencedUntil),
       });
     }
+    for (const e of brief) {
+      this.blipped(e);
+    }
+    this.removeBlips();
+    this.forgetBlips(now);
     this.forgetOld(now);
     this.cap();
+  }
+
+  /**
+   * A short episode just ended: it joins the issue's flapping episode if one
+   * ended within FLAP_WINDOW_MS, or becomes one with the blips before it once
+   * there are FLAP_COUNT; otherwise only its times are remembered.
+   */
+  private blipped(e: Episode): void {
+    const end = e.end!;
+    const flapping = this.episodes.findLast(
+      (f) => f.id === e.id && f.flaps && f.end !== null && f.end >= e.start - FLAP_WINDOW_MS,
+    );
+    if (flapping) {
+      flapping.end = Math.max(flapping.end!, end);
+      flapping.flaps! += 1;
+      flapping.title = e.title;
+      flapping.severity = e.severity === 'critical' ? 'critical' : flapping.severity;
+      flapping.silenced ||= e.silenced;
+      return;
+    }
+    const recent = (this.blips.get(e.id) ?? []).filter((b) => b.end >= e.start - FLAP_WINDOW_MS);
+    recent.push({ start: e.start, end, severity: e.severity, silenced: e.silenced });
+    if (recent.length < FLAP_COUNT) {
+      this.blips.set(e.id, recent);
+      return;
+    }
+    this.blips.delete(e.id);
+    this.episodes.push({
+      id: e.id,
+      title: e.title,
+      severity: recent.some((b) => b.severity === 'critical') ? 'critical' : 'warning',
+      module: e.module,
+      start: recent[0]!.start,
+      end,
+      silenced: recent.some((b) => b.silenced),
+      flaps: recent.length,
+    });
+    this.episodes.sort((a, b) => a.start - b.start);
+  }
+
+  /** Drops the short episodes `blipped` has taken in. */
+  private removeBlips(): void {
+    for (let i = this.episodes.length - 1; i >= 0; i--) {
+      const e = this.episodes[i]!;
+      if (e.end !== null && isBrief(e, this.briefUnderMs, e.end)) {
+        this.episodes.splice(i, 1);
+      }
+    }
+  }
+
+  /** Forgets blips that can no longer make an issue flapping. */
+  private forgetBlips(now: number): void {
+    for (const [id, list] of this.blips) {
+      if (list[list.length - 1]!.end < now - FLAP_WINDOW_MS) {
+        this.blips.delete(id);
+      }
+    }
   }
 
   /** Forgets what ended more than a week ago. */
@@ -155,8 +263,9 @@ export class EpisodeLog {
     }
   }
 
+  /** What counts as a problem in the last week: an open episode only once it has lasted `briefUnderMs`. */
   lastWeek(now: number): Episode[] {
-    return this.episodes.filter((e) => e.end === null || e.end >= now - WEEK);
+    return this.episodes.filter((e) => (e.end === null || e.end >= now - WEEK) && !isBrief(e, this.briefUnderMs, now));
   }
 }
 
@@ -198,9 +307,12 @@ export function formatDigest(
     lines.push(s(t('digest.longest')));
     for (const e of longest) {
       const episode = { title: e.title, duration: ageText((e.end ?? now) - e.start) };
-      lines.push(
-        `${e.severity === 'critical' ? '🔴' : '🟡'} ${s(e.end === null ? t('digest.episodeOpen', episode) : t('digest.episode', episode))}`,
-      );
+      const text = e.flaps
+        ? t('digest.episodeFlapping', { ...episode, n: e.flaps })
+        : e.end === null
+          ? t('digest.episodeOpen', episode)
+          : t('digest.episode', episode);
+      lines.push(`${e.severity === 'critical' ? '🔴' : '🟡'} ${s(text)}`);
     }
   }
   return { title, body: lines.join('\n'), priority: open.length > 0 ? 3 : 2, tags: 'calendar' };

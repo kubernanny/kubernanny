@@ -15,11 +15,16 @@ import { buildIncidents, IncidentsView } from '../views/incidents';
 export class IncidentsService {
   private readonly log: EpisodeLog;
 
-  constructor(kube?: KubeClient) {
+  /** `briefUnderMs`: episodes shorter than this are not problems (NOTIFY_AFTER_SECONDS, see EpisodeLog). */
+  constructor(kube?: KubeClient, briefUnderMs = 0) {
     const now = Date.now();
-    // The demo pretends to have watched for a week, so the app has a timeline to show.
+    // The demo pretends to have watched for a week, so the app has a timeline to show. Its
+    // open issues stand for a night that already happened (the app ages them), so they count
+    // from the first run on, and the week's flapping comes from the recorded history.
     this.log =
-      kube instanceof DemoKubeClient ? new EpisodeLog(now, demoIncidents(now, kube.scenario)) : new EpisodeLog(now);
+      kube instanceof DemoKubeClient
+        ? new EpisodeLog(now, demoIncidents(now, kube.scenario))
+        : new EpisodeLog(now, null, briefUnderMs);
   }
 
   get since(): number {

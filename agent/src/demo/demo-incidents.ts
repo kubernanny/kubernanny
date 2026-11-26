@@ -21,6 +21,7 @@ export function demoIncidents(now: number, scenario: DemoScenario): { since: num
     startAgo: number,
     lasted: number,
     silenced = false,
+    flaps?: number,
   ): Episode => ({
     id,
     title,
@@ -29,6 +30,7 @@ export function demoIncidents(now: number, scenario: DemoScenario): { since: num
     start: now - startAgo,
     end: now - startAgo + lasted,
     silenced,
+    ...(flaps ? { flaps } : {}),
   });
   const calm = [
     // kured rebooted a node at night; it came back before the notifier would have pushed.
@@ -39,6 +41,18 @@ export function demoIncidents(now: number, scenario: DemoScenario): { since: num
       t('nodes.notReady.title', { node: 'rke2-node-5' }),
       2 * D + 3 * H,
       7 * M,
+    ),
+    // A node whose kubelet lost its lease four times in 40 minutes, a minute each: no single
+    // time long enough to notify, together a flapping node (EpisodeLog's flapping rule).
+    ended(
+      'nodes/rke2-node-2/not-ready',
+      'nodes',
+      'critical',
+      t('nodes.notReady.title', { node: 'rke2-node-2' }),
+      4 * D + 6 * H,
+      40 * M,
+      false,
+      4,
     ),
     ended(
       'certificates/default/shop-app-tls',
