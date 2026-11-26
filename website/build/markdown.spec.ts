@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
+import { brokenRedirects } from '../scripts/postbuild.ts';
 import { editUrl, type RewriteContext, rewriteUrl, routeForFile, slugForFile } from './doc-paths.ts';
 import { BRANCH, buildNav, listDocFiles, MEDIA_BASE, parseComponents, readDoc, REPO_URL } from './docs-source.ts';
 import { githubSlug, renderMarkdown, rewriteHtml, truncate } from './markdown.ts';
@@ -245,5 +248,24 @@ describe('raw HTML in the docs', () => {
     const html = render('<!-- generated:write -->\nUse kubectl get <name> here.\n');
     expect(html).not.toContain('generated:write');
     expect(html).toContain('&lt;name&gt;');
+  });
+});
+
+describe('pages that left the site', () => {
+  it('keeps maintainer pages off the site and sends their old URL to GitHub', () => {
+    expect(listDocFiles()).not.toContain('RELEASING.md');
+    expect(allRoutes()).not.toContain('/docs/releasing');
+    const redirects = readFileSync(new URL('../public/_redirects', import.meta.url), 'utf8');
+    expect(redirects).toContain(
+      '/docs/releasing https://github.com/kubernanny/kubernanny/blob/main/docs/RELEASING.md 301',
+    );
+    expect(brokenRedirects(redirects, allRoutes())).toEqual([]);
+  });
+
+  it('refuses a redirect from a live page or to a missing one', () => {
+    expect(brokenRedirects('/docs /docs/x 301\n/old /docs 301\n/gone https://example.com 301', ['/docs'])).toEqual([
+      '/docs /docs/x 301',
+    ]);
+    expect(brokenRedirects('/old /docs/missing 301', ['/docs'])).toEqual(['/old /docs/missing 301']);
   });
 });

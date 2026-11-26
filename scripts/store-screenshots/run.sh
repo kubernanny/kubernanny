@@ -9,6 +9,11 @@
 #   SKIP_BUILD=1   use the existing dist/ of protocol, agent and app
 #   ONLY=iphone69,phone   only these sizes (iphone69, ipad13, phone, tablet)
 # To change only the headlines or the frame: node frame/frame.cjs (from raw/).
+# The frame (frame/template.html) is a generic device drawn in CSS on the
+# brand background: no real device images or trademarks, the device at the
+# same height on every shot of a size, the logo on the first. The push screen
+# exists only in the native app: capture.cjs gives the web build a stand-in
+# for the push plugin, and the relay address below makes the agents offer it.
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT=$(cd ../.. && pwd)

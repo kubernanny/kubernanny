@@ -61,6 +61,24 @@ function pinInlineScripts(files: string[]): void {
   writeFileSync(headersFile, headers.replace(placeholder, `script-src 'self' ${[...hashes].sort().join(' ')}`));
 }
 
+/**
+ * `_redirects` lines (`from to [status]`) that cannot be right: a page that
+ * still exists (it would never be served), or a target on this site that is
+ * not a route (a redirect into a 404). Absolute URLs are not checked.
+ */
+export function brokenRedirects(redirects: string, routes: string[]): string[] {
+  const known = new Set(routes);
+  return redirects
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '' && !line.startsWith('#'))
+    .filter((line) => {
+      const [from, to] = line.split(/\s+/);
+      const target = (to ?? '').split('#')[0]!;
+      return !from || !to || known.has(from) || (target.startsWith('/') && !known.has(target));
+    });
+}
+
 function main(): void {
   if (!existsSync(join(OUT_DIR, 'index.html'))) {
     throw new Error(`No build output in ${OUT_DIR}; run vite build first.`);
@@ -78,6 +96,14 @@ function main(): void {
     const html = readFileSync(file, 'utf8');
     if (!html.includes('<h1')) {
       throw new Error(`${route} has no <h1>: prerender probably failed`);
+    }
+  }
+
+  const redirectsFile = join(OUT_DIR, '_redirects');
+  if (existsSync(redirectsFile)) {
+    const broken = brokenRedirects(readFileSync(redirectsFile, 'utf8'), allRoutes());
+    if (broken.length > 0) {
+      throw new Error(`_redirects lines that cannot work: ${broken.join('; ')}`);
     }
   }
 

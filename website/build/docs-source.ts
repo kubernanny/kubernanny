@@ -15,6 +15,12 @@ export const BRANCH = 'main';
 export const MEDIA_BASE = '/docs-media/';
 
 /**
+ * Files under docs/ that stay off the site: maintainer pages. Links to them
+ * from published pages go to GitHub; public/_redirects sends their old URL there.
+ */
+export const UNPUBLISHED = new Set(['RELEASING.md']);
+
+/**
  * Sidebar order. Files not listed here land in "More", so a new doc appears
  * without touching the site. `label` overrides the page's own h1 in the nav.
  */
@@ -49,7 +55,6 @@ export const NAV: { title: string; items: { file: string; label?: string }[] }[]
       { file: 'API.md', label: 'HTTP API' },
       { file: 'ARCHITECTURE.md' },
       { file: 'DEVELOPMENT.md' },
-      { file: 'RELEASING.md', label: 'Releasing the apps' },
       { file: 'DESIGN.md' },
       { file: 'SCREENSHOTS.md' },
       { file: 'ROADMAP.md' },
@@ -60,7 +65,7 @@ export const NAV: { title: string; items: { file: string; label?: string }[] }[]
 /** Decision records are listed under "Decisions" automatically, so a new ADR needs no change here. */
 const DECISION = /^decisions\/(\d{4})-.+\.md$/;
 
-/** Every markdown file below `docs/`, relative and with `/` separators. */
+/** Every published markdown file below `docs/`, relative and with `/` separators. */
 export function listDocFiles(dir = DOCS_DIR): string[] {
   const out: string[] = [];
   const walk = (current: string) => {
@@ -69,7 +74,10 @@ export function listDocFiles(dir = DOCS_DIR): string[] {
       if (entry.isDirectory()) {
         walk(full);
       } else if (entry.name.toLowerCase().endsWith('.md')) {
-        out.push(relative(dir, full).split(sep).join('/'));
+        const file = relative(dir, full).split(sep).join('/');
+        if (!UNPUBLISHED.has(file)) {
+          out.push(file);
+        }
       }
     }
   };

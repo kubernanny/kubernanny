@@ -54,4 +54,4 @@ RELAY_E2E_URL=http://127.0.0.1:8787 npx vitest run test/external-relay.e2e.spec.
 
 ## The public relay (relay.kubernanny.app)
 
-The chart's default `relay.url` is run by the project: the Relay workflow (`.github/workflows/relay.yml`) deploys this Worker on every push to `main` that touches the relay or the protocol, with the custom domain `relay.kubernanny.app` and `RELAY_PUBLIC_URL` pinned to it. The repository's `CLOUDFLARE_API_TOKEN` needs Account → Workers Scripts: Edit and, on the zone `kubernanny.app`, Workers Routes: Edit and DNS: Edit. The rate limiting rule for `/v1/agents/*/ws` lives with the zone in the maintainer's infrastructure.
+The chart's default `relay.url` is this Worker, deployed by the project's Relay workflow (`.github/workflows/relay.yml`) on every push to `main` that touches the relay or the protocol. Its secrets and the zone settings: docs/RELEASING.md, "Infrastructure".

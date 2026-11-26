@@ -1,0 +1,3 @@
+# Pages that left the site. A target on this site must be a prerendered route
+# (scripts/postbuild.ts checks it).
+/docs/releasing https://github.com/kubernanny/kubernanny/blob/main/docs/RELEASING.md 301
