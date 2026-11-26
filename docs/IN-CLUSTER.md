@@ -71,25 +71,7 @@ kubectl -n kubernanny get pod -l app.kubernetes.io/name=kubernanny -o jsonpath='
 
 ## What it may do in the Kubernetes API
 
-**[PERMISSIONS.md](PERMISSIONS.md)** lists every permission, generated from the code: what each module reads and why, the write actions and exactly what each changes, the Role in its own namespace, what it never has, and which Helm value removes what. Anything you switch off in the Helm values is left out of the ClusterRole, not just unused. CI renders the chart with the switches and fails if a switched-off permission is still granted.
-
-```mermaid
-sequenceDiagram
-  participant P as Phone
-  participant A as Agent
-  participant K as Kubernetes API
-  A->>K: watch pods (always current)
-  A->>A: issue pods/default/Deployment/web: CrashLoopBackOff<br/>action stored: restart Deployment default/web
-  P->>A: run "restart" for issue pods/default/Deployment/web
-  A->>A: issue still open? action offered? action switched on?
-  A->>K: patch Deployment default/web (restartedAt annotation)
-  A-->>P: "Deployment web wird neu gestartet."
-  Note over A: audit log: who, which action, which object
-```
-
-An action never names its target in the request: the app says "run `restart` for issue X", and the agent takes namespace, kind and name from its own check result. It can only touch what is broken right now. For an Argo CD Application the restart targets are not taken from the Application's `status` (anyone who can edit an Application writes that), only workloads the agent's own inventory shows not ready, in the Application's destination namespace. The one exception is the opt-in Argo CD rollback (`actions.enabled: [argocd-rollback]`, off by default): it names an app and an entry of its history, works without an open issue, and only on apps with manual sync and a single source. The agent re-reads the Application and rolls back only to a revision recorded for the app's own repository and path or chart (a commit SHA or chart version), never to another source, at most once per app in 5 minutes, announced through the notification channels first. It adds no RBAC verb; the admission policy gains a branch that allows exactly that sync and nothing else.
-
-That binding lives in the agent's code. Should the pod itself be compromised, RBAC alone would let it use the cluster-wide `patch` for anything on those objects. On Kubernetes 1.30+ the chart therefore also installs ValidatingAdmissionPolicies that deny the agent's ServiceAccount every change beyond what each action sends, for example anything but the restart annotation on a workload or a plain sync or refresh on an Application ([PERMISSIONS.md](PERMISSIONS.md#admission-policy)). Check them with `kubectl get validatingadmissionpolicies | grep kubernanny`, and try one: `kubectl set image deploy/<any> '*=busybox' --as=system:serviceaccount:kubernanny:kubernanny --dry-run=server` must be refused. Every action and every log read is written to the agent's log with the device that asked (`kubectl -n kubernanny logs deploy/kubernanny | grep audit`).
+It reads across the cluster (the inventory every run needs, plus the resources of each tool it checks) and changes things only through actions: each one bound to an issue that is open right now, on the object the agent's own check named, after a confirmed tap in the app. The request never names a target; the one exception, the opt-in Argo CD rollback, names an app and an entry of its own history. It reads no Secret but its own two. On Kubernetes 1.30+ ValidatingAdmissionPolicies hold every write verb to exactly what its action sends, should the pod itself be compromised. Every action and every log read is in the agent's log with the device that asked. Anything switched off in the Helm values is left out of the ClusterRole, not just unused, and CI fails if a switched-off permission is still granted. Every permission, why it is needed and the Helm value that removes it, generated from the code: **[PERMISSIONS.md](PERMISSIONS.md)**.
 
 Check it yourself, as the agent's ServiceAccount:
 
@@ -100,6 +82,9 @@ kubectl auth can-i --list --as=$SA -n kubernanny         # plus its own namespac
 kubectl auth can-i get secrets -n default --as=$SA       # no
 kubectl auth can-i delete pods -n default --as=$SA       # no
 kubectl auth can-i create pods/exec -n default --as=$SA  # no
+kubectl get validatingadmissionpolicies | grep kubernanny
+kubectl set image deploy/<any> '*=busybox' --as=$SA --dry-run=server   # must be refused
+kubectl -n kubernanny logs deploy/kubernanny | grep audit             # who did what
 ```
 
 ## Network
@@ -116,7 +101,7 @@ kubectl auth can-i create pods/exec -n default --as=$SA  # no
 | 9100 | `/metrics` | Prometheus | scores and counts, no names; not on the ingress |
 | socket | `/tmp/kubernanny.sock` | the agent itself, `kubectl exec` | mode 0600 inside the pod; not on the network |
 
-The chart's NetworkPolicy (`networkPolicy.enabled: true`) lets 8080 accept connections only from the ingress controller's namespace and 9100 only from the monitoring namespace.
+Every call is end-to-end encrypted and authenticated, so plain HTTP in a LAN is fine; still keep 8080 in a VPN, or not exposed at all and reached through the relay. The chart's ingress never routes `/metrics`. The chart's NetworkPolicy (`networkPolicy.enabled: true`) lets 8080 accept connections only from the ingress controller's namespace and 9100 only from the monitoring namespace.
 
 ### Outbound
 
@@ -149,24 +134,9 @@ None of these is created by Helm, so `helm uninstall` leaves them (and your pair
 
 ## Switching things off
 
-| You want | Do |
-|---|---|
-| no actions at all, read-only | `rbac.allowActions: false` |
-| Kubernanny never to look at a tool (e.g. Argo CD) | `checks.disabled: [argocd]`: not run, no RBAC |
-| one action never to be possible | `actions.disabled: [restart]` |
-| no rollbacks of Argo CD apps (the default) | leave `actions.enabled` empty; `actions.disabled: [argocd-rollback]` or `rbac.allowActions: false` also win over it |
-| no logs readable from the app | `actions.disabled: [logs]` |
-| nothing to leave the cluster | leave notifications, relay, the vulnerability check and image updates unset (the default) |
-| image updates never to contact a registry | `checks.disabled: [image-updates]`: not run, the app cannot switch it on, no NetworkPolicy egress rule for it |
-| no look at Rook Ceph, Kyverno or Gatekeeper | `checks.disabled: [rook-ceph]`, `[kyverno]`, `[gatekeeper]`: not run, their reads leave the ClusterRole |
-| no error rates of the ingress controller | `checks.disabled: [traefik]` / `[ingress-nginx]`: no Prometheus query (the component then shows nothing at all, not even workload health) |
-| no clock check | `checks.disabled: [node-clocks]`: no Prometheus query |
-| no request to Prometheus at all | `checks.disabled: [prometheus]`: no module or view queries it (nodes, volumes, etcd, clocks, ingress error rates, history). Switching the Prometheus module off in the app only hides that module; the others keep using Prometheus |
-| no notification ever, security alerts included | `checks.disabled: [notifications]`: the chart passes no channel to the agent, the test route answers 403 |
-| fewer details in notifications | `notifications.detail: minimal` |
-| no native push to the app, ever | `notifications.appPush.enabled: false` (`APP_PUSH=off`): the push routes answer 404 before touching anything, stored push tokens are deleted on start, nothing is handed to the relay for push, and the app shows push as locked |
+Every Helm switch and exactly what it removes (RBAC, routes, outbound connections) is generated in [PERMISSIONS.md, "Switch -> what is removed"](PERMISSIONS.md#switch---what-is-removed); the values themselves are in [CONFIGURATION.md](CONFIGURATION.md#helm-values). The usual ones: `rbac.allowActions: false` for read-only, `checks.disabled: [<module>]` for a tool Kubernanny should never look at, `actions.disabled: [<type>]` for an action that must never be possible (`[logs]`: no logs readable from the app). With the defaults nothing leaves the cluster but the notifications you configure.
 
-Everything not locked in the Helm values can also be switched in the app: cluster settings → "What is checked". Those switches are softer: they stop the agent from using a permission, the permission stays granted. Every Helm switch and exactly what it removes: [PERMISSIONS.md, "Switch -> what is removed"](PERMISSIONS.md#switch---what-is-removed).
+Everything not locked in the Helm values can also be switched in the app (cluster settings, "What is checked"). Those switches are softer: they stop the agent from using a permission, the permission stays granted. Two things only Helm does: `checks.disabled: [prometheus]` stops every request to Prometheus, while the app's switch only hides the Prometheus module and the other modules keep querying it; and `checks.disabled: [traefik]` or `[ingress-nginx]` removes the component entirely, workload health included.
 
 ## Updating and removing
 

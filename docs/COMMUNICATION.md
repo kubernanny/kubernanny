@@ -1,6 +1,6 @@
 # Communication and trust
 
-Every connection Kubernanny makes or accepts, what protects it, and what an attacker on it could do. This is the part of Kubernanny that has to be right; read it before exposing an agent. The wire format itself is specified in [PROTOCOL.md](PROTOCOL.md).
+Every connection Kubernanny makes or accepts and what protects it. This is the part of Kubernanny that has to be right; read it before exposing an agent. The wire format is specified in [PROTOCOL.md](PROTOCOL.md), ports and NetworkPolicies are in [IN-CLUSTER.md](IN-CLUSTER.md#network), and what an attacker in each position can do is in [SECURITY.md](SECURITY.md#threats).
 
 ![Communication diagram](communication.png)
 
@@ -80,7 +80,7 @@ sequenceDiagram
 
 - HTTPS to `KUBERNETES_SERVICE_HOST`, server certificate verified against the ServiceAccount CA (`NODE_EXTRA_CA_CERTS`); TLS verification is never disabled.
 - The ServiceAccount token is read from the projected volume on every request, so rotation needs no restart.
-- What the ServiceAccount may do is listed in [SECURITY.md](SECURITY.md#what-the-agent-can-do). A test (`agent/src/rbac.spec.ts`) fails if it changes.
+- What the ServiceAccount may do is listed in [PERMISSIONS.md](PERMISSIONS.md), generated from the code. A test (`agent/src/rbac.spec.ts`) fails if it changes.
 
 ### 4. Agent → Prometheus, Alertmanager, Grafana, Loki
 
@@ -112,7 +112,7 @@ Only while the `vulnerabilities` module is switched on (Helm `vulnerabilities.en
 
 ### 10 and 11. Relay
 
-Only with `relay.enabled` (Helm) / `RELAY_URL`; without it the agent opens no outbound connection. Details and the full wire format: [RELAY.md](RELAY.md), the decisions behind it: [0005](decisions/0005-relay-protocol.md).
+Only with `relay.enabled` (Helm) / `RELAY_URL`; without it the agent opens no outbound connection. Operating it: [RELAY.md](RELAY.md); the wire format: [PROTOCOL.md](PROTOCOL.md#the-relay); the decisions behind it: [0005](decisions/0005-relay-protocol.md).
 
 ```
 App ── HTTPS POST /v1/agents/{agentId}/e2e ──▶ Relay ◀── wss:// (outbound, kept open) ── Agent
@@ -140,48 +140,3 @@ Only when a device taps "Push to this device" in a cluster's settings, and only 
 ### 13. Container registries
 
 Only while the `image-updates` module is switched on (Helm `imageUpdates.enabled`, or the app); it is off by default. At most every 12 hours per image the agent lists the tags of a recognised component's repository (`GET /v2/<repository>/tags/list`), with an anonymous pull token where the registry asks for one. It sends the repository name and nothing else: not the running tag, no cluster name, namespace, workload or host. Hosts, redirects and guards: [SECURITY-CHECKS.md](SECURITY-CHECKS.md#available-updates-image-updates).
-
-## What an attacker can do
-
-| Position | Can | Cannot |
-|---|---|---|
-| On the network anywhere between app and agent (Wi-Fi, ISP, ingress, proxy, relay) | see that a device talks to an agent, sizes, timing; drop traffic | read or change requests or answers, learn which device calls, replay a call, pose as the agent |
-| Knows the agent's address and public key, no device | complete a handshake and be told `DEVICE_UNKNOWN`; use up the budget unknown keys share, which slows other pairing attempts down | read anything, act, burn the pairing code, keep the owner from pairing with the right code, touch a paired device's budget |
-| Holds a device's private key (stolen, unlocked phone) | read cluster state and logs of broken pods; sync, refresh or restart what is broken; start an overdue backup; pair another device; switch notifications, modules and actions off, silence issues, start a 24 h maintenance window, revoke the other devices | target anything healthy, delete, read Secrets, make the blinding changes unnoticed: each one (and every new pairing) is announced through the notification channels first, naming the device. Revoke the device from another one and the key is dead on the next call; rotate if it revoked yours ([SECURITY.md](SECURITY.md)). |
-| Reads the pod log (e.g. in Loki) | a pairing code that is used or expires within an hour, the agent's public key | any credential |
-| Can read the Secret `kubernanny-devices` | public keys and names | anything usable |
-| Can read the Secret `kubernanny-identity` | impersonate the agent to devices whose traffic they also intercept; read recorded **requests** (not answers) | act as a device. Rotate: delete the Secret, restart, pair again. |
-| Runs a pod with a fake Prometheus image | make Kubernanny show wrong numbers or alerts | trigger any action |
-| Controls a notification endpoint | read what you send there | anything in the cluster (outbound only) |
-| Controls the vulnerability database (or a mirror you point at) | see which component versions you run; show made-up advisories or hide real ones | trigger any action (vulnerability issues carry none), make the app open a site other than osv.dev |
-| Runs the relay (the public one, or yours if compromised) | see which agents are online, when and how much they are called, the IP addresses of agents and phones; tell kinds of calls apart by size (status, views, logs, actions, pairing); drop, delay or replay calls (replays are refused); use up the budget unknown keys share (never a paired device's) | read or change a call or an answer, learn which device calls, pose as the agent, register in an agent's place, burn a pairing code, make the agent spend more memory or CPU than a direct caller could |
-| Knows an agent's public key and can reach its relay | send calls through the relay; get `DEVICE_UNKNOWN` like at the agent's address; use up that agent's relay rate limit (calls fail with `RELAY_RATE_LIMITED` while it lasts; the direct path is unaffected) and the agent's budget for unknown keys | read anything, act, burn the pairing code, block the right code |
-| Anyone on the internet, against the relay itself | register agent ids of their own (20 per address); from one address hold at most a quarter of the relay's answer memory, for at most 15 s per answer; open unproven connections up to 8 per address; with many addresses, slow the relay down for everyone | crash the relay with a malformed request; take another agent's id; fill the relay or its answer memory from one or two addresses; keep real agents from registering from other addresses for longer than one proof round trip at a time |
-| Runs the relay with push, or holds its Firebase service account | everything in the relay row above; the FCM tokens of registered devices; make those phones show notifications with any text, on Android (an FCM notification message) and on iOS (an APNs alert without `mutable-content`, which skips the extension); FCM and APNs cannot forbid it | read a Kubernanny push or forge one that opens; show a real cluster's text; add the person's push marker, so such a notification is recognisable by its missing marker; trigger any action (a tap at most opens a cluster already in the app) |
-| Google (FCM) or Apple (APNs) | that a phone gets Kubernanny pushes, when, how large; drop them | read them |
-| Extracts a phone's push key | open that cluster's pushes, recorded ones included | act as the device, call the agent |
-| Code execution in the agent pod | what the ServiceAccount may do | read other Secrets, escalate RBAC; the pod runs non-root, read-only, without capabilities |
-
-## Residual risks, honestly
-
-No system is 100 % secure. These are the risks that remain:
-
-- **Requests are not forward-secret against the agent's key** (see PROTOCOL.md, "Limits"). Answers are. Requests carry paths and action names, no cluster data.
-- **Device private keys** live in the iOS Keychain and the Android Keystore, marked "this device only": not synced through iCloud Keychain and not restored onto another phone from a backup. In the browser (the web UI) they sit in the origin's storage, guarded by the CSP; anyone with access to that browser profile has the key.
-- **Logs of broken pods** are readable with any paired device, also with `rbac.allowActions: false` (reading a log is no write). If your applications log secrets, restrict who gets a device, or set `actions.disabled: [logs]`: the chart then grants no `pods/log` and `GET /api/logs` answers 403 ([PERMISSIONS.md](PERMISSIONS.md)). With the plain manifest (`deploy/install.yaml`), remove the `pods/log` rule and set `DISABLED_ACTIONS=logs`.
-- **Custom URL schemes can be claimed by other apps.** A malicious app registered for `kubernanny://` could receive the pairing link and pair itself; it would show in the device list and the log, and can be revoked. Verified app links will replace the scheme with the native apps.
-- **Manual pairing without the QR code** trusts TLS (or the port-forward) once, to fetch the agent key. Compare the fingerprint with the log if in doubt.
-- **The agent is exposed to whoever can reach it.** Authentication happens before anything is dispatched, but an agent reachable from the internet is still a target for the next bug in Node or the agent's own HTTP code. Prefer a VPN or the relay over a public ingress.
-- **In-cluster hops to monitoring are plain HTTP** unless your CNI encrypts.
-- **The relay sees metadata** when it is on: which agent, when, how much, and the IP addresses of agent and phone. Sizes are not padded, so it can tell kinds of calls apart (status, a log, an action, a pairing attempt). Run your own ([RELAY.md](RELAY.md)) if that matters, or leave it off and stay in the VPN.
-- **A stranger with the agent's public key can slow pairing down**: unknown keys share one small budget, so a flood of them delays other pairing attempts (`E2E_RATE_LIMITED`, the app retries). They can never burn the code or have the right code refused for their wrong ones, and paired devices are not affected.
-- **Whoever holds the relay's Firebase service account can put a notification of their own on a registered phone, on Android and on iOS.** That is the relay's operator (for the public relay, the Kubernanny project) or anyone who steals the key. They cannot read or forge Kubernanny's sealed pushes, but Android shows an FCM *notification* message without the app's code, and iOS shows an APNs alert without `mutable-content` without the Notification Service Extension; FCM and APNs offer no way to forbid either. Such a notification can never carry a real cluster's text and cannot trigger any action (a tap at most opens a cluster already in the app). It is recognisable: every push the phone really opened starts with the marker the person picked when turning push on, which only the phone knows ([NOTIFICATIONS.md](NOTIFICATIONS.md#is-this-push-real)). A relay of your own with your own Firebase project and app build removes the third party; not switching push on, or `notifications.appPush.enabled: false`, removes the risk entirely.
-
-## Checklist for a new install
-
-- [ ] Agent reachable only in the VPN/LAN (or no ingress at all and the relay, [RELAY.md](RELAY.md))
-- [ ] `networkPolicy.enabled: true` with the right ingress-controller and monitoring namespaces
-- [ ] Notifications over HTTPS; `notifications.detail: minimal` for public services
-- [ ] `rbac.allowActions: false` if you only want to look
-- [ ] `actions.disabled: [logs]` if your applications may log secrets
-- [ ] Revoke devices you no longer use (settings → Paired devices, or `node dist/cli.js revoke <id>`)

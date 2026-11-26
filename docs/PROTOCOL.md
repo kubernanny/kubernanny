@@ -198,7 +198,7 @@ Compatible both ways, with no new version byte: phones before it read `t`, `b`, 
 
 A push with priority `p: 0`, an empty title and body and a `w` is a **status push**: the hourly state for the home-screen widget ([NOTIFICATIONS.md](NOTIFICATIONS.md#the-home-screen-widget)), `{"t": "", "b": "", "p": 0, "s": …, "w": {…}}` (`statusPushContent` in `protocol/src/push.ts`). Sealed like every push, with the same keys, so only the agent can make one and only the phone opens it. The phone never shows it: it applies `w` by the rules above and stops (iOS: the app's `AppDelegate`, which receives it as a background push, `StatusPush.swift`; Android: the messaging service, `PushFreshness.isStatusOnly`). Its freshness rule is simpler, because it is never shown: sealed within an hour of the phone's clock (`statusPushFresh`, `PushFreshness.statusFresh`, `PushKeys.isStatusFresh`). It is not compared with, and does not move, the time of the last push shown, so a delayed alert sealed before it still shows; a replayed one changes nothing, as the widget only takes a check newer than its own. Should a status push reach the iOS Notification Service Extension as an alert, the widget takes its state and the generic text is shown.
 
-On the relay socket a status push is a `Push` frame with `"q": 1` ([RELAY.md](RELAY.md#native-push)), which the relay turns into a silent FCM message. The agent sends one only to a relay whose `Ready` said `"statusPush": true`. Phones before status pushes never get one: the agent sends them only to devices that registered with `"widget": true` (`POST /push/register`), which only apps that handle them do.
+On the relay socket a status push is a `Push` frame with `"q": 1` ([below](#push-and-pushresult)), which the relay turns into a silent FCM message. The agent sends one only to a relay whose `Ready` said `"statusPush": true`. Phones before status pushes never get one: the agent sends them only to devices that registered with `"widget": true` (`POST /push/register`), which only apps that handle them do.
 
 ### Dead man's switch
 
@@ -223,9 +223,59 @@ All of them in [`protocol/test/push-vectors.json`](../protocol/test/push-vectors
 aa9c471e69fec6b33756624a2ba4d517df6f45bac9
 ```
 
-## Relay registration
+## The relay
 
-When an agent dials a relay ([RELAY.md](RELAY.md)), it proves it holds the private key behind the agent id it registers. Relay protocol version 2 (`RELAY_PROTOCOL_VERSION`, label `kubernanny-relay/2`; version 1 was never released) binds that proof to the relay: the relay sends a 32-byte nonce and a fresh X25519 public key `E`, and the agent answers with its static public key `A` and
+When the phone cannot reach the agent directly, the app sends the same sealed bytes to a relay, which hands them down a WebSocket the agent keeps open ([RELAY.md](RELAY.md) for operators, [decisions/0005](decisions/0005-relay-protocol.md) for why). The relay adds no cryptography to calls: everything above holds unchanged, and it can open nothing. The agent id is `base64url(BLAKE2b-256(agent static public key))`, 43 characters; the app derives it from the key it pinned. The test-vector agent key `883186b8…f06c77` has the id `o7oXZcDvJEDDJobQgsCp8flX2LO88EMA3CUTU5SqYok`.
+
+### HTTP, for the app
+
+| | |
+|---|---|
+| `POST /v1/agents/{agentId}/e2e` | body: the sealed request (`application/octet-stream`, at most 64 KiB). Answer: exactly what the agent's own `/api/e2e` answers: 200 with the sealed response, or the agent's plain refusal (`{"code":"E2E_…"}`), or the relay's own (below). |
+| `OPTIONS` same path | CORS preflight. `Access-Control-Allow-Origin: *` by default: calls carry no cookie or credential, and every answer is ciphertext for one device. |
+| `GET /healthz` | `{"ok":true}` |
+| `GET /metrics` | Prometheus, on its own port (`METRICS_PORT`, default 9100), not the public one. Node relay only. |
+
+The relay's own refusals, plain JSON `{"code": …}`:
+
+| Code | Status | Meaning |
+|---|---|---|
+| `RELAY_BAD_REQUEST` | 400 | empty body |
+| `RELAY_NOT_FOUND` | 404 | unknown path or not an agent id |
+| `RELAY_TOO_LARGE` | 413 | request over 64 KiB |
+| `RELAY_RATE_LIMITED` | 429 | this agent's call rate, concurrency or hourly byte budget is used up, or the calling address' share of it (`RELAY_CALLER_SHARE`) |
+| `RELAY_RESPONSE_TOO_LARGE` | 502 | the agent's answer is over 9 MiB |
+| `RELAY_BAD_AGENT_RESPONSE` | 502 | the agent answered with something the relay does not pass on (below) |
+| `RELAY_BUSY` | 503 | the relay holds as many request and answer bytes in memory as it may (`RELAY_MAX_INFLIGHT_BYTES`), or the agent has not read what was sent to it (`RELAY_MAX_SOCKET_BUFFER_BYTES`) |
+| `RELAY_AGENT_OFFLINE` | 503 | no agent with this id is connected, or it dropped during the call |
+| `RELAY_FULL` | 503 | the relay takes no more agents, or this address has too many unproven connections (at the WebSocket upgrade) |
+| `RELAY_TIMEOUT` | 504 | the agent did not answer within 25 s |
+
+### WebSocket, for the agent
+
+`GET /v1/agents/{agentId}/ws`. Binary messages are frames `u8 type | u32 call id (big-endian) | payload`; text messages are only the heartbeat `ping` / `pong`.
+
+| Type | Direction | Payload |
+|---|---|---|
+| `0x01` Call | relay → agent | the sealed request |
+| `0x02` ReplyChunk | agent → relay | part of the response body, more follows |
+| `0x03` ReplyEnd | agent → relay | `u16 status` and the last part |
+| `0x04` Cancel | relay → agent | none: the call timed out, its answer is not wanted |
+| `0x05` Push | agent → relay, the agent's own id | one native push as JSON (below) |
+| `0x06` PushResult | relay → agent, same id | `{"s": outcome}` |
+| `0x07` Deposit | agent → relay, the agent's own id | the dead man's switch messages to hold, as JSON ([below](#deposit-and-depositresult)) |
+| `0x08` DepositResult | relay → agent, same id | `{"s": "stored" \| "invalid" \| "rate_limited" \| "full" \| "disabled"}` |
+| `0x10` Challenge | relay → agent, id 0 | 32-byte nonce, relay's ephemeral X25519 public key |
+| `0x11` Proof | agent → relay, id 0 | agent's static public key, 32-byte MAC |
+| `0x12` Ready | relay → agent, id 0 | the relay's limits as JSON, with `push: true` when it delivers native push, `statusPush: true` when it delivers status pushes silently, `deadman: true` when it holds dead man's switch deposits, and `deadmanFired: {"k": [key ids], "m": ms away}` when it sent deposited messages since the agent's last registration |
+
+What the relay passes on from an agent is only ever 200 with the sealed bytes (`application/octet-stream`) or one of the agent's plain refusals, 400, 413, 429 or 503 with a body the relay rebuilds itself as `{"code":"E2E_…"}`. Any other status or body becomes `502 RELAY_BAD_AGENT_RESPONSE`: anyone can register an agent id of their own, and the relay's origin must not serve whatever such an "agent" sends.
+
+Answers travel in parts of at most 256 KiB, so no platform's WebSocket message limit matters. Unknown frame types are ignored by both sides. Close codes: 4000 protocol error, 4001 proof failed, 4002 no proof in time, 4003 replaced by a newer connection, 4008 idle, 4029 full, 1001 relay restarting.
+
+### Relay registration
+
+When an agent dials a relay, it proves it holds the private key behind the agent id it registers. Relay protocol version 2 (`RELAY_PROTOCOL_VERSION`, label `kubernanny-relay/2`; version 1 was never released) binds that proof to the relay: the relay sends a 32-byte nonce and a fresh X25519 public key `E`, and the agent answers with its static public key `A` and
 
 ```
 origin = relayOrigin(the URL the agent dialled)      e.g. "https://relay.example" for wss://relay.example
@@ -239,6 +289,35 @@ MAC    = first 32 bytes of HMAC-BLAKE2b(K, "kubernanny-relay/2" ‖ nonce)
 1100000000883186b800b41d5cf0429695da9b3cc4f328ebcd184a6e482fa578c103f06c7783d6c0
 7c864fb357ff0a70116f62f7a88dda187f798ca1c8a30c1d17d0009e5e
 ```
+
+The code is `protocol/src/relay.ts`, shared by the agent, the Node relay and the Worker.
+
+### Push and PushResult
+
+The relay announces push in `Ready` (`push: true`); without it the agent sends no `Push` frame, and a `Push` frame to a relay without push is answered `disabled`. The registration proof already says which agent is talking, so a push needs no proof of its own.
+
+```
+Push        {"t": FCM token, "o": "ios" | "android", "k": key id (16 chars), "m": sealed message (base64url), "l": "en" | "de", "q": 1 (status push, optional)}
+PushResult  {"s": "sent" | "unregistered" | "rate_limited" | "unavailable" | "invalid" | "failed" | "disabled"}
+```
+
+`m` is the sealed message of [Push messages](#push-messages), `k` its key id, `l` the language of the placeholder text. The relay sends it to FCM HTTP v1 (`POST https://fcm.googleapis.com/v1/projects/{project}/messages:send`) with an OAuth token it gets for its service account (a JWT signed with RS256 through WebCrypto, the same code on Node and the Worker, cached until five minutes before it expires). Android gets a data-only message (`data: {k, m}`, high priority, never a `notification` block), so the app's own messaging service shows it; iOS the same data plus a generic placeholder APNs alert ("Kubernanny", "New status from a cluster" in `l`'s language), always with `mutable-content`, which the app's Notification Service Extension replaces with the opened text. `unregistered` (FCM: the token is gone) makes the agent forget the token, but only after three such answers at least an hour apart, since it does not trust the relay either. The relay answers `unregistered` only for FCM's own verdict on the token (`UNREGISTERED`, `SENDER_ID_MISMATCH`, or `INVALID_ARGUMENT` naming `message.token`); a malformed message is `invalid`.
+
+**Status pushes** (`"q": 1`, [above](#status-pushes)): the relay builds them from a fixed shape of their own that has nothing to show: Android a data-only message at `NORMAL` priority with a TTL of an hour; iOS an APNs background push (`apns-push-type: background`, `apns-priority: 5`, `aps: {"content-available": 1}`, expiring after an hour), with no alert, no sound and no `mutable-content`, so iOS hands it to the app and never shows it. The same data `{k, m}` as every push. Nothing an agent puts into a Push frame reaches the visible part of either shape, so the status path cannot be used to make a phone show anything, and the sealed content says the same (`p: 0`). The relay says it handles them in `Ready` (`statusPush: true`); an agent sends none to a relay that does not, and a `q` other than `1` is `invalid`.
+
+### Deposit and DepositResult
+
+The dead man's switch messages ([above](#dead-mans-switch)). The relay announces it in `Ready` (`deadman: true`); without it the agent deposits nothing.
+
+```
+Deposit        {"x": validity in s, "h": hold in s, "d": [{"t": FCM token, "o": "ios" | "android", "k": key id, "m": sealed message, "l": "en" | "de", "g": grace in minutes}]}
+DepositResult  {"s": "stored" | "invalid" | "rate_limited" | "full" | "disabled"}
+```
+
+- **A deposit replaces the previous one**; an empty list clears it. The agent renews it every 30 minutes after a run, at once when a phone registers, changes its grace or turns push off, and on every new connection (a rollout's new leader deposits at once); a deposit the relay did not take is tried again after 5 minutes. `x` is at most 27 hours (the agent asks for 3 hours, plus a maintenance window); `h` is the rest of a maintenance window, before whose end nothing is sent. `g` is 10, 15, 30 or 60. Each item's key id appears once.
+- **Armed** when the agent's registered connection goes away without a newer one taking its place (a replaced connection does not count, so a rollout that hands over within seconds never arms it). The absence counts from the last time the relay heard the agent (its heartbeat every 25 s), not from when it noticed.
+- **Fired** for each item at `max(last heard, end of the hold) + grace`, once per absence, as a visible push of the ordinary shape (the same FCM message as an alert, [above](#push-and-pushresult)): it is meant to be seen, and Android's normal priority would hold it for a Doze window. Nothing is sent after the deposit's validity. Each message counts against the relay's push limits like a push ([RELAY.md](RELAY.md#native-push)); past them it is skipped, never retried in a loop.
+- **Disarmed** when a connection of the agent id registers. If messages went out, its Ready names their key ids and how long the agent was away (`deadmanFired`), once; the agent then sends those phones a sealed "reachable again" push.
 
 ## Versioning
 

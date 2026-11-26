@@ -120,20 +120,4 @@ Invalid values fail the start with a clear message instead of running with a sur
 
 Per cluster the app stores a name, the agent address and the agent's public key with Capacitor Preferences (`UserDefaults` on iOS, `SharedPreferences` on Android, `localStorage` on the web). This device's private key goes to the iOS Keychain or the Android Keystore (`@aparajita/capacitor-secure-storage`, "this device only"); on the web to the origin's storage. Keys stored by earlier versions are moved there on the first start. It polls every 30 seconds while in the foreground. Light and dark mode follow the system.
 
-## Switches in the app
-
-```mermaid
-flowchart LR
-  helm["Helm values<br/>checks.disabled, actions.disabled,<br/>actions.enabled, rbac.allowActions"] -->|"sets env and RBAC"| agent["agent"]
-  app["App: What is checked"] -->|"writes ConfigMap<br/>kubernanny-settings"| agent
-  agent -->|"runs a module or action only if<br/>both allow it"| run["checks and actions"]
-  helm -. "locked rows" .-> app
-```
-
-<p><img src="screenshots/68-modules.png" alt="What is checked" width="260"> <img src="screenshots/69-modules-actions.png" alt="Actions and notifications" width="260"></p>
-
-*The app's switches: every check, tool and action type.*
-
-Two layers. The Helm values are hard: what they switch off is not run and, for integrations and actions, not even permitted by RBAC, and the app shows it locked. The app's switches are soft: they stop the agent from using something the RBAC still allows, and anyone with a paired device can flip them back.
-
-Cluster settings → "What is checked" lists every core check, every recognised component, the action types and notifications, each with a switch. Switches set in the app are stored in the ConfigMap `kubernanny-settings` in the agent's namespace and survive restarts; anything switched off in the Helm values shows as locked. Known vulnerabilities is off until switched on; its row says what it would send and where. `kubectl -n kubernanny delete configmap kubernanny-settings` resets the app's switches.
+Cluster settings, "What is checked", switches every check, recognised component, action type and notifications off and on, within what the Helm values allow (locked rows). These switches are soft: they stop the agent from using a permission that RBAC still grants, and any paired device can flip them back. They are stored in the ConfigMap `kubernanny-settings`; `kubectl -n kubernanny delete configmap kubernanny-settings` resets them. Hard and soft switches and what each removes: [PERMISSIONS.md](PERMISSIONS.md#switch---what-is-removed).
