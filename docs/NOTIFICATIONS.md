@@ -216,6 +216,22 @@ Tapping a push opens its cluster: the push names its key id, and the app knows w
 
 The default is on: nothing leaves the cluster until a device opts in, and that needs the relay, which is off by default. The relay has its own switch (`RELAY_PUSH=off`), and is off anyway without a Firebase service account.
 
+### Test push fails
+
+"Test-Push senden" in the cluster's settings shows what the relay answered, in words. The same outcome is in the agent's log (`app push: 0 of 1 delivered (fcm_permission)`) and, with the reason Google gave, in the relay's log ([RELAY.md, Logs](RELAY.md#logs)). The first three are faults of the relay's Firebase setup: on the public relay only its operator can fix them, so try again later; on your own relay, fix them in the Firebase project whose service account the relay has (`FCM_SERVICE_ACCOUNT`).
+
+| Outcome | What it means | What to do |
+|---|---|---|
+| `fcm_permission` | FCM answered 403 `PERMISSION_DENIED`: the project does not allow this service account to send | Google Cloud console of the relay's project, APIs & Services, Library: enable **Firebase Cloud Messaging API** (not only the legacy one). IAM: give the service account the role **Firebase Cloud Messaging API Admin**. Check that the key file's `project_id` is the project of the app's `google-services.json` / `GoogleService-Info.plist` (`project_id` / `PROJECT_ID`). Changes take a few minutes to apply |
+| `fcm_auth` | Google's OAuth refused the service account (`invalid_grant`, `invalid_client`): the key was deleted or disabled, or the relay's clock is far off | Google Cloud console, IAM, Service accounts, the relay's account, Keys: create a new JSON key, give it to the relay as `FCM_SERVICE_ACCOUNT` (Worker: `wrangler secret put FCM_SERVICE_ACCOUNT`), restart. Check the time on the relay's host |
+| `apns_auth` | `THIRD_PARTY_AUTH_ERROR`: Firebase cannot reach Apple, so iPhones get nothing (Android is not affected) | Firebase console, Project settings, Cloud Messaging, Apple app configuration: upload an APNs authentication key (Apple Developer, Keys, "Apple Push Notifications service"), with the right Key ID and Team ID |
+| `unregistered` | Firebase no longer knows this phone's token (app reinstalled, data cleared, or a token of another Firebase project) | Turn push off and on again in the app. If it keeps coming back on your own relay, the app build and the relay belong to different Firebase projects |
+| `rate_limited` | Too many pushes in a short time, for this phone, this agent or the relay ([RELAY.md, Native push](RELAY.md#native-push)) | Wait and try again; the limits refill within the hour |
+| `unavailable` | Google or the relay could not be reached, or did not answer in time | Try again in a few minutes. On your own relay, check outbound HTTPS to `oauth2.googleapis.com` and `fcm.googleapis.com` |
+| `invalid` | The relay refused the message as malformed | Update the agent (and your own relay) to the latest version |
+| `disabled` | The relay does not deliver pushes now: the agent is not connected to it, or it has no service account | Check the relay connection in the agent's log; on your own relay, set `FCM_SERVICE_ACCOUNT` |
+| `failed` | Anything else (an agent before these outcomes shows every Firebase setup fault as `failed` too) | The relay's log names the HTTP status and Google's error |
+
 ### Setting it up yourself
 
 Only for a self-built app or your own relay; the store apps and the public relay need nothing. The Firebase project, the relay's service account and the app's config files: [RELAY.md, Your own Firebase project](RELAY.md#your-own-firebase-project).
