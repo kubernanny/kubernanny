@@ -439,7 +439,7 @@ Reports older than 14 days or of an image the workload no longer runs are skippe
 
 ### metrics-server (`metrics-server`)
 
-`metrics-server/api` (warning) when it is installed but delivers no node values (often `--kubelet-insecure-tls` missing, or the APIService unavailable).
+`metrics-server/api` (warning) when it is installed but delivers no node values (often `--kubelet-insecure-tls` missing, or the APIService unavailable). Without Prometheus its readings are also the source of the usage charts: the agent keeps them for 7 days in 5-minute buckets ([ARCHITECTURE.md](ARCHITECTURE.md#detail-views-and-history)).
 
 ## Every other component
 

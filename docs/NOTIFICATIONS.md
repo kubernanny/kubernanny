@@ -54,7 +54,7 @@ Longest:
 🔴 default/social-importer: CrashLoopBackOff (5 h, still open)
 ```
 
-With `detail: minimal` only the first line. The agent keeps the week in memory: after a restart the report covers the time since then and says so, and it waits until the agent has watched for a day.
+With `detail: minimal` only the first line. The week survives restarts and rollouts: the agent keeps its episodes in the ConfigMap `kubernanny-history` (Helm `history.persist`, on by default), so the report after an update still covers the whole week. Only on the first start ever, or with `history.persist: false` after every restart, does it cover the time since the start and say so; it waits until the agent has watched for a day.
 
 **Pausing everything**: cluster settings → "What is checked" → Notifications, or `checks.disabled: [notifications]` in the chart.
 

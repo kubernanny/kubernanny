@@ -35,6 +35,7 @@ Chart: `deploy/helm/kubernanny` (OCI: `oci://ghcr.io/kubernanny/charts/kubernann
 | `resources` | 20m / 128Mi, limit 256Mi | Measured around 96 MB resident |
 | `notifications.weeklyDigest` | `enabled: false, weekday: 1, hour: 9` | Weekly report through the configured channels ([NOTIFICATIONS.md](NOTIFICATIONS.md)) |
 | `timezone` | `""` (UTC) | `TZ` of the agent, for the weekly report, e.g. `Europe/Berlin` |
+| `history.persist` | `true` | Keeps the problem history of the last 7 days (the overview's strip, the incident list, the weekly report) and, without Prometheus, the agent's own CPU and memory record (5-minute buckets, 7 days) in the ConfigMap `kubernanny-history`, so a restart or a rollout continues the week. The chart creates the ConfigMap empty (`helm uninstall` removes it) and grants `get` and `patch` on that one name; at most 768 KiB. `false` (env `HISTORY_PERSIST=off`): no ConfigMap, no permission, every start begins a new week ([ARCHITECTURE.md](ARCHITECTURE.md#state-that-survives-a-restart-history)) |
 | `checks.systemNamespaces` | `[]` | Namespaces the security posture check skips, on top of kube-system and the other system namespaces it knows |
 | `vulnerabilities.enabled` | `false` | Switches the `vulnerabilities` module on for this install: sends component package names and versions to api.osv.dev (or `dbUrl`). It only covers the Kubernetes version and 13 recognised components, not your own images; Trivy Operator in the cluster covers every image (the `trivy` integration reads its reports, on by default when found). The app can still switch it off; `checks.disabled: [vulnerabilities]` locks it off. See [SECURITY-CHECKS.md](SECURITY-CHECKS.md) |
 | `vulnerabilities.dbUrl` | `""` | OSV-compatible mirror instead of `https://api.osv.dev` (https, or http to an in-cluster `*.svc` host) |
@@ -110,6 +111,7 @@ The chart sets these; set them yourself with `deploy/install.yaml` or `docker ru
 | `LEASE_NAME` | `kubernanny` | Name of that Lease in the agent's namespace (the Role grants exactly this name) |
 | `SHUTDOWN_DELAY_SECONDS` | `5` | After SIGTERM: unready and handed over at once, but still answering this long while the endpoints are removed; then requests in flight get up to 10 s |
 | `READY_TIMEOUT_SECONDS` | `90` | `/readyz` turns ready after the first check run, or after this long without one |
+| `HISTORY_PERSIST` | `on` | `off`: the problem history and the own CPU and memory record stay in memory only (Helm `history.persist`). Never written in demo mode |
 | `NODE_EXTRA_CA_CERTS` | ServiceAccount CA (chart) | Lets Node trust the API server |
 | `DEMO` | | Built-in demo cluster, every device counts as paired and any pairing code works: `broken`, `warning`, `healthy`, `1` or `true` (= `broken`) turn it on; unset, empty, `0`, `false` or `off` turn it off; any other value stops the agent at start |
 | `K8S_API_URL`, `K8S_TOKEN` | | Development outside a cluster, e.g. `kubectl proxy` on `http://127.0.0.1:8001` |

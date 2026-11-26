@@ -18,7 +18,7 @@ export const QUESTIONS: Question[] = [
   },
   {
     q: 'Do I need Prometheus?',
-    a: 'No. Without it Kubernanny reads the Kubernetes API and metrics-server: every component check, nodes, workloads, volumes, and six hours of CPU and RAM. When it finds a Prometheus in the cluster it adds the standard alerts, error rates of the ingress controller and up to seven days of history.',
+    a: 'No. Without it Kubernanny reads the Kubernetes API and metrics-server: every component check, nodes, workloads, volumes, the week of problems, and seven days of CPU and RAM per node and for the cluster, which it records itself in 5-minute steps. When it finds a Prometheus in the cluster it adds the standard alerts, error rates of the ingress controller, and network, restarts and etcd in the charts. Without metrics-server there are no usage figures at all.',
     link: { route: '/docs/checks', label: 'Every check and what it needs' },
   },
   {
@@ -27,7 +27,7 @@ export const QUESTIONS: Question[] = [
   },
   {
     q: 'What does it cost my cluster?',
-    a: 'One pod: 128 Mi of memory requested, a 256 Mi limit, about 100 MB in use on a three-node homelab. It writes nothing to disk.',
+    a: 'One pod: 128 Mi of memory requested, a 256 Mi limit, about 100 MB in use on a three-node homelab. It writes nothing to disk; the week of history it keeps across restarts is one ConfigMap of at most 768 KiB.',
     link: { route: '/docs/in-cluster', label: 'What runs in your cluster' },
   },
   {

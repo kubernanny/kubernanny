@@ -128,9 +128,10 @@ Optional egress policy (`networkPolicy.egress.enabled: true`) limits outbound tr
 | Secret `kubernanny-identity` | the agent's private key (32 bytes) | whoever can read Secrets in the namespace |
 | Secret `kubernanny-devices` | per device: id, name, public key, pairing date; with native push switched on by that device, its FCM token, platform and push public key | same; the FCM token is the phone's address at Firebase (it lets the holder of the relay's Firebase credentials send to that phone), so it is never logged or listed |
 | ConfigMap `kubernanny-settings` | switched-off modules and actions, modules switched on (vulnerabilities), notifications paused, silenced issues with their end time, advisories accepted as not applicable (component, advisory, end, device name, optional reason), issues already notified (`notified`: id, severity, title, at most 300 and 96 KiB) | whoever can read ConfigMaps in the namespace |
-| memory only | the last snapshot, 6 hours of CPU/RAM points, the replay cache of the end-to-end channel (10 min), the week of issue episodes for the incident history and the weekly report | lost on restart; the snapshot is rebuilt within a minute, the history starts again |
+| ConfigMap `kubernanny-history` | the problem history of the last 7 days (per episode: issue id, title as message key, severity, module, start, end; when the agent first started), and without Prometheus its own CPU and memory record (5-minute buckets, 7 days, the cluster and the 20 busiest nodes); at most 384 KiB each. Off with `history.persist: false` | whoever can read ConfigMaps in the namespace |
+| memory only | the last snapshot, the replay cache of the end-to-end channel (10 min) | lost on restart; the snapshot is rebuilt within a minute |
 
-None of these is created by Helm, so `helm uninstall` leaves them (and your paired devices) in place. `kubectl delete namespace kubernanny` removes everything.
+The chart (and `install.yaml`) creates `kubernanny-history` empty, so `helm uninstall` removes it with the history. The others are created by the agent, so `helm uninstall` leaves them (and your paired devices) in place. `kubectl delete namespace kubernanny` removes everything.
 
 ## Switching things off
 

@@ -2,7 +2,7 @@
 
 Kubernanny has three parts and no backend of its own:
 
-- **The agent** runs as one pod in the cluster it watches. It keeps what it reads from the Kubernetes API current with watches, checks it once a minute (and within seconds of a change that matters), recognises what runs there, keeps the result in memory, and serves it over HTTP together with the web UI. It also sends notifications.
+- **The agent** runs as one pod in the cluster it watches. It keeps what it reads from the Kubernetes API current with watches, checks it once a minute (and within seconds of a change that matters), recognises what runs there, keeps the result in memory (the week of problems and its own CPU and memory record also in a ConfigMap, so a restart continues them), and serves it over HTTP together with the web UI. It also sends notifications.
 - **The app** (iOS, Android, web) talks only to agents. Every cluster is an agent URL, the agent's pinned public key and this device's own key pair, stored on the device.
 - **The protocol** (`protocol/`) is shared by both: every call is one end-to-end encrypted Noise handshake between device key and agent key ([PROTOCOL.md](PROTOCOL.md)).
 
@@ -76,6 +76,7 @@ agent/src
 ├── status/                 the run loop (status.service), running modules and merging issues (run-modules), snapshot types, light and score (snapshot)
 ├── views/                  nodes, workloads, storage, network, events, backups, incidents, history for the detail tabs
 ├── incidents/              the episode log: incident history (GET /incidents) and the weekly report's data
+├── history/                the ConfigMap kubernanny-history (episode log, own CPU and memory record) and the metrics recorder
 ├── actions/                the issue actions (some opt-in, docs/PERMISSIONS.md), logs, the opt-in Argo CD rollback
 ├── silence/                silenced issues and their end times (ConfigMap kubernanny-settings)
 ├── notify/                 when to notify, and the body for ntfy, Discord, Slack, Gotify, JSON
@@ -198,9 +199,20 @@ Severity follows one rule: **critical** means something is down or data is at ri
 
 The tabs of the app read views built on request from the last inventory (`views/views.ts`): nodes with used vs. requested CPU and memory, workloads with pods, restarts and usage, volumes with fill level and Longhorn state, ingress hosts with certificate days left, warning events (grouped per object and reason). The backups view (`views/backups.ts`) is built the same way from the lists the CNPG, Longhorn, etcd and Velero modules keep in `RunData`, so it makes no API call of its own. Building them costs microseconds, so nothing is cached.
 
-The incident history (`GET /incidents`) comes from `IncidentsService` (`incidents/`), which owns the episode log: the run loop records every run into it (notifications paused or not), the weekly report and the route read it. Seven days deep, in memory like everything else.
+The incident history (`GET /incidents`) comes from `IncidentsService` (`incidents/`), which owns the episode log: the run loop records every run into it (notifications paused or not), the weekly report and the route read it. Seven days deep, kept in memory and in the ConfigMap `kubernanny-history` (below).
 
-History (`views/history.ts`) comes from Prometheus when one was found: cluster CPU, memory, network in/out, container restarts, etcd WAL fsync p99, API server p99, and CPU/memory per node, over 1 hour to 7 days with about 120 points. The result is cached for 60 s. Without Prometheus the agent serves its own ring buffer of cluster CPU and memory from metrics-server, one point per run, 6 hours deep.
+History (`views/history.ts`) comes from Prometheus when one was found: cluster CPU, memory, network in/out, container restarts, etcd WAL fsync p99, API server p99, and CPU/memory per node, over 1 hour to 7 days with about 120 points. The result is cached for 60 s. Without Prometheus (none found, or `checks.disabled: [prometheus]`) the agent records CPU and memory itself (`history/metrics-recorder.ts`): every run already reads `metrics.k8s.io`, so each run adds its reading to a 5-minute bucket (average and peak, as a share of allocatable) for the cluster and each node, seven days deep. `GET /history` then answers `source: agent` with `stepSeconds`, about 120 points per range like Prometheus, and the app says the data comes from Kubernanny itself at 5-minute resolution. While Prometheus is there nothing is recorded, so nothing is kept twice.
+
+### State that survives a restart (`history/`)
+
+Most state is in memory and rebuilt within a minute. Two things are not rebuildable from the cluster, the week of problems and the agent's own CPU and memory record, so `HistoryStore` (`history/history-store.ts`) keeps them in the ConfigMap `kubernanny-history` of the agent's namespace (switch: `history.persist`, env `HISTORY_PERSIST`, default on; never in the demo):
+
+- **Created by the chart**, empty (and by `install.yaml`), so `helm uninstall` removes it; the agent never sets `data` through Helm, so `helm upgrade` leaves its keys alone. The Role grants `get` and `patch` on that one name, no `create`. A missing ConfigMap is logged once and the history stays in memory.
+- **Read at start**, in `loadState()` before the internal socket, the first run and the public port: the new pod serves the history (and `coveredSince`, the first start ever) from its first answer. The read is merged into the in-memory log, never replaces it.
+- **Written only by the pod in charge** (the lease holder with current state), at most once a minute after a run, only the keys that changed (merge patch), and once more on SIGTERM before the lease is released (at most 5 s). A takeover reads the ConfigMap again and merges what the previous pod flushed last; an issue both pods saw open stays one episode, from the earlier start.
+- **Two keys, versioned (`v: 1`), each capped at 384 KiB** (768 KiB in all, well under the 1 MiB a ConfigMap holds). `episodes`: compact JSON per episode (issue id, title as message key with parameters, so it reads in either language; severity, module, start, end, silenced), rolling 7 days; past the cap the oldest ended episodes go first, open ones only as a last resort. `metrics`: per series the allocatable CPU and memory and four strings of 2016 buckets (CPU average and peak, memory average and peak), each value 12 bits in two base64url characters (0.1 % steps): 16 128 characters per series plus the name. The cluster totals and the 20 busiest nodes (by average use over the week) are 21 series, at most about 346 KB even with 253-character node names; the recorder follows up to 80 nodes in memory, so a node climbs into the stored ones with a history of its own.
+- **Unreadable or oversized content** (another version, broken JSON, over the cap) is logged once and replaced by a fresh history; nothing crashes. A read that fails for another reason (API unreachable) is tried again before the first write, so a short outage never overwrites a week with an empty one.
+- **Limits**: an issue that ended while no agent ran ends at the first run after the start; the time no agent ran counts as watched. With `history.persist: false` every start begins a new week, and `coveredSince` (the app's "Nothing known before …") is that start.
 
 ### Actions
 
@@ -249,7 +261,7 @@ stateDiagram-v2
 
 All changes of one run go out as one message per channel. A failed send is retried on the next run; an issue is only marked as sent once at least one channel accepted it. Channels and formats: [NOTIFICATIONS.md](NOTIFICATIONS.md).
 
-The state is in memory. After a restart the agent may send an "opened" again for an issue that lasts; it never sends a "resolved" for one it did not open. The weekly report reads its episodes from `IncidentsService`, the same log behind `GET /incidents`.
+The weekly report reads its episodes from `IncidentsService`, the same log behind `GET /incidents`, which survives restarts in `kubernanny-history` (above).
 
 ### Keys, pairing and the end-to-end channel
 
@@ -432,7 +444,7 @@ flowchart TB
     O->>O: answer 5 s more, finish requests in flight (≤ 10 s), exit
   ```
 
-  What was already notified lives in the ConfigMap `kubernanny-settings` (key `notified`), which the new pod reads before its first send, so a rollout sends nothing twice. A pod that dies without releasing loses the lease after 15 s. Readiness does not wait for the lease on purpose: the old pod only gets SIGTERM once the new one is ready, so a new pod that waited for the lease would never start. There is no PodDisruptionBudget: with one replica it could only block node drains. On a drain the pod is evicted and its replacement starts elsewhere at the same time, so the page is away for the replacement's start (usually under 10 s), and notifications resume once it holds the lease (at most 15 s).
+  What was already notified lives in the ConfigMap `kubernanny-settings` (key `notified`), which the new pod reads before its first send, so a rollout sends nothing twice. The week of problems and the own CPU and memory record live in `kubernanny-history`: the new pod reads it at start, the old one writes it one last time on SIGTERM before releasing the lease, and the new one merges that write when it takes over. A pod that dies without releasing loses the lease after 15 s. Readiness does not wait for the lease on purpose: the old pod only gets SIGTERM once the new one is ready, so a new pod that waited for the lease would never start. There is no PodDisruptionBudget: with one replica it could only block node drains. On a drain the pod is evicted and its replacement starts elsewhere at the same time, so the page is away for the replacement's start (usually under 10 s), and notifications resume once it holds the lease (at most 15 s).
 - **Hardened pod**: non-root, read-only root filesystem (plus a 1 MiB in-memory `/tmp` for the internal socket), no capabilities, `RuntimeDefault` seccomp.
 - **Image**: one multi-arch image (amd64, arm64) with the agent, the protocol package and the web build (`Dockerfile` at the repository root).
 - **Install paths**: Helm chart (`deploy/helm/kubernanny`, published as OCI), plain manifests (`deploy/install.yaml`), or an Argo CD Application pointing at the chart. Values: [CONFIGURATION.md](CONFIGURATION.md).
