@@ -1,6 +1,6 @@
 # A self-hosted Kubernanny relay (docs/RELAY.md).
 #
-#   kubectl apply -f deploy/relay/relay.yaml
+#   kubectl apply -f https://raw.githubusercontent.com/kubernanny/kubernanny/v0.3.0/deploy/relay/relay.yaml
 #
 # Run it OUTSIDE the clusters it serves (a small VPS, another cluster): a
 # relay inside the cluster it monitors goes down together with it, exactly
