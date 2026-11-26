@@ -72,7 +72,7 @@ WebSocket, for the agent: `GET /v1/agents/{agentId}/ws`. Binary messages are fra
 | `0x06` PushResult | relay → agent, same id | `{"s": outcome}` |
 | `0x10` Challenge | relay → agent, id 0 | 32-byte nonce, relay's ephemeral X25519 public key |
 | `0x11` Proof | agent → relay, id 0 | agent's static public key, 32-byte MAC |
-| `0x12` Ready | relay → agent, id 0 | the relay's limits as JSON, with `push: true` when it delivers native push |
+| `0x12` Ready | relay → agent, id 0 | the relay's limits as JSON, with `push: true` when it delivers native push and `statusPush: true` when it delivers status pushes silently |
 
 What the relay passes on from an agent is only ever 200 with the sealed bytes (`application/octet-stream`) or one of the agent's plain refusals, 400, 413, 429 or 503 with a body the relay rebuilds itself as `{"code":"E2E_…"}`. Any other status or body becomes `502 RELAY_BAD_AGENT_RESPONSE`: anyone can register an agent id of their own, and the relay's origin must not serve whatever such an "agent" sends.
 
@@ -87,17 +87,20 @@ Optional on the relay too: on only with a Firebase service account (`FCM_SERVICE
 The agent hands pushes over the WebSocket it already holds: the registration proof already says which agent is talking, so a push needs no proof of its own and adds no public route. The relay announces push in `Ready` (`push: true`); without it the agent sends no `Push` frame, and a `Push` frame to a relay without push is answered `disabled`.
 
 ```
-Push        {"t": FCM token, "o": "ios" | "android", "k": key id (16 chars), "m": sealed message (base64url), "l": "en" | "de"}
+Push        {"t": FCM token, "o": "ios" | "android", "k": key id (16 chars), "m": sealed message (base64url), "l": "en" | "de", "q": 1 (status push, optional)}
 PushResult  {"s": "sent" | "unregistered" | "rate_limited" | "unavailable" | "invalid" | "failed" | "disabled"}
 ```
 
 The relay sends it to FCM HTTP v1 (`POST https://fcm.googleapis.com/v1/projects/{project}/messages:send`) with an OAuth token it gets for its service account (a JWT signed with RS256 through WebCrypto, the same code on Node and the Worker, cached until five minutes before it expires). Android gets a data-only message (`data: {k, m}`, high priority, never a `notification` block), so the app's own messaging service shows it; iOS the same data plus a generic placeholder APNs alert ("Kubernanny", "New status from a cluster" in `l`'s language), always with `mutable-content`, which the app's Notification Service Extension replaces with the opened text. `unregistered` (FCM: the token is gone) makes the agent forget the token.
+
+**Status pushes** (`"q": 1`): the hourly state for a phone's home-screen widget ([NOTIFICATIONS.md](NOTIFICATIONS.md#the-home-screen-widget)). The relay builds them from a fixed shape of their own that has nothing to show: Android a data-only message at `NORMAL` priority with a TTL of an hour; iOS an APNs background push (`apns-push-type: background`, `apns-priority: 5`, `aps: {"content-available": 1}`, expiring after an hour), with no alert, no sound and no `mutable-content`, so iOS hands it to the app and never shows it. The same data `{k, m}` as every push. Nothing an agent puts into a Push frame reaches the visible part of either shape, so the status path cannot be used to make a phone show anything, and the sealed content says the same (`p: 0`, [PROTOCOL.md](PROTOCOL.md#status-pushes)). The relay says it handles them in `Ready` (`statusPush: true`); an agent sends none to a relay that does not, and a `q` other than `1` is `invalid`.
 
 | Limit | Default | |
 |---|---|---|
 | per agent id | `RELAY_PUSHES_PER_HOUR` 60, `RELAY_PUSH_BURST` 20, 4 waiting for FCM | token bucket kept by agent id, not by connection: a reconnect within the hour continues where it stopped (Node: in memory; Worker: in the object's storage) |
 | distinct tokens per agent id | `RELAY_PUSH_TOKENS_PER_DAY` 32 | an agent pushes to its own phones; more tokens in a day are `rate_limited` |
 | refused tokens | 1 hour | a token FCM answered `unregistered` or `invalid` for is blocked for that agent id for an hour, and the answer costs 5 pushes of its bucket |
+| status pushes per FCM token | `RELAY_STATUS_PUSHES_PER_TOKEN_PER_HOUR` 2 (burst 1) | a budget of its own, apart from the one below: status pushes never use up a phone's alerts, and alerts never travel on it. Node: a second token table; Worker: a second object per token (`status:` and the digest). Status pushes count against every other limit here like any push (per agent id, distinct tokens, per address, whole relay) |
 | per FCM token | `RELAY_PUSHES_PER_TOKEN_PER_HOUR` 30 | across every agent of the relay. Node: 20 000 tokens tracked by digest; when full, only an entry whose bucket has refilled is dropped, else a new token waits. Worker: one small Durable Object per token digest (`TokenLimiter`), one request and one storage write per push |
 | per agent address | `RELAY_PUSHES_PER_ADDRESS_PER_HOUR` 240 | all agents of one client address together (Node only) |
 | whole relay | `RELAY_PUSHES_TOTAL_PER_HOUR` 20 000 | what the relay hands to FCM at most, however many ids and addresses are used (Node only) |
@@ -105,7 +108,7 @@ The relay sends it to FCM HTTP v1 (`POST https://fcm.googleapis.com/v1/projects/
 
 Why so many: registering an agent id is free, so the per-agent limit alone would make the relay a sender of Kubernanny's generic alert to any FCM token someone knows. The per-token limit bounds what one phone can get, the per-address and relay-wide budgets bound the total (on the Node relay), and the distinct-token and refused-token rules make probing tokens slow and costly. The relay answers `unregistered` only for FCM's own verdict on the token (`UNREGISTERED`, `SENDER_ID_MISMATCH`, or `INVALID_ARGUMENT` naming `message.token`); a malformed message is `invalid`. A 401 for the relay's own access token gets a fresh token and one more try. The agent, which does not trust the relay either, forgets a token only after `unregistered` on three pushes at least an hour apart.
 
-**What the relay learns from push**, beyond what it sees for calls: each registered device's FCM token and platform, a key id (a hash of a random push key, not of the device key), and when and how large each push is. Not a word of the message: it is sealed with HPKE for the device's push key ([PROTOCOL.md](PROTOCOL.md#push-messages)), and only opens if the agent sealed it. The Node relay logs no token and no key id; metrics count pushes by outcome only (`kubernanny_relay_pushes_total{outcome}`). A relay with push needs outbound HTTPS to `oauth2.googleapis.com` and `fcm.googleapis.com`.
+**What the relay learns from push**, beyond what it sees for calls: each registered device's FCM token and platform, a key id (a hash of a random push key, not of the device key), when and how large each push is, and whether it is a status push (so which phones have a widget: they get about one an hour on quiet days). Not a word of the message: it is sealed with HPKE for the device's push key ([PROTOCOL.md](PROTOCOL.md#push-messages)), and only opens if the agent sealed it. The Node relay logs no token and no key id; metrics count pushes by outcome only (`kubernanny_relay_pushes_total{outcome}`). A relay with push needs outbound HTTPS to `oauth2.googleapis.com` and `fcm.googleapis.com`.
 
 **What a hostile relay can do with push**: drop or delay pushes (the agent counts the channel as failed and tries again next run) and learn the metadata above. It cannot make a push that opens: that needs the agent's private key. Whoever holds the service account (the relay's operator, or someone who stole it) can send FCM messages of their own to tokens they know, and can put a text of their choosing on those phones on both platforms: Android shows an FCM *notification* message without the app's code, and iOS shows an APNs alert without `mutable-content` without the extension. FCM and APNs cannot forbid that. Such a notification never carries a real cluster's text, cannot trigger any action, and lacks the sign the person picked on the phone, which every real push carries ([NOTIFICATIONS.md](NOTIFICATIONS.md#is-this-push-real)). Keep the service account in a Secret; a relay of your own with your own Firebase project removes the third party.
 
@@ -197,6 +200,7 @@ Settings (environment variables of the Node relay, `[vars]` of the Worker):
 | `RELAY_PUSH` | on | `off` keeps native push off even with a service account |
 | `RELAY_PUSHES_PER_HOUR`, `RELAY_PUSH_BURST` | 60, 20 | pushes per agent |
 | `RELAY_PUSHES_PER_TOKEN_PER_HOUR` | 30 | pushes per FCM token |
+| `RELAY_STATUS_PUSHES_PER_TOKEN_PER_HOUR` | 2 | silent status pushes per FCM token, a budget of its own |
 | `RELAY_PUSH_TOKENS_PER_DAY` | 32 | distinct FCM tokens one agent id may push to in a day |
 | `RELAY_PUSHES_PER_ADDRESS_PER_HOUR` | 240 | pushes of all agents of one client address (Node only) |
 | `RELAY_PUSHES_TOTAL_PER_HOUR` | 20000 | pushes of the whole relay (Node only) |
@@ -219,6 +223,8 @@ The lower numbers in each range come from `--max-semi-space-size=1` (a smaller y
     memory ≈ 100 MB (process) + agents × 25 KB + 2 × RELAY_MAX_INFLIGHT_BYTES
 
 (twice, because a finished answer is joined into one buffer before it is sent). `RELAY_MAX_INFLIGHT_BYTES` covers requests as well as answers: a call's request bytes until it ends, and its frame until the socket has sent it. What the kernel buffers for each socket comes on top and is not the relay's to count. With the defaults and 1 000 agents that is about 100 + 25 + 128 = 253 MB, inside the 256 MiB limit of the Kubernetes example; for more agents raise the limit or lower `RELAY_MAX_INFLIGHT_BYTES`. One agent id, and all agents of one address together, can hold at most `RELAY_MAX_INFLIGHT_BYTES × RELAY_INFLIGHT_SHARE` (16 MiB) of it; `RELAY_MAX_CONCURRENT × RELAY_MAX_RESPONSE_BYTES` (36 MiB) is larger and so not the binding cap. Measured with the reviewer's attack (three self-registered agents answering 8 calls each with 16 MiB that never end): before the global cap the relay grew from 98 MB to 525 MB; with it, from 98 MB to 123 MB.
+
+**Push volume.** Alerts come with changes, a few a day on a calm cluster. Status pushes add at most one per hour per phone with a widget, fewer when alerts went out: about 24 a day, some 720 a month, each about 300 to 700 bytes to FCM (the sealed state, base64url, in the FCM request). For a relay serving 1 000 such phones that is about 24 000 FCM requests a day, well under one a second on average. FCM itself charges nothing for messages; on the Worker each push is one request to the agent's object and one to the token limiter object, with one storage write each, so check those against your Cloudflare plan. The relay-wide push budget (`RELAY_PUSHES_TOTAL_PER_HOUR`, Node) counts status pushes too.
 
 ## The public relay, fair use
 

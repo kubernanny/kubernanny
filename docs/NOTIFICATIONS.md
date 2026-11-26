@@ -117,7 +117,7 @@ sequenceDiagram
   participant R as Relay
   participant G as Firebase Cloud Messaging
   participant P as Phone
-  P->>A: POST /api/push/register {FCM token, platform, push public key} (sealed call)
+  P->>A: POST /api/push/register {FCM token, platform, push public key, widget?} (sealed call)
   Note over A: issue lasts 5 min
   A->>A: seal title and body for that device's push key (HPKE)
   A->>R: Push frame on its relay WebSocket: token, key id, sealed bytes
@@ -130,15 +130,35 @@ sequenceDiagram
 
 **What it needs**: the relay (`relay.enabled`, [RELAY.md](RELAY.md)), and a relay that delivers push. The public relay does, for the app from the stores. Messages are the same as on every other channel: the five-minute rule, escalations, resolutions, silences, the maintenance window, security alerts and the weekly report, and with `detail: minimal` only counts (still sealed). The app is a channel like ntfy: it counts for the test button and for "a channel took it".
 
-**The home-screen widget catches up with every push.** Each push also carries the cluster's state, sealed like the text: its light, the numbers of outages and warnings, the time of the last check and, with `detail: full`, the titles of the three worst problems ([PROTOCOL.md, Push status](PROTOCOL.md#push-status)). The code that opens the push on the phone (the iOS Notification Service Extension, the Android messaging service) writes it into the widget's storage and redraws the widgets, without starting the app. A resolution push turns the widget green again. There is no push without a change, so between pushes the widget shows how old its state is and turns grey after 30 minutes (the agent does not push every check: iOS shows every push that reaches the extension as a notification, and a silent background push would wake the app only now and then, when the system allows).
+**The home-screen widget catches up with every push**, and with a silent status push about once an hour ([The home-screen widget](#the-home-screen-widget)).
+
+### The home-screen widget
+
+Each push also carries the cluster's state, sealed like the text: its light, the numbers of outages and warnings, the time of the last check and, with `detail: full`, the titles of the three worst problems ([PROTOCOL.md, Push status](PROTOCOL.md#push-status)). The code that opens the push on the phone writes it into the widget's storage and redraws the widgets, without starting the app. A resolution push turns the widget green again.
+
+Pushes only come with a change, so on a quiet day the widget would go stale. For that, a phone that has a widget gets a **status push**: when no other push reached it for an hour, the agent sends the state alone, without any text, marked silent. The phone shows nothing for it; only the widget changes.
+
+| What | When | On the phone |
+|---|---|---|
+| An alert, escalation, resolution, the weekly report, a security alert | when it happens (five-minute rule, [above](#when-a-message-is-sent)) | shown, and the widget takes the state it carries |
+| A status push | at most once per `notifications.appPush.widgetRefreshMinutes` (default 60) per phone, and only when nothing else was pushed to that phone within that time | nothing shown; the widget takes the state |
+| The app is open | every poll | the app writes the widget's list itself |
+
+- **Who gets it.** Only phones with push on for that cluster *and* a widget placed: the app tells the agent at registration and again whenever that changes (checked on start and every time the app comes to the front; iOS `WidgetCenter`, Android `AppWidgetManager`). Every kind of widget shows every cluster of the widget list or the worst of them, so one placed widget counts for every cluster in that list; a cluster switched off for the widget gets none. Older apps never say so and never get one; older agents ignore the flag.
+- **From where.** From the pod holding the lease, after a check run, and only through a relay that says it delivers status pushes silently (a relay before them would show its generic iOS alert, so the agent never sends one there). After a restart or a handover the first ones go out an interval later. A push the relay refuses is tried again ten minutes later, not on every run.
+- **Maintenance and pauses.** Status pushes keep coming during a [maintenance window](#when-a-message-is-sent): they are not notifications, and the widget should show the truth (with the maintenance light). They stop while notifications are paused in the app or switched off in the chart (`checks.disabled: [notifications]`), like every other push, and with `notifications.appPush.widgetRefreshMinutes: 0` (env `WIDGET_REFRESH_MINUTES=0`).
+- **On iOS it is best effort.** The status push is an APNs background push (`content-available`, priority 5): iOS hands it to the app in the background when it sees fit, throttles it (battery, Low Power Mode, how often the app is used), and never delivers it to an app the person swiped away in the app switcher, until the app is opened again. The app then opens it natively, writes the widget's storage and redraws the widgets within a few seconds, without starting the WebView. On Android it is a data message at normal priority, which may wait for a maintenance window of Doze; the messaging service updates the widget and posts nothing.
+- **Still grey sometimes.** When no status push gets through (iOS throttles, the phone is offline, the relay is down), the widget shows how old its state is and turns grey once it is older than its limit, as before.
+
+How a status push is told apart: its sealed content has priority 0 and no text ([PROTOCOL.md, Status pushes](PROTOCOL.md#status-pushes)), so the phone never shows one, whatever the relay or Google do with it, and the relay sends it in a shape of its own that has no alert at all ([RELAY.md](RELAY.md#native-push)).
 
 ### Who sees what
 
 | Party | Sees | Never sees |
 |---|---|---|
 | Agent | everything (it writes the message) | |
-| Relay | the device's FCM token and platform, a key id, the size and time of each push, the agent id | title, body, cluster name, anything in the cluster |
-| Google (FCM), Apple (APNs, iOS) | the token, the app, size and time | the content: it is sealed for the phone's push key |
+| Relay | the device's FCM token and platform, a key id, the size and time of each push and whether it is a status push, the agent id; so also that a phone has a widget (it gets about one status push an hour on quiet days) | title, body, cluster name, the state in a status push, anything in the cluster |
+| Google (FCM), Apple (APNs, iOS) | the token, the app, size and time, and that status pushes are background pushes (about one an hour per phone with a widget, a few hundred bytes each) | the content: it is sealed for the phone's push key |
 | Phone | the message, opened with its push key for that cluster | |
 
 A message opens only if the agent sealed it: the phone checks it against the agent key it pinned at pairing. It is shown only if it is fresh, too: sealed within an hour of the phone's clock and later than the last push shown for that cluster (the phone keeps that time next to the push key). So nobody who relays pushes (the relay, Google) can record an "all fine" and play it back later over a real problem ([PROTOCOL.md](PROTOCOL.md#push-messages)). On iOS a message that does not open, or is stale or replayed, shows a generic "Kubernanny: new status from a cluster", without your sign (iOS shows every alert that arrives); on Android it is dropped. A phone whose clock is off by more than an hour drops real pushes too: keep automatic time on.

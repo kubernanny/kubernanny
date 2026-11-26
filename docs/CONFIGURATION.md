@@ -47,6 +47,7 @@ Chart: `deploy/helm/kubernanny` (OCI: `oci://ghcr.io/kubernanny/charts/kubernann
 | `relay.url` | `wss://relay.kubernanny.app` | The public relay, or your own (`deploy/relay/`, `relay/cloudflare/`) |
 | `relay.egressPort` | `443` | Port for the NetworkPolicy egress rule to the relay |
 | `notifications.appPush.enabled` | `true` | Push straight to the Kubernanny app, sealed per device, through the relay and Firebase ([NOTIFICATIONS.md](NOTIFICATIONS.md)). Nothing leaves until a device opts in, and that needs the relay. `false` (env `APP_PUSH=off`): the push routes answer 404, stored tokens are deleted on start, nothing is handed to the relay, the app shows it locked |
+| `notifications.appPush.widgetRefreshMinutes` | `60` | Phones with a home-screen widget of this cluster get a silent status push (the state only, nothing shown) when no other push reached them for this many minutes ([NOTIFICATIONS.md](NOTIFICATIONS.md#the-home-screen-widget)). `0` off, otherwise at least 30 (env `WIDGET_REFRESH_MINUTES`) |
 | `extraEnv`, `nodeSelector`, `tolerations`, `affinity` | | |
 
 Example for a VPN-only Traefik setup with cert-manager and ntfy:
@@ -97,6 +98,7 @@ The chart sets these; set them yourself with `deploy/install.yaml` or `docker ru
 | `UPTIME_KUMA_STATUS_PAGE` | | Slug of a published Uptime Kuma status page (letters, digits, dashes). The `uptime-kuma` module then reads its monitors; without it only the pods are checked. Helm: `extraEnv: [{ name: UPTIME_KUMA_STATUS_PAGE, value: homelab }]`. In demo mode it defaults to `homelab`. |
 | `RELAY_URL` | | `wss://` relay address (`ws://` only for localhost or an in-cluster `*.svc` host). Unset: no outbound connection. The chart sets it from `relay.enabled` / `relay.url`. The relay's own settings (limits, `TRUST_PROXY`) are in [RELAY.md](RELAY.md). |
 | `APP_PUSH` | `on` | `off` disables native push for good (Helm `notifications.appPush.enabled`) |
+| `WIDGET_REFRESH_MINUTES` | `60` | silent status push for widgets after this long without other pushes; `0` off, 30 to 1440 otherwise (Helm `notifications.appPush.widgetRefreshMinutes`) |
 | `CUSTOM_COMPONENTS` | | JSON array of your own components (the chart sets it from `customComponents`) |
 | `DISABLED_ACTIONS` | | Comma-separated action types switched off in the deployment. The chart sets it from `actions.disabled`, plus every write action without `rbac.allowActions`. |
 | `ENABLED_ACTIONS` | | Comma-separated opt-in action types (only `argocd-rollback`); the chart sets it from `actions.enabled`. Anything else stops the start. `DISABLED_ACTIONS` wins. In demo mode `argocd-rollback` is on. |
@@ -111,7 +113,7 @@ The chart sets these; set them yourself with `deploy/install.yaml` or `docker ru
 | `DEMO` | | Built-in demo cluster, every device counts as paired and any pairing code works: `broken`, `warning`, `healthy`, `1` or `true` (= `broken`) turn it on; unset, empty, `0`, `false` or `off` turn it off; any other value stops the agent at start |
 | `K8S_API_URL`, `K8S_TOKEN` | | Development outside a cluster, e.g. `kubectl proxy` on `http://127.0.0.1:8001` |
 
-Invalid values fail the start with a clear message instead of running with a surprise: unknown ids in `DISABLED_MODULES` / `DISABLED_ACTIONS`, any id in `ENABLED_ACTIONS` other than `argocd-rollback` (the chart also refuses unknown ids in `checks.disabled` / `actions.disabled` / `actions.enabled`), and any unrecognised value of `VULN_ACCEPT`, `NOTIFY_DETAIL`, `WEBHOOK_FORMAT`, `DIGEST`, `PAIRING_LOG`, `METRICS_PORT`, `APP_PUSH` or `DEMO`. `DIGEST_WEEKDAY` takes 0 to 6 and `DIGEST_HOUR` 0 to 23. `checks.disabled: [prometheus]` means no Prometheus request at all, from any module.
+Invalid values fail the start with a clear message instead of running with a surprise: unknown ids in `DISABLED_MODULES` / `DISABLED_ACTIONS`, any id in `ENABLED_ACTIONS` other than `argocd-rollback` (the chart also refuses unknown ids in `checks.disabled` / `actions.disabled` / `actions.enabled`), and any unrecognised value of `VULN_ACCEPT`, `NOTIFY_DETAIL`, `WEBHOOK_FORMAT`, `DIGEST`, `PAIRING_LOG`, `METRICS_PORT`, `APP_PUSH` or `DEMO`. `DIGEST_WEEKDAY` takes 0 to 6 and `DIGEST_HOUR` 0 to 23, `WIDGET_REFRESH_MINUTES` 0 or 30 to 1440. `checks.disabled: [prometheus]` means no Prometheus request at all, from any module.
 
 ## The app
 
