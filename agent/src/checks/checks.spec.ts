@@ -248,6 +248,37 @@ describe('argocd', () => {
     expect(issue.actions.map((a) => a.type)).toEqual(['restart', 'argocd-sync', 'argocd-refresh']);
   });
 
+  it('gives an app that turned Degraded during or right after a sync three minutes to settle, no more', () => {
+    const now = new Date('2026-11-26T08:05:00Z');
+    const ago = (s: number) => new Date(now.getTime() - s * 1000).toISOString();
+    const app = (
+      degradedFor: number,
+      op: { phase: string; startedAt?: string; finishedAt?: string } | undefined,
+      transition = true,
+    ) => ({
+      metadata: { name: 'web', namespace: 'argocd' },
+      status: {
+        sync: { status: 'Synced' },
+        health: { status: 'Degraded', ...(transition ? { lastTransitionTime: ago(degradedFor) } : {}) },
+        ...(op ? { operationState: op } : {}),
+      },
+    });
+    const ids = (a: ReturnType<typeof app>) => evaluateArgoApps([a], undefined, now).map((i) => i.id);
+    const synced = { phase: 'Succeeded', startedAt: ago(60), finishedAt: ago(59) };
+    // The rollout: Degraded for 23 s right after the sync, or while it still runs.
+    expect(ids(app(23, synced))).toEqual([]);
+    expect(ids(app(23, { phase: 'Running', startedAt: ago(40) }))).toEqual([]);
+    // Past the grace it is reported, as is Degraded without a recent sync (a crash at night).
+    expect(ids(app(200, synced))).toEqual(['argocd/argocd/web/health']);
+    expect(ids(app(23, { phase: 'Succeeded', startedAt: ago(3600), finishedAt: ago(3590) }))).toEqual([
+      'argocd/argocd/web/health',
+    ]);
+    expect(ids(app(23, undefined))).toEqual(['argocd/argocd/web/health']);
+    // Argo CD 2 has no transition time: measured from the sync's start.
+    expect(ids(app(0, synced, false))).toEqual([]);
+    expect(ids(app(0, { phase: 'Running', startedAt: ago(400) }, false))).toEqual(['argocd/argocd/web/health']);
+  });
+
   describe('restart targets (security review H2: they come from attacker-writable status)', () => {
     const forged = (resources: { kind: string; namespace?: string; name: string }[], destination = 'tenant-a') => ({
       metadata: { name: 'x', namespace: 'tenant-a' },

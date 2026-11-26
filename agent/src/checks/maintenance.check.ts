@@ -103,7 +103,14 @@ export interface Hpa {
   status?: { currentReplicas?: number; desiredReplicas?: number; conditions?: Condition[] };
 }
 
-export function evaluateHpas(hpas: Hpa[]): Issue[] {
+/**
+ * How long an autoscaler may miss its metrics before it counts: after a
+ * rollout the new pods have none until metrics-server has scraped them
+ * (about a minute), and the HPA reports ScalingActive=False meanwhile.
+ */
+export const HPA_METRICS_GRACE_MS = 3 * 60_000;
+
+export function evaluateHpas(hpas: Hpa[], now: Date = new Date()): Issue[] {
   const issues: Issue[] = [];
   for (const hpa of hpas) {
     const ns = hpa.metadata.namespace ?? 'default';
@@ -112,6 +119,15 @@ export function evaluateHpas(hpas: Hpa[]): Issue[] {
     const active = condition(hpa.status?.conditions, 'ScalingActive');
     const able = condition(hpa.status?.conditions, 'AbleToScale');
     const limited = condition(hpa.status?.conditions, 'ScalingLimited');
+    const blindSince = Date.parse(active?.lastTransitionTime ?? '');
+    if (
+      active?.status === 'False' &&
+      Number.isFinite(blindSince) &&
+      now.getTime() - blindSince < HPA_METRICS_GRACE_MS
+    ) {
+      // Just lost its metrics, as during every rollout: reported once that lasts.
+      continue;
+    }
     if (active?.status === 'False') {
       issues.push({
         id,

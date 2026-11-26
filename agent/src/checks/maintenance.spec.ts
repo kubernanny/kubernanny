@@ -95,7 +95,7 @@ describe('PodDisruptionBudgets of operators that handle drains', () => {
 
 describe('HorizontalPodAutoscalers', () => {
   const hpa = (
-    conditions: { type: string; status: string; reason?: string; message?: string }[],
+    conditions: { type: string; status: string; reason?: string; message?: string; lastTransitionTime?: string }[],
     current = 2,
     max = 4,
   ) => ({
@@ -118,6 +118,23 @@ describe('HorizontalPodAutoscalers', () => {
     expect(
       de(evaluateHpas([hpa([{ type: 'ScalingLimited', status: 'True', reason: 'TooFewReplicas' }], 1, 4)])),
     ).toEqual([]);
+  });
+
+  it('gives an autoscaler that just lost its metrics three minutes, as after every rollout', () => {
+    const blind = (minutesAgo: number) =>
+      hpa([
+        {
+          type: 'ScalingActive',
+          status: 'False',
+          reason: 'FailedGetResourceMetric',
+          message: 'did not receive metrics for targeted pods (pods might be unready)',
+          lastTransitionTime: new Date(NOW.getTime() - minutesAgo * 60_000).toISOString(),
+        },
+      ]);
+    expect(evaluateHpas([blind(1)], NOW)).toEqual([]);
+    expect(de(evaluateHpas([blind(3)], NOW))[0]!.title).toContain('misst nichts');
+    // Without a transition time it is reported at once, as before.
+    expect(evaluateHpas([hpa([{ type: 'ScalingActive', status: 'False' }])], NOW)).toHaveLength(1);
   });
 });
 

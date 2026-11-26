@@ -109,7 +109,7 @@ A PDB that blocks only because pods are unhealthy right now is not reported: tha
 
 | Issue id | Severity | When |
 |---|---|---|
-| `hpa/<ns>/<target>` | warning | `ScalingActive=False`: the autoscaler gets no metrics (metrics-server missing, no resource requests) |
+| `hpa/<ns>/<target>` | warning | `ScalingActive=False` for at least 3 minutes (its `lastTransitionTime`): the autoscaler gets no metrics (metrics-server missing, no resource requests). Shorter is every rollout: the new pods have no metrics until metrics-server has scraped them, about a minute. |
 | `hpa/<ns>/<target>` | warning | `AbleToScale=False` |
 | `hpa/<ns>/<target>` | warning | `ScalingLimited` with `TooManyReplicas` and running at `maxReplicas` |
 
@@ -304,7 +304,7 @@ Stats: certificates ready, ClusterIssuers, next expiry.
 
 | Issue id | Severity | When | Actions |
 |---|---|---|---|
-| `argocd/<app>/health` | critical | health `Degraded` or `Missing`; the cause names the broken resources | restart of up to three degraded workloads, sync, hard refresh |
+| `argocd/<app>/health` | critical | health `Degraded` or `Missing`; the cause names the broken resources. An app that turned `Degraded` during a sync or within 10 minutes after one gets 3 minutes to settle first (measured from `status.health.lastTransitionTime`, on Argo CD 2 from the sync's start): new pods whose readiness probe fails for a few seconds. A rollout that really breaks it shows after those 3 minutes. | restart of up to three degraded workloads, sync, hard refresh |
 | `argocd/<app>/operation` | critical | last sync `Failed` or `Error` | sync, hard refresh |
 | `argocd/<app>/sync` | **hint** | `OutOfSync` on an app with **manual** sync whose last sync is more than 7 days ago (`PENDING_HINT_DAYS`): a change may have been forgotten. Sooner it is no issue at all, see "Ready to sync" below. | sync, hard refresh |
 | `argocd/<app>/sync` | warning | `OutOfSync` on an app with **automated** sync: Argo CD should have fixed it, so a sync is stuck or something changes the cluster behind Git's back | sync, hard refresh |

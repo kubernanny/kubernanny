@@ -19,7 +19,7 @@ export class HpaCheck extends CoreCheck {
 
   protected async check(ctx: ModuleContext): Promise<ModuleResult> {
     const list = (await ctx.kube.list<Hpa>('/apis/autoscaling/v2/horizontalpodautoscalers')) ?? [];
-    const issues = evaluateHpas(list);
+    const issues = evaluateHpas(list, ctx.now);
     const atMax = list.filter((h) => (h.status?.currentReplicas ?? 0) >= (h.spec?.maxReplicas ?? Infinity)).length;
     return {
       issues,

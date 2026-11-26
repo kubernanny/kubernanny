@@ -39,7 +39,8 @@ export interface ArgoApplication {
     /** The deployments Argo CD remembers (`revisionHistoryLimit`, 10 by default), oldest first. */
     history?: ArgoHistoryEntry[];
     sync?: { status?: string; revision?: string };
-    health?: { status?: string; message?: string };
+    /** `lastTransitionTime` from Argo CD 3 on. */
+    health?: { status?: string; message?: string; lastTransitionTime?: string };
     operationState?: {
       phase?: string;
       message?: string;
@@ -54,6 +55,32 @@ export interface ArgoApplication {
 
 /** How long a running operation may take before ending it is offered. */
 const OPERATION_STUCK_MS = 30 * 60_000;
+
+/** How long an app may be Degraded right after a sync before it counts: the new pods are starting. */
+export const ARGO_ROLLOUT_GRACE_MS = 3 * 60_000;
+/** A sync running, or finished at most this long ago, is a rollout that may still settle. */
+const ROLLOUT_WINDOW_MS = 10 * 60_000;
+
+/**
+ * A rollout settling: the app turned Degraded less than ARGO_ROLLOUT_GRACE_MS
+ * ago, during or shortly after a sync (a readiness probe failing for a few
+ * seconds while the new pods start). Measured from the health's last change
+ * (Argo CD 3), else from the sync's start; past the grace it is reported as
+ * usual, so a rollout that really breaks the app shows after three minutes.
+ */
+export function settlingAfterSync(app: ArgoApplication, now: number): boolean {
+  if (app.status?.health?.status !== 'Degraded') {
+    return false;
+  }
+  const op = app.status.operationState;
+  const synced = op?.phase === 'Running' ? now : Date.parse(op?.finishedAt ?? '');
+  if (!Number.isFinite(synced) || now - synced > ROLLOUT_WINDOW_MS) {
+    return false;
+  }
+  const changed = Date.parse(app.status.health.lastTransitionTime ?? '');
+  const from = Number.isFinite(changed) ? changed : Date.parse(op?.startedAt ?? '');
+  return Number.isFinite(from) && now - from < ARGO_ROLLOUT_GRACE_MS;
+}
 
 const RESTARTABLE = new Set<string>(['Deployment', 'StatefulSet', 'DaemonSet']);
 
@@ -118,7 +145,7 @@ export function evaluateArgoApps(apps: ArgoApplication[], inv?: Inventory, now: 
           { type: 'argocd-refresh', namespace: ns, app: name },
         ];
 
-    if (health === 'Degraded' || health === 'Missing') {
+    if ((health === 'Degraded' || health === 'Missing') && !settlingAfterSync(app, now.getTime())) {
       const broken = (app.status?.resources ?? []).filter(
         (r) => r.health?.status === 'Degraded' || r.health?.status === 'Missing',
       );
