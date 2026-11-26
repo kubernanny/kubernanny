@@ -43,18 +43,6 @@ import { LanguageService } from '../i18n/language.service';
     :host {
       display: block;
     }
-    .toggle {
-      display: flex;
-      gap: 0.6rem;
-      align-items: center;
-      margin: 0 0 0.75rem;
-      font-size: 0.9375rem;
-    }
-    .toggle input {
-      width: 1.1rem;
-      height: 1.1rem;
-      accent-color: var(--accent, currentColor);
-    }
   `,
 })
 export class RelaySectionComponent {

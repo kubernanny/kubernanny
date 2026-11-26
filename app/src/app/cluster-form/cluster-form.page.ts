@@ -157,9 +157,14 @@ import { WidgetSectionComponent } from './widget-section.component';
             <app-widget-section [cluster]="saved()" [push]="pushSection" />
             <app-devices-section [cluster]="saved()" (revokedSelf)="forget($event)" />
             <app-pairing-section [cluster]="saved()" />
-            <ion-button expand="block" fill="clear" color="danger" (click)="remove()">{{
-              t('form.removeCluster')
-            }}</ion-button>
+            <ion-button
+              class="remove"
+              expand="block"
+              fill="clear"
+              color="danger"
+              (click)="remove()"
+              >{{ t('form.removeCluster') }}</ion-button
+            >
           }
         </div>
       </ion-content>
@@ -183,6 +188,9 @@ import { WidgetSectionComponent } from './widget-section.component';
       min-height: 3rem;
       font-weight: 650;
       margin: 0.25rem 0 0;
+    }
+    .remove {
+      margin: 2.5rem 0 1rem;
     }
     .or {
       display: flex;

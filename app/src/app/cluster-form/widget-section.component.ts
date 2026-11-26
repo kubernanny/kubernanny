@@ -57,43 +57,28 @@ import { widgetView } from './widget-view';
     :host {
       display: block;
     }
-    .toggle {
-      display: flex;
-      gap: 0.6rem;
-      align-items: center;
-      margin: 0 0 0.75rem;
-      font-size: 0.9375rem;
-    }
-    .toggle input {
-      width: 1.1rem;
-      height: 1.1rem;
-      accent-color: var(--accent, currentColor);
-    }
-    .hint + .hint {
-      margin-top: 0.5rem;
-    }
+    /* The dot is sized in em and sits on the first line box of the text next to it. */
     .push {
       display: grid;
       grid-template-columns: auto 1fr;
       align-items: start;
-      gap: 0.5rem 0.65rem;
-      margin: 0 0 0.85rem;
-      padding: 0.75rem 0.9rem;
+      gap: 0.5rem;
+      padding: 1rem;
       border-radius: var(--radius-m);
       background: var(--mute-soft);
+      font-size: 0.9375rem;
+      line-height: 1.4;
     }
     .push.on {
       background: var(--ok-soft);
     }
     .push p {
       margin: 0;
-      font-size: 0.9375rem;
-      line-height: 1.4;
     }
     .dot {
-      width: 0.6rem;
-      height: 0.6rem;
-      margin-top: 0.4rem;
+      width: 0.6em;
+      height: 0.6em;
+      margin-top: 0.4em;
       border-radius: 50%;
       background: var(--mute);
     }
@@ -107,8 +92,8 @@ import { widgetView } from './widget-view';
     }
     .lines {
       display: grid;
-      gap: 0.35rem;
-      margin: 0 0 0.75rem;
+      gap: 0.5rem;
+      margin: 0;
       padding-left: 1.1rem;
     }
   `,

@@ -68,7 +68,7 @@ import { deviceRows } from './devices-view';
       justify-content: space-between;
       align-items: center;
       gap: 0.75rem;
-      padding: 0.6rem 0.4rem 0.6rem 1rem;
+      padding: 0.5rem 1rem;
     }
     .devices li + li {
       border-top: 1px solid var(--line);

@@ -8,7 +8,7 @@ import {
   input,
   signal,
 } from '@angular/core';
-import { IonButton, ToastController } from '@ionic/angular/standalone';
+import { IonButton, IonIcon, ToastController } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 import { AgentPushView, ClusterConfig } from '../core/agent.model';
@@ -37,7 +37,7 @@ import { PushMarkerPickerComponent } from './push-marker-picker.component';
 @Component({
   selector: 'app-push-section',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, IonButton, PushMarkerPickerComponent],
+  imports: [TranslocoDirective, IonButton, IonIcon, PushMarkerPickerComponent],
   template: `
     <ng-container *transloco="let t">
       @if (view().visible) {
@@ -45,7 +45,7 @@ import { PushMarkerPickerComponent } from './push-marker-picker.component';
           <h2>{{ t('push.title') }}</h2>
           <p class="hint" [class.locked]="view().locked">{{ view().note }}</p>
           @if (view().deadman; as d) {
-            <div class="deadman">
+            <div class="deadman card">
               <label class="toggle">
                 <input
                   type="checkbox"
@@ -82,15 +82,17 @@ import { PushMarkerPickerComponent } from './push-marker-picker.component';
               }}</ion-button>
             }
             @if (view().canTest) {
-              <ion-button fill="clear" [disabled]="busy()" (click)="test()">{{
+              <ion-button fill="outline" [disabled]="busy()" (click)="test()">{{
                 t('push.test')
               }}</ion-button>
             }
           </div>
           @if (view().sign; as sign) {
             <details class="advanced" [open]="advancedOpen()" (toggle)="advancedToggled($event)">
-              <summary>{{ t('push.advanced') }}</summary>
-              <div class="sign">
+              <summary>
+                <ion-icon name="chevron-forward" aria-hidden="true" />{{ t('push.advanced') }}
+              </summary>
+              <div class="sign card">
                 <label class="toggle sign-toggle">
                   <input
                     type="checkbox"
@@ -111,17 +113,14 @@ import { PushMarkerPickerComponent } from './push-marker-picker.component';
                   <p class="hint">{{ sign.line }}</p>
                 }
                 @if (sign.on && !picking()) {
-                  <ion-button
-                    class="change"
-                    fill="clear"
-                    size="small"
-                    [disabled]="busy()"
-                    (click)="picking.set(true)"
-                    >{{ t('push.markerChange') }}</ion-button
-                  >
+                  <ion-button fill="outline" [disabled]="busy()" (click)="picking.set(true)">{{
+                    t('push.markerChange')
+                  }}</ion-button>
                 }
                 <details class="why">
-                  <summary>{{ t('push.markerWhy') }}</summary>
+                  <summary>
+                    <ion-icon name="chevron-forward" aria-hidden="true" />{{ t('push.markerWhy') }}
+                  </summary>
                   <p class="hint">{{ t('push.markerWhyForge') }}</p>
                   <p class="hint">{{ t('push.markerWhySealed') }}</p>
                   <p class="hint">{{ t('push.markerWhySign') }}</p>
@@ -139,111 +138,53 @@ import { PushMarkerPickerComponent } from './push-marker-picker.component';
     :host {
       display: block;
     }
-    .actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
     .locked::before {
       content: '🔒 ';
     }
+    /* details cannot be a grid container on older WebViews: margins space its content. */
     .advanced {
-      margin: 1.25rem 0 0;
+      padding-top: 0.5rem;
       border-top: 1px solid var(--line);
-      padding-top: 0.75rem;
     }
-    summary {
-      cursor: pointer;
+    .advanced > .sign,
+    .why > p {
+      margin-top: 0.5rem;
+    }
+    .advanced > summary {
       color: var(--mute);
-      font-size: 0.875rem;
-      font-weight: 600;
-      padding: 0.35rem 0;
-      list-style: none;
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
     }
-    summary::-webkit-details-marker {
-      display: none;
-    }
-    summary::before {
-      content: '';
-      width: 0.45rem;
-      height: 0.45rem;
-      border-right: 2px solid currentColor;
-      border-bottom: 2px solid currentColor;
-      transform: rotate(-45deg);
-      transition: transform 0.15s ease;
-      margin-right: 0.15rem;
-    }
-    details[open] > summary::before {
-      transform: rotate(45deg);
-    }
-    .sign {
-      display: grid;
-      gap: 0.6rem;
-      margin-top: 0.5rem;
-      padding: 0.8rem 0.9rem;
-      border-radius: var(--radius-m);
-      background: var(--surface);
-    }
-    .sign .change {
-      justify-self: start;
-      margin: -0.25rem 0 0 -0.6rem;
-    }
-    .why summary {
+    .why > summary {
+      min-height: 2rem;
       color: var(--accent, currentColor);
-    }
-    .why p + p,
-    .why summary + p {
-      margin-top: 0.5rem;
-    }
-    .deadman {
-      display: grid;
-      gap: 0.6rem;
-      margin: 0.9rem 0 0.9rem;
-      padding: 0.8rem 0.9rem;
-      border-radius: var(--radius-m);
-      background: var(--surface);
-    }
-    .toggle {
-      display: flex;
-      gap: 0.6rem;
-      align-items: center;
-      font-size: 0.9375rem;
-    }
-    .toggle span {
-      color: var(--ink);
-      font-size: 0.9375rem;
-      font-weight: 600;
-    }
-    .toggle input {
-      width: 1.1rem;
-      height: 1.1rem;
-      padding: 0;
-      accent-color: var(--accent, currentColor);
-    }
-    .graces {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 0.4rem;
-      margin-top: -0.25rem;
     }
     .after {
       color: var(--mute);
       font-size: 0.8125rem;
       font-weight: 600;
     }
+    /*
+     * Four in a row, flush with the card's content edges; two by two once four
+     * chips of 5em no longer fit (never three and one): the clamp picks a
+     * quarter or a half of the row.
+     */
+    .graces {
+      display: grid;
+      grid-template-columns: repeat(
+        auto-fill,
+        minmax(clamp(25% - 0.375rem, (20em + 1.5rem - 100%) * 999, 50% - 0.25rem), 1fr)
+      );
+      gap: 0.5rem;
+      font-size: 0.875rem;
+    }
     .graces button {
       min-height: 2.5rem;
-      padding: 0 0.25rem;
+      padding: 0 0.5rem;
       white-space: nowrap;
       border-radius: 999px;
       border: 1px solid var(--line);
       background: transparent;
       color: var(--ink);
       font: inherit;
-      font-size: 0.875rem;
       cursor: pointer;
     }
     .graces button.chosen {

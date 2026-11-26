@@ -41,13 +41,12 @@ import { LanguageService } from '../i18n/language.service';
       font-size: 2rem;
       font-weight: 700;
       letter-spacing: 0.08em;
-      margin: 0.5rem 0;
+      margin: 0;
     }
     .link {
       display: block;
       font-size: 0.8125rem;
       overflow-wrap: anywhere;
-      margin-bottom: 0.4rem;
     }
   `,
 })

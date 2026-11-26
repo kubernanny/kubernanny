@@ -77,7 +77,9 @@ import {
           <ion-button fill="solid" [disabled]="!vm().marker" (click)="save()">{{
             t('push.markerSave')
           }}</ion-button>
-          <ion-button fill="clear" (click)="cancelled.emit()">{{ t('common.cancel') }}</ion-button>
+          <ion-button fill="outline" (click)="cancelled.emit()">{{
+            t('common.cancel')
+          }}</ion-button>
         </div>
       </div>
     </ng-container>
@@ -87,13 +89,16 @@ import {
     /* Sits in the sign box of the push section, which draws the surface around it. */
     .picker {
       display: grid;
-      gap: 0.75rem;
-      margin: 0.25rem 0 0;
+      gap: 0.5rem;
+      margin: 0.5rem 0 0;
     }
     h3 {
       font-size: 1rem;
       font-weight: 650;
       margin: 0;
+    }
+    .picker > ion-button {
+      justify-self: start;
     }
     .choices {
       display: flex;
