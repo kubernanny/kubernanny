@@ -26,12 +26,15 @@
                 android:resource="@xml/kn_cluster_detail_widget_info" />
         </receiver>
         <!-- Redraws after a push (explicit intent from the push service), when a
-             cluster turns grey (an alarm) and after an app update. Not exported. -->
+             cluster turns grey (an alarm), after an app update and after a change
+             of the system language (the texts are the app's resources; the
+             launcher keeps the old ones otherwise). Not exported. -->
         <receiver
             android:name="app.kubernanny.widget.WidgetRefreshReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.LOCALE_CHANGED" />
             </intent-filter>
         </receiver>
     </application>

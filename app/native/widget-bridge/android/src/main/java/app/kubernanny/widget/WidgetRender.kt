@@ -46,19 +46,11 @@ object WidgetRender {
     fun renderOverview(context: Context, manager: AppWidgetManager, id: Int) {
         val list = clusters(context)
         val now = System.currentTimeMillis()
-        val small = { overviewSmall(context, list, now) }
-        fun rows(n: Int) = { overviewList(context, list, now, header = false, rows = n, problems = false) }
-        val tall = { overviewList(context, list, now, header = true, rows = 4, problems = false) }
-        val large = { overviewList(context, list, now, header = true, rows = 4, problems = true) }
-        // A row takes about 37 dp, the summary on top 60, three problems 150.
-        val layouts = listOf(
-            SizeF(40f, 40f) to small,
-            SizeF(220f, 40f) to rows(2),
-            SizeF(220f, 160f) to rows(3),
-            SizeF(220f, 200f) to rows(4),
-            SizeF(220f, 260f) to tall,
-            SizeF(220f, 410f) to large,
-        )
+        val layouts = OverviewLayout.SPECS.map { spec ->
+            SizeF(spec.minWidth, spec.minHeight) to {
+                if (spec.small) overviewSmall(context, list, now) else overviewList(context, list, now, spec)
+            }
+        }
         manager.updateAppWidget(id, responsive(context, manager.getAppWidgetOptions(id), layouts))
     }
 
@@ -71,6 +63,8 @@ object WidgetRender {
             v.setViewVisibility(R.id.kn_time, View.GONE)
             return v
         }
+        v.setViewVisibility(R.id.kn_empty, View.GONE)
+        v.setViewVisibility(R.id.kn_headline, View.VISIBLE)
         val total = summary(list)
         val allStale = list.all { it.isStale(now) }
         v.setImageViewResource(R.id.kn_eye, eye(total.light, allStale))
@@ -94,14 +88,23 @@ object WidgetRender {
         return v
     }
 
-    private fun overviewList(context: Context, list: List<WidgetCluster>, now: Long, header: Boolean, rows: Int, problems: Boolean): RemoteViews {
+    /**
+     * Every optional view gets its visibility set both ways: the sizes share one
+     * layout, and when the launcher switches size it reapplies these actions to
+     * the view the previous size drew, so a "+1 more" or a summary set visible
+     * there would otherwise stay.
+     */
+    private fun overviewList(context: Context, list: List<WidgetCluster>, now: Long, spec: OverviewSpec): RemoteViews {
+        val header = spec.header
+        val rows = spec.rows
+        val problems = spec.problems
         val v = RemoteViews(context.packageName, R.layout.kn_overview_list)
         v.setOnClickPendingIntent(R.id.kn_root, openIntent(context, null))
         v.setViewVisibility(R.id.kn_empty, if (list.isEmpty()) View.VISIBLE else View.GONE)
-        val shown = list.take(rows)
+        val shown = list.take(OverviewLayout.shown(list.size, spec))
+        v.setViewVisibility(R.id.kn_header, if (header && list.isNotEmpty()) View.VISIBLE else View.GONE)
         if (header && list.isNotEmpty()) {
             val total = summary(list)
-            v.setViewVisibility(R.id.kn_header, View.VISIBLE)
             v.setImageViewResource(R.id.kn_eye, eye(total.light, list.all { it.isStale(now) }))
             v.setTextViewText(R.id.kn_headline, headline(context, total))
             v.setTextColor(R.id.kn_headline, context.getColor(tone(total.light)))
@@ -134,19 +137,26 @@ object WidgetRender {
             v.setTextColor(id(context, "kn_time_$i"), context.getColor(if (stale) R.color.kn_warn_soft else R.color.kn_mute))
             v.setOnClickPendingIntent(row, openIntent(context, cluster.id))
         }
-        if (list.size > shown.size) {
-            v.setViewVisibility(R.id.kn_more, View.VISIBLE)
-            v.setTextViewText(R.id.kn_more, context.resources.getQuantityString(R.plurals.kn_widget_more, list.size - shown.size, list.size - shown.size))
+        val more = OverviewLayout.more(list.size, spec)
+        v.setViewVisibility(R.id.kn_more, if (more > 0) View.VISIBLE else View.GONE)
+        if (more > 0) {
+            v.setTextViewText(R.id.kn_more, context.resources.getQuantityString(R.plurals.kn_widget_more, more, more))
         }
         // Every cluster grey: say what to do about it, where a free row or the large size leaves room.
-        if (list.isNotEmpty() && list.all { it.isStale(now) } && (problems || list.size < rows)) {
-            v.setViewVisibility(R.id.kn_stale_hint, View.VISIBLE)
+        val staleHint = list.isNotEmpty() && list.all { it.isStale(now) } && (problems || list.size < rows)
+        v.setViewVisibility(R.id.kn_stale_hint, if (staleHint) View.VISIBLE else View.GONE)
+        if (staleHint) {
             v.setTextViewText(R.id.kn_stale_hint, context.getString(R.string.kn_widget_stale_tag) + " · " + context.getString(R.string.kn_widget_stale_open))
         }
+        v.setViewVisibility(R.id.kn_divider, if (problems && list.isNotEmpty()) View.VISIBLE else View.GONE)
         if (problems && list.isNotEmpty()) {
-            v.setViewVisibility(R.id.kn_divider, View.VISIBLE)
             val top = list.flatMap { c -> c.problems.map { c to it } }.sortedBy { if (it.second.critical) 0 else 1 }.take(3)
             problems(context, v, top.map { it.second }, top.map { it.first }, now, withCluster = true, max = 4)
+        } else {
+            for (i in 0 until 4) {
+                v.setViewVisibility(id(context, "kn_prob_$i"), View.GONE)
+            }
+            v.setViewVisibility(R.id.kn_no_problems, View.GONE)
         }
         return v
     }
@@ -174,6 +184,16 @@ object WidgetRender {
                 v.setViewVisibility(R.id.kn_tiles, View.GONE)
             }
             return v
+        }
+        // Both ways, as in overviewList: an update reapplies to the view the last one drew.
+        v.setViewVisibility(R.id.kn_empty, View.GONE)
+        for (shown in listOf(R.id.kn_name, R.id.kn_line1, R.id.kn_time)) {
+            v.setViewVisibility(shown, View.VISIBLE)
+        }
+        if (layout == R.layout.kn_cluster_large) {
+            v.setViewVisibility(R.id.kn_tiles, View.VISIBLE)
+        } else {
+            v.setViewVisibility(R.id.kn_line2, View.GONE)
         }
         val stale = cluster.isStale(now) || cluster.unreachable
         v.setImageViewResource(R.id.kn_eye, eye(cluster.light, stale))
@@ -240,8 +260,8 @@ object WidgetRender {
                 v.setOnClickPendingIntent(row, openIntent(context, owner.id))
             }
         }
+        v.setViewVisibility(R.id.kn_no_problems, if (list.isEmpty()) View.VISIBLE else View.GONE)
         if (list.isEmpty()) {
-            v.setViewVisibility(R.id.kn_no_problems, View.VISIBLE)
             if (calm?.notChecked == true) {
                 v.setTextViewText(R.id.kn_no_problems, context.getString(R.string.kn_widget_not_checked))
             }
@@ -257,6 +277,7 @@ object WidgetRender {
             v.setViewVisibility(viewId, View.GONE)
             return
         }
+        v.setViewVisibility(viewId, View.VISIBLE)
         val text = formatTime(checkedAt, now)
         v.setTextViewText(viewId, if (stale) context.getString(R.string.kn_widget_stale_time, text) + "\n" + context.getString(R.string.kn_widget_stale_open) else context.getString(R.string.kn_widget_as_of, text))
         v.setTextColor(viewId, context.getColor(if (stale) R.color.kn_warn_soft else R.color.kn_mute))
