@@ -1,4 +1,4 @@
-import { BadGatewayException, BadRequestException, ForbiddenException, NotFoundException } from './http/errors';
+import { BadGatewayError, BadRequestError, ForbiddenError, NotFoundError } from './http/errors';
 import { Route, intQuery, strQuery, uuidParam } from './http/server';
 import { Logger } from './logger';
 import { AGENT_BUILD, AGENT_COMMIT, AGENT_VERSION } from './version';
@@ -37,7 +37,7 @@ const RUNNABLE: IssueActionType[] = [
 ];
 
 
-export class AppController {
+export class AppApi {
   private readonly logger = new Logger('audit');
   private historyCache: { key: string; at: number; value: HistoryView } | null = null;
 
@@ -72,7 +72,7 @@ export class AppController {
       await this.notifier.securityAlert(who.name, [{ kind: 'deviceRevoked', device: target.name }]);
     }
     if (!target || !(await this.devicesService.revoke(id))) {
-      throw new NotFoundException({ code: 'DEVICE_NOT_FOUND', message: t('error.deviceNotFound') });
+      throw new NotFoundError({ code: 'DEVICE_NOT_FOUND', message: t('error.deviceNotFound') });
     }
     this.logger.log(`device ${id} revoked by "${who.name}"`);
   }
@@ -88,7 +88,7 @@ export class AppController {
   /** The start banner with a fresh code, for the admin CLI (`node dist/cli.js pair`). */
   async newBanner(who: Principal): Promise<string> {
     if (who.kind !== 'admin') {
-      throw new ForbiddenException({ code: 'ADMIN_ONLY', message: t('error.adminOnly') });
+      throw new ForbiddenError({ code: 'ADMIN_ONLY', message: t('error.adminOnly') });
     }
     this.logger.log('pairing code issued by the admin CLI');
     return this.pairing.banner(this.pairing.issue());
@@ -102,7 +102,7 @@ export class AppController {
   /** Switches within the deployment's limits; `{ modules: { argocd: false }, actions: { restart: false }, notifications: true }`. */
   async changeSettings(patch: SettingsPatch, who: Principal): Promise<SettingsView> {
     if (typeof patch !== 'object' || patch === null) {
-      throw new BadRequestException({ code: 'SETTING_UNKNOWN', message: t('error.bodyMissing') });
+      throw new BadRequestError({ code: 'SETTING_UNKNOWN', message: t('error.bodyMissing') });
     }
     await this.settings.update(patch, who);
     return this.settingsView();
@@ -112,7 +112,7 @@ export class AppController {
   async silence(issue: string, hours: number, who: Principal): Promise<{ silencedUntil: string }> {
     const found = this.status.findIssue(issue);
     if (!found) {
-      throw new NotFoundException({ code: 'ISSUE_GONE', message: t('error.issueGone') });
+      throw new NotFoundError({ code: 'ISSUE_GONE', message: t('error.issueGone') });
     }
     const silencedUntil = await this.silences.silence(issue, hours, who, Date.now(), found.severity);
     await this.status.refreshAfterChange();
@@ -224,35 +224,35 @@ export class AppController {
     index?: number,
   ): Promise<{ done: Text }> {
     if (!issue || !RUNNABLE.includes(type as IssueActionType)) {
-      throw new BadRequestException({ code: 'ACTION_UNKNOWN', message: t('error.actionUnknown', { type }) });
+      throw new BadRequestError({ code: 'ACTION_UNKNOWN', message: t('error.actionUnknown', { type }) });
     }
     return this.actions.run(issue, type as IssueActionType, index ?? 0, who);
   }
 
   logs(issue: string, who: Principal, index?: number) {
     if (!issue) {
-      throw new BadRequestException({ code: 'ISSUE_MISSING', message: t('error.issueMissing') });
+      throw new BadRequestError({ code: 'ISSUE_MISSING', message: t('error.issueMissing') });
     }
     return this.actions.logs(issue, index ?? 0, who);
   }
 
   async testNotification(): Promise<{ channels: string[] }> {
     if (this.notifier.locked) {
-      throw new ForbiddenException({ code: 'NOTIFICATIONS_LOCKED', message: t('error.notificationsLocked') });
+      throw new ForbiddenError({ code: 'NOTIFICATIONS_LOCKED', message: t('error.notificationsLocked') });
     }
     if (this.notifier.channels.length === 0) {
-      throw new BadRequestException({ code: 'NO_CHANNEL', message: t('error.noChannel') });
+      throw new BadRequestError({ code: 'NO_CHANNEL', message: t('error.noChannel') });
     }
     try {
       return { channels: await this.notifier.test(this.config.clusterName) };
     } catch (err) {
-      throw new BadGatewayException({ code: 'NOTIFY_FAILED', message: t('error.notifyTestFailed', { error: err instanceof Error ? err.message.slice(0, 300) : String(err) }) });
+      throw new BadGatewayError({ code: 'NOTIFY_FAILED', message: t('error.notifyTestFailed', { error: err instanceof Error ? err.message.slice(0, 300) : String(err) }) });
     }
   }
 }
 
-/** The routes of AppController; `/healthz` is outside /api, like it always was. */
-export function appRoutes(c: AppController): Route[] {
+/** The routes of AppApi; `/healthz` is outside /api, like it always was. */
+export function appRoutes(c: AppApi): Route[] {
   return [
     // Liveness only, no cluster data: the plain routes besides /readyz, /api/identity and /api/e2e.
     { method: 'GET', path: '/healthz', public: true, handle: () => c.health() },

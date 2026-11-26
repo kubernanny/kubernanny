@@ -11,7 +11,7 @@ import { AppPushService, AppPushView } from './app-push.service';
  * only itself. With APP_PUSH off every write answers 404 PUSH_OFF before
  * anything is read or stored; GET answers `locked`, so the app can show why.
  */
-export class PushController {
+export class PushApi {
   constructor(
     private readonly push: AppPushService,
     private readonly config: Config,
@@ -41,7 +41,7 @@ export class PushController {
   }
 }
 
-export function pushRoutes(c: PushController): Route[] {
+export function pushRoutes(c: PushApi): Route[] {
   return [
     { method: 'GET', path: '/api/push', handle: (r) => c.view(r.principal) },
     { method: 'POST', write: true, path: '/api/push/register', status: 204, handle: (r) => c.register(r.principal, r.body) },

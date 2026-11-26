@@ -1,17 +1,17 @@
 import { Server, createServer } from 'node:http';
 import { ActionsService } from './actions/actions.service';
-import { RollbackController, rollbackRoutes } from './actions/rollback.controller';
+import { RollbackApi, rollbackRoutes } from './actions/rollback.routes';
 import { RollbackService } from './actions/rollback.service';
-import { AppController, appRoutes } from './app.controller';
+import { AppApi, appRoutes } from './app.routes';
 import { DevicesService } from './auth/devices.service';
 import { IdentityService } from './auth/identity.service';
-import { principalOf } from './auth/principal.guard';
+import { principalOf } from './auth/principal';
 import { CONFIG, Config, loadConfig } from './config';
 import { DemoKubeClient } from './demo/demo-cluster';
-import { E2eController, e2eRoutes } from './e2e/e2e.controller';
+import { E2eApi, e2eRoutes } from './e2e/e2e.routes';
 import { E2eService } from './e2e/e2e.service';
 import { InternalServer } from './e2e/internal-server';
-import { HttpException } from './http/errors';
+import { HttpError } from './http/errors';
 import { Reply, Route, createHttpHandler } from './http/server';
 import { t } from './i18n/text';
 import { Leader, LeaderElection, SoleLeader } from './lease/leader';
@@ -19,13 +19,13 @@ import { DeadmanService } from './push/deadman.service';
 import { Logger } from './logger';
 import { IncidentsService } from './incidents/incidents.service';
 import { KubeClient } from './kube/kube-client';
-import { AcceptanceController, acceptanceRoutes } from './modules/vulnerabilities/acceptance.controller';
+import { AcceptanceApi, acceptanceRoutes } from './modules/vulnerabilities/acceptance.routes';
 import { AcceptanceService } from './modules/vulnerabilities/acceptance.service';
 import { NotifiedStore } from './notify/notified-store';
 import { Notifier } from './notify/notifier';
 import { PairingService } from './pairing/pairing';
 import { AppPushService } from './push/app-push.service';
-import { PushController, pushRoutes } from './push/push.controller';
+import { PushApi, pushRoutes } from './push/push.routes';
 import { PushTransport } from './push/push-transport';
 import { RelayClient } from './relay/relay-client';
 import { SettingsService } from './settings/settings.service';
@@ -124,11 +124,11 @@ export class Agent {
     this.routes = [
       // Readiness, no data: ready once the first run is in memory (or READY_TIMEOUT_SECONDS passed), unready again on SIGTERM.
       { method: 'GET', path: '/readyz', public: true, handle: () => (this.ready() ? { ok: true } : new Reply(503, JSON.stringify({ ok: false }), 'application/json; charset=utf-8')) },
-      ...appRoutes(new AppController(this.status, this.actions, this.notifier, this.devices, this.identity, config, this.pairing, this.settings, this.relay, this.silences, this.incidents)),
-      ...e2eRoutes(new E2eController(this.e2e, this.identity)),
-      ...acceptanceRoutes(new AcceptanceController(this.acceptance, this.status)),
-      ...pushRoutes(new PushController(this.appPush, config)),
-      ...rollbackRoutes(new RollbackController(this.rollbacks)),
+      ...appRoutes(new AppApi(this.status, this.actions, this.notifier, this.devices, this.identity, config, this.pairing, this.settings, this.relay, this.silences, this.incidents)),
+      ...e2eRoutes(new E2eApi(this.e2e, this.identity)),
+      ...acceptanceRoutes(new AcceptanceApi(this.acceptance, this.status)),
+      ...pushRoutes(new PushApi(this.appPush, config)),
+      ...rollbackRoutes(new RollbackApi(this.rollbacks)),
     ];
     this.handler = createHttpHandler({
       routes: this.routes,
@@ -269,7 +269,7 @@ export class Agent {
       await this.followerRead;
     } catch (err) {
       this.logger.warn(`not in charge and cannot read devices: ${err instanceof Error ? err.message : String(err)}`);
-      throw new HttpException({ code: 'AGENT_HANDOVER', message: t('error.agentHandover') }, 503);
+      throw new HttpError({ code: 'AGENT_HANDOVER', message: t('error.agentHandover') }, 503);
     }
   }
 

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, NotFoundException } from '../http/errors';
+import { BadRequestError, ConflictError, NotFoundError } from '../http/errors';
 import { Logger } from '../logger';
 import { DEADMAN_GRACE_MINUTES, PUSH_PLATFORMS, PushContent, PushOutcome, PushPlatform, PushStatus, encodePushContent, isPushToken, parsePublicKey, sealPush, statusPushContent, toBase64Url } from '@kubernanny/protocol';
 import { DevicesService, Principal, PushTarget, validKey } from '../auth/devices.service';
@@ -109,27 +109,27 @@ export class AppPushService {
   /** The routes call this first: with APP_PUSH off nothing past it runs. */
   assertEnabled(): void {
     if (!this.config.appPush) {
-      throw new NotFoundException({ code: 'PUSH_OFF', message: t('error.pushOff') });
+      throw new NotFoundError({ code: 'PUSH_OFF', message: t('error.pushOff') });
     }
   }
 
   async register(who: Principal, body: unknown): Promise<void> {
     this.assertEnabled();
     if (who.kind !== 'device') {
-      throw new BadRequestException({ code: 'PUSH_DEVICE_ONLY', message: t('error.pushDeviceOnly') });
+      throw new BadRequestError({ code: 'PUSH_DEVICE_ONLY', message: t('error.pushDeviceOnly') });
     }
     if (!this.config.relayUrl) {
-      throw new ConflictException({ code: 'PUSH_NO_RELAY', message: t('error.pushNoRelay') });
+      throw new ConflictError({ code: 'PUSH_NO_RELAY', message: t('error.pushNoRelay') });
     }
     const { token, platform, key, widget, deadman } = (body ?? {}) as { token?: unknown; platform?: unknown; key?: unknown; widget?: unknown; deadman?: unknown };
     // `widget` and `deadman` are optional (apps before them never send them); anything else of the wrong type is a malformed call.
     const deadmanOk = deadman === undefined || deadman === false || (typeof deadman === 'number' && DEADMAN_GRACE_MINUTES.includes(deadman));
     if (!isPushToken(token) || !PUSH_PLATFORMS.includes(platform as PushPlatform) || !validKey(key) || (widget !== undefined && typeof widget !== 'boolean') || !deadmanOk) {
-      throw new BadRequestException({ code: 'PUSH_INVALID', message: t('error.pushInvalid') });
+      throw new BadRequestError({ code: 'PUSH_INVALID', message: t('error.pushInvalid') });
     }
     const grace = typeof deadman === 'number' ? deadman : undefined;
     if (!(await this.devices.setPush(who.id, { token, platform: platform as PushPlatform, key, widget: widget === true, ...(grace ? { deadman: grace } : {}) }))) {
-      throw new NotFoundException({ code: 'DEVICE_UNKNOWN', message: t('error.pushDeviceOnly') });
+      throw new NotFoundError({ code: 'DEVICE_UNKNOWN', message: t('error.pushDeviceOnly') });
     }
     this.audit.log(`push registered for "${who.name}" (${who.id}), ${platform}${widget === true ? ', with a widget' : ''}${grace ? `, dead man's switch after ${grace} min` : ''}`);
     this.onChange?.();
@@ -166,7 +166,7 @@ export class AppPushService {
     this.assertEnabled();
     const target = this.devices.pushTargets().find((p) => who.kind === 'device' && p.deviceId === who.id);
     if (!target) {
-      throw new ConflictException({ code: 'PUSH_NOT_REGISTERED', message: t('error.pushNotRegistered') });
+      throw new ConflictError({ code: 'PUSH_NOT_REGISTERED', message: t('error.pushNotRegistered') });
     }
     const [outcome] = await this.sendTo([target], message);
     return outcome!;

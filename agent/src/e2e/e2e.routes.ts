@@ -3,7 +3,7 @@ import { Reply, Route } from '../http/server';
 import { E2eService } from './e2e.service';
 
 /** Public by design: the identity is a public key, and /e2e authenticates every call itself (E2eService). */
-export class E2eController {
+export class E2eApi {
   constructor(
     private readonly e2e: E2eService,
     private readonly identity: IdentityService,
@@ -31,7 +31,7 @@ export class E2eController {
   }
 }
 
-export function e2eRoutes(c: E2eController): Route[] {
+export function e2eRoutes(c: E2eApi): Route[] {
   return [
     { method: 'GET', path: '/api/identity', public: true, handle: () => c.identityKey() },
     { method: 'POST', path: '/api/e2e', public: true, raw: true, handle: (r) => c.call(r.raw, r.req.socket.remoteAddress) },

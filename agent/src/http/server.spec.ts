@@ -5,10 +5,10 @@ import { join } from 'node:path';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { ADMIN } from '../auth/devices.service';
-import { INTERNAL } from '../auth/principal.guard';
+import { INTERNAL } from '../auth/principal';
 import { t } from '../i18n/text';
 import { CONTENT_SECURITY_POLICY } from '../security/http-security';
-import { BadRequestException, NotFoundException } from './errors';
+import { BadRequestError, NotFoundError } from './errors';
 import { Reply, Route, createHttpHandler, intQuery, uuidParam } from './server';
 
 /**
@@ -32,9 +32,9 @@ const routes: Route[] = [
   { method: 'POST', path: '/api/text', public: true, textType: 'text/plain; charset=utf-8', handle: () => 'banner' },
   { method: 'POST', path: '/api/html', public: true, handle: () => 'plain' },
   { method: 'POST', path: '/api/e2e', public: true, raw: true, handle: (c) => new Reply(200, c.raw ?? Buffer.alloc(0), 'application/octet-stream') },
-  { method: 'GET', path: '/api/text-error', public: true, handle: () => Promise.reject(new NotFoundException({ code: 'X', message: t('error.issueGone') })) },
-  { method: 'GET', path: '/api/plain-error', public: true, handle: () => Promise.reject(new BadRequestException('nope')) },
-  { method: 'GET', path: '/api/bare-error', public: true, handle: () => Promise.reject(new NotFoundException()) },
+  { method: 'GET', path: '/api/text-error', public: true, handle: () => Promise.reject(new NotFoundError({ code: 'X', message: t('error.issueGone') })) },
+  { method: 'GET', path: '/api/plain-error', public: true, handle: () => Promise.reject(new BadRequestError('nope')) },
+  { method: 'GET', path: '/api/bare-error', public: true, handle: () => Promise.reject(new NotFoundError()) },
   { method: 'GET', path: '/api/crash', public: true, handle: () => Promise.reject(new Error('boom')) },
   { method: 'GET', path: '/api/translated', public: true, handle: () => ({ title: t('error.issueGone') }) },
 ];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HttpException } from '../http/errors';
+import { HttpError } from '../http/errors';
 import type { Issue, IssueAction, IssueActionType } from '../checks/types';
 import { KubeClient, KubeError } from '../kube/kube-client';
 import type { SettingsService } from '../settings/settings.service';
@@ -49,7 +49,7 @@ async function code(p: Promise<unknown>): Promise<string> {
   try {
     await p;
   } catch (err) {
-    if (err instanceof HttpException) {
+    if (err instanceof HttpError) {
       return (err.getResponse() as { code: string }).code;
     }
     throw err;

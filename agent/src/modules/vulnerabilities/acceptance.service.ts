@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException } from '../../http/errors';
+import { BadRequestError, ForbiddenError } from '../../http/errors';
 import { Logger } from '../../logger';
 import type { Principal } from '../../auth/devices.service';
 import type { Config } from '../../config';
@@ -90,26 +90,26 @@ export class AcceptanceService {
   /** Before anything else, so a locked install never reads or writes the stored list. */
   assertAllowed(): void {
     if (this.config.vulnAcceptLocked) {
-      throw new ForbiddenException({ code: 'ACCEPT_LOCKED', message: t('error.acceptLocked') });
+      throw new ForbiddenError({ code: 'ACCEPT_LOCKED', message: t('error.acceptLocked') });
     }
     if (!this.anyModuleOn()) {
-      throw new ForbiddenException({ code: 'MODULE_OFF', message: t('error.vulnerabilitiesOff') });
+      throw new ForbiddenError({ code: 'MODULE_OFF', message: t('error.vulnerabilitiesOff') });
     }
   }
 
   private async doAccept(component: string, advisory: string, days: number, reason: unknown, who: Principal, now: number): Promise<string> {
     checkIds(component, advisory);
     if (!(ACCEPT_DAYS as readonly number[]).includes(days)) {
-      throw new BadRequestException({ code: 'ACCEPT_DAYS', message: t('error.acceptDays', { days: ACCEPT_DAYS.join(', ') }) });
+      throw new BadRequestError({ code: 'ACCEPT_DAYS', message: t('error.acceptDays', { days: ACCEPT_DAYS.join(', ') }) });
     }
     if (reason !== undefined && typeof reason !== 'string') {
-      throw new BadRequestException({ code: 'ACCEPT_REASON', message: t('error.acceptReason') });
+      throw new BadRequestError({ code: 'ACCEPT_REASON', message: t('error.acceptReason') });
     }
     const next = this.pruned(now);
     const text = cleanReason(reason);
     next.set(acceptanceKey(component, advisory), { until: now + days * DAY, at: now, by: who.name, ...(text ? { reason: text } : {}) });
     if (next.size > MAX_ACCEPTED) {
-      throw new BadRequestException({ code: 'ACCEPT_LIMIT', message: t('error.acceptLimit') });
+      throw new BadRequestError({ code: 'ACCEPT_LIMIT', message: t('error.acceptLimit') });
     }
     // Before it takes effect: hiding a real advisory is what a stolen device would do.
     await this.notifier?.securityAlert(who.name, [{ kind: 'advisoryAccepted', component, advisory, days }]);
@@ -142,6 +142,6 @@ export class AcceptanceService {
 
 function checkIds(component: string, advisory: string): void {
   if (typeof component !== 'string' || !COMPONENT.test(component) || typeof advisory !== 'string' || !ADVISORY.test(advisory)) {
-    throw new BadRequestException({ code: 'ACCEPT_TARGET', message: t('error.acceptTarget') });
+    throw new BadRequestError({ code: 'ACCEPT_TARGET', message: t('error.acceptTarget') });
   }
 }

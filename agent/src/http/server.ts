@@ -4,12 +4,12 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { extname, join, normalize, sep } from 'node:path';
 import { MAX_SEALED_REQUEST } from '@kubernanny/protocol';
 import type { Principal } from '../auth/devices.service';
-import { INTERNAL, InternalRequest } from '../auth/principal.guard';
+import { INTERNAL, InternalRequest } from '../auth/principal';
 import { requestLang } from '../i18n/localize';
 import { Lang, localize, t } from '../i18n/text';
 import { Logger } from '../logger';
 import { MAX_JSON_BODY, securityHeaders } from '../security/http-security';
-import { BadRequestException, HttpException, UnauthorizedException } from './errors';
+import { BadRequestError, HttpError, UnauthorizedError } from './errors';
 
 /**
  * The agent's HTTP layer: a route table, the guard, the language at the
@@ -75,7 +75,7 @@ export interface HttpOptions {
   webRoot?: string | null;
   /** Whether this pod may run `write` routes now (it holds the lease). Default: always. */
   isLeader?(): boolean;
-  /** Runs before the guard of every non-public route; a thrown HttpException is the answer. */
+  /** Runs before the guard of every non-public route; a thrown HttpError is the answer. */
   beforeGuard?(): Promise<void>;
 }
 
@@ -116,7 +116,7 @@ export function intQuery(call: Call, name: string, optional = false): number | u
     return undefined;
   }
   if (typeof value !== 'string' || !NUMERIC.test(value) || !Number.isFinite(Number(value))) {
-    throw new BadRequestException('Validation failed (numeric string is expected)');
+    throw new BadRequestError('Validation failed (numeric string is expected)');
   }
   return parseInt(value, 10);
 }
@@ -124,7 +124,7 @@ export function intQuery(call: Call, name: string, optional = false): number | u
 export function uuidParam(call: Call, name: string): string {
   const value = call.params[name];
   if (typeof value !== 'string' || !UUID.test(value)) {
-    throw new BadRequestException('Validation failed (uuid is expected)');
+    throw new BadRequestError('Validation failed (uuid is expected)');
   }
   return value;
 }
@@ -435,11 +435,11 @@ export function createHttpHandler(options: HttpOptions): Handler {
         }
         principal = options.principal(req as InternalRequest);
         if (!principal) {
-          throw new UnauthorizedException({ code: 'E2E_REQUIRED', message: t('error.e2eRequired') });
+          throw new UnauthorizedError({ code: 'E2E_REQUIRED', message: t('error.e2eRequired') });
         }
       }
       if (route.write && options.isLeader && !options.isLeader()) {
-        throw new HttpException({ code: 'AGENT_HANDOVER', message: t('error.agentHandover') }, 503);
+        throw new HttpError({ code: 'AGENT_HANDOVER', message: t('error.agentHandover') }, 503);
       }
       const call: Call = {
         req,
@@ -467,7 +467,7 @@ export function createHttpHandler(options: HttpOptions): Handler {
         sendJson(req, res, status, localize(result, lang));
       }
     } catch (err) {
-      if (err instanceof HttpException) {
+      if (err instanceof HttpError) {
         sendJson(req, res, err.getStatus(), localize(err.getResponse(), lang));
         return;
       }

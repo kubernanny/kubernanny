@@ -34,7 +34,7 @@ const REASONS: Record<number, string> = {
   503: 'Service Unavailable',
 };
 
-export class HttpException extends Error {
+export class HttpError extends Error {
   readonly response: unknown;
 
   constructor(
@@ -60,15 +60,15 @@ export class HttpException extends Error {
 }
 
 const of = (status: number) =>
-  class extends HttpException {
+  class extends HttpError {
     constructor(response?: string | object) {
       super(response, status);
     }
   };
 
-export const BadRequestException = of(400);
-export const UnauthorizedException = of(401);
-export const ForbiddenException = of(403);
-export const NotFoundException = of(404);
-export const ConflictException = of(409);
-export const BadGatewayException = of(502);
+export const BadRequestError = of(400);
+export const UnauthorizedError = of(401);
+export const ForbiddenError = of(403);
+export const NotFoundError = of(404);
+export const ConflictError = of(409);
+export const BadGatewayError = of(502);

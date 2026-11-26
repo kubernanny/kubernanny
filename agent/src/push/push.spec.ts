@@ -14,7 +14,7 @@ import {
   pushKeyId,
   toBase64Url,
 } from '@kubernanny/protocol';
-import { NotFoundException } from '../http/errors';
+import { NotFoundError } from '../http/errors';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
 import { DevicesService, Principal } from '../auth/devices.service';
@@ -24,7 +24,7 @@ import { DemoKubeClient } from '../demo/demo-cluster';
 import { E2eService } from '../e2e/e2e.service';
 import { RelayClient } from '../relay/relay-client';
 import { AppPushService } from './app-push.service';
-import { PushController } from './push.controller';
+import { PushApi } from './push.routes';
 import { PushTransport } from './push-transport';
 
 const TOKEN = 'cXVpdGUtYS10b2tlbg:APA91bHPRgkF-test_token';
@@ -136,15 +136,15 @@ describe('push registration', () => {
 describe('APP_PUSH=off: switched off for good, not just hidden', () => {
   it('refuses every push route with 404 before reading or storing anything', async () => {
     const { config, devices, device, push, kube } = await setup({ appPush: false });
-    const controller = new PushController(push, config);
+    const api = new PushApi(push, config);
     const writes = kube.writes.length;
-    await expect(controller.register(device, registration)).rejects.toBeInstanceOf(NotFoundException);
-    await expect(controller.register(device, registration)).rejects.toMatchObject({ response: { code: 'PUSH_OFF' } });
-    await expect(controller.unregister(device)).rejects.toBeInstanceOf(NotFoundException);
-    await expect(controller.test(device)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(api.register(device, registration)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(api.register(device, registration)).rejects.toMatchObject({ response: { code: 'PUSH_OFF' } });
+    await expect(api.unregister(device)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(api.test(device)).rejects.toBeInstanceOf(NotFoundError);
     expect(kube.writes.length).toBe(writes);
     expect(devices.pushTargets()).toEqual([]);
-    expect(controller.view(device)).toEqual({ state: 'locked', relay: false, registered: false, deadman: { state: 'on', grace: null } });
+    expect(api.view(device)).toEqual({ state: 'locked', relay: false, registered: false, deadman: { state: 'on', grace: null } });
   });
 
   it('deletes tokens stored while it was on, at start', async () => {

@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '../../http/errors';
+import { BadRequestError, NotFoundError } from '../../http/errors';
 import type { Route } from '../../http/server';
 import type { Principal } from '../../auth/devices.service';
 import { t } from '../../i18n/text';
@@ -14,7 +14,7 @@ interface AcceptBody {
 }
 
 /** Marks one advisory on one component as not applicable, and takes that back (docs/API.md). */
-export class AcceptanceController {
+export class AcceptanceApi {
   constructor(
     private readonly acceptance: AcceptanceService,
     private readonly status: StatusService,
@@ -27,7 +27,7 @@ export class AcceptanceController {
     // Only what the agent reports right now, so nobody pre-accepts advisories that are not there yet.
     const reported = this.status.snapshot().issues.some((i) => (i.check === 'vulnerabilities' || i.check === 'trivy') && acceptComponentOfIssue(i.id) === component && i.advisories?.includes(advisory));
     if (!reported) {
-      throw new NotFoundException({ code: 'ADVISORY_NOT_FOUND', message: t('error.advisoryNotFound') });
+      throw new NotFoundError({ code: 'ADVISORY_NOT_FOUND', message: t('error.advisoryNotFound') });
     }
     const acceptedUntil = await this.acceptance.accept(component, advisory, typeof body.days === 'number' ? body.days : NaN, body.reason, who);
     await this.status.refreshAfterChange();
@@ -43,13 +43,13 @@ export class AcceptanceController {
 
   private target(body: AcceptBody): { component: string; advisory: string } {
     if (typeof body !== 'object' || body === null || typeof body.component !== 'string' || typeof body.advisory !== 'string') {
-      throw new BadRequestException({ code: 'ACCEPT_TARGET', message: t('error.acceptTarget') });
+      throw new BadRequestError({ code: 'ACCEPT_TARGET', message: t('error.acceptTarget') });
     }
     return { component: body.component, advisory: body.advisory };
   }
 }
 
-export function acceptanceRoutes(c: AcceptanceController): Route[] {
+export function acceptanceRoutes(c: AcceptanceApi): Route[] {
   return [
     { method: 'POST', write: true, path: '/api/vulnerabilities/accept', handle: (r) => c.accept(r.body as AcceptBody, r.principal) },
     { method: 'POST', write: true, path: '/api/vulnerabilities/unaccept', status: 204, handle: (r) => c.unaccept(r.body as AcceptBody, r.principal) },

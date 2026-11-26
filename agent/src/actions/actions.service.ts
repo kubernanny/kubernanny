@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '../http/errors';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../http/errors';
 import { Logger } from '../logger';
 import { Condition, IssueAction, IssueActionType, ReconcileKind, WorkloadKind } from '../checks/types';
 import { RERUN_LABEL } from '../modules/core/workloads';
@@ -61,15 +61,15 @@ export class ActionsService {
   find(issueId: string, type: IssueActionType, index = 0): IssueAction {
     // The snapshot drops switched-off actions too; this covers the moment between a switch and the next run.
     if (!this.settings.actionOn(type)) {
-      throw new ForbiddenException({ code: 'ACTION_DISABLED', message: t('error.actionDisabled') });
+      throw new ForbiddenError({ code: 'ACTION_DISABLED', message: t('error.actionDisabled') });
     }
     const issue = this.status.findIssue(issueId);
     if (!issue) {
-      throw new ConflictException({ code: 'ISSUE_GONE', message: t('error.issueGone') });
+      throw new ConflictError({ code: 'ISSUE_GONE', message: t('error.issueGone') });
     }
     const action = issue.actions.filter((a) => a.type === type)[index];
     if (!action) {
-      throw new NotFoundException({ code: 'ACTION_NOT_OFFERED', message: t('error.actionNotOffered', { type }) });
+      throw new NotFoundError({ code: 'ACTION_NOT_OFFERED', message: t('error.actionNotOffered', { type }) });
     }
     return action;
   }
@@ -169,7 +169,7 @@ export class ActionsService {
         // cannot compare them with the schedule, so it denies them, and a schedule using them is not backed up from here.
         const refused = VELERO_REFUSED.filter((field) => spec[field] !== undefined);
         if (refused.length > 0) {
-          throw new ConflictException({ code: 'VELERO_HOOKS', message: t('error.veleroHooks', { schedule: action.schedule, fields: refused.join(', ') }) });
+          throw new ConflictError({ code: 'VELERO_HOOKS', message: t('error.veleroHooks', { schedule: action.schedule, fields: refused.join(', ') }) });
         }
         // As `velero backup create --from-schedule`: the schedule's template, named <schedule>-<timestamp>, labelled with the schedule.
         const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
@@ -186,7 +186,7 @@ export class ActionsService {
         const path = `/apis/argoproj.io/v1alpha1/namespaces/${enc(action.namespace)}/applications/${enc(action.app)}`;
         const app = await this.kube.get<{ metadata?: { resourceVersion?: string }; status?: { operationState?: { phase?: string } } }>(path);
         if (app.status?.operationState?.phase !== 'Running') {
-          throw new ConflictException({ code: 'TARGET_CHANGED', message: t('error.targetChanged') });
+          throw new ConflictError({ code: 'TARGET_CHANGED', message: t('error.targetChanged') });
         }
         // What `argocd app terminate-op` asks the API server to do: the controller sees Terminating and stops the sync.
         await this.kube.mergePatch(path, { metadata: { resourceVersion: app.metadata?.resourceVersion }, status: { operationState: { phase: 'Terminating' } } });
@@ -198,14 +198,14 @@ export class ActionsService {
         const pvc = await this.kube.get<{ metadata?: { resourceVersion?: string }; spec?: { resources?: { requests?: { storage?: string } } } }>(path);
         // Grown by someone else meanwhile: growing again from the old number would be a surprise.
         if (pvc.spec?.resources?.requests?.storage !== action.from) {
-          throw new ConflictException({ code: 'TARGET_CHANGED', message: t('error.targetChanged') });
+          throw new ConflictError({ code: 'TARGET_CHANGED', message: t('error.targetChanged') });
         }
         await this.kube.mergePatch(path, { metadata: { resourceVersion: pvc.metadata?.resourceVersion }, spec: { resources: { requests: { storage: action.to } } } });
         done = t('action.done.pvcExpand', { pvc: `${action.namespace}/${action.name}`, size: action.to });
         break;
       }
       case 'logs':
-        throw new BadRequestException({ code: 'USE_LOGS_ROUTE', message: t('error.useLogsRoute') });
+        throw new BadRequestError({ code: 'USE_LOGS_ROUTE', message: t('error.useLogsRoute') });
     }
     void this.status.refresh();
     return { done };
@@ -235,7 +235,7 @@ export class ActionsService {
     }
     const job = await this.kube.get<{ metadata: Meta; spec?: Record<string, unknown> & { template?: { metadata?: Meta } }; status?: { conditions?: Condition[] } }>(`${base}/jobs/${enc(action.name)}`);
     if ((job.metadata.ownerReferences ?? []).length > 0 || !job.status?.conditions?.some((c) => c.type === 'Failed' && c.status === 'True')) {
-      throw new ConflictException({ code: 'TARGET_CHANGED', message: t('error.targetChanged') });
+      throw new ConflictError({ code: 'TARGET_CHANGED', message: t('error.targetChanged') });
     }
     const without = (labels: Record<string, string> | undefined) => Object.fromEntries(Object.entries(labels ?? {}).filter(([k]) => !JOB_CONTROLLER_LABELS.includes(k)));
     const { selector: _selector, manualSelector: _manual, template, ...spec } = job.spec ?? {};
@@ -252,7 +252,7 @@ export class ActionsService {
   private refuseRisky(name: string, template: PodTemplateRisk | undefined): void {
     const risky = riskyPodTemplate(template);
     if (risky) {
-      throw new ConflictException({ code: 'JOB_PRIVILEGED', message: t('error.jobPrivileged', { job: name, what: risky }) });
+      throw new ConflictError({ code: 'JOB_PRIVILEGED', message: t('error.jobPrivileged', { job: name, what: risky }) });
     }
   }
 
@@ -275,7 +275,7 @@ export class ActionsService {
   async logs(issueId: string, index = 0, who?: Principal): Promise<{ pod: string; container?: string; previous: boolean; text: string }> {
     const action = this.find(issueId, 'logs', index);
     if (action.type !== 'logs') {
-      throw new NotFoundException();
+      throw new NotFoundError();
     }
     this.logger.log(`logs of ${action.namespace}/${action.pod} read by "${who?.name ?? 'unknown'}" (${who?.id ?? '-'})`);
     const params = new URLSearchParams({ tailLines: '300', timestamps: 'true', limitBytes: String(LOG_LIMIT_BYTES) });

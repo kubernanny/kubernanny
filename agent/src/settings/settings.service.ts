@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException } from '../http/errors';
+import { BadRequestError, ForbiddenError } from '../http/errors';
 import { Logger } from '../logger';
 import type { Principal } from '../auth/devices.service';
 import { ActionType, OPT_IN_ACTIONS } from '../checks/types';
@@ -254,10 +254,10 @@ export class SettingsService {
     const known = new Set([...CORE_CHECKS.map((c) => c.id), ...CATALOG.map((e) => e.id), ...this.config.customComponents.map((c) => c.id)]);
     for (const [id, on] of Object.entries(patch.modules ?? {})) {
       if (!known.has(id) || typeof on !== 'boolean') {
-        throw new BadRequestException({ code: 'SETTING_UNKNOWN', message: t('error.moduleUnknown', { id }) });
+        throw new BadRequestError({ code: 'SETTING_UNKNOWN', message: t('error.moduleUnknown', { id }) });
       }
       if (this.config.disabledModules.includes(id)) {
-        throw new ForbiddenException({ code: 'SETTING_LOCKED', message: t('error.settingLocked', { id }) });
+        throw new ForbiddenError({ code: 'SETTING_LOCKED', message: t('error.settingLocked', { id }) });
       }
       next.disabledModules = toggle(next.disabledModules, id, !on);
       // Remembered both ways for default-off modules, so an install that switches it on in Helm still respects the app's "off".
@@ -265,16 +265,16 @@ export class SettingsService {
     }
     for (const [type, on] of Object.entries(patch.actions ?? {})) {
       if (!ACTION_TYPES.some((a) => a.type === type) || typeof on !== 'boolean') {
-        throw new BadRequestException({ code: 'SETTING_UNKNOWN', message: t('error.actionUnknown', { type }) });
+        throw new BadRequestError({ code: 'SETTING_UNKNOWN', message: t('error.actionUnknown', { type }) });
       }
       if (this.actionState(type as ActionType) === 'locked') {
-        throw new ForbiddenException({ code: 'SETTING_LOCKED', message: t('error.settingLocked', { id: type }) });
+        throw new ForbiddenError({ code: 'SETTING_LOCKED', message: t('error.settingLocked', { id: type }) });
       }
       next.disabledActions = toggle(next.disabledActions, type, !on);
     }
     if (patch.notifications !== undefined) {
       if (typeof patch.notifications !== 'boolean') {
-        throw new BadRequestException({ code: 'SETTING_UNKNOWN', message: t('error.notificationsBoolean') });
+        throw new BadRequestError({ code: 'SETTING_UNKNOWN', message: t('error.notificationsBoolean') });
       }
       next.notificationsPaused = !patch.notifications;
     }

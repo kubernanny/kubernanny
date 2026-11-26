@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createServer } from 'node:http';
 import { Agent } from '../agent';
-import { INTERNAL, PRINCIPAL_HEADER } from '../auth/principal.guard';
+import { INTERNAL, PRINCIPAL_HEADER } from '../auth/principal';
 import { KubeError } from '../kube/kube-client';
 import { Notifier } from '../notify/notifier';
 import { Snapshot } from '../status/status.service';

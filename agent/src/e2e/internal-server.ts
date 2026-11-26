@@ -1,7 +1,7 @@
 import { chmodSync, existsSync, unlinkSync } from 'node:fs';
 import { IncomingMessage, Server, ServerResponse, createServer, request } from 'node:http';
 import type { Language } from '@kubernanny/protocol';
-import { INTERNAL, LANGUAGE_HEADER, PRINCIPAL_HEADER } from '../auth/principal.guard';
+import { INTERNAL, LANGUAGE_HEADER, PRINCIPAL_HEADER } from '../auth/principal';
 import type { Config } from '../config';
 import { Logger } from '../logger';
 

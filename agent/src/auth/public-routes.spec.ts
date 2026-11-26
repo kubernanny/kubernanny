@@ -23,7 +23,7 @@ describe('every route is guarded unless marked public (fail closed)', () => {
   it('answers 401 E2E_REQUIRED on the public port on every other route, even with the principal header', async () => {
     const guarded = agent.app.routes.filter((r) => !r.public);
     for (const route of guarded) {
-      // Parameters get a well-formed value, so a pipe cannot answer before the guard would.
+      // Parameters get a well-formed value, so a parameter check cannot answer before the principal check would.
       const path = `${route.path.replace(':id', '00000000-0000-4000-8000-000000000000').replace(/:[a-z]+/g, 'x')}?issue=x&hours=1`;
       const res = await request(agent.app.getHttpServer())
         [route.method.toLowerCase() as 'get' | 'post' | 'delete'](path)

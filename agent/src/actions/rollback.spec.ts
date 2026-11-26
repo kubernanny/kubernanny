@@ -1,4 +1,4 @@
-import { HttpException } from '../http/errors';
+import { HttpError } from '../http/errors';
 import { describe, expect, it, vi } from 'vitest';
 import type { ArgoApplication } from '../checks/argocd.check';
 import { rollbackApps, rollbackTarget } from '../checks/argocd-rollback';
@@ -116,7 +116,7 @@ const code = async (p: Promise<unknown>) => {
     await p;
     return 'none';
   } catch (err) {
-    return ((err as HttpException).getResponse() as { code: string }).code;
+    return ((err as HttpError).getResponse() as { code: string }).code;
   }
 };
 

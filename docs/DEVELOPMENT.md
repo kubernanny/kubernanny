@@ -199,4 +199,4 @@ They register the pairing scheme `kubernanny://` (the app listens in `app.ts`, `
 - Every push to `main` builds `ghcr.io/<owner>/kubernanny:<YYYY-MM-DD>-<run>` and `:edge` for amd64 and arm64.
 - A tag `vX.Y.Z` builds `:X.Y.Z` and `:latest` and pushes the chart to `oci://ghcr.io/<owner>/charts/kubernanny` with that version.
 - The iOS and Android apps are released separately with `cd app && npm run release` (tags `app-vX.Y.Z`, which CI ignores): [RELEASING.md](RELEASING.md).
-- Bump `version` / `appVersion` in `deploy/helm/kubernanny/Chart.yaml`, the image tag in `deploy/install.yaml`, `AGENT_VERSION` in `agent/src/app.controller.ts`, and add a `CHANGELOG.md` entry first.
+- Bump `version` / `appVersion` in `deploy/helm/kubernanny/Chart.yaml`, the image tag in `deploy/install.yaml`, `AGENT_VERSION` in `agent/src/version.ts`, and add a `CHANGELOG.md` entry first.

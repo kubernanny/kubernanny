@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, HttpException, HttpStatus, NotFoundException } from '../http/errors';
+import { BadRequestError, ConflictError, ForbiddenError, HttpError, HttpStatus, NotFoundError } from '../http/errors';
 import { Logger } from '../logger';
 import type { Principal } from '../auth/devices.service';
 import { ArgoApplication } from '../checks/argocd.check';
@@ -44,10 +44,10 @@ export class RollbackService {
   /** Before anything is read: off (not opted in, disabled, or switched off in the app) or Argo CD not checked. */
   assertAllowed(): void {
     if (!this.settings.actionOn('argocd-rollback')) {
-      throw new ForbiddenException({ code: 'ACTION_DISABLED', message: t('error.actionDisabled') });
+      throw new ForbiddenError({ code: 'ACTION_DISABLED', message: t('error.actionDisabled') });
     }
     if (!this.settings.moduleOn('argocd')) {
-      throw new ForbiddenException({ code: 'MODULE_OFF', message: t('error.argocdOff') });
+      throw new ForbiddenError({ code: 'MODULE_OFF', message: t('error.argocdOff') });
     }
   }
 
@@ -57,7 +57,7 @@ export class RollbackService {
     const key = `${namespace}/${app}`;
     const previous = this.last.get(key);
     if (previous !== undefined && now - previous < ROLLBACK_INTERVAL_MS) {
-      throw new HttpException({ code: 'ROLLBACK_RATE_LIMITED', message: t('error.rollbackRateLimited') }, HttpStatus.TOO_MANY_REQUESTS);
+      throw new HttpError({ code: 'ROLLBACK_RATE_LIMITED', message: t('error.rollbackRateLimited') }, HttpStatus.TOO_MANY_REQUESTS);
     }
     const path = `/apis/argoproj.io/v1alpha1/namespaces/${encodeURIComponent(namespace)}/applications/${encodeURIComponent(app)}`;
     let application: ArgoApplication;
@@ -65,13 +65,13 @@ export class RollbackService {
       application = await this.kube.get<ArgoApplication>(path);
     } catch (err) {
       if (err instanceof KubeError && err.status === 404) {
-        throw new NotFoundException({ code: 'APP_NOT_FOUND', message: t('error.rollbackAppNotFound') });
+        throw new NotFoundError({ code: 'APP_NOT_FOUND', message: t('error.rollbackAppNotFound') });
       }
       throw err;
     }
     const decided = rollbackTarget(application, id);
     if ('refusal' in decided) {
-      throw new ConflictException({ code: decided.refusal, message: t(`error.${decided.refusal}`) });
+      throw new ConflictError({ code: decided.refusal, message: t(`error.${decided.refusal}`) });
     }
     const from = application.status?.sync?.revision;
     const fromShort = typeof from === 'string' ? shortRevision(logSafe(from, 64)) : '?';
@@ -105,7 +105,7 @@ function target(body: RollbackRequest): { namespace: string; app: string; id: nu
     Number.isSafeInteger(body.id) &&
     body.id >= 0;
   if (!ok) {
-    throw new BadRequestException({ code: 'ROLLBACK_TARGET', message: t('error.rollbackTarget') });
+    throw new BadRequestError({ code: 'ROLLBACK_TARGET', message: t('error.rollbackTarget') });
   }
   return { namespace: body.namespace as string, app: body.app as string, id: body.id as number };
 }

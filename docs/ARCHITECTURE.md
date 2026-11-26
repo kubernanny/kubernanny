@@ -60,7 +60,7 @@ agent/src
 ├── agent.ts                every service wired by hand, start-up, readiness, graceful shutdown
 ├── http/                   the route table on node:http: guard, CORS, static web UI, errors, ETags
 ├── cli.ts                  admin commands inside the pod (pair, devices, revoke) over the internal socket
-├── app.controller.ts       the HTTP API (routes in appRoutes)
+├── app.routes.ts           the HTTP API (routes in appRoutes)
 ├── config.ts               every environment variable, validated at start
 ├── kube/                   fetch wrapper: ServiceAccount token, list/get/watch/patch/create, 404 = "not installed"; the watch cache
 ├── lease/                  which pod is in charge during a rolling update (coordination.k8s.io Lease)
@@ -275,7 +275,7 @@ After pairing, every call goes the same way:
 ```mermaid
 flowchart LR
   app["App<br/>sealRequest()"] -- "POST /api/e2e<br/>0x01 · message 1" --> e2e["E2eService<br/>size · replay cache · openRequest()<br/>budget per device · clock · device"]
-  e2e -- "HTTP over a Unix socket<br/>as device X" --> routes["AppController routes<br/>(global PrincipalGuard)"]
+  e2e -- "HTTP over a Unix socket<br/>as device X" --> routes["appRoutes<br/>(principal check on every route)"]
   routes -- "status + JSON" --> e2e
   e2e -- "message 2 · frames" --> app
 ```

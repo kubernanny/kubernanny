@@ -1,4 +1,4 @@
-import { BadRequestException } from '../http/errors';
+import { BadRequestError } from '../http/errors';
 import { Logger } from '../logger';
 import type { Principal } from '../auth/devices.service';
 import type { Config } from '../config';
@@ -101,7 +101,7 @@ export class SilenceService {
 
   private async doStartMaintenance(hours: number, who: Principal, now: number): Promise<string> {
     if (!(MAINTENANCE_HOURS as readonly number[]).includes(hours)) {
-      throw new BadRequestException({ code: 'MAINTENANCE_HOURS', message: t('error.maintenanceHours', { hours: MAINTENANCE_HOURS.join(', ') }) });
+      throw new BadRequestError({ code: 'MAINTENANCE_HOURS', message: t('error.maintenanceHours', { hours: MAINTENANCE_HOURS.join(', ') }) });
     }
     await this.notifier?.securityAlert(who.name, [{ kind: 'maintenance', hours }]);
     const next = this.pruned(now);
@@ -130,16 +130,16 @@ export class SilenceService {
 
   private async doSilence(issueId: string, hours: number, who: Principal, now: number, severity?: IssueSeverity): Promise<string> {
     if (!issueId || issueId.length > 300 || issueId === MAINTENANCE) {
-      throw new BadRequestException({ code: 'ISSUE_MISSING', message: t('error.issueMissing') });
+      throw new BadRequestError({ code: 'ISSUE_MISSING', message: t('error.issueMissing') });
     }
     if (!(SILENCE_HOURS as readonly number[]).includes(hours)) {
-      throw new BadRequestException({ code: 'SILENCE_HOURS', message: t('error.silenceHours', { hours: SILENCE_HOURS.join(', ') }) });
+      throw new BadRequestError({ code: 'SILENCE_HOURS', message: t('error.silenceHours', { hours: SILENCE_HOURS.join(', ') }) });
     }
     const next = this.pruned(now);
     // Unknown severity (an issue the caller did not look up) counts as a warning: an outage then still breaks through.
     next.set(issueId, { until: now + hours * 3_600_000, severity: severity ?? 'warning' });
     if (next.size > MAX_SILENCED) {
-      throw new BadRequestException({ code: 'SILENCE_LIMIT', message: t('error.silenceLimit') });
+      throw new BadRequestError({ code: 'SILENCE_LIMIT', message: t('error.silenceLimit') });
     }
     // Before it takes effect, like a maintenance window: a silenced critical issue sends nothing more.
     const events = this.silenceEvents(issueId, hours, severity);
