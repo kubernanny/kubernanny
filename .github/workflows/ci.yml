@@ -80,7 +80,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       # Includes the cross-test against libsodium and the published test vectors.
-      - run: npm test
+      - run: npm run test:coverage   # coverage as a report in the log, no threshold
 
   # ESLint and Prettier over every package, with the shared config at the
   # root (eslint.config.mjs). Each package is installed so the type-aware
@@ -120,7 +120,7 @@ jobs:
         working-directory: protocol
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
+      - run: npm run test:coverage   # coverage as a report in the log, no threshold
 
   app:
     needs: changes
@@ -169,7 +169,7 @@ jobs:
         working-directory: agent
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
+      - run: npm run test:coverage   # coverage as a report in the log, no threshold
       - name: Cloudflare Worker typecheck and bundle
         working-directory: relay/cloudflare
         run: |

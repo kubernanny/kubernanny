@@ -52,6 +52,8 @@ cd app && npm run test:scripts   # node:test for the release and asset scripts
 cd e2e && npm test          # Playwright: the web demo in both languages, and the app against a running demo agent
 ```
 
+`npm run test:coverage` in agent, relay and protocol prints a coverage summary and writes an HTML report to `coverage/` (CI shows the summary; there is no threshold).
+
 The e2e suite builds nothing itself: it serves `app/dist` and starts `agent/dist`, so run `npm run build` in both first, and `npm run build:demo` in `app/` for the demo host tests (`cd e2e && npm run build` does all of it, as CI does).
 
 What the tests guard beyond the logic itself:
