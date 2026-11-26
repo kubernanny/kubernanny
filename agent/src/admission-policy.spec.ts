@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseAllDocuments } from 'yaml';
+import { BASELINE_CAPABILITIES, BASELINE_SELINUX_TYPES, BASELINE_SYSCTLS } from './actions/pod-security';
 
 /**
  * The deployment side of the security review (M1, M4, LOW). Helm renders
@@ -78,14 +79,29 @@ describe('admission policy for the agent (security review M4)', () => {
     expect(template).toContain('{{- $terminate := has "argocd-terminate-op" $writes }}');
   });
 
-  it('denies Velero hooks, and host access or privileges in a rerun Job', () => {
+  it('denies Velero hooks, and anything beyond the baseline Pod Security Standard in a rerun Job, with the agent\'s own lists', () => {
     const velero = JSON.stringify(policies.find((p) => p.metadata.name === 'kubernanny-velero-backups'));
     for (const field of ['hooks', 'resourcePolicy', 'orderedResources']) {
       expect(velero).toContain(`!has(object.spec.${field})`);
     }
     const template = chart('templates/admission-policy.yaml');
-    for (const check of ['hostNetwork.orValue(false) == false', 'all(v, !has(v.hostPath))', 'privileged.orValue(false) == false', 'allowPrivilegeEscalation.orValue(false) == false', 'capabilities.?add.orValue([])) == 0']) {
+    for (const check of [
+      'hostNetwork.orValue(false) == false',
+      'all(v, !has(v.hostPath))',
+      'privileged.orValue(false) == false',
+      'allowPrivilegeEscalation.orValue(false) == false',
+      'capabilities.?add.orValue([]).all(x, x in variables.capabilities)',
+      "procMount.orValue('Default') == 'Default'",
+      "seccompProfile.?type.orValue('') != 'Unconfined'",
+      "p.?hostPort.orValue(0) == 0",
+      'all(s, s.name in variables.sysctls)',
+      "!k.startsWith('container.apparmor.security.beta.kubernetes.io/')",
+    ]) {
       expect(template).toContain(check);
+    }
+    // The policy's allowlists are the agent's (actions/pod-security.ts).
+    for (const value of [...BASELINE_CAPABILITIES, ...BASELINE_SYSCTLS, ...BASELINE_SELINUX_TYPES]) {
+      expect(template).toContain(`'${value}'`);
     }
     // CEL's optional map index is m[?'key']; m.?['key'] does not compile in an API server.
     expect(template).not.toContain(".?['");

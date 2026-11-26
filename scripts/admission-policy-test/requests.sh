@@ -9,7 +9,7 @@ expect() { # allow|deny description command...
   local want=$1 desc=$2; shift 2
   local out; out=$("$@" 2>&1); local rc=$?
   local got=allow; [ $rc -ne 0 ] && got=deny
-  if [ "$got" = "$want" ]; then PASS=$((PASS+1)); echo "ok    $want  $desc"; else FAILN=$((FAILN+1)); echo "FAIL  want $want got $got: $desc :: $(echo "$out" | tail -1)"; fi
+  if [ "$got" = "$want" ]; then PASS=$((PASS+1)); echo "ok    $want  $desc$([ "$want" = deny ] && echo " :: $(echo "$out" | tail -1 | sed 's/.*denied request: //' | cut -c1-110)")"; else FAILN=$((FAILN+1)); echo "FAIL  want $want got $got: $desc :: $(echo "$out" | tail -1)"; fi
 }
 k() { kubectl "$@"; }
 ka() { kubectl $AS "$@"; }
@@ -39,11 +39,13 @@ expect deny  "delete a pending (running) pod" ka -n $SH delete pod running --wai
 expect allow "force-delete a pod already terminating" ka -n $SH delete pod stuck --grace-period=0 --force --wait=false
 expect deny  "create a pod" ka -n $SH run evil --image=busybox --restart=Never
 # ---- jobs
-job() { # name extra-json
+job() { # name container-extra label-extra ownerReferences pod-extra [template-annotations]
   cat <<J
-{"apiVersion":"batch/v1","kind":"Job","metadata":{"name":"$1","namespace":"$SH","labels":{"app.kubernetes.io/created-by":"kubernanny"$3},"ownerReferences":$4},"spec":{"template":{"spec":{"restartPolicy":"Never","containers":[{"name":"c","image":"busybox"$2}]$5}}}}
+{"apiVersion":"batch/v1","kind":"Job","metadata":{"name":"$1","namespace":"$SH","labels":{"app.kubernetes.io/created-by":"kubernanny"$3},"ownerReferences":$4},"spec":{"template":{"metadata":{"annotations":{${6:-}}},"spec":{"restartPolicy":"Never","containers":[{"name":"c","image":"busybox"$2}]$5}}}}
 J
 }
+# A run of the CronJob with one change to the container ($2), the pod ($3) or the template's annotations ($4).
+cron() { sh -c "$(declare -f job); job $1 '$2' '' '$CRON' '$3' '$4' | kubectl $AS create -f -"; }
 CRON='[{"apiVersion":"batch/v1","kind":"CronJob","name":"nightly","uid":"6f0d7c6e-0000-4000-8000-000000000001","controller":true}]'
 expect allow "a run of a CronJob" sh -c "$(declare -f job); job run1 '' '' '$CRON' '' | kubectl $AS create -f -"
 expect allow "a rerun of a Job without owner" sh -c "$(declare -f job); job run2 '' ',\"kubernanny.io/rerun-of\":\"migrate\"' '[]' '' | kubectl $AS create -f -"
@@ -54,6 +56,27 @@ expect deny  "allowPrivilegeEscalation true" sh -c "$(declare -f job); job run6 
 expect deny  "an added capability" sh -c "$(declare -f job); job run7 ',\"securityContext\":{\"capabilities\":{\"add\":[\"NET_ADMIN\"]}}' '' '$CRON' '' | kubectl $AS create -f -"
 expect deny  "hostNetwork" sh -c "$(declare -f job); job run8 '' '' '$CRON' ',\"hostNetwork\":true' | kubectl $AS create -f -"
 expect deny  "a hostPath volume" sh -c "$(declare -f job); job run9 '' '' '$CRON' ',\"volumes\":[{\"name\":\"h\",\"hostPath\":{\"path\":\"/\"}}]' | kubectl $AS create -f -"
+# Pod Security Standards baseline, pod and container level (pod-security.ts holds the same list).
+expect allow "baseline: capabilities from the allowlist, drop ALL" cron b1 ',"securityContext":{"capabilities":{"add":["NET_BIND_SERVICE","CHOWN"],"drop":["ALL"]}}' ''
+expect allow "baseline: SELinux container_t, seccomp RuntimeDefault, AppArmor Localhost" cron b2 ',"securityContext":{"seLinuxOptions":{"type":"container_t"},"seccompProfile":{"type":"RuntimeDefault"},"appArmorProfile":{"type":"Localhost","localhostProfile":"p"}}' ''
+expect allow "baseline: safe sysctls, hostPort 0, AppArmor annotation runtime/default" cron b3 ',"ports":[{"containerPort":80,"hostPort":0}]' ',"securityContext":{"sysctls":[{"name":"net.ipv4.ip_local_port_range","value":"1024 65535"}]}' '"container.apparmor.security.beta.kubernetes.io/c":"runtime/default"'
+expect deny  "baseline: SYS_ADMIN" cron d1 ',"securityContext":{"capabilities":{"add":["SYS_ADMIN"]}}' ''
+expect deny  "baseline: a hostPort" cron d2 ',"ports":[{"containerPort":80,"hostPort":8080}]' ''
+expect deny  "baseline: SELinux spc_t on the pod" cron d3 '' ',"securityContext":{"seLinuxOptions":{"type":"spc_t"}}'
+expect deny  "baseline: SELinux user on a container" cron d4 ',"securityContext":{"seLinuxOptions":{"user":"system_u"}}' ''
+expect deny  "baseline: SELinux role on the pod" cron d5 '' ',"securityContext":{"seLinuxOptions":{"role":"sysadm_r"}}'
+expect deny  "baseline: procMount Unmasked" cron d6 ',"securityContext":{"procMount":"Unmasked"}' ',"hostUsers":false'
+expect deny  "baseline: seccomp Unconfined on the pod" cron d7 '' ',"securityContext":{"seccompProfile":{"type":"Unconfined"}}'
+expect deny  "baseline: seccomp Unconfined on a container" cron d8 ',"securityContext":{"seccompProfile":{"type":"Unconfined"}}' ''
+expect deny  "baseline: AppArmor Unconfined field on a container" cron d9 ',"securityContext":{"appArmorProfile":{"type":"Unconfined"}}' ''
+expect deny  "baseline: AppArmor Unconfined field on the pod" cron d10 '' ',"securityContext":{"appArmorProfile":{"type":"Unconfined"}}'
+expect deny  "baseline: AppArmor unconfined annotation" cron d11 '' '' '"container.apparmor.security.beta.kubernetes.io/c":"unconfined"'
+expect deny  "baseline: an unsafe sysctl" cron d12 '' ',"securityContext":{"sysctls":[{"name":"kernel.msgmax","value":"65536"}]}'
+expect deny  "baseline: a privileged init container" cron d13 '' ',"initContainers":[{"name":"i","image":"busybox","securityContext":{"privileged":true}}]'
+expect deny  "baseline: NET_ADMIN on an init container" cron d14 '' ',"initContainers":[{"name":"i","image":"busybox","securityContext":{"capabilities":{"add":["NET_ADMIN"]}}}]'
+expect deny  "baseline: a probe to another host" cron d15 ',"readinessProbe":{"httpGet":{"host":"10.0.0.1","port":80}}' ''
+expect deny  "baseline: a lifecycle hook to another host" cron d16 ',"lifecycle":{"postStart":{"tcpSocket":{"host":"db","port":5432}}}' ''
+expect deny  "baseline: hostPID" cron d17 '' ',"hostPID":true'
 # ---- pvcs
 k apply -f - >/dev/null <<Y
 apiVersion: storage.k8s.io/v1

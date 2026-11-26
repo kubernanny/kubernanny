@@ -409,8 +409,23 @@ spec:
   variables:
     - name: labels
       expression: "request.operation == 'CREATE' ? object.metadata.?labels.orValue({}) : {}"
+    - name: pod
+      expression: "object.spec.template.spec"
     - name: containers
       expression: "request.operation == 'CREATE' ? object.spec.template.spec.containers + object.spec.template.spec.?initContainers.orValue([]) : []"
+    - name: annotations
+      expression: "request.operation == 'CREATE' ? object.spec.template.?metadata.?annotations.orValue({}) : {}"
+    - name: capabilities
+      expression: "['AUDIT_WRITE', 'CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'FSETID', 'KILL', 'MKNOD', 'NET_BIND_SERVICE', 'SETFCAP', 'SETGID', 'SETPCAP', 'SETUID', 'SYS_CHROOT']"
+    - name: seLinuxTypes
+      expression: "['', 'container_t', 'container_init_t', 'container_kvm_t', 'container_engine_t']"
+    - name: sysctls
+      expression: >-
+        ['kernel.shm_rmid_forced', 'net.ipv4.ip_local_port_range', 'net.ipv4.ip_unprivileged_port_start',
+        'net.ipv4.tcp_syncookies', 'net.ipv4.ping_group_range', 'net.ipv4.ip_local_reserved_ports',
+        'net.ipv4.tcp_keepalive_time', 'net.ipv4.tcp_fin_timeout', 'net.ipv4.tcp_keepalive_intvl',
+        'net.ipv4.tcp_keepalive_probes', 'net.ipv4.tcp_rmem', 'net.ipv4.tcp_wmem',
+        'net.ipv4.tcp_slow_start_after_idle', 'net.ipv4.tcp_notsent_lowat']
   validations:
     - expression: request.operation == 'CREATE'
       message: the Kubernanny agent may only create Jobs
@@ -425,17 +440,49 @@ spec:
           ('kubernanny.io/rerun-of' in variables.labels && size(object.metadata.?ownerReferences.orValue([])) == 0))
       message: the Kubernanny agent may only create a Job run of a CronJob or a rerun of a failed Job without owner
       reason: Forbidden
-    # No host access and no extra privileges, whatever the template says (the agent refuses such a rerun itself).
+    # The Pod Security Standards "baseline" profile, at pod and container level, whatever the template
+    # says (the agent refuses such a rerun itself: agent/src/actions/pod-security.ts), plus no
+    # allowPrivilegeEscalation: true and no ephemeral containers.
     - expression: >-
-        object.spec.template.spec.?hostNetwork.orValue(false) == false &&
-        object.spec.template.spec.?hostPID.orValue(false) == false &&
-        object.spec.template.spec.?hostIPC.orValue(false) == false &&
-        object.spec.template.spec.?volumes.orValue([]).all(v, !has(v.hostPath)) &&
+        variables.pod.?hostNetwork.orValue(false) == false &&
+        variables.pod.?hostPID.orValue(false) == false &&
+        variables.pod.?hostIPC.orValue(false) == false &&
+        variables.pod.?volumes.orValue([]).all(v, !has(v.hostPath)) &&
+        size(variables.pod.?ephemeralContainers.orValue([])) == 0
+      message: the Kubernanny agent may not create a Job with host namespaces, hostPath volumes or ephemeral containers
+      reason: Forbidden
+    - expression: >-
+        variables.pod.?securityContext.?windowsOptions.?hostProcess.orValue(false) == false &&
+        variables.pod.?securityContext.?seLinuxOptions.?type.orValue('') in variables.seLinuxTypes &&
+        variables.pod.?securityContext.?seLinuxOptions.?user.orValue('') == '' &&
+        variables.pod.?securityContext.?seLinuxOptions.?role.orValue('') == '' &&
+        variables.pod.?securityContext.?seccompProfile.?type.orValue('') != 'Unconfined' &&
+        variables.pod.?securityContext.?appArmorProfile.?type.orValue('RuntimeDefault') in ['RuntimeDefault', 'Localhost'] &&
+        variables.pod.?securityContext.?sysctls.orValue([]).all(s, s.name in variables.sysctls) &&
+        variables.annotations.all(k, !k.startsWith('container.apparmor.security.beta.kubernetes.io/') ||
+          variables.annotations[k] == 'runtime/default' || variables.annotations[k].startsWith('localhost/'))
+      message: the Kubernanny agent may not create a Job whose pod leaves the baseline profile (hostProcess, SELinux, seccomp, AppArmor, sysctls)
+      reason: Forbidden
+    - expression: >-
         variables.containers.all(c,
           c.?securityContext.?privileged.orValue(false) == false &&
           c.?securityContext.?allowPrivilegeEscalation.orValue(false) == false &&
-          size(c.?securityContext.?capabilities.?add.orValue([])) == 0)
-      message: the Kubernanny agent may not create a Job with host access, privileged containers, privilege escalation or added capabilities
+          c.?securityContext.?capabilities.?add.orValue([]).all(x, x in variables.capabilities) &&
+          c.?securityContext.?procMount.orValue('Default') == 'Default' &&
+          c.?securityContext.?windowsOptions.?hostProcess.orValue(false) == false &&
+          c.?securityContext.?seLinuxOptions.?type.orValue('') in variables.seLinuxTypes &&
+          c.?securityContext.?seLinuxOptions.?user.orValue('') == '' &&
+          c.?securityContext.?seLinuxOptions.?role.orValue('') == '' &&
+          c.?securityContext.?seccompProfile.?type.orValue('') != 'Unconfined' &&
+          c.?securityContext.?appArmorProfile.?type.orValue('RuntimeDefault') in ['RuntimeDefault', 'Localhost'] &&
+          c.?ports.orValue([]).all(p, p.?hostPort.orValue(0) == 0))
+      message: the Kubernanny agent may not create a Job with a container that leaves the baseline profile (privileged, capabilities, procMount, hostProcess, SELinux, seccomp, AppArmor, hostPort)
+      reason: Forbidden
+    - expression: >-
+        variables.containers.all(c,
+          [c.?livenessProbe, c.?readinessProbe, c.?startupProbe].all(p, p.?httpGet.?host.orValue('') == '' && p.?tcpSocket.?host.orValue('') == '') &&
+          [c.?lifecycle.?postStart, c.?lifecycle.?preStop].all(h, h.?httpGet.?host.orValue('') == '' && h.?tcpSocket.?host.orValue('') == ''))
+      message: the Kubernanny agent may not create a Job whose probes or lifecycle hooks name another host
       reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1

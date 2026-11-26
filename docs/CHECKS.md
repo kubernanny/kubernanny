@@ -261,7 +261,7 @@ Every action belongs to an issue: the app names the issue and the action type, t
 | `uncordon` | yes | `nodes/<node>/cordoned` | `kubectl uncordon` |
 | `cleanup-pods` | yes | `pods/finished/<ns>` | deletes the finished pods listed (never a running one) |
 | `logs` | yes | crash loops, failed jobs, CNPG, etcd | reads the last 300 lines, changes nothing |
-| `job-rerun` | **opt-in** | `jobs/…` | a Job from the CronJob's template (`kubectl create job --from=cronjob/…`), or a copy of a failed stand-alone Job without its controller-uid labels and selector. Never for a Job another controller owns, nor for one with host access or extra privileges. |
+| `job-rerun` | **opt-in** | `jobs/…` | a Job from the CronJob's template (`kubectl create job --from=cronjob/…`), or a copy of a failed stand-alone Job without its controller-uid labels and selector. Never for a Job another controller owns, nor for one whose pod leaves the Pod Security Standards baseline profile. |
 | `force-delete-terminating` | **opt-in** | `pods/terminating/…` | deletes the pod with grace period 0. The confirmation warns that a StatefulSet pod could run twice if the node is in fact alive. |
 | `argocd-terminate-op` | **opt-in** | `argocd/<app>/operation-stuck` | ends the running operation |
 | `pvc-expand` | **opt-in** | `volumes/<ns>/<pvc>/full` | raises the storage request by a quarter; cannot be undone |

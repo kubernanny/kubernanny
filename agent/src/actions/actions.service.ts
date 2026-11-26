@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, NotFoundExc
 import { Logger } from '../logger';
 import { Condition, IssueAction, IssueActionType, ReconcileKind, WorkloadKind } from '../checks/types';
 import { RERUN_LABEL } from '../modules/core/workloads';
+import { PodTemplateRisk, riskyPodTemplate } from './pod-security';
 import type { Principal } from '../auth/devices.service';
 import { Text, t } from '../i18n/text';
 import { KubeClient, KubeError } from '../kube/kube-client';
@@ -37,39 +38,6 @@ const CREATED_BY = { 'app.kubernetes.io/created-by': 'kubernanny' };
 
 /** Fields of a Velero backup spec the admission policy denies to the agent; a schedule using them is not backed up from the app. */
 export const VELERO_REFUSED = ['hooks', 'resourcePolicy', 'orderedResources'] as const;
-
-interface PodSpecRisk {
-  hostNetwork?: boolean;
-  hostPID?: boolean;
-  hostIPC?: boolean;
-  volumes?: { hostPath?: unknown }[];
-  containers?: { securityContext?: { privileged?: boolean; allowPrivilegeEscalation?: boolean; capabilities?: { add?: string[] } } }[];
-  initContainers?: PodSpecRisk['containers'];
-}
-
-/**
- * What the admission policy denies in a Job the agent creates: host namespaces, host paths, privileged
- * containers, privilege escalation, added capabilities. A rerun of a Job that needs them is refused here
- * already, with a message, rather than by the API server.
- */
-export function riskyPodSpec(spec: PodSpecRisk | undefined): string | null {
-  if (!spec) {
-    return null;
-  }
-  if (spec.hostNetwork || spec.hostPID || spec.hostIPC) {
-    return 'hostNetwork/hostPID/hostIPC';
-  }
-  if ((spec.volumes ?? []).some((v) => v.hostPath !== undefined)) {
-    return 'hostPath';
-  }
-  for (const c of [...(spec.containers ?? []), ...(spec.initContainers ?? [])]) {
-    const sc = c.securityContext;
-    if (sc?.privileged || sc?.allowPrivilegeEscalation === true || (sc?.capabilities?.add ?? []).length > 0) {
-      return 'privileged/allowPrivilegeEscalation/capabilities.add';
-    }
-  }
-  return null;
-}
 
 const enc = encodeURIComponent;
 /** The newest part of a pod's log the app shows: Kubernetes cuts it (`limitBytes`), and the client refuses anything larger. */
@@ -250,7 +218,7 @@ export class ActionsService {
     if (action.from === 'CronJob') {
       const cron = await this.kube.get<{ metadata: Meta; spec?: { jobTemplate?: { metadata?: Meta; spec?: Record<string, unknown> } } }>(`${base}/cronjobs/${enc(action.name)}`);
       const template = cron.spec?.jobTemplate;
-      this.refuseRisky(action.name, (template?.spec as { template?: { spec?: PodSpecRisk } } | undefined)?.template?.spec);
+      this.refuseRisky(action.name, (template?.spec as { template?: PodTemplateRisk } | undefined)?.template);
       await this.kube.create(`${base}/jobs`, {
         apiVersion: 'batch/v1',
         kind: 'Job',
@@ -271,7 +239,7 @@ export class ActionsService {
     }
     const without = (labels: Record<string, string> | undefined) => Object.fromEntries(Object.entries(labels ?? {}).filter(([k]) => !JOB_CONTROLLER_LABELS.includes(k)));
     const { selector: _selector, manualSelector: _manual, template, ...spec } = job.spec ?? {};
-    this.refuseRisky(action.name, (template as { spec?: PodSpecRisk } | undefined)?.spec);
+    this.refuseRisky(action.name, template as PodTemplateRisk | undefined);
     await this.kube.create(`${base}/jobs`, {
       apiVersion: 'batch/v1',
       kind: 'Job',
@@ -281,8 +249,8 @@ export class ActionsService {
     return t('action.done.jobRerun', { job: action.name });
   }
 
-  private refuseRisky(name: string, spec: PodSpecRisk | undefined): void {
-    const risky = riskyPodSpec(spec);
+  private refuseRisky(name: string, template: PodTemplateRisk | undefined): void {
+    const risky = riskyPodTemplate(template);
     if (risky) {
       throw new ConflictException({ code: 'JOB_PRIVILEGED', message: t('error.jobPrivileged', { job: name, what: risky }) });
     }
