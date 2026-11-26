@@ -1,27 +1,43 @@
 # Kubernanny documentation
 
-Start with the [README](../README.md) for what Kubernanny is and how to install it.
+What Kubernanny is and how to install it: the [README](../README.md). These pages are also published at https://kubernanny.app/docs, built from this folder on every push to main.
 
-Also published at https://kubernanny.app/docs, built from this folder by `website/` on every push to main.
+## Use it
 
-| Document | For |
+| | |
 |---|---|
-| [IN-CLUSTER.md](IN-CLUSTER.md) | Everything Kubernanny runs in your cluster: processes, ports, permissions, outbound connections, stored data, switches, how to verify |
-| [PERMISSIONS.md](PERMISSIONS.md) | Every permission the agent can hold (generated from the code): write access at a glance, reads per module and why, its own namespace, what it never has, switch -> what is removed, how to verify |
-| [RELAY.md](RELAY.md) | The optional relay: when you need it, what it can and cannot see, limits, running your own (Node or Cloudflare Worker) |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | How the agent and the app work: the run loop, discovery, modules, actions, notifications, pairing, deployment, design decisions |
-| [CHECKS.md](CHECKS.md) | Every issue Kubernanny can raise, with id, severity, threshold and action |
-| [SECURITY-CHECKS.md](SECURITY-CHECKS.md) | The security posture hints and the vulnerability lookup against OSV.dev |
 | [COMPONENTS.md](COMPONENTS.md) | The components Kubernanny recognises (kept in step with the catalog by a test) |
-| [CONFIGURATION.md](CONFIGURATION.md) | Helm values, environment variables, what the app stores |
-| [COMMUNICATION.md](COMMUNICATION.md) | Every connection, what protects it, what an attacker could do, residual risks; with a diagram |
-| [PROTOCOL.md](PROTOCOL.md) | The end-to-end protocol: Noise IK per call, pairing, what the agent checks, limits, test vectors |
-| [decisions/](decisions/README.md) | Decision records: Noise IK, device keys, the internal socket, direct and relay |
-| [SECURITY.md](SECURITY.md) | RBAC, threat model, revoking devices, rotation |
-| [NOTIFICATIONS.md](NOTIFICATIONS.md) | ntfy, Discord, Slack, Gotify, JSON; timing; alerting on Kubernanny |
+| [CHECKS.md](CHECKS.md) | Every issue it can raise, with id, severity, threshold and action |
+| [SECURITY-CHECKS.md](SECURITY-CHECKS.md) | Posture hints, the vulnerability lookup, Trivy Operator's reports and image updates, and what each sends |
+| [NOTIFICATIONS.md](NOTIFICATIONS.md) | When a message is sent, the channels, native push, widgets, the dead man's switch |
+| [SCREENSHOTS.md](SCREENSHOTS.md) | One picture per screen |
+
+## Run it
+
+| | |
+|---|---|
+| [IN-CLUSTER.md](IN-CLUSTER.md) | Everything it runs in your cluster: processes, ports, connections in and out, stored data, how to verify |
+| [PERMISSIONS.md](PERMISSIONS.md) | Every permission (generated from the code), why, and which switch removes what |
+| [CONFIGURATION.md](CONFIGURATION.md) | Helm values and environment variables |
+| [RELAY.md](RELAY.md) | Remote access without a VPN: the public relay, running your own, limits |
+
+## Review it
+
+| | |
+|---|---|
+| [SECURITY.md](SECURITY.md) | The security model: threats per attacker, revoking devices, rotation, supply chain, reviews |
+| [COMMUNICATION.md](COMMUNICATION.md) | Every connection and what protects it, with a diagram |
+| [PROTOCOL.md](PROTOCOL.md) | The wire: Noise IK per call, pairing, relay frames, push messages, test vectors |
+| [decisions/](decisions/README.md) | Decision records: why Noise, device keys, the internal socket, the relay, languages, push |
+
+## Change it
+
+| | |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | How the agent and the app work: run loop, discovery, modules, actions, notifications, widgets |
 | [API.md](API.md) | The agent's HTTP API and Prometheus metrics |
-| [DEVELOPMENT.md](DEVELOPMENT.md) | Local setup, demo mode, tests, adding components, integrations and actions, native builds, releases |
-| [RELEASING.md](RELEASING.md) | Native iOS/Android projects, one-time store setup, release commands and versioning |
-| [DESIGN.md](DESIGN.md) | Principles, the nanny's eye, module sheets, tokens, type, layout, charts, copy |
-| [SCREENSHOTS.md](SCREENSHOTS.md) | Every screen, phone, tablet, desktop, dark and light |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | Local setup, tests, lint, adding components, integrations and actions, native builds |
+| [DESIGN.md](DESIGN.md) | Principles, the nanny's eye, tokens, type, layout, charts, copy |
 | [ROADMAP.md](ROADMAP.md) | What comes next, and what will not |
+
+Maintainers: [RELEASING.md](RELEASING.md) (not published on the website).

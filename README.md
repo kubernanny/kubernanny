@@ -40,13 +40,13 @@ helm install kubernanny oci://ghcr.io/kubernanny/charts/kubernanny -n kubernanny
 kubectl -n kubernanny logs deploy/kubernanny
 ```
 
-The log shows a QR code. Scan it in the app ("Scan QR code") or with your phone's camera, or open the link in a browser. That's the whole setup. The log only carries a one-time pairing code (valid for an hour) and the agent's public key. Each device creates its own key pair, which never leaves it, and every call is end-to-end encrypted between device and agent, so it works the same over a VPN, the LAN or plain HTTP: [docs/PROTOCOL.md](docs/PROTOCOL.md).
+The log shows a QR code. Scan it in the app or with your phone's camera, or open the link in a browser: that's the whole setup. The log carries only a one-time pairing code and the agent's public key; each device makes its own key pair, and every call is end-to-end encrypted, so it works the same over a VPN, the LAN or plain HTTP ([docs/PROTOCOL.md](docs/PROTOCOL.md)).
 
 <img src="docs/screenshots/56-terminal-pairing.png" alt="The agent's log with a QR code" width="520">
 
-**From anywhere, without opening a port:** switch on the relay (`relay.enabled: true`). The agent then dials out to a relay that only passes sealed messages along and can read none of them; your phone falls back to it whenever the cluster is not reachable directly. Run your own or use the public one: [docs/RELAY.md](docs/RELAY.md).
+**From anywhere, without opening a port:** `relay.enabled: true`. The agent dials out to a relay that passes sealed messages along and can read none of them ([docs/RELAY.md](docs/RELAY.md)).
 
-Other ways: `kubectl apply -f deploy/install.yaml`, or an Argo CD Application pointing at `deploy/helm/kubernanny`. No ingress? `kubectl -n kubernanny port-forward svc/kubernanny 8080:80` and open http://localhost:8080: the agent serves the full web UI itself. Configuration: [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+Other ways: `kubectl apply -f deploy/install.yaml`, or an Argo CD Application pointing at `deploy/helm/kubernanny`. No ingress? `kubectl -n kubernanny port-forward svc/kubernanny 8080:80`: the agent serves the full web UI itself. [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 ## What it checks
 
@@ -70,61 +70,36 @@ Other ways: `kubectl apply -f deploy/install.yaml`, or an Argo CD Application po
 
 Every threshold and issue: [docs/CHECKS.md](docs/CHECKS.md) and [docs/SECURITY-CHECKS.md](docs/SECURITY-CHECKS.md).
 
-Plus the last seven days at a glance (every incident with start and duration), a backups tab across CloudNativePG, Longhorn, etcd snapshots and Velero (including what has no backup at all), a plain-text status report to share when you ask for help in a forum (no ids, addresses or keys), home-screen widgets on iOS and Android with each cluster's light (switchable off per cluster or altogether), and the details for checking a cluster yourself: per-node CPU, RAM and disk (used vs. requested), OS and kernel; every workload with pods, restarts and usage; volumes with fill level; every ingress host with its certificate; Kubernetes warning events; CPU, RAM, network, restarts, etcd and API server latency over up to seven days.
+Plus the last seven days at a glance, backups across CloudNativePG, Longhorn, etcd and Velero (including what has none), home-screen widgets on iOS and Android, a plain-text status report to share in a forum, and the details for checking a cluster yourself: nodes, workloads, volumes, ingresses with their certificates, events and up to seven days of history.
 
 ## Actions, safely
 
-Only on an open problem, and only what that problem needs. Ten are on by default: **sync** and **hard refresh** an Argo CD app, **restart** a workload (after the logs on a crash loop, not at all after an OOMKill; first when a ConfigMap it reads changed since it started, with the opt-in `config-change-hint`), **back up now** (CloudNativePG, Longhorn, Velero), **reconcile now** (Flux, External Secrets, Infisical) or **renew** a cert-manager certificate, **uncordon** a node someone forgot, **clean up** evicted and failed pods, and read the **logs**. Five are off until you name them in `actions.enabled`, because their permission reaches further: **run a failed job again**, **force-delete** a pod stuck on a dead node, **stop** an Argo CD sync that hangs, **grow** a full volume, and **roll back** a manual-sync Argo CD app to an earlier deployment ([docs/CHECKS.md](docs/CHECKS.md#actions)). The app never says what to change, only which problem and which action; the agent takes the target from its own check, and admission policies hold each permission to exactly what its action sends. A stolen phone can fix what is broken right now and nothing else (and is revoked with one tap); it deletes nothing but finished pods. `rbac.allowActions=false` makes the agent strictly read-only. [docs/SECURITY.md](docs/SECURITY.md)
+Only on an open problem, and only what that problem needs: sync an Argo CD app, restart a crash-looping workload, start an overdue backup, uncordon a forgotten node and a few more, some of them off until you name them in `actions.enabled`. The agent takes the target from its own check, never from the request, and admission policies hold each permission to exactly what its action sends; a stolen phone can fix what is broken right now and nothing else. `rbac.allowActions=false` makes the agent strictly read-only. Every action: [docs/CHECKS.md](docs/CHECKS.md#actions); the security model: [docs/SECURITY.md](docs/SECURITY.md).
 
 ## You decide what it looks at
 
-Every check and every action can be switched off, in Helm (`checks.disabled: [argocd]`, `actions.disabled: [restart]`) or in the app. Switched off in Helm, the permissions go too: the chart's RBAC is generated from what each module declares it reads, so an agent told to leave Argo CD alone cannot read an Argo CD Application. What the agent runs, reads, stores and connects to, and how to verify each with `kubectl auth can-i`: [docs/IN-CLUSTER.md](docs/IN-CLUSTER.md). Every permission, why it is needed, exactly what each write action changes, and which Helm value removes what: [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
+Every check and every action can be switched off, in Helm (`checks.disabled: [argocd]`, `actions.disabled: [restart]`) or in the app. Switched off in Helm, the permission goes too: the chart's RBAC is generated from what each module reads. What runs, reads, stores and connects to: [docs/IN-CLUSTER.md](docs/IN-CLUSTER.md); every permission and which value removes it: [docs/PERMISSIONS.md](docs/PERMISSIONS.md).
 
 ## Notifications
 
-Straight to the Kubernanny app (sealed per device: the relay and Google cannot read it), or ntfy, Discord, Slack, Gotify or any JSON webhook. A problem is sent once it has lasted five minutes (rollouts and planned reboots heal before), again if it turns critical, and once more when it is resolved. Known problems can be silenced for an hour up to a week, and an optional weekly digest sums up the week. [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md)
+Straight to the Kubernanny app (sealed per phone, with a warning when the agent itself goes silent), or ntfy, Discord, Slack, Gotify or any JSON webhook. A problem is sent once it has lasted five minutes, again if it turns critical, and when it is resolved: [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md).
 
 ## How it works
 
-```mermaid
-flowchart LR
-  subgraph cluster["Your cluster"]
-    agent["kubernanny"] -- "watches, checks every 60 s" --> api["Kubernetes API"]
-    agent -- "cluster DNS" --> prom["Prometheus · Alertmanager · Grafana · Loki"]
-  end
-  app["App (iOS · Android · web)"] -- "end-to-end encrypted (Noise), direct" --> agent
-  app -. "or via the relay, still sealed" .-> relay["relay (optional)"]
-  agent -. "dials out" .-> relay
-  agent -- "changes" --> notify["ntfy · Discord · Slack · Gotify · webhook"]
-```
+<img src="docs/communication.png" alt="Who talks to whom: the app, the agent in your cluster, the optional relay with push, the Kubernetes API, monitoring and notifications">
 
-No account, no telemetry, nothing to sign up for. Nothing leaves your network except the notifications you configure (and, if you switch them on, the relay's sealed messages and component versions to OSV.dev). Every connection and what protects it: [docs/COMMUNICATION.md](docs/COMMUNICATION.md).
-
-<img src="docs/communication.png" alt="Communication diagram">
+No account, no telemetry, nothing to sign up for. What leaves your cluster is what you switch on: notifications, the relay's sealed messages and pushes, and, off by default, version lookups at OSV.dev and the container registries. Every connection and what protects it: [docs/COMMUNICATION.md](docs/COMMUNICATION.md); the full list of outbound connections: [docs/IN-CLUSTER.md](docs/IN-CLUSTER.md).
 
 ## Documentation
 
+Also at [kubernanny.app/docs](https://kubernanny.app/docs).
+
 | | |
 |---|---|
-| [In the cluster](docs/IN-CLUSTER.md) | what runs in your cluster: processes, ports, permissions, connections, stored data, how to verify |
-| [Permissions](docs/PERMISSIONS.md) | every permission (generated from the code): write access at a glance, reads per module and why, which switch removes what |
-| [Relay](docs/RELAY.md) | reaching the cluster without a VPN, what the relay sees and cannot see, running your own |
-| [Architecture](docs/ARCHITECTURE.md) | components, the run loop, modules, data flow, design decisions |
-| [Checks](docs/CHECKS.md) | every issue, threshold and action |
-| [Security checks](docs/SECURITY-CHECKS.md) | the posture hints and the vulnerability lookup, what it sends |
-| [Components](docs/COMPONENTS.md) | the ~75 recognised components |
-| [Configuration](docs/CONFIGURATION.md) | Helm values and environment variables |
-| [Communication](docs/COMMUNICATION.md) | every connection, what protects it, residual risks |
-| [Protocol](docs/PROTOCOL.md) | the end-to-end protocol between app and agent, with test vectors |
-| [Decisions](docs/decisions/README.md) | why Noise, why device keys, why the internal socket, direct and relay |
-| [Security](docs/SECURITY.md) | RBAC, threat model, devices and rotation |
-| [Notifications](docs/NOTIFICATIONS.md) | channels, timing, formats |
-| [API](docs/API.md) | the agent's HTTP API and metrics |
-| [Development](docs/DEVELOPMENT.md) | running locally, tests, adding components and checks |
-| [Releasing](docs/RELEASING.md) | the iOS and Android apps: native projects, store setup, `npm run release` |
-| [Design](docs/DESIGN.md) | principles, tokens, type, charts, copy |
-| [Screenshots](docs/SCREENSHOTS.md) | every screen |
-| [Roadmap](docs/ROADMAP.md) | what comes next |
+| **Use it** | [Components](docs/COMPONENTS.md) · [Checks](docs/CHECKS.md) · [Security checks and updates](docs/SECURITY-CHECKS.md) · [Notifications](docs/NOTIFICATIONS.md) · [Screenshots](docs/SCREENSHOTS.md) |
+| **Run it** | [What runs in your cluster](docs/IN-CLUSTER.md) · [Permissions](docs/PERMISSIONS.md) · [Configuration](docs/CONFIGURATION.md) · [Remote access (relay)](docs/RELAY.md) |
+| **Review it** | [Security model](docs/SECURITY.md) · [Communication](docs/COMMUNICATION.md) · [Protocol](docs/PROTOCOL.md) · [Decisions](docs/decisions/README.md) |
+| **Change it** | [Architecture](docs/ARCHITECTURE.md) · [HTTP API](docs/API.md) · [Development](docs/DEVELOPMENT.md) · [Design](docs/DESIGN.md) · [Roadmap](docs/ROADMAP.md) · [Changelog](CHANGELOG.md) |
 
 ## Repository
 
@@ -134,12 +109,12 @@ app/       Angular + Ionic + Capacitor app (iOS, Android, web); its web build sh
 protocol/  the end-to-end protocol shared by agent, app and relay
 relay/     the optional relay: Node (NestJS) and a Cloudflare Worker
 deploy/    Helm chart, plain manifests, relay deployment
-docs/      documentation and screenshots; also published at kubernanny.app/docs
-website/   kubernanny.app: landing page and docs, prerendered (Analog/Angular), Cloudflare Pages
+docs/      documentation, screenshots and diagrams; published at kubernanny.app/docs
+website/   kubernanny.app: landing page and docs, prerendered (Analog/Angular)
 e2e/       Playwright tests against the web demo and a running agent
 fastlane/  App Store and Google Play releases (docs/RELEASING.md)
 branding/  icon and logo
-scripts/   screenshot automation
+scripts/   screenshots, store screenshots, the diagram, the admission policy test
 ```
 
 Contributions welcome, especially new components and checks: [CONTRIBUTING.md](CONTRIBUTING.md).

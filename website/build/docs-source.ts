@@ -26,23 +26,29 @@ export const UNPUBLISHED = new Set(['RELEASING.md']);
  */
 export const NAV: { title: string; items: { file: string; label?: string }[] }[] = [
   {
-    title: 'Start',
+    title: 'Use it',
     items: [
       { file: 'README.md', label: 'Overview' },
+      { file: 'COMPONENTS.md', label: 'Components' },
+      { file: 'CHECKS.md', label: 'Checks' },
+      { file: 'SECURITY-CHECKS.md', label: 'Security checks and updates' },
+      { file: 'NOTIFICATIONS.md' },
+      { file: 'SCREENSHOTS.md' },
+    ],
+  },
+  {
+    title: 'Run it',
+    items: [
       { file: 'IN-CLUSTER.md', label: 'What runs in your cluster' },
       { file: 'PERMISSIONS.md', label: 'Permissions' },
       { file: 'CONFIGURATION.md' },
-      { file: 'COMPONENTS.md', label: 'Components' },
-      { file: 'CHECKS.md', label: 'Checks' },
-      { file: 'SECURITY-CHECKS.md', label: 'Security checks' },
-      { file: 'NOTIFICATIONS.md' },
       { file: 'RELAY.md', label: 'Remote access (relay)' },
     ],
   },
   {
     title: 'Security',
     items: [
-      { file: 'SECURITY.md' },
+      { file: 'SECURITY.md', label: 'Security model' },
       { file: 'COMMUNICATION.md' },
       { file: 'PROTOCOL.md', label: 'Protocol' },
       // Every decision record (decisions/NNNN-*.md) follows here by itself, numbered, see buildNav.
@@ -50,13 +56,12 @@ export const NAV: { title: string; items: { file: string; label?: string }[] }[]
     ],
   },
   {
-    title: 'Reference',
+    title: 'Internals',
     items: [
-      { file: 'API.md', label: 'HTTP API' },
       { file: 'ARCHITECTURE.md' },
+      { file: 'API.md', label: 'HTTP API' },
       { file: 'DEVELOPMENT.md' },
       { file: 'DESIGN.md' },
-      { file: 'SCREENSHOTS.md' },
       { file: 'ROADMAP.md' },
     ],
   },

@@ -1,4 +1,4 @@
-# Security checks
+# Security checks and updates
 
 > **What the built-in lookup can and cannot see**
 >
