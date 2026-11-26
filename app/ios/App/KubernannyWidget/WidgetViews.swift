@@ -76,9 +76,11 @@ private struct OverviewSmall: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 6)
-            Text(total.headline)
+            // A cluster whose agent went silent outranks every count: say which one, in coral.
+            let silent = clusters.filter(\.unreachable)
+            Text(silent.isEmpty ? total.headline : silent.count == 1 ? "\(silent[0].name): \(String(localized: "widget.silent"))" : String.localizedStringWithFormat(NSLocalizedString("widget.silentMany", comment: "2 agents not answering"), silent.count))
                 .font(.system(size: 19, weight: .bold, design: .rounded))
-                .foregroundColor(Palette.tone(total.light))
+                .foregroundColor(silent.isEmpty ? Palette.tone(total.light) : Palette.crit)
                 .lineLimit(3)
                 .minimumScaleFactor(0.7)
             Spacer(minLength: 6)

@@ -423,7 +423,7 @@ export const de = {
     markerSaved: 'Zeichen auf diesem Gerät gespeichert.',
     deadmanTitle: 'Warnen, wenn der Agent schweigt',
     deadmanHint: 'Antwortet Kubernanny nicht mehr (Cluster oder Agent ausgefallen), schickt das Relay diesem Telefon eine Nachricht, die es versiegelt hinterlegt hat und nicht lesen kann.',
-    deadmanAfter: 'Nach',
+    deadmanAfter: 'Nach so langer Stille',
     deadmanMinutes: '{{n}} Min.',
     deadmanLocked: 'In der Installation abgeschaltet (notifications.appPush.deadman.enabled).',
     deadmanRelay: 'Das Relay unterstützt das noch nicht. Sobald es das tut, geht es ohne weiteres Zutun.',

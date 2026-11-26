@@ -75,8 +75,15 @@ object WidgetRender {
         val allStale = list.all { it.isStale(now) }
         v.setImageViewResource(R.id.kn_eye, eye(total.light, allStale))
         v.setTextViewText(R.id.kn_count, count(context, list.size))
-        v.setTextViewText(R.id.kn_headline, headline(context, total))
-        v.setTextColor(R.id.kn_headline, context.getColor(tone(total.light)))
+        // A cluster whose agent went silent outranks every count: say which one, in coral.
+        val silent = list.filter { it.unreachable }
+        if (silent.isEmpty()) {
+            v.setTextViewText(R.id.kn_headline, headline(context, total))
+            v.setTextColor(R.id.kn_headline, context.getColor(tone(total.light)))
+        } else {
+            v.setTextViewText(R.id.kn_headline, if (silent.size == 1) silent[0].name + ": " + context.getString(R.string.kn_widget_silent) else context.getString(R.string.kn_widget_silent_many, silent.size))
+            v.setTextColor(R.id.kn_headline, context.getColor(R.color.kn_crit))
+        }
         for (i in 0 until 8) {
             val dotId = context.resources.getIdentifier("kn_sdot_$i", "id", context.packageName)
             val cluster = list.getOrNull(i)

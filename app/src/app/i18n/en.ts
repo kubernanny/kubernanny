@@ -419,7 +419,7 @@ export const en: Dictionary = {
     markerSaved: 'Sign saved on this device.',
     deadmanTitle: 'Warn when the agent goes silent',
     deadmanHint: 'If Kubernanny stops answering (the cluster or the agent is down), the relay sends this phone a message it holds sealed, without being able to read it.',
-    deadmanAfter: 'After',
+    deadmanAfter: 'After this much silence',
     deadmanMinutes: '{{n}} min',
     deadmanLocked: 'Switched off in the deployment (notifications.appPush.deadman.enabled).',
     deadmanRelay: 'The relay does not support this yet. Once it does, it works without anything to do here.',

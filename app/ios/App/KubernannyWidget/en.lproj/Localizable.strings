@@ -6,6 +6,7 @@
 "widget.empty" = "Open Kubernanny to see your clusters here.";
 "widget.staleOpen" = "Open Kubernanny";
 "widget.silent" = "Agent not answering";
+"widget.silentMany" = "%d agents not answering";
 "widget.staleTag" = "Not current";
 "widget.justNow" = "just now";
 "widget.noProblems" = "No open problems";

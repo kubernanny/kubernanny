@@ -43,8 +43,8 @@ import { PushMarkerPickerComponent } from './push-marker-picker.component';
                 <span>{{ t('push.deadmanTitle') }}</span>
               </label>
               @if (d.on && d.editable) {
-                <div class="graces" role="radiogroup" [attr.aria-label]="t('push.deadmanAfter')">
-                  <span class="after">{{ t('push.deadmanAfter') }}</span>
+                <span class="after" id="deadman-after">{{ t('push.deadmanAfter') }}</span>
+                <div class="graces" role="radiogroup" aria-labelledby="deadman-after">
                   @for (g of d.graces; track g.minutes) {
                     <button type="button" role="radio" [attr.aria-checked]="g.minutes === d.grace" [class.chosen]="g.minutes === d.grace" [disabled]="busy()" (click)="setDeadman(g.minutes)">{{ g.label }}</button>
                   }
@@ -107,19 +107,20 @@ import { PushMarkerPickerComponent } from './push-marker-picker.component';
       accent-color: var(--accent, currentColor);
     }
     .graces {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 0.4rem;
+      margin-top: -0.25rem;
     }
     .after {
       color: var(--mute);
-      font-size: 0.875rem;
-      margin-right: 0.2rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
     }
     .graces button {
-      min-height: 2.25rem;
-      padding: 0 0.8rem;
+      min-height: 2.5rem;
+      padding: 0 0.25rem;
+      white-space: nowrap;
       border-radius: 999px;
       border: 1px solid var(--line);
       background: transparent;
