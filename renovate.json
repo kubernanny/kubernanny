@@ -1,0 +1,91 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["github>NLueg/renovate-config", "helpers:pinGitHubActionDigests"],
+  "labels": ["dependencies", "renovate"],
+  "automerge": false,
+  "packageRules": [
+    {
+      "description": "Angular and what is built on it, app and website together, majors included",
+      "matchPackageNames": ["@angular/**", "@angular-devkit/**", "angular-eslint", "@angular-eslint/**", "@analogjs/**"],
+      "groupName": "angular",
+      "separateMajorMinor": false
+    },
+    {
+      "description": "Ionic and Capacitor with its plugins, majors included",
+      "matchPackageNames": [
+        "@ionic/**",
+        "ionicons",
+        "@capacitor/**",
+        "@capacitor-mlkit/**",
+        "@capacitor-firebase/**",
+        "@aparajita/capacitor-*"
+      ],
+      "groupName": "ionic and capacitor",
+      "separateMajorMinor": false
+    },
+    {
+      "description": "Firebase for native push (Android; the iOS SDK is pinned in the Xcode project)",
+      "matchPackageNames": ["com.google.firebase:**", "com.google.gms:google-services"],
+      "groupName": "firebase"
+    },
+    {
+      "description": "Test tooling",
+      "matchPackageNames": ["vitest", "@vitest/**", "playwright", "@playwright/test", "jsdom", "supertest", "@types/supertest"],
+      "groupName": "test tooling"
+    },
+    {
+      "description": "Lint and format",
+      "matchPackageNames": ["eslint", "eslint-*", "@eslint/**", "typescript-eslint", "prettier"],
+      "groupName": "lint and format"
+    },
+    {
+      "description": "Cloudflare Worker tooling",
+      "matchPackageNames": ["wrangler", "@cloudflare/**"],
+      "groupName": "cloudflare"
+    },
+    {
+      "description": "The protocol's cryptography: merge only with the protocol's vector and libsodium cross-tests green",
+      "matchPackageNames": ["@noble/**", "@hpke/**", "noise-protocol"],
+      "groupName": "crypto",
+      "prBodyNotes": ["Cryptography of the end-to-end protocol: check that `cd protocol && npm test` (test vectors, libsodium cross-test) and the native push vector tests pass before merging."]
+    },
+    {
+      "description": "Docker base images, pinned by digest (the Dockerfiles take them as ARG NODE_IMAGE)",
+      "matchDatasources": ["docker"],
+      "pinDigests": true,
+      "groupName": "docker base images"
+    },
+    {
+      "description": "Our own images are released from this repository, not updated by Renovate",
+      "matchPackageNames": ["ghcr.io/kubernanny/**"],
+      "enabled": false
+    },
+    {
+      "description": "Android build: Gradle, the Android Gradle Plugin and Kotlin",
+      "matchManagers": ["gradle", "gradle-wrapper"],
+      "matchPackageNames": ["!com.google.firebase:**", "!com.google.gms:google-services"],
+      "groupName": "android build"
+    },
+    {
+      "description": "fastlane and the Ruby side of the store releases",
+      "matchManagers": ["bundler"],
+      "groupName": "fastlane"
+    },
+    {
+      "description": "Agent, relay and protocol compile with TypeScript 7 (overrides the preset's cap)",
+      "matchPackageNames": ["typescript"],
+      "matchFileNames": ["agent/package.json", "relay/package.json", "relay/cloudflare/package.json", "protocol/package.json"],
+      "allowedVersions": "<8.0.0"
+    },
+    {
+      "description": "The root's TypeScript only serves typescript-eslint, which reads TypeScript below 6.1",
+      "matchPackageNames": ["typescript"],
+      "matchFileNames": ["package.json"],
+      "allowedVersions": "<6.1.0"
+    }
+  ],
+  "swift": {
+    "description": "app/ios/App/CapApp-SPM/Package.swift is written by npx cap sync; the Firebase iOS SDK is updated in Xcode",
+    "enabled": false
+  }
+}
