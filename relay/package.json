@@ -10,7 +10,9 @@
     "start:dev": "tsc -p tsconfig.build.json && node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "measure": "npm run build && node scripts/measure-memory.mjs"
+    "measure": "npm run build && node scripts/measure-memory.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "dependencies": {
     "@kubernanny/protocol": "file:../protocol",

@@ -18,7 +18,9 @@
     "store:metadata": "cd .. && bundle exec fastlane metadata",
     "store:screenshots": "cd .. && bundle exec fastlane screenshots",
     "store:shots": "../scripts/store-screenshots/run.sh",
-    "test:scripts": "node --test scripts/*.test.mjs"
+    "test:scripts": "node --test scripts/*.test.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "private": true,
   "packageManager": "npm@10.9.9",

@@ -66,6 +66,17 @@ What the tests guard beyond the logic itself:
 | CI step "RBAC follows the switches" | a module or action switched off in Helm loses its permissions |
 | `scripts/admission-policy-test/run.sh` (by hand; Go, Helm, kubectl, network) | the admission policies compile in a real kube-apiserver with the real CRDs, and allow and deny exactly what `requests.sh` says, as the agent's ServiceAccount |
 
+## Lint and format
+
+One ESLint setup for all packages lives at the root (`eslint.config.mjs`, the shared `eslint-config-nlueg-angular` with Prettier at 120 columns from `.prettierrc`). Install it once with `npm ci` at the root, then:
+
+```sh
+npm run lint                # at the root: every package
+cd agent && npm run lint    # one package; npm run lint:fix sorts imports and formats
+```
+
+The root's TypeScript 6 is only for the linter: agent, relay and protocol compile with TypeScript 7, which typescript-eslint cannot read yet. The CI job `lint` runs the same. Large mechanical reformats go into `.git-blame-ignore-revs`.
+
 ## The demo in the app
 
 The app's demo (first screen, `/#/demo`, and demo.kubernanny.app) does not run an agent: `app/src/app/core/demo/demo-agent.ts` answers from recordings in `app/public/demo/<scenario>.<lang>.json` and shifts their times to now, so the demo never looks stale. The recordings are made from the agent's demo cluster:

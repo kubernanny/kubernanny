@@ -27,6 +27,7 @@ jobs:
       e2e: ${{ steps.paths.outputs.e2e }}
       image: ${{ steps.paths.outputs.image }}
       relay_image: ${{ steps.paths.outputs.relay_image }}
+      lint: ${{ steps.paths.outputs.lint }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -59,6 +60,7 @@ jobs:
             hit '^(protocol|agent|app|e2e)/' e2e
             hit '^(protocol|agent|app)/|^Dockerfile$|^\.dockerignore$' image
             hit '^(protocol|relay)/' relay_image
+            hit '^(protocol|agent|app|relay|website|e2e)/|^(package(-lock)?\.json|eslint\.config\.mjs|\.prettierrc)$' lint
           } | tee -a "$GITHUB_OUTPUT"
 
   protocol:
@@ -79,6 +81,26 @@ jobs:
       - run: npm run typecheck
       # Includes the cross-test against libsodium and the published test vectors.
       - run: npm test
+
+  # ESLint and Prettier over every package, with the shared config at the
+  # root (eslint.config.mjs). Each package is installed so the type-aware
+  # rules see its dependencies.
+  lint:
+    needs: changes
+    if: needs.changes.outputs.lint == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: '**/package-lock.json'
+      - run: npm ci
+      - run: npm ci && npm run build
+        working-directory: protocol
+      - run: for p in agent relay relay/cloudflare app website e2e; do npm ci --prefix "$p" || exit 1; done
+      - run: npm run lint
 
   agent:
     needs: changes

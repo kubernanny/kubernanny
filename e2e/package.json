@@ -6,7 +6,9 @@
   "scripts": {
     "build": "cd ../protocol && npm run build && cd ../agent && npm run build && cd ../app && npx ng build && npm run build:demo",
     "test": "playwright test --trace off",
-    "test:headed": "playwright test --headed"
+    "test:headed": "playwright test --headed",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

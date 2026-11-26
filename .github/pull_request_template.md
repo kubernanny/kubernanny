@@ -2,6 +2,7 @@
 
 ## How it was tested
 
+- [ ] `npm run lint` (at the root, or in the package)
 - [ ] `agent`: `npm test`
 - [ ] `app`: `npm test`
 - [ ] Demo cluster has the data, healthy scenario still raises nothing

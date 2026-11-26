@@ -11,7 +11,9 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.build.json --noEmit",
     "screenshots": "node scripts/screenshots.mjs",
-    "brand": "node scripts/brand-assets.mjs"
+    "brand": "node scripts/brand-assets.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "dependencies": {
     "@analogjs/content": "^3.0.0",

@@ -1,0 +1,15 @@
+{
+  "name": "kubernanny-tooling",
+  "private": true,
+  "description": "Lint and format tooling for every package of the repository. The packages keep their own dependencies; this holds only ESLint, Prettier and the TypeScript the linter parses with.",
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "devDependencies": {
+    "eslint": "^10.9.1",
+    "eslint-config-nlueg-angular": "^22.1.0",
+    "prettier": "^3.9.6",
+    "typescript": "~6.0.3"
+  }
+}
