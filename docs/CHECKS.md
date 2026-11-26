@@ -23,6 +23,7 @@ A module that cannot run (API error, missing RBAC) shows as *not checkable* and 
 | `nodes/<node>/MemoryPressure`, `DiskPressure`, `PIDPressure` | warning | kubelet reports the condition | Node status |
 | `nodes/<node>/memory` | warning ≥ 90 %, critical ≥ 97 % | memory used / allocatable | metrics-server |
 | `nodes/<node>/disk` | warning ≥ 85 %, critical ≥ 95 % | root filesystem used | node-exporter via Prometheus |
+| `nodes/<node>/cordoned` | warning | a **Ready** node cordoned for more than 30 minutes that kured does not hold the lock for and that no drain is working on (no pod on it is terminating). Offers **uncordon**. | Node spec; since when: the managedFields entry that owns `spec.unschedulable`, else when the agent first saw it |
 
 Stats: nodes ready, cluster CPU and RAM %, cores, memory.
 
@@ -66,14 +67,23 @@ RKE2 and k3s renew their certificates on restart when they expire within 90 days
 
 | Issue id | Severity | When | Actions |
 |---|---|---|---|
-| `pods/<ns>/<Kind>/<name>` | critical | a container waits with `CrashLoopBackOff`, `ImagePullBackOff`, `ErrImagePull`, `CreateContainerConfigError`, `CreateContainerError`, `InvalidImageName` or `RunContainerError`. One issue per workload, however many pods. | logs (of the previous, crashed run for CrashLoopBackOff), restart of the owner |
+| `pods/<ns>/<Kind>/<name>` | critical | a container waits with `CrashLoopBackOff`, `ImagePullBackOff`, `ErrImagePull`, `CreateContainerConfigError`, `CreateContainerError`, `InvalidImageName` or `RunContainerError`. One issue per workload, however many pods. | logs (of the previous, crashed run for CrashLoopBackOff), restart of the owner (see below) |
+| `pods/<ns>/<Kind>/<name>` | critical, title `…: OOMKilled` | a crash loop whose last run ended with `OOMKilled`. The cause names the container's memory limit and says to raise it (without a limit: the node ran out of memory). | logs only: a restart cannot help |
 | `pods/<ns>/<Kind>/<name>` | warning | a pod is `Pending` for more than 10 minutes (scheduler message as cause) | logs, restart |
+| `pods/terminating/<ns>/<pod>` | warning | a pod in Terminating for more than 10 minutes whose node is NotReady or no longer exists: no kubelet confirms the end, a StatefulSet does not start its replacement, a Longhorn volume stays attached | force delete (opt-in) |
+| `pods/finished/<ns>` | hint | pods older than an hour that finished: `Failed` (evicted ones included) and `Succeeded` ones whose Job is gone. Pods of a Job that still exists are left alone (their logs belong to the Job). | clean up (at most 50 per run) |
 | `workloads/<ns>/<Kind>/<name>` | critical | no replica ready, not explained by a pod issue, workload older than 5 minutes | restart |
 | `workloads/<ns>/<Kind>/<name>` | warning | some replicas not ready, or `ProgressDeadlineExceeded` | restart |
-| `jobs/<ns>/<cronjob>` | warning | the newest finished run of a CronJob failed | logs of its pod |
-| `jobs/<ns>/<job>` | warning | a Job without CronJob failed within the last 24 h | logs |
+| `jobs/<ns>/<cronjob>` | warning | the newest finished run of a CronJob failed | logs of its pod, run again (opt-in) |
+| `jobs/<ns>/<job>` | warning | a Job without CronJob failed within the last 24 h; hidden once a rerun of it exists (label `kubernanny.io/rerun-of`) | logs, run again (opt-in, only for a Job without any owner) |
 
-The owner of a pod is resolved through its ReplicaSet (`<deployment>-<pod-template-hash>`), StatefulSet or DaemonSet. Pods of finished Jobs (`Succeeded`) are ignored.
+The owner of a pod is resolved through its ReplicaSet (`<deployment>-<pod-template-hash>`), StatefulSet or DaemonSet. Pods of finished Jobs (`Succeeded`) are ignored, and so are pods already being deleted.
+
+**Which restart is offered on a crash loop.** A restart replaces the pods; it helps when the cause is gone, not before. So:
+
+- no known cause: the logs of the crashed run come first, the restart second, with a hint ("helps once you have fixed the cause, e.g. changed a Secret or a dependency is back");
+- the last run ended with `OOMKilled`: no restart, the cause names the limit;
+- a ConfigMap the container reads through `env` (`configMapKeyRef`) or `envFrom` changed after the container's last start: the restart comes first, and the cause says so ("ConfigMap app-config changed after the last start: a restart loads it right away"). The kubelet reads env from ConfigMaps at every container start, so the next attempt after the back-off would pick it up too; the restart does it now. Volume-mounted ConfigMaps update by themselves and are not counted. The agent reads only the metadata of those ConfigMaps (`PartialObjectMetadata`, never their data, at most 20 per run) and takes the newest managedFields time as the change time. That needs `get` on ConfigMaps, which comes with the `restart` action. **Secrets are not checked**: their metadata needs `get` on Secrets cluster-wide, which the chart never grants; the restart's hint names a changed Secret as the typical case instead.
 
 ### Volumes (`volumes`)
 
@@ -81,7 +91,7 @@ The owner of a pod is resolved through its ReplicaSet (`<deployment>-<pod-templa
 |---|---|---|
 | `volumes/<ns>/<pvc>` | critical | phase `Lost` |
 | `volumes/<ns>/<pvc>` | warning | phase `Pending` for more than 5 minutes (StorageClass named; `WaitForFirstConsumer` explained) |
-| `volumes/<ns>/<pvc>/full` | warning ≥ 85 %, critical ≥ 95 % | `kubelet_volume_stats_used_bytes / capacity` from Prometheus |
+| `volumes/<ns>/<pvc>/full` | warning ≥ 85 %, critical ≥ 95 % | `kubelet_volume_stats_used_bytes / capacity` from Prometheus. Offers **grow** (opt-in `pvc-expand`) by a quarter, rounded up to whole Gi, when the claim is Bound and its StorageClass has `allowVolumeExpansion`. A CloudNativePG volume gets no offer: the cause says to raise the Cluster's `storage.size`. For a claim made from a StatefulSet's volumeClaimTemplates the confirmation says that the template keeps the old size. |
 
 ### Disruption budgets (`pdb`)
 
@@ -236,6 +246,29 @@ Every upstream alert considered:
 | PrometheusTSDBCompactionsFailing | taken | `prometheus-compactions/<instance>` | failed compactions (4 h) | warning |
 | Prometheus remote write, notification queue, SD, scrape limits, duplicate or out-of-order samples, TSDB reloads, Alertmanager* and PrometheusOperator* | left out | | self-monitoring of a setup Kubernanny does not depend on; kube-prometheus-stack ships them | |
 
+## Actions
+
+Every action belongs to an issue: the app names the issue and the action type, the agent takes the target from its own check. Each has a switch (Helm `actions.disabled`, the app), its permission is granted only while it is on, the admission policy holds it to what it sends ([PERMISSIONS.md](PERMISSIONS.md)), every run is logged with the device, and the app confirms each one, saying what exactly happens.
+
+| Action | On by default | Offered on | What it does |
+|---|---|---|---|
+| `restart` | yes | `pods/…`, `workloads/…`, `argocd/<app>/health` | `kubectl rollout restart` of the workload; on a crash loop see above |
+| `argocd-sync`, `argocd-refresh` | yes | `argocd/…` | a plain sync, a hard refresh |
+| `cnpg-backup` | yes | `cnpg/<ns>/<cluster>/backup` | a CloudNativePG `Backup` |
+| `longhorn-backup` | yes | `longhorn/backup/<volume>` (attached volumes) | a Longhorn `Snapshot` and a `Backup` of it |
+| `velero-backup` | yes | `velero/<schedule>` | a Velero `Backup` from the schedule's template |
+| `reconcile-now` | yes | Flux Kustomization/HelmRelease, ExternalSecret, InfisicalStaticSecret, cert-manager Certificate issues | the controller's reconcile annotation; for a Certificate `cmctl renew` |
+| `uncordon` | yes | `nodes/<node>/cordoned` | `kubectl uncordon` |
+| `cleanup-pods` | yes | `pods/finished/<ns>` | deletes the finished pods listed (never a running one) |
+| `logs` | yes | crash loops, failed jobs, CNPG, etcd | reads the last 300 lines, changes nothing |
+| `job-rerun` | **opt-in** | `jobs/…` | a Job from the CronJob's template (`kubectl create job --from=cronjob/…`), or a copy of a failed stand-alone Job without its controller-uid labels and selector. Never for a Job another controller owns. |
+| `force-delete-terminating` | **opt-in** | `pods/terminating/…` | deletes the pod with grace period 0. The confirmation warns that a StatefulSet pod could run twice if the node is in fact alive. |
+| `argocd-terminate-op` | **opt-in** | `argocd/<app>/operation-stuck` | ends the running operation |
+| `pvc-expand` | **opt-in** | `volumes/<ns>/<pvc>/full` | raises the storage request by a quarter; cannot be undone |
+| `argocd-rollback` | **opt-in** | the Argo CD sheet, no issue needed | below |
+
+The opt-in ones need `actions.enabled: [<type>, …]` in the Helm values (env `ENABLED_ACTIONS`): each needs a permission a compromised agent pod could use for more than the action (create any Job, force-delete a terminating pod, end any running operation, grow any claim by half), see [SECURITY.md](SECURITY.md).
+
 ## Integrations (when the component is detected and switched on)
 
 ### Longhorn (`longhorn`)
@@ -247,8 +280,8 @@ Every upstream alert considered:
 | `longhorn/node/<node>` | warning | Longhorn node not `Ready` |
 | `longhorn/capacity` | warning < 15 % free, critical < 5 % | free disk across all Longhorn disks |
 | `longhorn/backup-target/<name>` | critical | a configured backup target (S3, NFS) is not available: no volume backups run |
-| `longhorn/backup/<volume>` | warning | the newest backup of a volume failed (Longhorn's message as cause) |
-| `longhorn/backup/<volume>` | warning older than `BACKUP_MAX_AGE_HOURS` *(config)*, critical older than twice that | age of the newest completed backup, for attached volumes that have backups (a RecurringJob that stopped) |
+| `longhorn/backup/<volume>` | warning | the newest backup of a volume failed (Longhorn's message as cause). Offers **backup now** for an attached volume. |
+| `longhorn/backup/<volume>` | warning older than `BACKUP_MAX_AGE_HOURS` *(config)*, critical older than twice that | age of the newest completed backup, for attached volumes that have backups (a RecurringJob that stopped). Offers **backup now**. |
 | `longhorn/backup/<volume>` | hint | the same for a **detached** volume: Longhorn's RecurringJobs skip detached volumes unless `allow-recurring-job-while-volume-detached` is on, and nothing writes to them |
 
 Only volumes that exist now are judged, titled by their PVC (`namespace/pvc`) where they have one. Longhorn keeps the backups of deleted volumes in the target until someone removes them; they protect nothing and only appear as a stat ("Backups of deleted volumes") and as `orphaned` in the Backups view, never as an issue or a row. Detached volumes report `unknown` robustness; that is normal and ignored. Stats: volumes healthy/attached, total, free disk, scheduled share, nodes.
@@ -262,6 +295,8 @@ Only volumes that exist now are judged, titled by their PVC (`namespace/pvc`) wh
 | `certificates/<ns>/<name>` | warning < 14 days *(config)*, critical < 3 days | expiry close. cert-manager renews a 90-day certificate 30 days early, so this means renewal is failing. |
 | `certificates/issuer/<name>` | critical | ClusterIssuer not ready: no new certificate can be issued |
 
+Every `certificates/<ns>/<name>` issue offers **renew** (`reconcile-now`), unless the `Issuing` condition is already True: what `cmctl renew` does, the `Issuing` condition set to True with reason `ManuallyTriggered` on the status subresource.
+
 Stats: certificates ready, ClusterIssuers, next expiry.
 
 ### Argo CD (`argocd`)
@@ -273,13 +308,14 @@ Stats: certificates ready, ClusterIssuers, next expiry.
 | `argocd/<app>/sync` | **hint** | `OutOfSync` on an app with **manual** sync whose last sync is more than 7 days ago (`PENDING_HINT_DAYS`): a change may have been forgotten. Sooner it is no issue at all, see "Ready to sync" below. | sync, hard refresh |
 | `argocd/<app>/sync` | warning | `OutOfSync` on an app with **automated** sync: Argo CD should have fixed it, so a sync is stuck or something changes the cluster behind Git's back | sync, hard refresh |
 | `argocd/<app>/comparison` | warning | `ComparisonError` condition | hard refresh |
+| `argocd/<app>/operation-stuck` | warning | an operation has been `Running` for more than 30 minutes (`status.operationState.startedAt`): a hook that never finishes blocks every later sync | end the operation (opt-in `argocd-terminate-op`) |
 
 **Ready to sync.** A manual app that is `OutOfSync`, neither `Degraded` nor `Missing`, and whose last sync did not fail, is routine maintenance, not a problem: no issue, no hint, no notification. The `argocd` module lists it in `pendingSyncs` instead, and the app shows one calm card ("3 Apps bereit zum Sync") that opens the list. Each entry is read from the Application resource alone (the agent has no Argo CD API token, so no commit messages): the revision deployed (`status.operationState.syncResult.revision`, else the newest `status.history` entry) and the one Git has (`status.sync.revision`), the resources that differ (`status.resources[]` with `OutOfSync`; `health: Missing` is new, `requiresPruning` is removed by the sync), and image changes where Git names the image (Helm parameters `<prefix>.repository|name` + `<prefix>.tag`, Kustomize `images`) and `status.summary.images` says what runs. Since when the change waits is not recorded; the list says "since the last sync", which is the upper bound. The Sync button appears while `argocd-sync` is on; it runs under the id the app had as an issue (`argocd/<ns>/<app>/sync`), with the target taken from the agent's own list.
 
 An app counts as automated when `spec.syncPolicy.automated` is set and not `enabled: false` (Argo CD 3). The "Synced" stat is only tinted as a warning when an automated app is out of sync. No sync is offered while an operation is running. Stats: apps, synced, healthy, automated.
 
 
-Issue ids are `argocd/<namespace>/<app>/{health,operation,sync,comparison}`. A restart is offered only for a workload in the Application's `spec.destination.namespace` that the agent's own inventory shows not ready, never for a target taken from the Application's status alone.
+Issue ids are `argocd/<namespace>/<app>/{health,operation,sync,comparison,operation-stuck}`. Ending an operation sets `status.operationState.phase: Terminating`, which is what `argocd app terminate-op` has the API server write; the controller then stops the sync. Changes already applied stay. The agent re-reads the Application and refuses (409 `TARGET_CHANGED`) once the operation is no longer running. A restart is offered only for a workload in the Application's `spec.destination.namespace` that the agent's own inventory shows not ready, never for a target taken from the Application's status alone.
 
 #### Rolling back (`argocd-rollback`, off by default)
 
@@ -353,7 +389,7 @@ Stats: node rebooting now, nodes waiting for a reboot (`kured_reboot_required`, 
 
 ### Velero (`velero`)
 
-Per schedule, the newest backup: `velero/<schedule>` critical on `Failed`, warning on `PartiallyFailed` or when older than 26 h *(config)*.
+Per schedule, the newest backup: `velero/<schedule>` critical on `Failed`, warning on `PartiallyFailed` or when older than 26 h *(config)*. Both offer **backup now** (`velero-backup`): the agent reads the Schedule and creates a Backup with its template, named `<schedule>-<timestamp>` and labelled `velero.io/schedule-name`, the same as `velero backup create --from-schedule`.
 
 ### Flux, External Secrets, Infisical
 
@@ -366,7 +402,7 @@ Every Kustomization, HelmRelease and GitRepository (Flux), ExternalSecret and Cl
 | InfisicalDynamicSecret (`v1alpha1`) | `secrets.infisical.com/Reconcile` | `False` |
 | InfisicalPushSecret (`v1alpha1`) | `secrets.infisical.com/Reconcile` | `True` (inverted: reason `Error`) |
 
-Issue ids `<module>/<Kind>/<ns>/<name>`. Stats: ready per kind; the summary counts the same, and names resources the controller has not given a status yet instead of calling them ready.
+Issue ids `<module>/<Kind>/<ns>/<name>`. **Reconcile now** (`reconcile-now`) is offered where the controller reconciles on an annotation: Kustomization and HelmRelease (`reconcile.fluxcd.io/requestedAt`, as `flux reconcile`), ExternalSecret (`force-sync`, as the External Secrets FAQ shows) and InfisicalStaticSecret (`kubernanny.io/requested-at`: the operator's v1beta1 controller reconciles on any change of its annotations). Not for GitRepository and ClusterSecretStore (they recover on their interval), nor for the older InfisicalSecret, InfisicalDynamicSecret and InfisicalPushSecret: their controllers ignore metadata changes (`GenerationChangedPredicate`), so an annotation would do nothing. Stats: ready per kind; the summary counts the same, and names resources the controller has not given a status yet instead of calling them ready.
 
 ### Gatus (`gatus`)
 

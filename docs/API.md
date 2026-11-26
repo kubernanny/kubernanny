@@ -31,7 +31,8 @@ Errors carry the HTTP status and a body with a stable `code` and a `message` in 
 | `ADMIN_ONLY` | 403 | a device asked for a route of the admin CLI |
 | `ISSUE_GONE` | 409 | the issue no longer exists (fixed meanwhile) |
 | `ACTION_NOT_OFFERED` | 404 | the issue does not offer that action |
-| `ACTION_UNKNOWN` | 400 | not one of the four issue action types |
+| `ACTION_UNKNOWN` | 400 | not one of the issue action types (`POST /api/actions/<type>`) |
+| `TARGET_CHANGED` | 409 | the object changed since the issue was raised (an operation ended, a volume was grown); reload |
 | `NO_CHANNEL` | 400 | test notification without a configured channel |
 | `NOTIFICATIONS_LOCKED` | 403 | test notification while `checks.disabled: [notifications]` switches every channel off |
 | `NOTIFY_FAILED` | 502 | the test notification did not reach every channel; the message names the failing one |
@@ -226,13 +227,15 @@ Sources and rules, each the same as its check: CNPG clusters with backups config
 
 ### `POST /actions/:type?issue=<issue id>&index=<n>`
 
-`type`: `argocd-sync`, `argocd-refresh`, `restart`, `cnpg-backup`. `index` picks among several actions of the same type on one issue (an Argo CD app with two degraded Deployments offers two restarts), default 0.
+`type`: `argocd-sync`, `argocd-refresh`, `restart`, `cnpg-backup`, `longhorn-backup`, `velero-backup`, `reconcile-now`, `uncordon`, `cleanup-pods`, and the opt-in `job-rerun`, `force-delete-terminating`, `argocd-terminate-op`, `pvc-expand` (403 `ACTION_DISABLED` until named in Helm `actions.enabled`). `index` picks among several actions of the same type on one issue (an Argo CD app with two degraded Deployments offers two restarts), default 0. What each one changes: [CHECKS.md](CHECKS.md#actions).
 
 ```json
 { "done": "Deployment social-importer wird neu gestartet." }
 ```
 
-The agent looks up the issue in its current snapshot and runs the action stored there; the request cannot name a target. After an action the agent starts a new run.
+The agent looks up the issue in its current snapshot and runs the action stored there; the request cannot name a target. After an action the agent starts a new run. An action that reads its object first (`argocd-terminate-op`, `pvc-expand`, a `job-rerun` of a stand-alone Job) answers 409 `TARGET_CHANGED` when the object no longer matches the issue (the operation ended, the volume was grown, the Job got an owner).
+
+The fields an issue's action carries for the app (`agent.model.ts`): `restart` may carry `secondary: true` (a crash loop: shown after the logs, with a hint) or `changed: { kind: 'ConfigMap', name }` (a ConfigMap of the environment changed after the last start: shown first, as the fix). `pvc-expand` carries `from`, `to` and, for a claim from a StatefulSet's volumeClaimTemplates, `template`; `force-delete-terminating` carries `node` and, for a StatefulSet pod, `statefulSet`, so the confirmation can name the risk.
 
 ### `POST /argocd/rollback`
 

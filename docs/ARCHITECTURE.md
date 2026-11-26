@@ -76,7 +76,7 @@ agent/src
 ├── status/                 the run loop (status.service), running modules and merging issues (run-modules), snapshot types, light and score (snapshot)
 ├── views/                  nodes, workloads, storage, network, events, backups, incidents, history for the detail tabs
 ├── incidents/              the episode log: incident history (GET /incidents) and the weekly report's data
-├── actions/                the four issue actions, plus the opt-in Argo CD rollback
+├── actions/                the issue actions (nine on by default, four opt-in), logs, the opt-in Argo CD rollback
 ├── notify/                 when to notify, and the body for ntfy, Discord, Slack, Gotify, JSON
 ├── settings/               what runs: module, action and notification switches (Helm + app)
 ├── rbac/                   the permissions each module and action needs; feeds the chart
@@ -200,7 +200,16 @@ History (`views/history.ts`) comes from Prometheus when one was found: cluster C
 
 ### Actions
 
-Four actions are bound to open issues: Argo CD **sync** and **hard refresh**, **restart** of a Deployment/StatefulSet/DaemonSet (the same patch as `kubectl rollout restart`) and **CNPG backup** (a `Backup` resource). Logs of a pod (including the previous, crashed container) are read the same way. A fifth, the Argo CD **rollback**, is the one exception to that binding and off by default (below).
+Thirteen actions that change something are bound to open issues. Nine are on by default:
+
+- Argo CD **sync** and **hard refresh**;
+- **restart** of a Deployment/StatefulSet/DaemonSet (the same patch as `kubectl rollout restart`). On a crash loop it comes second, after the logs, with a hint that it only helps once the cause is gone; after an OOMKill it is not offered at all (the cause names the memory limit to raise); when a ConfigMap the pod reads through env/envFrom changed after its last start it comes first, as the fix;
+- **backups now**: CloudNativePG (a `Backup`), Longhorn (a `Snapshot` and a `Backup` of it), Velero (a `Backup` from a schedule's template, like `velero backup create --from-schedule`);
+- **reconcile now** (`reconcile-now`): Flux Kustomizations and HelmReleases, ExternalSecrets, InfisicalStaticSecrets (an annotation their controller reconciles on), and cert-manager Certificates (the `Issuing` condition, like `cmctl renew`);
+- **uncordon** a Ready node cordoned for over 30 minutes that no kured reboot or drain is working on;
+- **clean up** finished pods (Failed, evicted, or Succeeded without their Job) of a namespace.
+
+Four are off until the deployment names them in `actions.enabled`, because the permission each needs reaches further than the action if the pod were compromised: **run a failed Job again** (`job-rerun`: `create` on Jobs), **force-delete** a pod stuck in Terminating on a lost node (`force-delete-terminating`), **end** an Argo CD sync running for over 30 minutes (`argocd-terminate-op`) and **grow** an almost full volume by a quarter (`pvc-expand`). Logs of a pod (including the previous, crashed container) are read the same way, as an action of their own. The last of the fifteen action types, the Argo CD **rollback**, is the one exception to that binding and off by default too (below). The per-action table of what each one changes is in [CHECKS.md](CHECKS.md#actions) and [PERMISSIONS.md](PERMISSIONS.md).
 
 ```mermaid
 sequenceDiagram
@@ -215,7 +224,7 @@ sequenceDiagram
   G->>G: log the action, start a new run
 ```
 
-The request names an issue and an action type, never a target. Namespace, name and kind come from the agent's own check result. A stolen device key can therefore restart what is broken right now, and nothing else; it cannot delete anything, read Secrets, or patch a healthy workload. RBAC is the second line: without `rbac.allowActions` the ServiceAccount has no write verbs at all.
+The request names an issue and an action type, never a target. Namespace, name and kind come from the agent's own check result. A stolen device key can therefore restart what is broken right now, and nothing else; it cannot read Secrets, patch a healthy workload or delete anything but finished pods (and, opt-in, a pod already stuck in Terminating). RBAC is the second line: each action's verbs are granted only while it is on, and without `rbac.allowActions` the ServiceAccount has no write verbs at all. The admission policies are the third: they hold every write verb to exactly what its action sends (an uncordon may only turn `spec.unschedulable` off, a pod delete only hit a finished pod). Every run is written to the audit log with the device that asked.
 
 **The exception: Argo CD rollback (`argocd-rollback`).** A bad deploy is not always something Kubernanny can see (a release that is healthy to Kubernetes but broken for its users), so `POST /api/argocd/rollback` names a target: the app's namespace and name and an id from its `status.history`, **with or without an open issue**. It is off unless the deployment opts in (`actions.enabled: [argocd-rollback]`), and the agent narrows it as far as it can: only manual-sync, single-source apps, only a revision from the app's own history with the same repository and path or chart, never a source, never a prune, at most once per app in 5 minutes, announced through the channels first, and the admission policy only renders the branch that lets the agent set a revision when the action is opted in. With it on, a stolen device key can roll any such app back to one of its recent deployments, healthy or not; [SECURITY.md](SECURITY.md) lists it as its own row in the threat model. Details: [CHECKS.md](CHECKS.md#rolling-back-argocd-rollback-off-by-default).
 
@@ -394,7 +403,7 @@ flowchart TB
     ing["Ingress (optional)<br/>VPN-only recommended"]
     sm["ServiceMonitor (optional)"]
   end
-  cr["ClusterRole: get/list on what checks read<br/>+ patch/create for the four actions"]
+  cr["ClusterRole: get/list on what checks read<br/>+ the verbs of the enabled actions"]
   role["Role in kubernanny: get its two Secrets,<br/>patch the device list, create secrets"]
   sa --- cr
   sa --- role
@@ -436,7 +445,7 @@ flowchart TB
 
 **Pure check functions.** Every check is a function of Kubernetes objects. That makes them testable without a cluster and lets the same code run in demo mode.
 
-**Actions bound to issues.** The alternative, an API taking a namespace and a name, would turn every paired device into a cluster-wide restart button. Binding to an open issue keeps the blast radius to what is already broken. The opt-in Argo CD rollback is the one documented exception (see [Actions](#actions)): binding it to an issue would make it useless for the bad deploys Kubernanny cannot see, so it is off by default and narrowed to the app's own history instead.
+**Actions bound to issues.** The alternative, an API taking a namespace and a name, would turn every paired device into a cluster-wide restart button. Binding to an open issue keeps the blast radius to what is already broken. An action whose permission a compromised pod could use for much more than the action (creating Jobs, force-deleting pods, ending an operation, growing volumes) is opt-in; one the admission policy can hold to the action exactly is on by default. The opt-in Argo CD rollback is the one documented exception (see [Actions](#actions)): binding it to an issue would make it useless for the bad deploys Kubernanny cannot see, so it is off by default and narrowed to the app's own history instead.
 
 **Services over cluster DNS, not the API server proxy.** Reaching Prometheus through `services/proxy` would work everywhere, but needs a cluster-wide grant that reaches every internal service. Inside a pod the agent calls `http://<service>.<namespace>.svc:<port>` directly (NetworkPolicies apply); the proxy path is only used outside a cluster, during development with `kubectl proxy`.
 
