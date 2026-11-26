@@ -19,7 +19,6 @@ export const en = {
   'module.moreIssues.title': (p) => `${p.n} more reports`,
   'module.moreIssues.cause': 'This module reports more than the app shows. The full list is in the tool itself.',
   'common.yes': 'yes',
-  'common.none': 'none',
 
   'age.minutes': (p) => `${p.n} min`,
   'age.hours': (p) => `${p.n} h`,
@@ -32,7 +31,6 @@ export const en = {
   'stat.backups': 'Backups',
   'stat.lastBackup': 'Last backup',
   'stat.database': 'Database',
-  'stat.namespaces': 'Namespaces',
   'stat.workloads': 'Workloads',
 
   'module.checkFailed': 'Check failed',
@@ -76,7 +74,6 @@ export const en = {
   'etcd.stat.membersReady': 'Members ready',
   'etcd.stat.walFsync': 'WAL fsync p99',
   'etcd.stat.leaderChanges': 'Leader changes 1 h',
-  'etcd.stat.snapshots': 'Snapshots',
   'etcd.stat.lastSnapshot': 'Last snapshot',
   'etcd.summary.none': 'No etcd pods visible (external or kine)',
   'etcd.summary.ok': (p) => `${p.n} members, quorum holds`,
@@ -330,8 +327,6 @@ export const en = {
   'argocd.drift.cause':
     'Automated sync is on, yet the cluster differs: a sync is stuck, or something changes a resource outside Git.',
   'argocd.pending.title': (p) => `Argo CD app ${p.app}: change waiting for sync`,
-  'argocd.pending.cause':
-    'Manual sync: the repository holds a change that has not been rolled out yet. Not an error, just so you know.',
   'argocd.pending.longCause': (p) =>
     `Manual sync: Git has a change, and the last sync was ${p.age} ago. Forgotten? "Ready to sync" lists what changes.`,
   'argocd.comparison.title': (p) => `Argo CD cannot compare ${p.app}`,
@@ -384,7 +379,6 @@ export const en = {
   'loki.summary.notReady': 'Not ready',
 
   'kured.stat.rebooting': 'Rebooting now',
-  'kured.stat.rebootRequired': 'Reboot required',
   'kured.lock.title': (p) => `kured lock held for ${p.age}`,
   'kured.lock.cause': (p) =>
     `${p.node} holds the reboot lock. Until it lets go, no other node reboots and security updates wait.`,
@@ -393,8 +387,6 @@ export const en = {
   'kured.summary.none': 'No reboot needed',
   'kured.summary.idle': 'No reboot in progress',
   'upgrade.unresolved.title': (p) => `Upgrade plan ${p.plan}: version cannot be resolved`,
-  'upgrade.stat.plan': (p) => `Plan ${p.plan}`,
-  'upgrade.stat.planValue': (p) => `${p.version}${p.nodes ? ` · running on ${p.nodes}` : ''}`,
   'upgrade.summary.running': 'Upgrade running',
   'upgrade.summary.ok': (p) => `${n1(p.n, 'plan', 'plans')}, nothing pending`,
   'metricsServer.noValues.title': 'metrics-server returns no figures',
@@ -405,7 +397,6 @@ export const en = {
   'metricsServer.summary.none': 'No figures',
 
   'velero.manual': '(manual)',
-  'velero.stat.value': (p) => `${p.phase} · ${p.age} ago`,
   'velero.failed.title': (p) => `Velero backup ${p.schedule}: ${p.phase}`,
   'velero.failed.cause': (p) =>
     `${n1(p.errors, 'error', 'errors')}, ${n1(p.warnings, 'warning', 'warnings')}. velero backup logs ${p.backup}`,
@@ -844,13 +835,10 @@ export const en = {
   'detail.upgrade.done': 'done',
   'detail.velero.schedules': 'Schedules',
   'detail.etcd.members': 'Members',
-  'detail.etcd.snapshots': (p) => n1(p.n, 'snapshot', 'snapshots'),
   'detail.lookup': 'Lookup',
   'detail.cores': (p) =>
     `${(p.milli / 1000).toLocaleString('en-US', { minimumFractionDigits: p.milli % 1000 ? 2 : 0, maximumFractionDigits: 2 })} ${p.milli === 1000 ? 'core' : 'cores'}`,
   'detail.cpuMem': (p) => `${p.cpu}, ${p.mem}`,
-  'detail.pods': 'Pods',
-  'detail.resources': 'CPU and RAM',
   'detail.volumes': 'Volumes',
   'detail.pod.where': (p) => `on ${p.node}, ${p.namespace}`,
   'detail.pod.restarts': (p) => n1(p.n, 'restart', 'restarts'),
@@ -952,7 +940,6 @@ export const en = {
   'timing.total': 'Total',
   'timing.slowestModules': 'Slowest modules',
   'timing.slowestQueries': 'Slowest Prometheus queries',
-  'detail.instances': 'Instances',
   'stat.rebootPending': 'Waiting for reboot',
   'stat.plans': 'Plans',
   'stat.nodesUpgrading': 'Nodes upgrading',

@@ -561,11 +561,9 @@ export const en: Dictionary = {
   pair: {
     connecting: 'Connecting to {{name}}…',
     agentKey: 'Agent key:',
-    enterCode: 'Enter the pairing code',
     codeHelp:
       'You find it in the agent’s log: <code>kubectl -n kubernanny logs deploy/kubernanny</code>. For a new code: <code>kubectl -n kubernanny exec deploy/kubernanny -- node dist/cli.js pair</code>',
     codeLabel: 'Pairing code',
-    connect: 'Connect',
     failed: 'Connection failed',
     retry: 'Try again',
     checking: 'Reading the pairing link…',

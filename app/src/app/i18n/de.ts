@@ -562,11 +562,9 @@ export const de = {
   pair: {
     connecting: 'Verbinde mit {{name}}…',
     agentKey: 'Schlüssel des Agents:',
-    enterCode: 'Pairing-Code eingeben',
     codeHelp:
       'Er steht im Log des Agents: <code>kubectl -n kubernanny logs deploy/kubernanny</code>. Neuer Code: <code>kubectl -n kubernanny exec deploy/kubernanny -- node dist/cli.js pair</code>',
     codeLabel: 'Pairing-Code',
-    connect: 'Verbinden',
     failed: 'Verbindung fehlgeschlagen',
     retry: 'Nochmal versuchen',
     checking: 'Lese den Pairing-Link…',

@@ -26,7 +26,6 @@ export const de = {
   'module.moreIssues.cause':
     'Dieses Modul meldet mehr, als die App zeigt. Die vollständige Liste steht im Werkzeug selbst.',
   'common.yes': 'ja',
-  'common.none': 'keiner',
 
   'age.minutes': (p: { n: number }) => `${p.n} min`,
   'age.hours': (p: { n: number }) => `${p.n} h`,
@@ -40,7 +39,6 @@ export const de = {
   'stat.backups': 'Backups',
   'stat.lastBackup': 'Letztes Backup',
   'stat.database': 'Datenbank',
-  'stat.namespaces': 'Namespaces',
   'stat.workloads': 'Workloads',
 
   // ---------- run loop, workload health ----------
@@ -87,7 +85,6 @@ export const de = {
   'etcd.stat.membersReady': 'Mitglieder bereit',
   'etcd.stat.walFsync': 'WAL fsync p99',
   'etcd.stat.leaderChanges': 'Leaderwechsel 1 h',
-  'etcd.stat.snapshots': 'Snapshots',
   'etcd.stat.lastSnapshot': 'Letzter Snapshot',
   'etcd.summary.none': 'Keine etcd-Pods sichtbar (extern oder kine)',
   'etcd.summary.ok': (p: { n: number }) => `${p.n} Mitglieder, Quorum steht`,
@@ -376,8 +373,6 @@ export const de = {
   'argocd.drift.cause':
     'Automatischer Sync ist an, trotzdem weicht der Cluster ab: ein Sync hängt, oder eine Ressource wird außerhalb von Git geändert.',
   'argocd.pending.title': (p: { app: string }) => `ArgoCD-App ${p.app}: Änderung wartet auf Sync`,
-  'argocd.pending.cause':
-    'Manueller Sync: im Repo liegt eine Änderung, die noch nicht ausgerollt ist. Kein Fehler, nur zur Info.',
   'argocd.pending.longCause': (p: { age: string }) =>
     `Manueller Sync: im Repo liegt eine Änderung, und der letzte Sync ist ${p.age} her. Vergessen? Unter "Bereit zum Sync" steht, was sich ändert.`,
   'argocd.comparison.title': (p: { app: string }) => `ArgoCD kann ${p.app} nicht vergleichen`,
@@ -437,7 +432,6 @@ export const de = {
 
   // ---------- maintenance: kured, system-upgrade-controller, metrics-server ----------
   'kured.stat.rebooting': 'Startet gerade neu',
-  'kured.stat.rebootRequired': 'Neustart nötig',
   'kured.lock.title': (p: { age: string }) => `kured-Sperre hängt seit ${p.age}`,
   'kured.lock.cause': (p: { node: string }) =>
     `${p.node} hält die Neustart-Sperre. Solange startet kein anderer Node neu und Sicherheitsupdates warten.`,
@@ -446,9 +440,6 @@ export const de = {
   'kured.summary.none': 'Kein Neustart nötig',
   'kured.summary.idle': 'Kein Neustart im Gange',
   'upgrade.unresolved.title': (p: { plan: string }) => `Upgrade-Plan ${p.plan}: Version nicht auflösbar`,
-  'upgrade.stat.plan': (p: { plan: string }) => `Plan ${p.plan}`,
-  'upgrade.stat.planValue': (p: { version: string; nodes?: string }) =>
-    `${p.version}${p.nodes ? ` · läuft auf ${p.nodes}` : ''}`,
   'upgrade.summary.running': 'Upgrade läuft',
   'upgrade.summary.ok': (p: { n: number }) => `${n1(p.n, 'Plan', 'Pläne')}, nichts offen`,
   'metricsServer.noValues.title': 'metrics-server liefert keine Werte',
@@ -460,7 +451,6 @@ export const de = {
 
   // ---------- Velero ----------
   'velero.manual': '(manuell)',
-  'velero.stat.value': (p: { phase: string; age: string }) => `${p.phase} · vor ${p.age}`,
   'velero.failed.title': (p: { schedule: string; phase: string }) => `Velero-Backup ${p.schedule}: ${p.phase}`,
   'velero.failed.cause': (p: { errors: number; warnings: number; backup: string }) =>
     `${p.errors} Fehler, ${p.warnings} Warnungen. velero backup logs ${p.backup}`,
@@ -938,13 +928,10 @@ export const de = {
   'detail.upgrade.done': 'fertig',
   'detail.velero.schedules': 'Zeitpläne',
   'detail.etcd.members': 'Mitglieder',
-  'detail.etcd.snapshots': (p: { n: number }) => n1(p.n, 'Snapshot', 'Snapshots'),
   'detail.lookup': 'Abgleich',
   'detail.cores': (p: { milli: number }) =>
     `${(p.milli / 1000).toLocaleString('de-DE', { minimumFractionDigits: p.milli % 1000 ? 2 : 0, maximumFractionDigits: 2 })} ${p.milli === 1000 ? 'Kern' : 'Kerne'}`,
   'detail.cpuMem': (p: { cpu: string; mem: string }) => `${p.cpu}, ${p.mem}`,
-  'detail.pods': 'Pods',
-  'detail.resources': 'CPU und RAM',
   'detail.volumes': 'Volumes',
   'detail.pod.where': (p: { node: string; namespace: string }) => `auf ${p.node}, ${p.namespace}`,
   'detail.pod.restarts': (p: { n: number }) => n1(p.n, 'Neustart', 'Neustarts'),
@@ -1053,7 +1040,6 @@ export const de = {
   'timing.total': 'Gesamt',
   'timing.slowestModules': 'Langsamste Module',
   'timing.slowestQueries': 'Langsamste Prometheus-Abfragen',
-  'detail.instances': 'Instanzen',
   'stat.rebootPending': 'Warten auf Neustart',
   'stat.plans': 'Pläne',
   'stat.nodesUpgrading': 'Nodes im Upgrade',

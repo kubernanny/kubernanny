@@ -63,6 +63,15 @@ describe('translations', () => {
     expect([...used].filter((key) => !known(key))).toEqual([]);
     expect(used.size).toBeGreaterThan(200);
   });
+
+  it('use every key: a text nobody shows does not stay in the dictionaries', () => {
+    const code = sources()
+      .filter((file) => !/[/\\]i18n[/\\](de|en)\.ts$/.test(file))
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n');
+    const keys = new Set(Object.keys(flatEn).map((key) => key.replace(/\.(one|other)$/, '')));
+    expect([...keys].filter((key) => !code.includes(`'${key}'`))).toEqual([]);
+  });
 });
 
 describe('translator', () => {
