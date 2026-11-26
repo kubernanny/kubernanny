@@ -70,9 +70,11 @@ WebSocket, for the agent: `GET /v1/agents/{agentId}/ws`. Binary messages are fra
 | `0x04` Cancel | relay → agent | none: the call timed out, its answer is not wanted |
 | `0x05` Push | agent → relay, the agent's own id | one native push as JSON (below) |
 | `0x06` PushResult | relay → agent, same id | `{"s": outcome}` |
+| `0x07` Deposit | agent → relay, the agent's own id | the dead man's switch messages to hold, as JSON ([below](#dead-mans-switch)) |
+| `0x08` DepositResult | relay → agent, same id | `{"s": "stored" \| "invalid" \| "rate_limited" \| "full" \| "disabled"}` |
 | `0x10` Challenge | relay → agent, id 0 | 32-byte nonce, relay's ephemeral X25519 public key |
 | `0x11` Proof | agent → relay, id 0 | agent's static public key, 32-byte MAC |
-| `0x12` Ready | relay → agent, id 0 | the relay's limits as JSON, with `push: true` when it delivers native push and `statusPush: true` when it delivers status pushes silently |
+| `0x12` Ready | relay → agent, id 0 | the relay's limits as JSON, with `push: true` when it delivers native push, `statusPush: true` when it delivers status pushes silently, `deadman: true` when it holds dead man's switch deposits, and `deadmanFired: {"k": [key ids], "m": ms away}` when it sent deposited messages since the agent's last registration |
 
 What the relay passes on from an agent is only ever 200 with the sealed bytes (`application/octet-stream`) or one of the agent's plain refusals, 400, 413, 429 or 503 with a body the relay rebuilds itself as `{"code":"E2E_…"}`. Any other status or body becomes `502 RELAY_BAD_AGENT_RESPONSE`: anyone can register an agent id of their own, and the relay's origin must not serve whatever such an "agent" sends.
 
@@ -112,11 +114,35 @@ Why so many: registering an agent id is free, so the per-agent limit alone would
 
 **What a hostile relay can do with push**: drop or delay pushes (the agent counts the channel as failed and tries again next run) and learn the metadata above. It cannot make a push that opens: that needs the agent's private key. Whoever holds the service account (the relay's operator, or someone who stole it) can send FCM messages of their own to tokens they know, and can put a text of their choosing on those phones on both platforms: Android shows an FCM *notification* message without the app's code, and iOS shows an APNs alert without `mutable-content` without the extension. FCM and APNs cannot forbid that. Such a notification never carries a real cluster's text, cannot trigger any action, and lacks the sign the person picked on the phone, which every real push carries ([NOTIFICATIONS.md](NOTIFICATIONS.md#is-this-push-real)). Keep the service account in a Secret; a relay of your own with your own Firebase project removes the third party.
 
+## Dead man's switch
+
+When the agent, or the whole cluster, goes silent, nothing in the cluster can say so. The relay can: it notices that the agent's connection is gone. For each phone that asked for it ([NOTIFICATIONS.md](NOTIFICATIONS.md#when-the-agent-goes-silent)) the agent deposits an "agent silent" message, sealed in advance for that phone like every push, and the relay sends it when no connection of that agent id comes back within the phone's grace. On wherever native push is on; `RELAY_DEADMAN=off` turns it off. Ready says `deadman: true`; without it the agent deposits nothing and the app says the relay does not support it.
+
+```
+Deposit        {"x": validity in s, "h": hold in s, "d": [{"t": FCM token, "o": "ios" | "android", "k": key id, "m": sealed message, "l": "en" | "de", "g": grace in minutes}]}
+DepositResult  {"s": "stored" | "invalid" | "rate_limited" | "full" | "disabled"}
+```
+
+- **A deposit replaces the previous one**; an empty list clears it. The agent renews it every 30 minutes, when a phone's registration changes, and on every new connection (a rollout's new leader deposits at once). `x` is at most 27 hours (the agent asks for 3 hours, plus a maintenance window); `h` is the rest of a maintenance window, before whose end nothing is sent. `g` is 10, 15, 30 or 60. Each item's key id appears once.
+- **Armed** when the agent's registered connection goes away without a newer one taking its place (a replaced connection does not count, so a rollout that hands over within seconds never arms it). The absence counts from the last time the relay heard the agent (its heartbeat every 25 s), not from when it noticed.
+- **Fired** for each item at `max(last heard, end of the hold) + grace`, once per absence, as a visible push of the ordinary shape (the same FCM message as an alert, [above](#native-push)): it is meant to be seen, and Android's normal priority would hold it for a Doze window. Nothing is sent after the deposit's validity. Each message counts against this agent's push allowance and every per-token budget like a push (`RELAY_PUSHES_PER_HOUR`, `RELAY_PUSHES_PER_TOKEN_PER_HOUR`, the distinct tokens a day; on the Node relay also `RELAY_PUSHES_TOTAL_PER_HOUR`); past them it is skipped, never retried in a loop.
+- **Disarmed** when a connection of the agent id registers. If messages went out, its Ready names their key ids and how long the agent was away (`deadmanFired`), once; the agent then sends those phones a sealed "reachable again" push.
+- **Where it lives.** The Node relay keeps deposits in memory, with a timer per absent agent: a restart of the relay forgets them (agents renew within 30 minutes of reconnecting), and an agent that went away while the relay was restarting is not reported. All agents together hold at most `RELAY_DEADMAN_MAX_TOTAL_BYTES`. The Worker stores the deposit in the agent's Durable Object (key `deadman`) and uses the object's alarm: every 5 minutes while the agent is connected, to notice a socket whose peer vanished without a close (the runtime answers heartbeats without waking the object, so the object reads the time of the last one), and once per message due while it is away. That is one alarm every 5 minutes per agent with a deposit, about 8 600 a month each, plus one storage write per deposit (every 30 minutes); check them against your plan.
+
+| Limit | Default | |
+|---|---|---|
+| messages per agent | `RELAY_DEADMAN_MAX_DEPOSITS` 8 | one per phone; more is `invalid` |
+| one sealed message | `RELAY_DEADMAN_MAX_BYTES` 1024 | base64url characters; the agent's are about 300 |
+| deposits per agent | `RELAY_DEADMAN_DEPOSITS_PER_HOUR` 30 (burst 10) | kept with the deposit, so a reconnect does not refill it; past it the previous deposit stays (`rate_limited`) |
+| whole relay | `RELAY_DEADMAN_MAX_TOTAL_BYTES` 16 MiB | tokens and messages held for all agents (Node only); past it `full` |
+
+**What the relay holds for it, and what it can do.** Per agent id: for each phone with the switch on, its FCM token, platform, push key id, grace and the sealed message, from the deposit until it is replaced or its validity ends (at most 27 hours), plus, after it fired, the key ids it sent to until the agent registers again. That is the same metadata a push shows, held for longer, and it adds when the agent's connection came and went (which the relay sees anyway). It cannot read a message, change one or make one that opens (HPKE, sealed by the agent for the phone's push key, [PROTOCOL.md](PROTOCOL.md#dead-mans-switch)). It can send a message early (a false "silent" alarm), late (within its validity) or not at all; a hostile relay can also withhold the "reachable again" report, and the agent then says nothing. It can never make a phone believe all is fine: a deposited message only says "silent", and the "reachable again" push is sealed by the agent when it is back. The phone shows each deposited message once and not when it heard from the agent within the grace.
+
 ## What the relay sees, and what it does not
 
 | The relay sees | The relay never sees |
 |---|---|
-| the agent id (a hash of the agent's public key) and that the agent is online | anything inside a call: paths, cluster data, logs, actions, pairing codes |
+| the agent id (a hash of the agent's public key) and that the agent is online; with the dead man's switch, the phones' push tokens and sealed messages it holds for that ([Dead man's switch](#dead-mans-switch)) | anything inside a call: paths, cluster data, logs, actions, pairing codes |
 | the agent's IP address (its outbound connection) | which device calls: the device's key travels encrypted inside the handshake |
 | when calls happen, how long they take, and their sizes | any key that could open a call or an answer |
 | the IP address of the phone or browser that calls | the agent's address in your network |
@@ -204,10 +230,14 @@ Settings (environment variables of the Node relay, `[vars]` of the Worker):
 | `RELAY_PUSH_TOKENS_PER_DAY` | 32 | distinct FCM tokens one agent id may push to in a day |
 | `RELAY_PUSHES_PER_ADDRESS_PER_HOUR` | 240 | pushes of all agents of one client address (Node only) |
 | `RELAY_PUSHES_TOTAL_PER_HOUR` | 20000 | pushes of the whole relay (Node only) |
+| `RELAY_DEADMAN` | on | `off` keeps the dead man's switch off; it is only ever on with native push |
+| `RELAY_DEADMAN_MAX_DEPOSITS`, `RELAY_DEADMAN_MAX_BYTES` | 8, 1024 | messages per agent, characters per sealed message |
+| `RELAY_DEADMAN_DEPOSITS_PER_HOUR` | 30 | deposits per agent |
+| `RELAY_DEADMAN_MAX_TOTAL_BYTES` | 16777216 | deposits held for all agents (Node only) |
 
 **`TRUST_PROXY` only helps if the proxy owns the header.** The per-address limits (unproven connections, registered agents, the share of the answer budget) are only as good as the address they read. The proxy in front must set the header itself from the connecting address, overwriting anything the client sent (`cf-connecting-ip` behind Cloudflare, `x-real-ip` behind most reverse proxies), or append to `x-forwarded-for`. A proxy that passes a client's own `x-forwarded-for` through unchanged lets every client pick its address, and with it a fresh set of limits. Prefer `cf-connecting-ip` or `x-real-ip` where the proxy sets them; check with a request carrying a made-up header that the relay does not see it.
 
-Metrics of the Node relay: `kubernanny_relay_agents`, `kubernanny_relay_pending_registrations`, `kubernanny_relay_calls_total{outcome}`, `kubernanny_relay_pushes_total{outcome}`, `kubernanny_relay_registrations_total{outcome}`, `kubernanny_relay_bytes_total{direction}`, `kubernanny_relay_call_duration_seconds`, `process_resident_memory_bytes`.
+Metrics of the Node relay: `kubernanny_relay_agents`, `kubernanny_relay_deadman_deposits`, `kubernanny_relay_deadman_total{event}`, `kubernanny_relay_pending_registrations`, `kubernanny_relay_calls_total{outcome}`, `kubernanny_relay_pushes_total{outcome}`, `kubernanny_relay_registrations_total{outcome}`, `kubernanny_relay_bytes_total{direction}`, `kubernanny_relay_call_duration_seconds`, `process_resident_memory_bytes`.
 
 ## Sizing
 
@@ -233,4 +263,4 @@ The lower numbers in each range come from `--max-semi-space-size=1` (a smaller y
 ## Turning it off
 
 - For a cluster, in the app: its settings, "Relay nutzen" off. The app then never calls the relay for it.
-- For the agent: `relay.enabled: false` (the default), or remove `RELAY_URL`. The agent then has no outbound connection. Paired devices drop the relay address the next time they open the cluster's settings (the agent's `/info` no longer names one); until then a call through the relay gets `RELAY_AGENT_OFFLINE`.
+- For the agent: `relay.enabled: false` (the default), or remove `RELAY_URL`. The agent then has no outbound connection. Paired devices drop the relay address the next time they open the cluster's settings (the agent's `/info` no longer names one); until then a call through the relay gets `RELAY_AGENT_OFFLINE`. With the dead man's switch on for any phone, the relay then sends those phones their message once after the grace, since the agent is gone from its point of view: switch it off in the app first (or pause notifications, which clears the deposit), then the relay.

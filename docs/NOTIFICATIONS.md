@@ -130,6 +130,8 @@ sequenceDiagram
 
 **What it needs**: the relay (`relay.enabled`, [RELAY.md](RELAY.md)), and a relay that delivers push. The public relay does, for the app from the stores. Messages are the same as on every other channel: the five-minute rule, escalations, resolutions, silences, the maintenance window, security alerts and the weekly report, and with `detail: minimal` only counts (still sealed). The app is a channel like ntfy: it counts for the test button and for "a channel took it".
 
+**When the agent goes silent**, the relay sends a message the agent sealed in advance ([When the agent goes silent](#when-the-agent-goes-silent)).
+
 **The home-screen widget catches up with every push**, and with a silent status push about once an hour ([The home-screen widget](#the-home-screen-widget)).
 
 ### The home-screen widget
@@ -152,12 +154,48 @@ Pushes only come with a change, so on a quiet day the widget would go stale. For
 
 How a status push is told apart: its sealed content has priority 0 and no text ([PROTOCOL.md, Status pushes](PROTOCOL.md#status-pushes)), so the phone never shows one, whatever the relay or Google do with it, and the relay sends it in a shape of its own that has no alert at all ([RELAY.md](RELAY.md#native-push)).
 
+### When the agent goes silent
+
+Every other message comes from the agent, so a cluster that is down, or an agent that is gone, says nothing. For that the relay holds a message for each phone, sealed in advance: the **dead man's switch**.
+
+<p><img src="screenshots/98-settings-deadman.png" alt="The dead man's switch in the cluster's push section" width="260"></p>
+
+```mermaid
+sequenceDiagram
+  participant A as Agent (holds the lease)
+  participant R as Relay
+  participant P as Phone
+  A->>A: seal "homelab: Kubernanny is silent" per phone, valid 3 h
+  A->>R: Deposit frame on its WebSocket (every 30 min, and at once on changes)
+  Note over A: the cluster loses power
+  R->>R: connection gone, last heard 10:02
+  Note over R: no connection of this agent id until 10:17 (grace 15 min)
+  R->>P: the deposited message, once (a visible push)
+  P->>P: opens it, shows it with your sign, widget: "Agent not answering"
+  A->>R: back at 10:44, registers again
+  R->>A: Ready: sent to these key ids, away 42 min
+  A->>P: "homelab: Kubernanny is reachable again", "It was gone for 42 min."
+```
+
+- **In the app**: the cluster's push section, "Warn when the agent goes silent", on by default whenever push is on, with the grace: 10, 15 (default), 30 or 60 minutes of silence. It is a setting of this phone for this cluster; each phone chooses its own. Switched off in the deployment, or with a relay or an agent before it, the section says so.
+- **What is sent**: `{cluster}: Kubernanny is silent`, "No word from Kubernanny for 15 min. Check the cluster or the agent." in the agent's `LANGUAGE` (`Kubernanny schweigt`, "Kubernanny meldet sich seit 15 Min. nicht. Cluster oder Agent prüfen."), with your sign like every push. The phone marks the cluster's widget entry: both widgets show it as "Agent not answering" in coral until a newer state arrives (the next push, status push or the open app).
+- **When**: the relay counts the silence from the last heartbeat it heard on the agent's connection (every 25 s). A rollout hands the connection to the new pod within seconds and the new leader deposits again at once, so it never fires; neither does a relay restart of a few seconds or a network hiccup under the grace. On the Cloudflare relay, an agent that vanished without closing its connection is noticed within about 5 minutes, still counted from its last heartbeat.
+- **Back again**: when the agent registers after a message went out, the relay names the phones it sent to and how long the agent was away, and those phones get an ordinary push, "homelab: Kubernanny is reachable again" with "It was gone for 42 min.", with the current state for the widget. Back before the grace: nothing is sent at all.
+- **Renewed** every 30 minutes after a run, at once when a phone registers, changes its grace or turns push off, and on every new relay connection. A deposit the relay did not take is tried again after 5 minutes.
+- **Maintenance and pauses.** During a [maintenance window](#when-a-message-is-sent) the relay holds the message until the window ends (plus the grace): planned work that takes the cluster down does not buzz the phone, an agent still gone after it does. While notifications are paused in the app, or locked in the chart, the agent clears what the relay holds. `notifications.appPush.deadman.enabled: false` (env `DEADMAN=off`) switches it off for the deployment; the relay has `RELAY_DEADMAN=off`.
+- **Uninstalling**: `helm uninstall` (or scaling to zero) takes the agent away like an outage, and phones with the switch on get the message once. Turn it off in the app first, or pause notifications, if that is not wanted.
+- **Not covered**: a relay that is down, or that drops the deposit, cannot send anything. The Node relay keeps deposits in memory: its restart forgets them until each agent renews (at the latest 30 minutes later), and an agent that went away while the relay was restarting is not reported. The Cloudflare relay keeps them in the agent's Durable Object. A phone that is off or without signal gets the message when FCM delivers it, if that is within the message's validity.
+
+**What the relay holds** for this: per agent id, for each phone with the switch on, the FCM token, the platform, the push key id, the grace and the sealed message, for at most the message's validity (3 hours after it was deposited, or the end of a maintenance window plus 3 hours, 27 hours at most), replaced by every renewal and forgotten after it expires. It cannot read the message or change it (sealed with HPKE for the phone's push key and the agent's key, like every push), and it cannot make a message that opens. It can send it early (a false "silent" alarm), late or not at all. It can never produce a false "all fine": the "reachable again" push is sealed by the agent when it is back, and a deposited message only ever says "silent".
+
+**On the phone** a dead man's switch message has its own freshness rule ([PROTOCOL.md](PROTOCOL.md#dead-mans-switch)): it is shown only within the validity sealed into it, only once (a replay marker of its own, apart from the one of ordinary pushes, because it was sealed before pushes the phone may have shown since), and not when a push of that agent opened within the grace (an agent heard from that recently was not silent, and a late arrival after "reachable again" is dropped).
+
 ### Who sees what
 
 | Party | Sees | Never sees |
 |---|---|---|
 | Agent | everything (it writes the message) | |
-| Relay | the device's FCM token and platform, a key id, the size and time of each push and whether it is a status push, the agent id; so also that a phone has a widget (it gets about one status push an hour on quiet days) | title, body, cluster name, the state in a status push, anything in the cluster |
+| Relay | the device's FCM token and platform, a key id, the size and time of each push and whether it is a status push, the agent id; so also that a phone has a widget (it gets about one status push an hour on quiet days). With the dead man's switch: the sealed messages it holds (token, platform, key id, grace) for up to their validity, and when the agent's connection comes and goes | title, body, cluster name, the state in a status push, anything in the cluster |
 | Google (FCM), Apple (APNs, iOS) | the token, the app, size and time, and that status pushes are background pushes (about one an hour per phone with a widget, a few hundred bytes each) | the content: it is sealed for the phone's push key |
 | Phone | the message, opened with its push key for that cluster | |
 
@@ -195,7 +233,7 @@ The relay's service account and the app's config files must belong to the same F
 
 ## Alerting on Kubernanny itself
 
-With `serviceMonitor.enabled`, Prometheus scrapes `kubernanny_*`. Two rules worth having:
+With native push, the [dead man's switch](#when-the-agent-goes-silent) covers the agent and the whole cluster going silent, from outside. Inside the cluster, with `serviceMonitor.enabled`, Prometheus scrapes `kubernanny_*`. Two rules worth having:
 
 ```yaml
 - alert: KubernannyAgentStale

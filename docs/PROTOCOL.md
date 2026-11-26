@@ -200,9 +200,21 @@ A push with priority `p: 0`, an empty title and body and a `w` is a **status pus
 
 On the relay socket a status push is a `Push` frame with `"q": 1` ([RELAY.md](RELAY.md#native-push)), which the relay turns into a silent FCM message. The agent sends one only to a relay whose `Ready` said `"statusPush": true`. Phones before status pushes never get one: the agent sends them only to devices that registered with `"widget": true` (`POST /push/register`), which only apps that handle them do.
 
+### Dead man's switch
+
+A push with a descriptor `d` is a **dead man's switch message** ([NOTIFICATIONS.md](NOTIFICATIONS.md#when-the-agent-goes-silent)): the agent seals it in advance and deposits it with the relay, which sends it when the agent's connection stays away longer than the phone's grace. `{"t": title, "b": body, "p": 3, "s": …, "d": {"u": valid until (agent clock, ms), "g": grace in minutes}}` (`deadmanPushContent` in `protocol/src/push.ts`); `g` is one of 10, 15, 30, 60, and `u - s` is at most 27 hours (three hours, plus a maintenance window the relay waits out). It carries no `w`: the state it was sealed with is not the state when it is sent. A message whose `d` does not parse is refused as a whole (`decodePushContent` throws), so it is never shown under the ordinary rule.
+
+It was sealed before pushes the phone may have shown since, so the ordinary replay rule (later than the last push shown) would drop it, and the hour would too. The phone applies a rule of its own instead (`deadmanFresh` in `app/src/app/core/push/push-content.ts`, `PushFreshness.deadmanFresh`, `PushKeys.isDeadmanFresh`):
+
+- the phone's clock is at most `u`, `s` is not more than an hour ahead of it, and `u - s` is within the 27 hours;
+- `s` is later than the `s` of the last dead man's switch message shown for that key id: a **replay marker of its own**, kept next to the push key apart from the one of ordinary pushes, so the relay cannot show the same message twice, nor an older one after a newer;
+- no push of that key opened within the grace: the phone keeps the newest `s` of any push it opened and accepted for the key (status pushes included), and drops the message when that lies less than `g` minutes before now. An agent heard from that recently was not silent, and a message that arrives after the "reachable again" push is dropped.
+
+A message that passes is shown like any push, with the person's sign, does not move the ordinary replay marker, and marks the cluster's widget entry `unreachableSince` (the phone's time), which the widgets draw as "Agent not answering" while it is later than the entry's last check. What the relay can do with it: send it early, late (within `u`) or not at all; never change it, never make one that opens, never turn it into an "all fine".
+
 ### Push test vector
 
-All of them in [`protocol/test/push-vectors.json`](../protocol/test/push-vectors.json), the third (`widget-status`) with a status, the fourth (`status-only`) a status push. The first: agent static secret `8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0` (the same agent key as the call vectors), push secret `2122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40`, push public `5869aff450549732cbaaed5e5df9b30a6da31cb0e5742bad5ad4a1a768f1a67b`, ephemeral secret `6162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80`, key id `LbUGLxX9BNGEjdbP`, plaintext `{"t":"homelab: 2 problems","b":"🔴 default/api: CrashLoopBackOff","p":5,"s":1795000000000}`, message (141 bytes):
+All of them in [`protocol/test/push-vectors.json`](../protocol/test/push-vectors.json), the third (`widget-status`) with a status, the fourth (`status-only`) a status push, the fifth (`deadman`) a dead man's switch message. The first: agent static secret `8182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0` (the same agent key as the call vectors), push secret `2122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40`, push public `5869aff450549732cbaaed5e5df9b30a6da31cb0e5742bad5ad4a1a768f1a67b`, ephemeral secret `6162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80`, key id `LbUGLxX9BNGEjdbP`, plaintext `{"t":"homelab: 2 problems","b":"🔴 default/api: CrashLoopBackOff","p":5,"s":1795000000000}`, message (141 bytes):
 
 ```
 01244fe3b963e899dd295baffce248d3530f3a9a7479ba063002680ebfe7adad4927773b1cba3e12
