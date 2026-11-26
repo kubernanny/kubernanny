@@ -102,6 +102,7 @@
 
 - Home-screen widgets (iOS WidgetKit, Android RemoteViews): each cluster's light, headline and last check, no keys and no issue texts on the device's shared storage; off per cluster or altogether.
 - Widgets stay fresh on quiet days: a phone with a widget and push on gets a silent status push (the state only, sealed, never shown) when nothing else was pushed to it for an hour (`notifications.appPush.widgetRefreshMinutes`, env `WIDGET_REFRESH_MINUTES`, 0 off). The relay sends it as a background push with a per-token budget of its own (`RELAY_STATUS_PUSHES_PER_TOKEN_PER_HOUR`, 2); iOS delivers it when it allows.
+- Widgets turn grey after 2 hours without new data (was 30 minutes) and then say "Open Kubernanny"; the cluster settings explain when the widget updates and show whether push is on for this device, with a button to switch it on.
 - `npm run store:shots` renders the store screenshots in every required size, English and German.
 
 - Native iOS and Android apps (Capacitor 8, Swift Package Manager), `kubernanny://` links, icons and splash (`npm run native-assets`). Device keys in the Keychain and Android Keystore, never in a backup.
