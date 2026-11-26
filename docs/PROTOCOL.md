@@ -210,7 +210,7 @@ It was sealed before pushes the phone may have shown since, so the ordinary repl
 - `s` is later than the `s` of the last dead man's switch message shown for that key id: a **replay marker of its own**, kept next to the push key apart from the one of ordinary pushes, so the relay cannot show the same message twice, nor an older one after a newer;
 - no push of that key opened within the grace: the phone keeps the newest `s` of any push it opened and accepted for the key (status pushes included), and drops the message when that lies less than `g` minutes before now. An agent heard from that recently was not silent, and a message that arrives after the "reachable again" push is dropped.
 
-A message that passes is shown like any push, with the person's sign, does not move the ordinary replay marker, and marks the cluster's widget entry `unreachableSince` (the phone's time), which the widgets draw as "Agent not answering" while it is later than the entry's last check. What the relay can do with it: send it early, late (within `u`) or not at all; never change it, never make one that opens, never turn it into an "all fine".
+A message that passes is shown like any push, with the person's sign if they use one, does not move the ordinary replay marker, and marks the cluster's widget entry `unreachableSince` (the phone's time), which the widgets draw as "Agent not answering" while it is later than the entry's last check. What the relay can do with it: send it early, late (within `u`) or not at all; never change it, never make one that opens, never turn it into an "all fine".
 
 ### Push test vector
 

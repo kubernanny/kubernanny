@@ -135,7 +135,7 @@ Only when a device taps "Push to this device" in a cluster's settings, and only 
 - **What travels in clear**: the device's FCM token, its platform, a key id (a hash of the random push key) and the size and time of each push, for the relay and FCM. The token is stored with the device in `kubernanny-devices`, never logged, and goes when the device is revoked or turns push off.
 - **No new connection from the agent**: the push rides on the relay WebSocket. The relay talks to `oauth2.googleapis.com` and `fcm.googleapis.com`.
 - **Registration** is an ordinary sealed call (`POST /api/push/register`); a device registers only itself.
-- **Shape**: Android gets data-only messages (no `notification` block), so the app's own code shows them; iOS always gets `mutable-content` with a placeholder, so the extension replaces it. Every opened push carries the person's marker, which never leaves the phone; a notification without it was sent around Kubernanny by whoever holds the relay's Firebase credentials ([NOTIFICATIONS.md](NOTIFICATIONS.md#is-this-push-real)).
+- **Shape**: Android gets data-only messages (no `notification` block), so the app's own code shows them; iOS always gets `mutable-content` with a placeholder, so the extension replaces it. With the optional sign turned on (off by default), every opened push carries the person's marker, which never leaves the phone; a notification without it was sent around Kubernanny by whoever holds the relay's Firebase credentials ([NOTIFICATIONS.md](NOTIFICATIONS.md#is-this-push-real)).
 
 ### 13. Container registries
 

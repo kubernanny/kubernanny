@@ -24,7 +24,7 @@ Vier, und nur bei einem offenen Problem oder einer App, die bereit zum Sync ist:
 
 BENACHRICHTIGUNGEN
 Der Agent meldet Probleme selbst, sobald sie fünf Minuten bestehen, noch einmal, wenn sie kritisch werden, und wenn sie behoben sind:
-• als Push direkt an die App, Ende-zu-Ende verschlüsselt: Weder das Relay noch Google oder Apple können ihn lesen. Jeder echte Push beginnt mit deinem Zeichen, das nur auf deinem Gerät liegt. Dafür braucht der Agent das optionale Relay, das öffentliche oder dein eigenes.
+• als Push direkt an die App, Ende-zu-Ende verschlüsselt: Weder das Relay noch Google oder Apple können ihn lesen. Auf Wunsch beginnt jeder echte Push mit einem Zeichen, das nur dein Gerät kennt. Dafür braucht der Agent das optionale Relay, das öffentliche oder dein eigenes.
 • oder über ntfy, Discord, Slack, Gotify oder einen Webhook.
 Bekannte Probleme schaltest du bis zu einer Woche stumm, ein Wartungsfenster hält Benachrichtigungen zurück.
 

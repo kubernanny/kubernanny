@@ -24,7 +24,7 @@ Four, and only on an open problem or an app that is ready to sync: sync and hard
 
 NOTIFICATIONS
 The agent reports problems itself once they have lasted five minutes, again when they turn critical, and when they are resolved:
-• as a push straight to the app, end-to-end encrypted: neither the relay nor Google or Apple can read it. Every real push starts with your sign, which lives only on your device. This needs the agent to use the optional relay, the public one or your own.
+• as a push straight to the app, end-to-end encrypted: neither the relay nor Google or Apple can read it. If you like, every real push starts with a sign only your device knows. This needs the agent to use the optional relay, the public one or your own.
 • or through ntfy, Discord, Slack, Gotify or a webhook.
 Known problems can be silenced for up to a week, and a maintenance window holds notifications back.
 

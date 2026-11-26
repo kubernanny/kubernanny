@@ -158,7 +158,7 @@ On real devices, what can regress without a test noticing:
 
 - Pairing by QR code and by a `kubernanny://pair?…` link (cold start and running app), against an `http://` agent in the LAN and an `https://` one, iOS and Android.
 - Push: switch it on in a cluster's settings, a test push with the app in the background and with the phone locked.
-- The dead man's switch, when the relay, the push code or the protocol changed: grace 10 minutes, `kubectl -n kubernanny scale deploy/kubernanny --replicas 0`, the message arrives with your sign and the widget says "Agent not answering"; scale back, the "reachable again" push follows.
+- The dead man's switch, when the relay, the push code or the protocol changed: grace 10 minutes, `kubectl -n kubernanny scale deploy/kubernanny --replicas 0`, the message arrives (with your sign if it is on) and the widget says "Agent not answering"; scale back, the "reachable again" push follows.
 - Widgets on both platforms: red, yellow and green clusters, a tap opens the cluster, the entries turn grey after 2 hours without news, a push updates them with the app closed, largest text size, German and English.
 - Light and dark, the largest system text size, the demo without a cluster.
 
