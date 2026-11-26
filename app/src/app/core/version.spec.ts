@@ -28,7 +28,7 @@ describe('agent version', () => {
       score: 100,
       checkedAt: new Date().toISOString(),
       durationMs: 1,
-      agentVersion: '0.3.0',
+      agentVersion: KNOWN_AGENT_VERSION,
       kubernetes: null,
       overview: null,
       modules: [],
