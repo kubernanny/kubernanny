@@ -144,7 +144,7 @@ From the pod specs the run already reads; no extra RBAC, nothing leaves the clus
 | `security/<ns>/mutable-image` | hint | image tag `latest` or none, without a digest |
 | `security/<ns>/accept-annotation` | hint | a workload's `kubernanny.io/accept` annotation names an unknown key or `privileged` |
 
-A hint can be accepted in Git: `kubernanny.io/accept: "root: the official image boots runit as root and drops privileges itself"` on the Deployment, StatefulSet, DaemonSet or CronJob (or its pod template). Keys `host-access`, `root`, `no-memory-limit`, `mutable-image`, each with a required reason; `privileged` never. Accepted hints count nowhere and are listed folded on the module's sheet ("1 accepted"). Details: [SECURITY-CHECKS.md](SECURITY-CHECKS.md#accepting-a-hint-in-git-kubernannyioaccept).
+**Accepting hints:** a hint can be accepted in Git: `kubernanny.io/accept: "root: the official image boots runit as root and drops privileges itself"` on the Deployment, StatefulSet, DaemonSet or CronJob (or its pod template). Keys `host-access`, `root`, `no-memory-limit`, `mutable-image`, each with a required reason; `privileged` never. Every hint that can be accepted ends with the snippet for its key (`Deliberate? Set the annotation kubernanny.io/accept: "root: <reason>" on the workload.`). Accepted hints count nowhere and are listed folded on the module's sheet ("1 accepted"). Keys and rules: [SECURITY-CHECKS.md](SECURITY-CHECKS.md#accepting-a-hint-in-git-kubernannyioaccept).
 
 Stats: findings, namespaces with privileged containers, namespaces with findings, exempt namespaces.
 

@@ -118,6 +118,10 @@ The chart sets these; set them yourself with `deploy/install.yaml` or `docker ru
 
 Invalid values fail the start with a clear message instead of running with a surprise: unknown ids in `DISABLED_MODULES` / `DISABLED_ACTIONS`, any id in `ENABLED_ACTIONS` that is not an opt-in action type (the chart also refuses unknown ids in `checks.disabled` / `actions.disabled` / `actions.enabled`), and any unrecognised value of `VULN_ACCEPT`, `NOTIFY_DETAIL`, `WEBHOOK_FORMAT`, `DIGEST`, `PAIRING_LOG`, `METRICS_PORT`, `APP_PUSH`, `DEADMAN` or `DEMO`. `DIGEST_WEEKDAY` takes 0 to 6 and `DIGEST_HOUR` 0 to 23, `WIDGET_REFRESH_MINUTES` 0 or 30 to 1440. `checks.disabled: [prometheus]` means no Prometheus request at all, from any module.
 
+## Accepting hints
+
+A deliberate security hint (`host-access`, `root`, `no-memory-limit`, `mutable-image`; `privileged` never) is accepted with the annotation `kubernanny.io/accept: "<key>: <reason>"` on the workload, not with a Helm value: [SECURITY-CHECKS.md](SECURITY-CHECKS.md#accepting-a-hint-in-git-kubernannyioaccept).
+
 ## The app
 
 Per cluster the app stores a name, the agent address and the agent's public key with Capacitor Preferences (`UserDefaults` on iOS, `SharedPreferences` on Android, `localStorage` on the web). This device's private key goes to the iOS Keychain or the Android Keystore (`@aparajita/capacitor-secure-storage`, "this device only"); on the web to the origin's storage. Keys stored by earlier versions are moved there on the first start. It polls every 30 seconds while in the foreground. Light and dark mode follow the system.
