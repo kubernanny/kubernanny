@@ -1,0 +1,5 @@
+# Mechanical reformats, skipped by `git blame` (git config blame.ignoreRevsFile .git-blame-ignore-revs;
+# GitHub reads this file by itself).
+
+# style: format with Prettier and sort imports
+ba977012775f7f04a771cb348d2911cec8933ff5
