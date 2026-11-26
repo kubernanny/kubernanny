@@ -59,8 +59,9 @@ const CHANNELS = ['ntfy', 'Discord', 'Slack', 'Gotify', 'JSON webhook'];
             <span class="badge"><kn-icon name="stethoscope" /></span>
             <h3>Deep checks, not just pod status</h3>
             <p>
-              Degraded Longhorn volumes, Argo CD apps with the broken resource, CNPG WAL archiving and backup age,
-              expiring certificates, etcd quorum, your own firing alerts.
+              Degraded Longhorn volumes, Argo CD apps with the broken resource, CNPG backup age, expiring
+              certificates. Plus the community mixins' standard alerts, built in: etcd peer latency, disks filling up,
+              overcommit, CoreDNS.
               <a routerLink="/docs/checks">Every check</a>
             </p>
           </div>
@@ -73,7 +74,7 @@ const CHANNELS = ['ntfy', 'Discord', 'Slack', 'Gotify', 'JSON webhook'];
           <div class="card-text">
             <span class="badge crit"><kn-icon name="scan" /></span>
             <h3>Only what is broken</h3>
-            <p>No wall of green. Each problem says why, since when, and which action usually fixes it. Planned kured reboots are a warning, not an alarm.</p>
+            <p>No wall of green. Each problem says why, since when, and which action usually fixes it. A planned kured reboot is a warning; an Argo CD app waiting for its sync is a calm "ready to sync" note.</p>
           </div>
           <div class="shot">
             <img [src]="vm.issues.src" [alt]="vm.issues.alt" [width]="vm.issues.width" [height]="vm.issues.height" loading="lazy" decoding="async" />
@@ -160,7 +161,9 @@ const CHANNELS = ['ntfy', 'Discord', 'Slack', 'Gotify', 'JSON webhook'];
           <h3>Notifications that wait five minutes</h3>
           <p>
             A problem is sent once it has lasted five minutes, so rollouts and planned reboots never wake you. Again if
-            it turns critical, and once more when it is resolved.
+            it turns critical, and once more when it is resolved. Straight to the app as a native push, sealed for your
+            device so neither the relay nor Google can read it, and the home-screen widget updates with it. Or to
+            your own channels:
           </p>
           <ul class="channels" aria-label="Channels">
             @for (c of vm.channels; track c) {
