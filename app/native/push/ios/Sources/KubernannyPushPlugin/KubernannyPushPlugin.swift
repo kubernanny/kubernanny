@@ -168,6 +168,9 @@ public class KubernannyPushPlugin: CAPPlugin, CAPBridgedPlugin, NotificationHand
             SecItemDelete(query(kid) as CFDictionary)
             // The extension's record of the last push shown for this key (PushKeys.seenAccount).
             SecItemDelete(query("seen.\(kid)") as CFDictionary)
+            // ... and of the dead man's switch (PushKeys.deadmanAccount, PushKeys.heardAccount).
+            SecItemDelete(query("deadman.\(kid)") as CFDictionary)
+            SecItemDelete(query("heard.\(kid)") as CFDictionary)
         }
         call.resolve()
     }

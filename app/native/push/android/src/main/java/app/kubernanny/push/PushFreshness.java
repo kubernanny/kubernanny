@@ -35,4 +35,30 @@ final class PushFreshness {
     static boolean statusFresh(long sealedAt, long now) {
         return Math.abs(now - sealedAt) <= MAX_AGE_MS;
     }
+
+    /** The longest validity a dead man's switch message may carry (DEADMAN_MAX_VALIDITY_MS in protocol/src/push.ts). */
+    static final long DEADMAN_MAX_VALIDITY_MS = 27L * 60L * 60L * 1000L;
+
+    /**
+     * Whether a dead man's switch message (sealed ahead of time, sent by the
+     * relay when the agent went silent) may be shown: the phone's clock within
+     * its window `validUntil`, not sealed more than an hour ahead, later than
+     * the last such message shown for its key (a replay marker of its own),
+     * and no push of this agent opened within the grace (`lastHeard`).
+     * Mirrors deadmanFresh in push-content.ts and PushKeys.isDeadmanFresh.
+     */
+    static boolean deadmanFresh(long sealedAt, long validUntil, int graceMinutes, long now, Long lastDeadman, Long lastHeard) {
+        if (sealedAt - now > MAX_AGE_MS || now > validUntil || validUntil - sealedAt > DEADMAN_MAX_VALIDITY_MS) {
+            return false;
+        }
+        if (lastDeadman != null && sealedAt <= lastDeadman) {
+            return false;
+        }
+        return lastHeard == null || lastHeard < now - graceMinutes * 60_000L;
+    }
+
+    /** The graces the protocol allows (DEADMAN_GRACE_MINUTES); anything else is not a dead man's switch message. */
+    static boolean validGrace(int minutes) {
+        return minutes == 10 || minutes == 15 || minutes == 30 || minutes == 60;
+    }
 }

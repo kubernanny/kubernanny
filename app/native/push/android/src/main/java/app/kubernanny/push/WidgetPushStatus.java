@@ -92,6 +92,32 @@ final class WidgetPushStatus {
         }
     }
 
+    /**
+     * The stored list with `clusterId` marked as "agent not answering" since
+     * `now` (field `unreachableSince`, written only here and in the iOS
+     * extension; the app keeps it, WidgetCluster in widget-summary.ts). The
+     * widgets show it while it is later than the entry's last check, so any
+     * newer state supersedes it. Null when the cluster has no entry.
+     */
+    static String markUnreachable(String stored, String clusterId, long now) {
+        try {
+            if (stored == null) {
+                return null;
+            }
+            JSONArray list = new JSONArray(stored);
+            for (int i = 0; i < list.length(); i++) {
+                JSONObject candidate = list.optJSONObject(i);
+                if (candidate != null && clusterId.equals(candidate.optString("id", null))) {
+                    candidate.put("unreachableSince", formatIso(now));
+                    return list.toString();
+                }
+            }
+            return null;
+        } catch (Exception malformed) {
+            return null;
+        }
+    }
+
     static String formatIso(long millis) {
         SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
         f.setTimeZone(TimeZone.getTimeZone("UTC"));

@@ -444,7 +444,19 @@ export interface ClusterConfig {
    * agent was told this device has a home-screen widget showing the cluster
    * (it then sends a silent status push about hourly); absent means no.
    */
-  push?: { kid: string; key: string; token: string; widget?: true };
+  push?: {
+    kid: string;
+    key: string;
+    token: string;
+    widget?: true;
+    /**
+     * The dead man's switch as this device registered it (docs/NOTIFICATIONS.md,
+     * "When the agent goes silent"): the grace in minutes, or false when
+     * switched off. Absent: registered by an app before it; the next start
+     * registers again with the default (on, 15 minutes).
+     */
+    deadman?: number | false;
+  };
 }
 
 /** GET /push: whether this device can get native push from the agent, and whether it does. */
@@ -454,6 +466,12 @@ export interface AgentPushView {
   /** The relay is connected and delivers push right now. */
   relay: boolean;
   registered: boolean;
+  /**
+   * The dead man's switch. state on: available; locked: DEADMAN=off in the
+   * deployment; relay: the connected relay does not hold deposits. grace:
+   * this device's choice, null when off. Absent from agents before it.
+   */
+  deadman?: { state: 'on' | 'locked' | 'relay'; grace: number | null };
 }
 
 /** on: runs. off: switched off in the app. locked: switched off in the deployment (Helm), only changeable there. */

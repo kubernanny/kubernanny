@@ -47,6 +47,9 @@ enum StatusPush {
         else {
             return false
         }
+        if let sealedAt = (json["s"] as? NSNumber)?.doubleValue {
+            PushKeys.markHeard(kid, sealedAt: sealedAt)
+        }
         return WidgetPushStatus.apply(clusterId: entry.clusterId, status: status)
     }
 }

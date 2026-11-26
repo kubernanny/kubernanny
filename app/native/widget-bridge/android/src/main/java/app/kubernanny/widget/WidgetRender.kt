@@ -81,7 +81,7 @@ object WidgetRender {
             val dotId = context.resources.getIdentifier("kn_sdot_$i", "id", context.packageName)
             val cluster = list.getOrNull(i)
             v.setViewVisibility(dotId, if (cluster == null) View.GONE else View.VISIBLE)
-            cluster?.let { v.setImageViewResource(dotId, dot(it.light, it.isStale(now))) }
+            cluster?.let { v.setImageViewResource(dotId, dot(it.light, it.isStale(now) || it.unreachable)) }
         }
         time(context, v, R.id.kn_time, total.checkedAt, allStale, now)
         return v
@@ -107,15 +107,22 @@ object WidgetRender {
                 v.setViewVisibility(row, View.GONE)
                 continue
             }
-            val stale = cluster.isStale(now)
+            val stale = cluster.isStale(now) || cluster.unreachable
             v.setViewVisibility(row, View.VISIBLE)
             v.setImageViewResource(id(context, "kn_dot_$i"), dot(cluster.light, stale))
             v.setTextViewText(id(context, "kn_name_$i"), cluster.name)
             v.setViewVisibility(id(context, "kn_demo_$i"), if (cluster.demo) View.VISIBLE else View.GONE)
             // Colour never carries alone: an old check also says so in words.
             val line = shortHeadline(context, cluster)
-            v.setTextViewText(id(context, "kn_headline_$i"), if (stale && cluster.checkedAt != null) context.getString(R.string.kn_widget_stale_tag) + " · " + line else line)
-            v.setTextColor(id(context, "kn_headline_$i"), context.getColor(if (stale) R.color.kn_mute else tone(cluster.light)))
+            v.setTextViewText(
+                id(context, "kn_headline_$i"),
+                when {
+                    cluster.unreachable -> context.getString(R.string.kn_widget_silent)
+                    stale && cluster.checkedAt != null -> context.getString(R.string.kn_widget_stale_tag) + " · " + line
+                    else -> line
+                },
+            )
+            v.setTextColor(id(context, "kn_headline_$i"), context.getColor(if (cluster.unreachable) R.color.kn_crit else if (stale) R.color.kn_mute else tone(cluster.light)))
             v.setTextViewText(id(context, "kn_time_$i"), cluster.checkedAt?.let { formatTime(it, now) } ?: "")
             v.setTextColor(id(context, "kn_time_$i"), context.getColor(if (stale) R.color.kn_warn_soft else R.color.kn_mute))
             v.setOnClickPendingIntent(row, openIntent(context, cluster.id))
@@ -161,7 +168,7 @@ object WidgetRender {
             }
             return v
         }
-        val stale = cluster.isStale(now)
+        val stale = cluster.isStale(now) || cluster.unreachable
         v.setImageViewResource(R.id.kn_eye, eye(cluster.light, stale))
         v.setTextViewText(R.id.kn_name, cluster.name)
         v.setViewVisibility(R.id.kn_demo, if (cluster.demo) View.VISIBLE else View.GONE)
@@ -192,6 +199,14 @@ object WidgetRender {
             if (layout == R.layout.kn_cluster_wide) {
                 problems(context, v, cluster.problems, null, now, withCluster = false, max = 3, stale = stale, calm = cluster)
             }
+        }
+        if (cluster.unreachable) {
+            // The dead man's switch fired: say so in words and in coral, whatever the last state was.
+            if (layout != R.layout.kn_cluster_large) {
+                v.setViewVisibility(R.id.kn_line2, View.GONE)
+            }
+            v.setTextViewText(R.id.kn_line1, context.getString(R.string.kn_widget_silent))
+            v.setTextColor(R.id.kn_line1, context.getColor(R.color.kn_crit))
         }
         time(context, v, R.id.kn_time, cluster.checkedAt, stale, now)
         return v

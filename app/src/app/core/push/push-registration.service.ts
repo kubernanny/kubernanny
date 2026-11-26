@@ -8,6 +8,14 @@ import { PushNative } from './push-native';
 
 export type EnableOutcome = 'enabled' | 'denied' | 'unavailable';
 
+/** The dead man's switch is on by default when push is, with this grace in minutes. */
+export const DEFAULT_DEADMAN_GRACE = 15;
+
+/** What this device asks for: the stored choice, or the default for a registration made before the switch existed. */
+export function deadmanChoice(cluster: ClusterConfig): number | false {
+  return cluster.push?.deadman ?? DEFAULT_DEADMAN_GRACE;
+}
+
 /**
  * "Push to this device" (docs/NOTIFICATIONS.md, "Native push"): asks for the
  * notification permission only when someone taps it, makes a push key pair
@@ -39,9 +47,10 @@ export class PushRegistration {
     const kid = pushKeyId(keys.publicKey);
     const key = toBase64Url(keys.publicKey);
     const widget = (await this.widgetClusters()).has(cluster.id);
+    const deadman = deadmanChoice(cluster);
     await this.native.storeKey({ kid, secretKey: toBase64Url(keys.secretKey), publicKey: key, agentKey: cluster.agentKey, clusterId: cluster.id });
     try {
-      await this.client.registerPush(cluster, { token, platform: status.platform, key, widget });
+      await this.client.registerPush(cluster, { token, platform: status.platform, key, widget, deadman });
     } catch (err) {
       await this.native.removeKey(kid);
       throw err;
@@ -49,9 +58,24 @@ export class PushRegistration {
     if (cluster.push && cluster.push.kid !== kid) {
       await this.native.removeKey(cluster.push.kid);
     }
-    const saved = await this.store.save({ ...cluster, push: { kid, key, token, ...(widget ? { widget: true as const } : {}) } });
+    const saved = await this.store.save({ ...cluster, push: { kid, key, token, ...(widget ? { widget: true as const } : {}), deadman } });
     void this.client.testPush(saved).catch(() => undefined);
     return 'enabled';
+  }
+
+  /**
+   * The dead man's switch for this device: a grace in minutes, or false for
+   * off. Registers again with the same key and token, so the agent deposits
+   * (or clears) at once.
+   */
+  async setDeadman(cluster: ClusterConfig, deadman: number | false): Promise<ClusterConfig> {
+    const push = cluster.push;
+    const status = await this.native.status();
+    if (!push || !status.platform) {
+      return cluster;
+    }
+    await this.client.registerPush(cluster, { token: push.token, platform: status.platform, key: push.key, widget: push.widget === true, deadman });
+    return this.store.save({ ...cluster, push: { ...push, deadman } });
   }
 
   /** Off at the agent first (so it stops sending), then the key goes. */
@@ -101,11 +125,13 @@ export class PushRegistration {
     const shown = await this.widgetClusters();
     for (const cluster of clusters) {
       const widget = shown.has(cluster.id);
-      if (cluster.push!.token !== token || (cluster.push!.widget === true) !== widget) {
+      const deadman = deadmanChoice(cluster);
+      // A registration from before the dead man's switch (`deadman` absent) is made again once, with the default.
+      if (cluster.push!.token !== token || (cluster.push!.widget === true) !== widget || cluster.push!.deadman === undefined) {
         try {
-          await this.client.registerPush(cluster, { token, platform: status.platform, key: cluster.push!.key, widget });
+          await this.client.registerPush(cluster, { token, platform: status.platform, key: cluster.push!.key, widget, deadman });
           const { widget: _before, ...push } = cluster.push!;
-          await this.store.save({ ...cluster, push: { ...push, token, ...(widget ? { widget: true as const } : {}) } });
+          await this.store.save({ ...cluster, push: { ...push, token, ...(widget ? { widget: true as const } : {}), deadman } });
         } catch {
           // Unreachable now, or push switched off at the agent: tried again next start.
         }

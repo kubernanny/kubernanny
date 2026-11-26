@@ -99,7 +99,7 @@ final class PushKeyStore {
     }
 
     static void remove(Context context, String kid) {
-        prefs(context).edit().remove("key." + kid).remove("seen." + kid).apply();
+        prefs(context).edit().remove("key." + kid).remove("seen." + kid).remove("deadman." + kid).remove("heard." + kid).apply();
     }
 
     /**
@@ -114,6 +114,29 @@ final class PushKeyStore {
 
     static synchronized void markShown(Context context, String kid, long sealedAt) {
         prefs(context).edit().putLong("seen." + kid, sealedAt).commit();
+    }
+
+    /** The sealed time of the last dead man's switch message shown for this key: its own replay marker (PushFreshness.deadmanFresh). */
+    static synchronized Long lastDeadman(Context context, String kid) {
+        SharedPreferences prefs = prefs(context);
+        return prefs.contains("deadman." + kid) ? prefs.getLong("deadman." + kid, 0L) : null;
+    }
+
+    static synchronized void markDeadman(Context context, String kid, long sealedAt) {
+        prefs(context).edit().putLong("deadman." + kid, sealedAt).commit();
+    }
+
+    /** The newest sealed time of any push opened and accepted for this key, status pushes included: when the agent was last heard. */
+    static synchronized Long lastHeard(Context context, String kid) {
+        SharedPreferences prefs = prefs(context);
+        return prefs.contains("heard." + kid) ? prefs.getLong("heard." + kid, 0L) : null;
+    }
+
+    static synchronized void markHeard(Context context, String kid, long sealedAt) {
+        Long before = lastHeard(context, kid);
+        if (before == null || sealedAt > before) {
+            prefs(context).edit().putLong("heard." + kid, sealedAt).commit();
+        }
     }
 
     private static SharedPreferences prefs(Context context) {

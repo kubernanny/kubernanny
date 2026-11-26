@@ -26,8 +26,12 @@ data class WidgetCluster(
     val demo: Boolean,
     /** The worst open problems, outages first; absent in lists an older app version stored. */
     val problems: List<WidgetProblem> = emptyList(),
+    /** Epoch ms when this phone showed the dead man's switch message for the cluster (written by the push service), or null. */
+    val unreachableSince: Long? = null,
 ) {
     val hasProblems get() = critical + warning > 0
+    /** "Agent not answering": the silence warning came after the last check; any newer check ends it (isUnreachable in the app). */
+    val unreachable get() = unreachableSince != null && (checkedAt == null || unreachableSince > checkedAt)
     val notChecked get() = checkedAt == null || (light == "unknown" && !hasProblems)
 
     fun isStale(now: Long) = checkedAt == null || now - checkedAt > WidgetStore.STALE_AFTER_MS
@@ -79,6 +83,7 @@ object WidgetStore {
                             list.optJSONObject(j)?.let { p -> WidgetProblem(p.getString("title"), p.getString("severity") == "critical") }
                         }
                     } ?: emptyList(),
+                    unreachableSince = o.optString("unreachableSince", "").takeIf { it.isNotEmpty() }?.let { parseIso(it) },
                 )
             }.getOrNull()
         }

@@ -20,7 +20,7 @@ struct OverviewWidgetView: View {
             if #available(iOSApplicationExtension 16.0, *) {
                 let total = summary(entry.clusters)
                 let all = WidgetCluster(id: "", name: String.localizedStringWithFormat(NSLocalizedString("widget.clusterCount", comment: "4 clusters"), entry.clusters.count), light: total.light, critical: total.critical, warning: total.warning, checkedAt: total.checkedAt, demo: false, problems: [])
-                AccessoryView(cluster: all, stale: entry.clusters.allSatisfy { $0.isStale(at: entry.date) }, now: entry.date)
+                AccessoryView(cluster: all, stale: entry.clusters.allSatisfy { $0.isDim(at: entry.date) }, now: entry.date)
                     .accessoryBackground(circular: family == .accessoryCircular)
                     .widgetURL(entry.clusters.first?.url)
             }
@@ -65,10 +65,10 @@ private struct OverviewSmall: View {
 
     var body: some View {
         let total = summary(clusters)
-        let stale = clusters.allSatisfy { $0.isStale(at: now) }
+        let stale = clusters.allSatisfy { $0.isDim(at: now) }
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
-                NannyEye(light: total.light, stale: clusters.allSatisfy { $0.isStale(at: now) }, width: 46)
+                NannyEye(light: total.light, stale: clusters.allSatisfy { $0.isDim(at: now) }, width: 46)
                 Spacer(minLength: 4)
                 Text(String.localizedStringWithFormat(NSLocalizedString("widget.clusterCount", comment: "4 clusters"), clusters.count))
                     .font(.caption2.weight(.semibold))
@@ -85,7 +85,7 @@ private struct OverviewSmall: View {
             HStack(spacing: 5) {
                 ForEach(clusters.prefix(9)) { cluster in
                     Circle()
-                        .fill(cluster.isStale(at: now) ? Palette.stale : Palette.tone(cluster.light))
+                        .fill(cluster.isDim(at: now) ? Palette.stale : Palette.tone(cluster.light))
                         .frame(width: 9, height: 9)
                 }
             }
@@ -118,7 +118,7 @@ private struct OverviewMedium: View {
             }
             if shown.count < 4 {
                 Spacer(minLength: 0)
-                if clusters.allSatisfy({ $0.isStale(at: now) }) {
+                if clusters.allSatisfy({ $0.isDim(at: now) }) {
                     StaleHint()
                 }
             }
@@ -142,7 +142,7 @@ private struct OverviewLarge: View {
             .prefix(problems)
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 12) {
-                NannyEye(light: total.light, stale: clusters.allSatisfy { $0.isStale(at: now) }, width: 50)
+                NannyEye(light: total.light, stale: clusters.allSatisfy { $0.isDim(at: now) }, width: 50)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(total.headline)
                         .font(.system(size: 20, weight: .bold, design: .rounded))
@@ -172,13 +172,13 @@ private struct OverviewLarge: View {
                 VStack(alignment: .leading, spacing: 7) {
                     ForEach(Array(top.enumerated()), id: \.offset) { _, item in
                         Link(destination: item.cluster.url ?? URL(string: "kubernanny://")!) {
-                            ProblemRow(problem: item.problem, cluster: item.cluster.name, stale: item.cluster.isStale(at: now))
+                            ProblemRow(problem: item.problem, cluster: item.cluster.name, stale: item.cluster.isDim(at: now))
                         }
                     }
                 }
             }
             Spacer(minLength: 0)
-            if clusters.allSatisfy({ $0.isStale(at: now) }) {
+            if clusters.allSatisfy({ $0.isDim(at: now) }) {
                 StaleHint()
             }
         }
@@ -206,7 +206,7 @@ private struct ClusterRow: View {
     let now: Date
 
     var body: some View {
-        let stale = cluster.isStale(at: now)
+        let stale = cluster.isDim(at: now)
         Link(destination: cluster.url ?? URL(string: "kubernanny://")!) {
             HStack(spacing: 10) {
                 LightDot(light: cluster.light, stale: stale, size: 16)
@@ -221,9 +221,9 @@ private struct ClusterRow: View {
                         }
                     }
                     // Colour never carries alone: an old check also says so in words.
-                    Text(stale && cluster.checkedAt != nil ? "\(String(localized: "widget.staleTag")) · \(cluster.shortHeadline)" : cluster.shortHeadline)
+                    Text(cluster.unreachable ? String(localized: "widget.silent") : stale && cluster.checkedAt != nil ? "\(String(localized: "widget.staleTag")) · \(cluster.shortHeadline)" : cluster.shortHeadline)
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(stale ? Palette.mute : Palette.tone(cluster.light))
+                        .foregroundColor(cluster.unreachable ? Palette.crit : stale ? Palette.mute : Palette.tone(cluster.light))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
@@ -249,7 +249,7 @@ struct ClusterWidgetView: View {
     }
 
     @ViewBuilder private func view(for cluster: WidgetCluster) -> some View {
-        let stale = cluster.isStale(at: entry.date)
+        let stale = cluster.isDim(at: entry.date)
         switch family {
         case .systemMedium:
             ClusterMedium(cluster: cluster, stale: stale, now: entry.date).navyBackground()
@@ -352,9 +352,9 @@ private struct ClusterLarge: View {
                             DemoPill()
                         }
                     }
-                    Text(cluster.headline)
+                    Text(cluster.unreachable ? String(localized: "widget.silent") : cluster.headline)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(stale ? Palette.mute : Palette.tone(cluster.light))
+                        .foregroundColor(cluster.unreachable ? Palette.crit : stale ? Palette.mute : Palette.tone(cluster.light))
                         .lineLimit(2)
                 }
             }
@@ -454,7 +454,14 @@ private struct Counts: View {
     let size: CGFloat
 
     var body: some View {
-        if cluster.hasProblems && !cluster.notChecked {
+        if cluster.unreachable {
+            // The dead man's switch fired: said in words and in coral, whatever the last state was.
+            Text(String(localized: "widget.silent"))
+                .font(.system(size: size, weight: .bold, design: .rounded))
+                .foregroundColor(Palette.crit)
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+        } else if cluster.hasProblems && !cluster.notChecked {
             VStack(alignment: .leading, spacing: 0) {
                 if cluster.critical > 0 {
                     Text(cluster.outagesText)

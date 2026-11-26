@@ -32,6 +32,22 @@ export interface WidgetCluster {
   demo: boolean;
   /** The worst open problems, outages first, at most MAX_PROBLEMS (none when all is well). */
   problems: WidgetProblem[];
+  /**
+   * When this phone showed the dead man's switch message for the cluster
+   * (ISO time; written by the push extension / service, never by the app).
+   * Later than `checkedAt`: the widgets draw the cluster as "Agent not
+   * answering". Any newer check supersedes it, so nothing has to clear it.
+   */
+  unreachableSince?: string;
+}
+
+/** The widgets show "Agent not answering" for this entry: the silence warning came after the last check. */
+export function isUnreachable(entry: Pick<WidgetCluster, 'checkedAt' | 'unreachableSince'>): boolean {
+  if (!entry.unreachableSince) {
+    return false;
+  }
+  const since = Date.parse(entry.unreachableSince);
+  return Number.isFinite(since) && (!entry.checkedAt || since > Date.parse(entry.checkedAt));
 }
 
 /** Long enough for any sensible name, short enough that a pasted essay stays in the app. */
@@ -108,7 +124,8 @@ export function keepFresher(next: WidgetCluster[], stored: WidgetCluster[]): Wid
   return next.map((entry) => {
     const other = stored.find((s) => s.id === entry.id);
     if (!other?.checkedAt || (entry.checkedAt && Date.parse(other.checkedAt) <= Date.parse(entry.checkedAt))) {
-      return entry;
+      // The silence warning a push wrote stays while the app has nothing newer than it.
+      return other?.unreachableSince && isUnreachable({ checkedAt: entry.checkedAt, unreachableSince: other.unreachableSince }) ? { ...entry, unreachableSince: other.unreachableSince } : entry;
     }
     return { ...other, name: entry.name, demo: entry.demo };
   });
@@ -145,5 +162,15 @@ export function validWidgetList(value: unknown): WidgetCluster[] {
         typeof c.demo === 'boolean' &&
         validProblems(c.problems) !== null,
     )
-    .map(({ id, name, light, critical, warning, checkedAt, demo, problems }) => ({ id, name, light, critical, warning, checkedAt, demo, problems: validProblems(problems)! }));
+    .map(({ id, name, light, critical, warning, checkedAt, demo, problems, unreachableSince }) => ({
+      id,
+      name,
+      light,
+      critical,
+      warning,
+      checkedAt,
+      demo,
+      problems: validProblems(problems)!,
+      ...(typeof unreachableSince === 'string' && Number.isFinite(Date.parse(unreachableSince)) ? { unreachableSince } : {}),
+    }));
 }

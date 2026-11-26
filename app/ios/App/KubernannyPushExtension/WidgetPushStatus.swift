@@ -53,6 +53,36 @@ enum WidgetPushStatus {
     }
 
     /// Writes into the App Group; true when the widget should redraw.
+    /// The stored list with `clusterId` marked "agent not answering" since `now`
+    /// (ms; field `unreachableSince`, written only here and by the Android push
+    /// service; the app keeps it). The widgets show it while it is later than
+    /// the entry's last check, so any newer state supersedes it. Nil without an entry.
+    static func markUnreachable(stored json: String?, clusterId: String, now: Double) -> String? {
+        guard
+            let json = json,
+            var list = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [[String: Any]],
+            let index = list.firstIndex(where: { ($0["id"] as? String) == clusterId })
+        else {
+            return nil
+        }
+        list[index]["unreachableSince"] = isoWithFraction.string(from: Date(timeIntervalSince1970: now / 1000))
+        guard let data = try? JSONSerialization.data(withJSONObject: list) else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func markUnreachable(clusterId: String, now: Double) -> Bool {
+        guard
+            let defaults = UserDefaults(suiteName: appGroup),
+            let next = markUnreachable(stored: defaults.string(forKey: key), clusterId: clusterId, now: now)
+        else {
+            return false
+        }
+        defaults.set(next, forKey: key)
+        return true
+    }
+
     static func apply(clusterId: String, status: [String: Any]) -> Bool {
         guard
             let defaults = UserDefaults(suiteName: appGroup),

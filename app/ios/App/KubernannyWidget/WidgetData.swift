@@ -21,8 +21,10 @@ struct WidgetCluster: Decodable, Identifiable {
     let demo: Bool
     /// The worst open problems, outages first; absent in lists an older app version stored.
     let problems: [WidgetProblem]
+    /// When this phone showed the dead man's switch message for the cluster (written by the push extension), or nil.
+    let unreachableSince: Date?
 
-    init(id: String, name: String, light: String, critical: Int, warning: Int, checkedAt: Date?, demo: Bool, problems: [WidgetProblem]) {
+    init(id: String, name: String, light: String, critical: Int, warning: Int, checkedAt: Date?, demo: Bool, problems: [WidgetProblem], unreachableSince: Date? = nil) {
         self.id = id
         self.name = name
         self.light = light
@@ -31,9 +33,10 @@ struct WidgetCluster: Decodable, Identifiable {
         self.checkedAt = checkedAt
         self.demo = demo
         self.problems = problems
+        self.unreachableSince = unreachableSince
     }
 
-    private enum CodingKeys: String, CodingKey { case id, name, light, critical, warning, checkedAt, demo, problems }
+    private enum CodingKeys: String, CodingKey { case id, name, light, critical, warning, checkedAt, demo, problems, unreachableSince }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -45,6 +48,20 @@ struct WidgetCluster: Decodable, Identifiable {
         checkedAt = try c.decodeIfPresent(Date.self, forKey: .checkedAt)
         demo = try c.decode(Bool.self, forKey: .demo)
         problems = (try? c.decodeIfPresent([WidgetProblem].self, forKey: .problems)) ?? []
+        unreachableSince = try? c.decodeIfPresent(Date.self, forKey: .unreachableSince)
+    }
+
+    /// "Agent not answering": the dead man's switch message came after the last check; any newer check ends it
+    /// (isUnreachable in the app, WidgetCluster.unreachable on Android).
+    var unreachable: Bool {
+        guard let since = unreachableSince else { return false }
+        guard let checkedAt else { return true }
+        return since > checkedAt
+    }
+
+    /// Drawn grey: too old, or the agent went silent.
+    func isDim(at now: Date) -> Bool {
+        unreachable || isStale(at: now)
     }
 
     /// Nothing refreshes the widget but the open app and pushes (on a quiet day a status push about hourly,

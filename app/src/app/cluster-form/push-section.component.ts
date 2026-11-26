@@ -36,6 +36,23 @@ import { PushMarkerPickerComponent } from './push-marker-picker.component';
           @if (picking()) {
             <app-push-marker-picker [current]="marker()" [clusterName]="clusterName()" (chosen)="markerChosen($event)" (cancelled)="pickerClosed()" />
           }
+          @if (view().deadman; as d) {
+            <div class="deadman">
+              <label class="toggle">
+                <input type="checkbox" [checked]="d.on" [disabled]="!d.editable || busy()" (change)="setDeadman(d.on ? false : d.grace)" />
+                <span>{{ t('push.deadmanTitle') }}</span>
+              </label>
+              @if (d.on && d.editable) {
+                <div class="graces" role="radiogroup" [attr.aria-label]="t('push.deadmanAfter')">
+                  <span class="after">{{ t('push.deadmanAfter') }}</span>
+                  @for (g of d.graces; track g.minutes) {
+                    <button type="button" role="radio" [attr.aria-checked]="g.minutes === d.grace" [class.chosen]="g.minutes === d.grace" [disabled]="busy()" (click)="setDeadman(g.minutes)">{{ g.label }}</button>
+                  }
+                </div>
+              }
+              <p class="hint">{{ d.note }}</p>
+            </div>
+          }
           <div class="actions">
             @if (view().action) {
               <ion-button fill="outline" [disabled]="busy()" (click)="toggle()">{{ view().actionLabel }}</ion-button>
@@ -63,6 +80,59 @@ import { PushMarkerPickerComponent } from './push-marker-picker.component';
     }
     .locked::before {
       content: '🔒 ';
+    }
+    .deadman {
+      display: grid;
+      gap: 0.6rem;
+      margin: 0.9rem 0 0.9rem;
+      padding: 0.8rem 0.9rem;
+      border-radius: var(--radius-m);
+      background: var(--surface);
+    }
+    .toggle {
+      display: flex;
+      gap: 0.6rem;
+      align-items: center;
+      font-size: 0.9375rem;
+    }
+    .toggle span {
+      color: var(--ink);
+      font-size: 0.9375rem;
+      font-weight: 600;
+    }
+    .toggle input {
+      width: 1.1rem;
+      height: 1.1rem;
+      padding: 0;
+      accent-color: var(--accent, currentColor);
+    }
+    .graces {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .after {
+      color: var(--mute);
+      font-size: 0.875rem;
+      margin-right: 0.2rem;
+    }
+    .graces button {
+      min-height: 2.25rem;
+      padding: 0 0.8rem;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--ink);
+      font: inherit;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .graces button.chosen {
+      border-color: var(--accent, currentColor);
+      background: var(--accent, currentColor);
+      color: var(--ion-color-primary-contrast, #fff);
+      font-weight: 600;
     }
   `,
 })
@@ -178,6 +248,25 @@ export class PushSectionComponent {
         await this.toast(tr.t('push.disabled'));
       }
       await this.load(cluster);
+    } catch (err) {
+      await this.toast(describeError(err, tr));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  /** The dead man's switch: a grace in minutes, or false for off; registered again at once. */
+  async setDeadman(deadman: number | false): Promise<void> {
+    const cluster = this.cluster();
+    if (!cluster) {
+      return;
+    }
+    const tr = this.language.translator();
+    this.busy.set(true);
+    try {
+      await this.registration.setDeadman(cluster, deadman);
+      await this.load(cluster);
+      await this.toast(deadman === false ? tr.t('push.deadmanOff') : tr.t('push.deadmanOn', { n: deadman }));
     } catch (err) {
       await this.toast(describeError(err, tr));
     } finally {

@@ -6,7 +6,7 @@ import { ClusterConfig, Issue, Snapshot } from '../agent.model';
 import { ClusterStore } from '../cluster-store.service';
 import { ClusterState, StatusStore } from '../status-store.service';
 import { WidgetBridge } from './widget-bridge';
-import { WidgetCluster, keepFresher, nextWidgetList, validWidgetList, widgetCluster } from './widget-summary';
+import { WidgetCluster, isUnreachable, keepFresher, nextWidgetList, validWidgetList, widgetCluster } from './widget-summary';
 import { WidgetSync } from './widget-sync.service';
 
 /** Stands in for the native plugin: what it holds is what the device's shared storage would hold. */
@@ -158,6 +158,24 @@ describe('keepFresher', () => {
 
   it('never brings back a cluster the app left out', () => {
     expect(keepFresher([], [pushed])).toEqual([]);
+  });
+
+  it('keeps the silence warning a push wrote until the app has a check newer than it', () => {
+    const silent: WidgetCluster = { ...app, unreachableSince: '2026-11-25T10:30:00Z' };
+    expect(keepFresher([app], [silent])).toEqual([{ ...app, unreachableSince: '2026-11-25T10:30:00Z' }]);
+    expect(keepFresher([{ ...app, checkedAt: '2026-11-25T10:31:00Z' }], [silent])[0]!.unreachableSince).toBeUndefined();
+  });
+});
+
+describe('isUnreachable (the widgets\' "Agent not answering")', () => {
+  const base = { checkedAt: '2026-11-25T10:00:00Z' };
+  it('holds while the silence warning is newer than the last check, and ends with any newer check', () => {
+    expect(isUnreachable(base)).toBe(false);
+    expect(isUnreachable({ ...base, unreachableSince: '2026-11-25T10:20:00Z' })).toBe(true);
+    expect(isUnreachable({ checkedAt: '2026-11-25T10:21:00Z', unreachableSince: '2026-11-25T10:20:00Z' })).toBe(false);
+    expect(isUnreachable({ checkedAt: null, unreachableSince: '2026-11-25T10:20:00Z' })).toBe(true);
+    expect(validWidgetList([{ id: 'a', name: 'x', light: 'green', critical: 0, warning: 0, checkedAt: null, demo: false, unreachableSince: '2026-11-25T10:20:00Z' }])[0]!.unreachableSince).toBe('2026-11-25T10:20:00Z');
+    expect(validWidgetList([{ id: 'a', name: 'x', light: 'green', critical: 0, warning: 0, checkedAt: null, demo: false, unreachableSince: 'soon' }])[0]!.unreachableSince).toBeUndefined();
   });
 });
 

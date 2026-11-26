@@ -43,19 +43,46 @@ final class NotificationService: UNNotificationServiceExtension {
         }
         // A status push reaches the app as a background push (AppDelegate). Should one arrive here
         // as an alert, the widget still takes its state, and the generic text is what shows.
-        if StatusPush.isStatusOnly(json) {
-            if let status = StatusPush.status(fromOpened: json, now: Date().timeIntervalSince1970 * 1000),
-               WidgetPushStatus.apply(clusterId: entry.clusterId, status: status) {
+        let now = Date().timeIntervalSince1970 * 1000
+        // A dead man's switch message (docs/PROTOCOL.md "Dead man's switch"): sealed ahead of time, sent by the
+        // relay because the agent went silent. Its own freshness rule and replay marker (a stale or replayed one
+        // gets the generic text, without the marker); the widget turns to "agent not answering".
+        if json["d"] != nil {
+            guard
+                let d = json["d"] as? [String: Any],
+                let validUntil = (d["u"] as? NSNumber)?.doubleValue,
+                let grace = (d["g"] as? NSNumber)?.intValue,
+                PushKeys.validGrace(grace),
+                PushKeys.isDeadmanFresh(sealedAt: sealedAt, validUntil: validUntil, graceMinutes: grace, now: now, lastDeadman: PushKeys.lastDeadman(kid), lastHeard: PushKeys.lastHeard(kid))
+            else {
+                return
+            }
+            PushKeys.markDeadman(kid, sealedAt: sealedAt)
+            if WidgetPushStatus.markUnreachable(clusterId: entry.clusterId, now: now) {
                 WidgetCenter.shared.reloadAllTimelines()
+            }
+            content.title = PushKeys.markedTitle(PushKeys.marker(), title)
+            content.body = body
+            content.threadIdentifier = entry.clusterId
+            content.userInfo = ["k": kid]
+            return
+        }
+        if StatusPush.isStatusOnly(json) {
+            if let status = StatusPush.status(fromOpened: json, now: now) {
+                PushKeys.markHeard(kid, sealedAt: sealedAt)
+                if WidgetPushStatus.apply(clusterId: entry.clusterId, status: status) {
+                    WidgetCenter.shared.reloadAllTimelines()
+                }
             }
             return
         }
         // A replayed or stale message opens fine (the agent made it once) but says something old.
         // iOS shows every alert that arrives, so it gets the generic text, without the marker.
-        guard PushKeys.isFresh(sealedAt: sealedAt, now: Date().timeIntervalSince1970 * 1000, lastShown: PushKeys.lastShown(kid)) else {
+        guard PushKeys.isFresh(sealedAt: sealedAt, now: now, lastShown: PushKeys.lastShown(kid)) else {
             return
         }
         PushKeys.markShown(kid, sealedAt: sealedAt)
+        PushKeys.markHeard(kid, sealedAt: sealedAt)
         // The cluster's state for the home-screen widget (agents that send it; docs/PROTOCOL.md "Push status").
         if let status = json["w"] as? [String: Any], WidgetPushStatus.apply(clusterId: entry.clusterId, status: status) {
             WidgetCenter.shared.reloadAllTimelines()

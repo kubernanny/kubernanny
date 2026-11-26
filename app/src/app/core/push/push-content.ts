@@ -1,4 +1,4 @@
-import { PushContent, decodePushContent, fromBase64Url, keyPairFromSecret, openPush, parsePublicKey } from '@kubernanny/protocol';
+import { DEADMAN_MAX_VALIDITY_MS, PushContent, decodePushContent, fromBase64Url, keyPairFromSecret, openPush, parsePublicKey } from '@kubernanny/protocol';
 
 /**
  * Opens one push as the native code does (iOS extension, Android service):
@@ -38,4 +38,30 @@ export function pushFresh(sealedAt: number, now: number, lastShown: number | nul
  */
 export function statusPushFresh(sealedAt: number, now: number): boolean {
   return pushFresh(sealedAt, now, null);
+}
+
+/**
+ * Whether a dead man's switch message (docs/PROTOCOL.md, "Dead man's
+ * switch") may be shown. It was sealed ahead of time and deposited with the
+ * relay, so the hour of `pushFresh` does not apply, and other pushes shown
+ * since are no reason to drop it. Instead:
+ *   - the phone's clock is within the window sealed into it (`u`), and the
+ *     sealing time `s` is not ahead of the phone by more than the usual hour;
+ *   - it is later than the last such message shown for this key (a replay
+ *     marker of its own, `lastDeadman`), so the relay cannot show one twice;
+ *   - no push of this agent was opened within the grace (`lastHeard`, the
+ *     newest `s` of any push opened for this key, status pushes included):
+ *     an agent heard from that recently was not silent, and a late arrival
+ *     after the "reachable again" push is dropped.
+ * Mirrored by PushFreshness.deadmanFresh and PushKeys.isDeadmanFresh.
+ */
+export function deadmanFresh(content: { s: number; d: { u: number; g: number } }, now: number, lastDeadman: number | null, lastHeard: number | null): boolean {
+  const { s, d } = content;
+  if (!Number.isFinite(s) || !Number.isFinite(d.u) || s - now > MAX_PUSH_AGE_MS || now > d.u || d.u - s > DEADMAN_MAX_VALIDITY_MS) {
+    return false;
+  }
+  if (lastDeadman !== null && s <= lastDeadman) {
+    return false;
+  }
+  return lastHeard === null || lastHeard < now - d.g * 60_000;
 }

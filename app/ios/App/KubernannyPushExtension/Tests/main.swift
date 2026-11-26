@@ -57,3 +57,28 @@ precondition(!PushKeys.isFresh(sealedAt: now - 60_000, now: now, lastShown: now 
 precondition(!PushKeys.isFresh(sealedAt: now - 60_000, now: now, lastShown: now - 5_000))
 precondition(!PushKeys.isFresh(sealedAt: now + PushKeys.maxAge + 1, now: now, lastShown: nil))
 print("PushKeys.isFresh: as pushFresh in push-content.ts")
+
+// Dead man's switch messages: the same cases as deadmanFresh in push.spec.ts.
+let ds = 1_795_000_000_000.0
+let dmin = 60_000.0
+let du = ds + 3 * 3_600_000
+precondition(PushKeys.isDeadmanFresh(sealedAt: ds, validUntil: du, graceMinutes: 15, now: ds + 2 * 3_600_000, lastDeadman: nil, lastHeard: nil))
+precondition(PushKeys.isDeadmanFresh(sealedAt: ds, validUntil: du, graceMinutes: 15, now: ds + 90 * dmin, lastDeadman: nil, lastHeard: ds - 10 * dmin))
+precondition(PushKeys.isDeadmanFresh(sealedAt: ds, validUntil: du, graceMinutes: 15, now: ds + 90 * dmin, lastDeadman: nil, lastHeard: ds + 20 * dmin))
+precondition(!PushKeys.isDeadmanFresh(sealedAt: ds, validUntil: du, graceMinutes: 15, now: ds + 90 * dmin, lastDeadman: ds, lastHeard: nil))
+precondition(!PushKeys.isDeadmanFresh(sealedAt: ds, validUntil: du, graceMinutes: 15, now: du + 1, lastDeadman: nil, lastHeard: nil))
+precondition(!PushKeys.isDeadmanFresh(sealedAt: ds + 2 * 3_600_000, validUntil: du, graceMinutes: 15, now: ds, lastDeadman: nil, lastHeard: nil))
+precondition(!PushKeys.isDeadmanFresh(sealedAt: ds, validUntil: ds + 28 * 3_600_000, graceMinutes: 15, now: ds + dmin, lastDeadman: nil, lastHeard: nil))
+precondition(!PushKeys.isDeadmanFresh(sealedAt: ds, validUntil: du, graceMinutes: 15, now: ds + 90 * dmin, lastDeadman: nil, lastHeard: ds + 80 * dmin))
+precondition(PushKeys.validGrace(15) && !PushKeys.validGrace(20))
+// The deadman vector carries its descriptor, and is no status push.
+let dv = vectors.first { $0["name"] == "deadman" }!
+let dplain = try PushCrypto.open(pushSecret: hex(dv["pushSecret"]!), pushPublic: hex(dv["pushPublic"]!), agentPublic: hex(dv["agentStaticPublic"]!), message: hex(dv["message"]!))
+let djson = try JSONSerialization.jsonObject(with: dplain) as! [String: Any]
+let dd = djson["d"] as! [String: Any]
+precondition((dd["g"] as! NSNumber).intValue == 15 && !StatusPush.isStatusOnly(djson))
+// The widget's "agent not answering" mark.
+let silentList = WidgetPushStatus.markUnreachable(stored: #"[{"id":"a","name":"homelab","light":"green","critical":0,"warning":0,"checkedAt":null,"demo":false}]"#, clusterId: "a", now: 1_795_000_200_000)!
+precondition(silentList.contains("\"unreachableSince\":\"2026-11-18T"), silentList)
+precondition(WidgetPushStatus.markUnreachable(stored: silentList, clusterId: "gone", now: 1) == nil)
+print("PushKeys.isDeadmanFresh: as deadmanFresh in push-content.ts")

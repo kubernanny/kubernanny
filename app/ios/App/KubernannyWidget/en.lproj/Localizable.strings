@@ -5,6 +5,7 @@
 "widget.clusterDescription" = "One cluster with its worst problems. Updated by every push and while the app is open.";
 "widget.empty" = "Open Kubernanny to see your clusters here.";
 "widget.staleOpen" = "Open Kubernanny";
+"widget.silent" = "Agent not answering";
 "widget.staleTag" = "Not current";
 "widget.justNow" = "just now";
 "widget.noProblems" = "No open problems";

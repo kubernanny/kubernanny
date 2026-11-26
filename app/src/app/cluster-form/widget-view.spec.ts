@@ -32,7 +32,8 @@ describe('widgetPushState', () => {
 describe('widgetView', () => {
   it('explains when the widget updates and names the grey limit in hours', () => {
     const vm = widgetView({ cluster: cluster(), push: push({ state: 'on', relay: true, registered: true }) }, de);
-    expect(vm.lines).toHaveLength(3);
+    expect(vm.lines).toHaveLength(4);
+    expect(vm.lines[3]).toContain("„Agent antwortet nicht“");
     expect(vm.lines[2]).toContain('seit 2 Stunden');
     expect(vm.lines[2]).toContain('„Nicht aktuell“');
     expect(vm.pushLine).toBe('Push ist auf diesem Gerät an: Das Widget bleibt aktuell.');

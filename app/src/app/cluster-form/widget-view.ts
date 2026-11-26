@@ -37,7 +37,7 @@ export function widgetView(input: { cluster: ClusterConfig; push: PushVM | null 
   const push = widgetPushState(input.push, input.cluster);
   const pushLine = push === 'unknown' ? '' : tr.t(push === 'on' ? 'widget.pushOn' : push === 'off' ? 'widget.pushOff' : 'widget.pushUnavailable');
   return {
-    lines: [tr.t('widget.updates'), tr.t('widget.quiet'), tr.t('widget.stale', { hours: WIDGET_STALE_HOURS })],
+    lines: [tr.t('widget.updates'), tr.t('widget.quiet'), tr.t('widget.stale', { hours: WIDGET_STALE_HOURS }), tr.t('widget.silent')],
     push,
     pushLine,
     offerPush: push === 'off',

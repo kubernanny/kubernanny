@@ -1,3 +1,4 @@
+import { DEADMAN_GRACE_MINUTES } from '@kubernanny/protocol';
 import { AgentPushView } from '../agent.model';
 import { NativePushStatus } from './push-native';
 import { Translator } from '../../i18n/translator';
@@ -15,9 +16,36 @@ export interface PushVM {
   markerLine: string;
   /** "Change sign" / "Choose a sign"; empty when there is nothing to change. */
   markerActionLabel: string;
+  /** "Warn when the agent goes silent"; only while push is on for this device. */
+  deadman: DeadmanVM | null;
 }
 
-const HIDDEN: PushVM = { visible: false, locked: false, note: '', action: null, actionLabel: '', canTest: false, markerLine: '', markerActionLabel: '' };
+export interface DeadmanVM {
+  /** The switch can be used (an agent and deployment that support it). */
+  editable: boolean;
+  on: boolean;
+  /** The grace shown as chosen (the device's, or the default while off). */
+  grace: number;
+  graces: { minutes: number; label: string }[];
+  /** One line: what it does, or why it cannot be used here. */
+  note: string;
+}
+
+const HIDDEN: PushVM = { visible: false, locked: false, note: '', action: null, actionLabel: '', canTest: false, markerLine: '', markerActionLabel: '', deadman: null };
+
+/** The dead man's switch row of a device with push on (docs/NOTIFICATIONS.md, "When the agent goes silent"). */
+export function deadmanView(agent: AgentPushView, tr: Translator, fallbackGrace = 15): DeadmanVM {
+  const graces = DEADMAN_GRACE_MINUTES.map((minutes) => ({ minutes, label: tr.t('push.deadmanMinutes', { n: minutes }) }));
+  const d = agent.deadman;
+  if (!d) {
+    return { editable: false, on: false, grace: fallbackGrace, graces, note: tr.t('push.deadmanOldAgent') };
+  }
+  if (d.state === 'locked') {
+    return { editable: false, on: false, grace: fallbackGrace, graces, note: tr.t('push.deadmanLocked') };
+  }
+  const on = d.grace !== null;
+  return { editable: true, on, grace: d.grace ?? fallbackGrace, graces, note: tr.t(d.state === 'relay' ? 'push.deadmanRelay' : 'push.deadmanHint') };
+}
 
 /**
  * The "Push to this device" section. The agent's answer is the truth about
@@ -45,6 +73,7 @@ export function pushView(input: { demo: boolean; native: NativePushStatus | null
       canTest: agent.relay,
       markerLine: marker ? tr.t('push.markerOn', { marker }) : tr.t('push.markerMissing'),
       markerActionLabel: tr.t(marker ? 'push.markerChange' : 'push.markerChoose'),
+      deadman: deadmanView(agent, tr),
     };
   }
   return { ...HIDDEN, visible: true, note: tr.t('push.hint'), action: 'enable', actionLabel: tr.t('push.enable') };

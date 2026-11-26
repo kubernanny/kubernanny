@@ -6,11 +6,12 @@ import { AgentClient } from '../agent-client.service';
 import { AgentPushView, ClusterConfig } from '../agent.model';
 import { ClusterStore } from '../cluster-store.service';
 import { translatorFor } from '../../i18n/translator';
-import { MAX_PUSH_AGE_MS, openPushMessage, pushFresh, statusPushFresh } from './push-content';
+import { MAX_PUSH_AGE_MS, deadmanFresh, openPushMessage, pushFresh, statusPushFresh } from './push-content';
 import { PushNative } from './push-native';
 import { WidgetBridge } from '../widget/widget-bridge';
 import { PushRegistration } from './push-registration.service';
-import { pushView } from './push-view';
+import { deadmanView, pushView } from './push-view';
+import { isDeadman } from '@kubernanny/protocol';
 
 const en = translatorFor('en');
 const agentKeys = generateKeyPair();
@@ -105,10 +106,10 @@ class FakeWidgets {
 }
 
 class FakeClient {
-  registered: { token: string; platform: string; key: string; widget: boolean }[] = [];
+  registered: { token: string; platform: string; key: string; widget: boolean; deadman?: number | false }[] = [];
   unregistered = 0;
   fail = false;
-  async registerPush(_: ClusterConfig, r: { token: string; platform: string; key: string; widget: boolean }) {
+  async registerPush(_: ClusterConfig, r: { token: string; platform: string; key: string; widget: boolean; deadman?: number | false }) {
     if (this.fail) {
       throw new Error('agent says no');
     }
@@ -159,9 +160,9 @@ describe('PushRegistration', () => {
     const [kid, stored] = [...native.keys][0]!;
     expect(stored).toMatchObject({ agentKey: config().agentKey, clusterId: 'c1' });
     expect(stored.secretKey).not.toBe(config().deviceKey);
-    expect(client.registered).toEqual([{ token: 'fcm-token-1:APA91b', platform: 'ios', key: stored.publicKey, widget: false }]);
+    expect(client.registered).toEqual([{ token: 'fcm-token-1:APA91b', platform: 'ios', key: stored.publicKey, widget: false, deadman: 15 }]);
     expect(kid).toBe(pushKeyId(parsePublicKey(stored.publicKey)));
-    expect(store.clusters()[0]!.push).toEqual({ kid, key: stored.publicKey, token: 'fcm-token-1:APA91b' });
+    expect(store.clusters()[0]!.push).toEqual({ kid, key: stored.publicKey, token: 'fcm-token-1:APA91b', deadman: 15 });
     expect(JSON.stringify(store.clusters())).not.toContain(stored.secretKey);
 
     // What the agent seals for the registered key opens with what the phone stored.
@@ -198,7 +199,7 @@ describe('PushRegistration', () => {
     const before = store.clusters()[0]!.push!;
     native.currentToken = 'fcm-token-2:APA91b';
     await registration.refreshRegistrations();
-    expect(client.registered.at(-1)).toEqual({ token: 'fcm-token-2:APA91b', platform: 'ios', key: before.key, widget: false });
+    expect(client.registered.at(-1)).toEqual({ token: 'fcm-token-2:APA91b', platform: 'ios', key: before.key, widget: false, deadman: 15 });
     expect(store.clusters()[0]!.push).toEqual({ ...before, token: 'fcm-token-2:APA91b' });
     const count = client.registered.length;
     await registration.refreshRegistrations();
@@ -227,6 +228,28 @@ describe('PushRegistration', () => {
     widgets.ids = ['c1'];
     await registration.refreshRegistrations();
     expect(client.registered.at(-1)!.widget).toBe(true);
+  });
+
+  it('turns the dead man\'s switch on with push, changes its grace and switches it off, registering again each time', async () => {
+    await registration.enable(config());
+    let cluster = await registration.setDeadman(store.clusters()[0]!, 60);
+    expect(client.registered.at(-1)).toMatchObject({ key: cluster.push!.key, deadman: 60 });
+    cluster = await registration.setDeadman(cluster, false);
+    expect(client.registered.at(-1)!.deadman).toBe(false);
+    expect(store.clusters()[0]!.push!.deadman).toBe(false);
+    // An explicit off survives the next start.
+    const count = client.registered.length;
+    await registration.refreshRegistrations();
+    expect(client.registered.length).toBe(count);
+  });
+
+  it('registers once more, with the default, a push set up by an app before the dead man\'s switch', async () => {
+    store.clusters.set([config({ push: { kid: 'k', key: 'key', token: 'fcm-token-1:APA91b' } })]);
+    await registration.refreshRegistrations();
+    expect(client.registered).toEqual([{ token: 'fcm-token-1:APA91b', platform: 'ios', key: 'key', widget: false, deadman: 15 }]);
+    expect(store.clusters()[0]!.push!.deadman).toBe(15);
+    await registration.refreshRegistrations();
+    expect(client.registered).toHaveLength(1);
   });
 
   it('keeps the old flag when the agent cannot be reached, and tries again next time', async () => {
@@ -266,5 +289,54 @@ describe('pushFresh (mirrored by PushFreshness.java and PushKeys.isFresh)', () =
   it('drops a push dated more than an hour ahead, so it cannot block the ones after it', () => {
     expect(pushFresh(now + MAX_PUSH_AGE_MS + 1, now, null)).toBe(false);
     expect(pushFresh(Number.NaN, now, null)).toBe(false);
+  });
+});
+
+describe('deadmanView (the switch in the push section)', () => {
+  const on = { state: 'on' as const, relay: true, registered: true };
+  it('offers the switch and the graces, with the device\'s choice', () => {
+    const vm = deadmanView({ ...on, deadman: { state: 'on', grace: 30 } }, en);
+    expect(vm).toMatchObject({ editable: true, on: true, grace: 30, note: expect.stringContaining('relay sends this phone') });
+    expect(vm.graces.map((g) => g.label)).toEqual(['10 min', '15 min', '30 min', '60 min']);
+    expect(deadmanView({ ...on, deadman: { state: 'on', grace: null } }, en)).toMatchObject({ editable: true, on: false, grace: 15 });
+  });
+
+  it('explains a deployment that switched it off, a relay without it and an agent before it', () => {
+    expect(deadmanView({ ...on, deadman: { state: 'locked', grace: null } }, en)).toMatchObject({ editable: false, note: expect.stringContaining('deadman.enabled') });
+    expect(deadmanView({ ...on, deadman: { state: 'relay', grace: 15 } }, en)).toMatchObject({ editable: true, on: true, note: expect.stringContaining('relay does not support') });
+    expect(deadmanView(on, en)).toMatchObject({ editable: false, note: expect.stringContaining('newer agent') });
+    expect(pushView({ demo: false, native: { available: true, platform: 'ios' }, agent: { ...on, deadman: { state: 'on', grace: 15 } } }, en).deadman).toMatchObject({ on: true });
+    expect(pushView({ demo: false, native: { available: true, platform: 'ios' }, agent: { ...on, registered: false } }, en).deadman).toBeNull();
+  });
+});
+
+describe('deadmanFresh (mirrored by PushFreshness.deadmanFresh and PushKeys.isDeadmanFresh)', () => {
+  const s = 1_795_000_000_000;
+  const message = { s, d: { u: s + 3 * 3_600_000, g: 15 } };
+  const MIN = 60_000;
+
+  it('opens the deadman vector and shows it within its window, long after it was sealed', () => {
+    // Base64url of the vector "deadman": push secret, agent static public key, message.
+    const content = openPushMessage(
+      'sbKztLW2t7i5uru8vb6_wMHCw8TFxsfIycrLzM3Oz9A',
+      'TSe87jE1xJRLKNJ92Amwe-EMNRYNIBMcqn6FV1SY0Hw',
+      'ATX96p4w06MsjDZt0Y4e7kwTJmmV_VwcBOppQgbOowh8hYarE-piepKZaBYRrorxfB7lbcyU8YZKWo3WRO7nevokwUNmK5_UHZG6It2z_1cigIo-IGH3NOjTXI9GVu1V1vs2x0ZimWDB-NktFhdNbKob5g9otD3C3p6IG7A1e6NmGj80Ny1QvehYRf6mc8Ko7tVHMdCi8Y7y426zE7xKdXyLWCkP7-FemM6b6hsIy1E1aMg40ijP9k_3ISdIWeIUwxprT4IaCaaMSk-685w0Lwn4AOuVZA4',
+    );
+    expect(isDeadman(content)).toBe(true);
+    expect(deadmanFresh(content as typeof message, s + 2 * 3_600_000, null, null)).toBe(true);
+    expect(deadmanFresh(message, s + 90 * MIN, null, s - 10 * MIN)).toBe(true);
+  });
+
+  it('is not held back by pushes shown since it was sealed (its own replay marker)', () => {
+    expect(pushFresh(s, s + 90 * MIN, s + 20 * MIN)).toBe(false);
+    expect(deadmanFresh(message, s + 90 * MIN, null, s + 20 * MIN)).toBe(true);
+  });
+
+  it('drops a replay, one past its window, one dated ahead, and one while the agent was heard within the grace', () => {
+    expect(deadmanFresh(message, s + 90 * MIN, s, null)).toBe(false);
+    expect(deadmanFresh(message, s + 3 * 3_600_000 + 1, null, null)).toBe(false);
+    expect(deadmanFresh({ s: s + 2 * 3_600_000, d: message.d }, s, null, null)).toBe(false);
+    expect(deadmanFresh({ s, d: { u: s + 28 * 3_600_000, g: 15 } }, s + MIN, null, null)).toBe(false);
+    expect(deadmanFresh(message, s + 90 * MIN, null, s + 80 * MIN)).toBe(false);
   });
 });

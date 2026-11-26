@@ -43,6 +43,12 @@ public final class WidgetPushStatusTest {
         check(WidgetPushStatus.merge(stored, "a", new JSONObject(status.toString()).put("l", "pink")) == null, "bad light");
         check(WidgetPushStatus.merge(stored, "a", new JSONObject(status.toString()).put("a", JSONObject.NULL)) == null, "no check time");
 
+        // The dead man's switch: "agent not answering" since the message was shown; a newer state still merges.
+        JSONArray silent = new JSONArray(WidgetPushStatus.markUnreachable(stored, "a", 1795000200000L));
+        check(WidgetPushStatus.parseIso(silent.getJSONObject(0).getString("unreachableSince")) == 1795000200000L, "unreachable marked");
+        check(!silent.getJSONObject(1).has("unreachableSince"), "other cluster not marked");
+        check(WidgetPushStatus.markUnreachable(stored, "gone", 1L) == null, "no entry, no mark");
+
         JSONObject minimal = new JSONObject(status.toString());
         minimal.remove("i");
         check(new JSONArray(WidgetPushStatus.merge(stored, "a", minimal)).getJSONObject(0).getJSONArray("problems").length() == 0, "minimal");

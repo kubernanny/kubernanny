@@ -74,14 +74,76 @@ enum PushKeys {
 
     /// Kept next to the key, in the same group; the app's removeKey deletes it with the key.
     static func markShown(_ kid: String, sealedAt: Double) {
+        storeTime(seenAccount(kid), sealedAt)
+    }
+
+    /// The longest validity a dead man's switch message may carry (DEADMAN_MAX_VALIDITY_MS in protocol/src/push.ts).
+    static let deadmanMaxValidity: Double = 27 * 60 * 60 * 1000
+
+    /// Whether a dead man's switch message may be shown: the phone's clock within
+    /// its window `validUntil`, not sealed more than an hour ahead, later than the
+    /// last such message shown for its key (a replay marker of its own), and no
+    /// push of this agent opened within the grace (`lastHeard`). Mirrors
+    /// deadmanFresh in push-content.ts and PushFreshness.deadmanFresh.
+    static func isDeadmanFresh(sealedAt: Double, validUntil: Double, graceMinutes: Int, now: Double, lastDeadman: Double?, lastHeard: Double?) -> Bool {
+        guard sealedAt.isFinite, validUntil.isFinite, sealedAt - now <= maxAge, now <= validUntil, validUntil - sealedAt <= deadmanMaxValidity else {
+            return false
+        }
+        if let last = lastDeadman, sealedAt <= last {
+            return false
+        }
+        guard let heard = lastHeard else {
+            return true
+        }
+        return heard < now - Double(graceMinutes) * 60_000
+    }
+
+    /// The graces the protocol allows (DEADMAN_GRACE_MINUTES).
+    static func validGrace(_ minutes: Int) -> Bool {
+        [10, 15, 30, 60].contains(minutes)
+    }
+
+    /// The dead man's switch message's own replay marker, and when the agent was last heard (any push opened and accepted).
+    static func deadmanAccount(_ kid: String) -> String {
+        "deadman.\(kid)"
+    }
+
+    static func heardAccount(_ kid: String) -> String {
+        "heard.\(kid)"
+    }
+
+    static func lastDeadman(_ kid: String) -> Double? {
+        time(deadmanAccount(kid))
+    }
+
+    static func markDeadman(_ kid: String, sealedAt: Double) {
+        storeTime(deadmanAccount(kid), sealedAt)
+    }
+
+    static func lastHeard(_ kid: String) -> Double? {
+        time(heardAccount(kid))
+    }
+
+    static func markHeard(_ kid: String, sealedAt: Double) {
+        if let before = lastHeard(kid), before >= sealedAt {
+            return
+        }
+        storeTime(heardAccount(kid), sealedAt)
+    }
+
+    private static func time(_ account: String) -> Double? {
+        item(account).flatMap { String(data: $0, encoding: .utf8) }.flatMap(Double.init)
+    }
+
+    private static func storeTime(_ account: String, _ value: Double) {
         var base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: seenAccount(kid),
+            kSecAttrAccount as String: account,
             kSecAttrAccessGroup as String: accessGroup
         ]
         SecItemDelete(base as CFDictionary)
-        base[kSecValueData as String] = Data(String(format: "%.0f", sealedAt).utf8)
+        base[kSecValueData as String] = Data(String(format: "%.0f", value).utf8)
         base[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         base[kSecAttrSynchronizable as String] = false
         SecItemAdd(base as CFDictionary, nil)
