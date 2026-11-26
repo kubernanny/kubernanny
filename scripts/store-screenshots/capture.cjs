@@ -7,7 +7,7 @@ const path = require('node:path');
 const { chromium, devices } = require('playwright');
 const { LABELS, tab, closeSheet, pairAll, openCluster } = require('../screenshots/helpers.cjs');
 const { TARGETS, LOCALES } = require('./targets.cjs');
-const { frameTarget, clearTarget } = require('./frame/frame.cjs');
+const { frameTarget, clearTarget, frameBanners } = require('./frame/frame.cjs');
 
 const RAW = process.env.OUT ?? path.join(__dirname, 'raw');
 const errors = [];
@@ -26,8 +26,9 @@ const SCREENS = [
   { file: '05-service', go: (p, L) => openService(p, L, 'CloudNativePG'), after: (p, L) => closeSheet(p, L) },
   { file: '06-ready-to-sync', go: showReadyToSync, after: (p, L) => closeReadyToSync(p, L) },
   { file: '07-clusters', go: showClusters },
-  // Push exists only in the native app; pushPlugin and showPush play it.
-  { file: '08-push', go: showPush },
+  // The home-screen widgets exist only on a device: a whole device screenshot
+  // from device/ (frame/frame.cjs), taken as docs/RELEASING.md describes.
+  { file: '08-widgets', device: true },
 ];
 
 /** Puts a section's heading at the top of the screen (scrollIntoViewIfNeeded would leave it at the bottom edge). */
@@ -83,48 +84,6 @@ async function closeReadyToSync(page, labels) {
   await page.waitForTimeout(700);
 }
 
-/**
- * Cluster settings, the push section. Turning push on asks for nothing more
- * since the sign before each push became optional (docs/NOTIFICATIONS.md, "Is
- * this push real?"), and a demo agent registers push only for a paired
- * device, never for the demo visitor this script pairs as: so the section is
- * shown before the tap, with the sealing explained.
- */
-async function showPush(page) {
-  await openCluster(page, 'homelab');
-  // openCluster reloads the page; the native platform is played from here on, for the settings page only.
-  await page.evaluate(() => {
-    window.Capacitor.isNativePlatform = () => true;
-  });
-  await page.locator('.ion-page:not(.ion-page-hidden) ion-button:has(ion-icon[name="settings-outline"])').first().click();
-  await page.waitForSelector('app-push-section ion-button', { timeout: 15000 });
-  await page.waitForTimeout(400);
-  await scrollToTop(page, 'app-push-section');
-}
-
-/**
- * The push plugin as a build with Firebase has it, for the push screen. Only
- * its header is set at load, so the app stays on the web platform everywhere
- * else; showPush then lets PushNative see a native platform, after the page
- * has loaded and just before the settings ask for it.
- */
-function pushPlugin(platform) {
-  const answers = { isAvailable: { available: true, platform }, getMarker: { marker: null } };
-  window.Capacitor = {
-    PluginHeaders: [
-      {
-        name: 'KubernannyPush',
-        methods: [
-          ...['isAvailable', 'requestPermission', 'getToken', 'storeKey', 'removeKey', 'getMarker', 'setMarker', 'removeMarker', 'removeListener'].map((name) => ({ name, rtype: 'promise' })),
-          { name: 'addListener', rtype: 'callback' },
-        ],
-      },
-    ],
-    nativePromise: async (plugin, method) => answers[method] ?? {},
-    nativeCallback: () => 'store-screenshot',
-  };
-}
-
 async function showClusters(page) {
   await page.goto(`${new URL(page.url()).origin}/#/clusters`);
   await page.reload();
@@ -155,7 +114,6 @@ async function captureTarget(browser, target, locale) {
     colorScheme: 'dark',
     locale: lang,
   });
-  await ctx.addInitScript(pushPlugin, target.platform);
   await ctx.addInitScript(safeArea, target.safe);
   const page = await ctx.newPage();
   const label = `${target.id}/${locale}`;
@@ -164,6 +122,10 @@ async function captureTarget(browser, target, locale) {
   try {
     await pairAll(page);
     for (const screen of SCREENS) {
+      if (screen.device) {
+        files.push(screen.file);
+        continue;
+      }
       try {
         await screen.go(page, labels);
         await page.waitForTimeout(500);
@@ -194,6 +156,10 @@ async function captureTarget(browser, target, locale) {
       });
       errors.push(...(await frameTarget(browser, target, locale, files)));
       console.log(`${target.id} ${locale}: ${files.length} screenshots`);
+    }
+    if (!process.env.ONLY) {
+      errors.push(...(await frameBanners(browser, locale)));
+      console.log(`banners ${locale}`);
     }
   }
   await browser.close();

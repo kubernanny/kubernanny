@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Store screenshots for the App Store and Google Play: the demo agents of
 # scripts/screenshots (red, yellow, green), the web UI paired with all three,
-# then eight screens per device size and language, each framed in a drawn
-# device under a headline (frame/), written to fastlane/screenshots/ for
-# `npm run store:screenshots`. Needs Playwright with Chromium (the one of e2e/
+# then seven screens per device size and language plus the home-screen widgets
+# from device/ (whole device screenshots, see docs/RELEASING.md), each framed
+# in a drawn device under a headline (frame/), written to fastlane/screenshots/
+# for `npm run store:screenshots`; and the store banners (App Store header and
+# search result asset into fastlane/screenshots/banners/, Play's feature
+# graphic). Needs Playwright with Chromium (the one of e2e/
 # is used when none is installed elsewhere) and Python 3 with Pillow
 # (docs/RELEASING.md, Screenshots).
 #   SKIP_BUILD=1   use the existing dist/ of protocol, agent and app
@@ -11,9 +14,7 @@
 # To change only the headlines or the frame: node frame/frame.cjs (from raw/).
 # The frame (frame/template.html) is a generic device drawn in CSS on the
 # brand background: no real device images or trademarks, the device at the
-# same height on every shot of a size, the logo on the first. The push screen
-# exists only in the native app: capture.cjs gives the web build a stand-in
-# for the push plugin, and the relay address below makes the agents offer it.
+# same height on every shot of a size, the logo on the first.
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT=$(cd ../.. && pwd)
@@ -21,8 +22,6 @@ OUT=$(pwd)/raw
 mkdir -p "$OUT"
 export OUT
 export NODE_PATH="$ROOT/e2e/node_modules${NODE_PATH:+:$NODE_PATH}"
-# A relay address makes the agents offer push (the push screen); nothing listens there, nothing leaves the machine.
-export DEMO_RELAY_URL=ws://localhost:9
 source ../screenshots/demo-agents.sh
 
 node capture.cjs
@@ -49,6 +48,17 @@ for dirpath, _, files in os.walk(root):
                 # The App Store refuses screenshots with an alpha channel.
                 im.convert('RGB').save(os.path.join(dirpath, f), optimize=True)
         print(f'{os.path.relpath(dirpath, root)}: {len(mine)} x {size[0]}x{size[1]}')
+# The banners (frame/frame.cjs, BANNERS): their sizes, no transparency either.
+banners = {'apple-header.png': (3840, 1646), 'apple-search.png': (3840, 2560), 'featureGraphic.png': (1024, 500)}
+for dirpath, _, files in os.walk(root):
+    for f in files:
+        if f in banners:
+            p = os.path.join(dirpath, f)
+            im = Image.open(p)
+            if im.size != banners[f]:
+                bad.append(f'{p}: {im.size}, expected {banners[f]}')
+            elif im.mode != 'RGB':
+                im.convert('RGB').save(p, optimize=True)
 if bad:
     sys.exit('\n'.join(bad))
 PY

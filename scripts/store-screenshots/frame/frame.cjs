@@ -24,7 +24,17 @@ const FONTS = `
   @font-face { font-family: 'Figtree'; font-weight: 300 900; src: url(${font('figtree', 'figtree-latin-wght-normal.woff2')}) format('woff2'); }`;
 const ICON = dataUrl(path.join(ROOT, 'branding/kubernanny-icon-1024.png'), 'image/png');
 
-const rawFile = (target, locale, file) => path.join(RAW, `${target.id}-${locale}-${file}.png`);
+// Whole device screenshots (home screen with the widgets), taken on a
+// simulator or emulator, not in the browser: committed, since they cannot be
+// rendered here (docs/RELEASING.md, Screenshots). Same name as a raw shot.
+const DEVICE = path.join(__dirname, '../device');
+const deviceFile = (target, locale, file) => path.join(DEVICE, `${target.id}-${locale}-${file}.jpg`);
+const rawFile = (target, locale, file) => {
+  const device = deviceFile(target, locale, file);
+  return fs.existsSync(device) ? device : path.join(RAW, `${target.id}-${locale}-${file}.png`);
+};
+const isDeviceShot = (file) => file.startsWith(DEVICE + path.sep);
+const imageUrl = (file) => dataUrl(file, isDeviceShot(file) ? 'image/jpeg' : 'image/png');
 
 /**
  * Renders every shot of one target and language. `files` are the screen
@@ -56,7 +66,8 @@ async function frameTarget(browser, target, locale, files) {
         data: {
           width: W, height: H, frame: target.frame, android: target.platform === 'android',
           headline, subline, hero: file === HERO, icon: ICON,
-          screenshot: dataUrl(rawFile(target, locale, file), 'image/png'),
+          screenshot: imageUrl(rawFile(target, locale, file)),
+          deviceShot: isDeviceShot(rawFile(target, locale, file)),
           screenAspect: vw / vh,
           statusShare: target.safe[0] / vh,
           bottomShare: target.safe[1] / vh,
@@ -96,12 +107,63 @@ function clearTarget(target, locale) {
   }
 }
 
-module.exports = { frameTarget, clearTarget };
+/**
+ * The App Store's product page header (21:9) and search result asset (3:2),
+ * and Google Play's feature graphic, from the same shots as the screenshots.
+ * App Store Connect takes the first two only by hand (docs/RELEASING.md).
+ * `target` names the size whose shots and device are shown.
+ */
+const BANNERS = [
+  { id: 'apple-header', size: [3840, 1646], kind: 'header', target: 'iphone69', shots: ['01-overview', '08-widgets'], dir: (l) => `banners/${l}`, layout: { phoneX: [.545, .77] } },
+  // Not 02-issues: the overview above already shows the same list.
+  { id: 'apple-search', size: [3840, 2560], kind: 'search', target: 'iphone69', shots: ['01-overview', '03-nodes', '08-widgets'], dir: (l) => `banners/${l}` },
+  {
+    id: 'featureGraphic', size: [1024, 500], kind: 'header', target: 'phone', shots: ['01-overview', '08-widgets'], dir: (l) => `android/${l}/images`,
+    layout: { claimSize: 8.6, nameSize: 6.4, textWidth: .48, textLeft: .06, phoneW: .215, phoneX: [.535, .765], phoneY: [11, 18] },
+  },
+];
+
+/** Renders the banners of one language; returns the problems found. */
+async function frameBanners(browser, locale) {
+  const { ALL } = require('../targets.cjs');
+  const texts = TEXTS[locale.slice(0, 2)].banner;
+  const problems = [];
+  const ctx = await browser.newContext({ deviceScaleFactor: 1 });
+  const page = await ctx.newPage();
+  await page.goto(TEMPLATE);
+  await page.addStyleTag({ content: FONTS });
+  for (const banner of BANNERS) {
+    const target = ALL.find((t) => t.id === banner.target);
+    const missing = banner.shots.filter((f) => !fs.existsSync(rawFile(target, locale, f)));
+    if (missing.length) {
+      problems.push(`${banner.id}/${locale}: no shot ${missing.join(', ')}`);
+      continue;
+    }
+    const [W, H] = banner.size;
+    await page.setViewportSize({ width: W, height: H });
+    const found = await page.evaluate((d) => window.renderBanner(d), {
+      width: W, height: H, kind: banner.kind, frame: target.frame, android: target.platform === 'android',
+      claim: texts.claim, line: texts.line, icon: ICON, layout: banner.layout,
+      screenAspect: target.viewport[0] / target.viewport[1],
+      statusShare: target.safe[0] / target.viewport[1],
+      bottomShare: target.safe[1] / target.viewport[1],
+      shots: banner.shots.map((f) => ({ screenshot: imageUrl(rawFile(target, locale, f)), deviceShot: isDeviceShot(rawFile(target, locale, f)) })),
+    });
+    problems.push(...found.map((p) => `${banner.id}/${locale}: ${p}`));
+    const dir = path.join(FASTLANE, banner.dir(locale));
+    fs.mkdirSync(dir, { recursive: true });
+    await page.screenshot({ path: path.join(dir, `${banner.id}.png`), clip: { x: 0, y: 0, width: W, height: H } });
+  }
+  await ctx.close();
+  return problems;
+}
+
+module.exports = { frameTarget, clearTarget, frameBanners };
 
 if (require.main === module) {
   (async () => {
     const { chromium } = require('playwright');
-    const files = Object.keys(TEXTS.en).filter((f) => !f.includes('@'));
+    const files = Object.keys(TEXTS.en).filter((f) => !f.includes('@') && f !== 'banner');
     const browser = await chromium.launch();
     const problems = [];
     for (const locale of LOCALES) {
@@ -109,6 +171,10 @@ if (require.main === module) {
         clearTarget(target, locale);
         problems.push(...(await frameTarget(browser, target, locale, files)));
         console.log(`${target.id} ${locale}`);
+      }
+      if (!process.env.ONLY) {
+        problems.push(...(await frameBanners(browser, locale)));
+        console.log(`banners ${locale}`);
       }
     }
     await browser.close();

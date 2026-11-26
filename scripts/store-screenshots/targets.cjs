@@ -33,4 +33,4 @@ const TARGETS = ALL.filter((t) => !process.env.ONLY || process.env.ONLY.split(',
 
 const LOCALES = ['en-US', 'de-DE'];
 
-module.exports = { TARGETS, LOCALES };
+module.exports = { ALL, TARGETS, LOCALES };

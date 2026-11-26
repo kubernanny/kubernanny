@@ -83,10 +83,7 @@
 
   .device {
     position: absolute;
-    left: 50%;
-    top: var(--device-top);
     width: var(--device-w);
-    transform: translateX(-50%);
     padding: var(--bezel-y) var(--bezel-x);
     border-radius: var(--radius);
     background: linear-gradient(160deg, #2a3045 0%, #12151d 35%, #0b0d12 100%);
@@ -110,6 +107,8 @@
     background: #0f1626;
   }
   .screen > img { display: block; width: 100%; height: auto; }
+  /* A whole device screenshot (home screen with widgets): its own status bar, cut to the screen's shape. */
+  .screen > img.device-shot { height: var(--screen-h); object-fit: cover; object-position: top; }
 
   .island, .punch, .camera {
     position: absolute;
@@ -121,6 +120,20 @@
   .island { top: calc(var(--screen-w) * .025); width: 29%; height: calc(var(--screen-w) * .085); border-radius: 999px; }
   .punch { top: calc(var(--status-h) * .5); width: calc(var(--screen-w) * .04); aspect-ratio: 1; border-radius: 50%; transform: translate(-50%, -50%); }
   .camera { top: calc(var(--bezel-y) * .5 - var(--device-w) * .005); width: calc(var(--device-w) * .01); aspect-ratio: 1; border-radius: 50%; background: #262b38; }
+
+  .banner-text {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+  }
+  .banner-text .brand { font-weight: 720; }
+  .banner-text .brand img { border-radius: 23%; box-shadow: 0 .12em .4em rgba(0, 0, 0, .45), 0 0 0 1px rgba(233, 237, 247, .12); }
+  .banner-text h1 { text-wrap: balance; }
+  .banner-line { position: absolute; left: 6%; right: 6%; text-align: center; text-wrap: balance; }
 
   /* Drawn over the room the app left for it (safe area), in the app's dark theme. */
   .status {
@@ -163,28 +176,80 @@
   const BATTERY = '<svg viewBox="0 0 27 12"><rect x=".6" y=".6" width="22.8" height="10.8" rx="3" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".45"/><rect x="2.4" y="2.4" width="17" height="7.2" rx="1.6"/><rect x="24.6" y="4" width="1.6" height="4" rx=".8" opacity=".45"/></svg>';
 
   /**
-   * Lays out one store screenshot. Sizes are shares of the canvas, so one
-   * layout serves every size; `frame` picks the device: island (iPhone),
-   * punch (Android phone), tablet. `measureOnly` returns where the copy ends,
-   * so frame.cjs can put the device at the same height on every shot.
+   * One device with its screen: a generic phone or tablet drawn in CSS.
+   * `frame` picks it: island (iPhone), punch (Android phone), tablet. An app
+   * shot leaves room at the top and bottom (statusShare, bottomShare), where
+   * the status bar and the home indicator are drawn; a `deviceShot` is a whole
+   * device screenshot with its own status bar, so nothing is drawn over it.
+   * `style` positions the device (absolute). Returns the markup.
    */
-  window.renderShot = async (data) => {
-    const { width: W, height: H, frame, headline, subline, screenshot, screenAspect, statusShare, bottomShare,
-      hero, icon, deviceTop: fixedTop, measureOnly, android } = data;
+  window.deviceMarkup = ({ frame, deviceW, screenAspect, statusShare, bottomShare, screenshot, android, deviceShot, style = '' }) => {
     const tablet = frame === 'tablet';
-    const canvas = document.getElementById('canvas');
-    const headlineSize = W * (tablet ? .062 : .088) * (W / H > .6 && !tablet ? .92 : 1);
-    const deviceTop = fixedTop ?? H * (tablet ? .2 : .26);
     const kx = ({ island: .03, punch: .026, tablet: .036 })[frame];
-    const ky = kx;
-    const maxW = W * (tablet ? .84 : .82);
-    const deviceW = Math.min(maxW, (H * .968 - deviceTop) / ((1 - 2 * kx) / screenAspect + 2 * ky));
     const bezelX = deviceW * kx;
-    const bezelY = deviceW * ky;
+    const bezelY = deviceW * kx;
     const radius = deviceW * ({ island: .155, punch: .1, tablet: .06 })[frame];
     const screenW = deviceW - 2 * bezelX;
     const screenH = screenW / screenAspect;
     const statusH = screenH * statusShare;
+    const vars = {
+      '--device-w': deviceW + 'px',
+      '--bezel-x': bezelX + 'px',
+      '--bezel-y': bezelY + 'px',
+      '--radius': radius + 'px',
+      '--screen-radius': Math.max(radius - bezelX, deviceW * .012) + 'px',
+      '--screen-w': screenW + 'px',
+      '--screen-h': screenH + 'px',
+      '--status-h': statusH + 'px',
+      '--status-font': Math.min(statusH * (tablet ? .5 : .36), screenW * (tablet ? .02 : .042)) + 'px',
+      '--status-pad': screenW * (tablet ? .03 : frame === 'island' ? .085 : .05) + 'px',
+      '--home-w': screenW * (tablet ? .2 : .36) + 'px',
+    };
+    const css = Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(';');
+    const time = android ? '9:41' : '9:41';
+    const status = statusH > 0 && !deviceShot
+      ? `<div class="status ${frame === 'island' ? 'island-bar' : ''}"><span>${time}</span><span class="icons">${SIGNAL}${WIFI}${BATTERY}</span></div>`
+      : '';
+    // The island and the camera hole are not in a device screenshot either, so they are drawn on both.
+    const cutout = { island: '<div class="island"></div>', punch: '<div class="punch"></div>', tablet: '' }[frame];
+    // Side buttons: one on the right, two on the left for phones.
+    const btn = (side, top, h) => `<div class="button" style="${side}:${-deviceW * .006}px;top:${top}%;height:${h}%"></div>`;
+    const buttons = tablet
+      ? `<div class="button" style="top:${-deviceW * .006}px;right:12%;width:6%;height:${deviceW * .008}px"></div>`
+      : btn('right', 24, 9) + btn('left', 18, 4) + btn('left', 25, 7) + btn('left', 34, 7);
+    return `
+      <div class="device" style="${css};${style}">
+        ${buttons}
+        ${tablet ? '<div class="camera"></div>' : ''}
+        <div class="screen">
+          ${cutout}
+          ${status}
+          <img src="${screenshot}"${deviceShot ? ' class="device-shot"' : ''}>
+          ${bottomShare > 0 && !deviceShot ? '<div class="home"></div>' : ''}
+        </div>
+      </div>`;
+  };
+
+  /** The device's outer height for a given width, so callers can fit it. */
+  window.deviceHeight = (frame, deviceW, screenAspect) => {
+    const k = ({ island: .03, punch: .026, tablet: .036 })[frame];
+    return deviceW * ((1 - 2 * k) / screenAspect + 2 * k);
+  };
+
+  /**
+   * Lays out one store screenshot. Sizes are shares of the canvas, so one
+   * layout serves every size; `frame` picks the device. `measureOnly`
+   * returns where the copy ends, so frame.cjs can put the device at the same
+   * height on every shot.
+   */
+  window.renderShot = async (data) => {
+    const { width: W, height: H, frame, headline, subline, screenAspect, hero, icon, deviceTop: fixedTop, measureOnly } = data;
+    const tablet = frame === 'tablet';
+    const canvas = document.getElementById('canvas');
+    const headlineSize = W * (tablet ? .062 : .088) * (W / H > .6 && !tablet ? .92 : 1);
+    const deviceTop = fixedTop ?? H * (tablet ? .2 : .26);
+    const maxW = W * (tablet ? .84 : .82);
+    const deviceW = Math.min(maxW, (H * .968 - deviceTop) / (deviceHeight(frame, 1, screenAspect)));
 
     const vars = {
       '--w': W + 'px', '--h': H + 'px',
@@ -194,50 +259,18 @@
       '--copy-align': measureOnly ? 'flex-start' : 'flex-end',
       '--headline-size': headlineSize + 'px',
       '--sub-size': headlineSize * .56 + 'px',
-      '--device-top': deviceTop + 'px',
-      '--device-w': deviceW + 'px',
-      '--bezel-x': bezelX + 'px',
-      '--bezel-y': bezelY + 'px',
-      '--radius': radius + 'px',
-      '--screen-radius': Math.max(radius - bezelX, deviceW * .012) + 'px',
-      '--screen-w': screenW + 'px',
-      '--status-h': statusH + 'px',
-      '--status-font': Math.min(statusH * (tablet ? .5 : .36), screenW * (tablet ? .02 : .042)) + 'px',
-      '--status-pad': screenW * (tablet ? .03 : frame === 'island' ? .085 : .05) + 'px',
-      '--home-w': screenW * (tablet ? .2 : .36) + 'px',
     };
     for (const [k, v] of Object.entries(vars)) canvas.style.setProperty(k, v);
-
-    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-    const time = android ? '9:41' : '9:41';
-    const status = statusH > 0
-      ? `<div class="status ${frame === 'island' ? 'island-bar' : ''}"><span>${time}</span><span class="icons">${SIGNAL}${WIFI}${BATTERY}</span></div>`
-      : '';
-    const cutout = { island: '<div class="island"></div>', punch: '<div class="punch"></div>', tablet: '' }[frame];
-    // Side buttons: one on the right, two on the left for phones.
-    const btn = (side, top, h) => `<div class="button" style="${side}:${-deviceW * .006}px;top:${top}%;height:${h}%"></div>`;
-    const buttons = tablet
-      ? `<div class="button" style="top:${-deviceW * .006}px;right:12%;width:6%;height:${deviceW * .008}px"></div>`
-      : btn('right', 24, 9) + btn('left', 18, 4) + btn('left', 25, 7) + btn('left', 34, 7);
 
     canvas.innerHTML = `
       <div class="copy">
         ${hero
           ? `<div class="brand"><img src="${icon}"><span>Kubernanny</span></div>`
-          : '<div class="lights"><i style="background:#36d6a8"></i><i style="background:#f5b83d"></i><i style="background:#ff5d73"></i></div>'}
+          : LIGHTS}
         <h1>${esc(headline)}</h1>
         ${subline ? `<p class="sub">${esc(subline)}</p>` : ''}
       </div>
-      <div class="device">
-        ${buttons}
-        ${tablet ? '<div class="camera"></div>' : ''}
-        <div class="screen">
-          ${cutout}
-          ${status}
-          <img src="${screenshot}">
-          ${bottomShare > 0 ? '<div class="home"></div>' : ''}
-        </div>
-      </div>`;
+      ${deviceMarkup({ ...data, deviceW, style: `left:50%;top:${deviceTop}px;transform:translateX(-50%)` })}`;
 
     await document.fonts.ready;
     if (measureOnly) {
@@ -252,6 +285,50 @@
     if (copy.scrollWidth > copy.clientWidth + 1) problems.push('copy wider than the canvas');
     return problems;
   };
+
+  /**
+   * The store banners (banners.cjs): the App Store's product page header and
+   * search result asset, and Google Play's feature graphic, on the same
+   * ground as the screenshots. `kind`:
+   * - header: logo, name and claim on the left, two tilted devices on the right
+   * - search: one line on top, three devices side by side
+   * `shots` are { screenshot, deviceShot } in the order shown.
+   */
+  window.renderBanner = async (data) => {
+    const { width: W, height: H, kind, frame, claim, line, icon, shots, screenAspect, statusShare, bottomShare, android, layout = {} } = data;
+    const L = { claimSize: 9.6, nameSize: 6.4, textWidth: .46, textLeft: .065, phoneW: .19, phoneX: [.575, .765], phoneY: [12, 19], ...layout };
+    const canvas = document.getElementById('canvas');
+    const u = H / 100;
+    for (const [k, v] of Object.entries({ '--w': W + 'px', '--h': H + 'px', '--dot': Math.max(W, H) * .02 + 'px' })) canvas.style.setProperty(k, v);
+    const device = (shot, w, style) => deviceMarkup({ frame, deviceW: w, screenAspect, statusShare, bottomShare, android, ...shot, style });
+    let html = '';
+    if (kind === 'header') {
+      html += `<div class="banner-text" style="left:${W * L.textLeft}px;width:${W * L.textWidth}px;font-size:${u}px">
+          <div class="brand" style="font-size:${u * L.nameSize}px;gap:.45em;margin-bottom:0"><img src="${icon}" style="width:1.7em">Kubernanny</div>
+          ${LIGHTS.replace('class="lights"', `class="lights" style="--headline-size:${u * L.claimSize}px;margin:${u * 5.5}px 0 ${u * 3}px"`)}
+          <h1 style="font-size:${u * L.claimSize}px">${esc(claim)}</h1>
+        </div>`;
+      const w = W * L.phoneW;
+      html += device(shots[1], w, `left:${W * L.phoneX[1]}px;top:${u * L.phoneY[1]}px;transform:rotate(8deg);transform-origin:50% 0;z-index:1`);
+      html += device(shots[0], w, `left:${W * L.phoneX[0]}px;top:${u * L.phoneY[0]}px;transform:rotate(-6deg);transform-origin:50% 0;z-index:2`);
+    } else {
+      html += `<h1 class="banner-line" style="top:${u * 7}px;font-size:${W * .04}px">${esc(line)}</h1>`;
+      const w = W * .25;
+      [.1, .375, .65].forEach((x, i) => {
+        html += device(shots[i], w, `left:${W * x}px;top:${u * 25}px`);
+      });
+    }
+    canvas.innerHTML = html;
+    await document.fonts.ready;
+    await Promise.all([...canvas.querySelectorAll('img')].map((img) => img.decode()));
+    const problems = [];
+    const text = canvas.querySelector('.banner-text, .banner-line');
+    if (text.scrollWidth > text.clientWidth + 1) problems.push('text wider than its column');
+    return problems;
+  };
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const LIGHTS = '<div class="lights"><i style="background:#36d6a8"></i><i style="background:#f5b83d"></i><i style="background:#ff5d73"></i></div>';
 </script>
 </body>
 </html>

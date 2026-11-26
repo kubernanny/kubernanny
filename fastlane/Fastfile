@@ -339,7 +339,7 @@ def android_screenshots
     skip_upload_aab: true,
     skip_upload_metadata: true,
     skip_upload_changelogs: true,
-    # icon.png and featureGraphic.png come from `npm run native-assets`.
+    # icon.png comes from `npm run native-assets`, featureGraphic.png from `npm run store:shots`.
     skip_upload_images: false,
     skip_upload_screenshots: false,
     sync_image_upload: true,

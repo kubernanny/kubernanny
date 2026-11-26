@@ -140,22 +140,13 @@ for (const orientation of ['port', 'land']) {
 rmSync(join(res, 'drawable/splash.png'), { force: true });
 
 // ---- Google Play listing --------------------------------------------------
-// Uploaded by `fastlane android screenshots` together with the screenshots.
-const TAGLINES = { 'de-DE': 'Ist mein Cluster okay?', 'en-US': 'Is my cluster okay?' };
-for (const [locale, tagline] of Object.entries(TAGLINES)) {
+// The icon, uploaded by `fastlane android screenshots` together with the
+// screenshots. The feature graphic shows the app, so `npm run store:shots`
+// renders it with the screenshots (scripts/store-screenshots/frame/frame.cjs).
+for (const locale of ['de-DE', 'en-US']) {
   const images = join(root, 'fastlane/screenshots/android', locale, 'images');
   await render(join(images, 'icon.png'), 512, 512, svgAt(fullBleed(), 512));
-  await render(
-    join(images, 'featureGraphic.png'),
-    1024,
-    500,
-    `<div style="display:flex;align-items:center;gap:44px;width:1024px;height:500px;box-sizing:border-box;padding:0 72px;
-      background:linear-gradient(180deg,#1d2b4d,${GROUND});font-family:Bricolage,sans-serif;color:#eef1ff">
-      ${svgAt(nannyOnly(0.92), 330)}
-      <div><div style="font-size:84px;font-weight:700;letter-spacing:-1px">Kubernanny</div>
-      <div style="font-size:40px;font-weight:500;color:#b3c0ff;margin-top:8px">${tagline}</div></div></div>`,
-  );
 }
 
 await browser.close();
-console.log('Icons, splash screens and Play graphics written.');
+console.log('Icons, splash screens and the Play icon written.');

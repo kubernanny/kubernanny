@@ -29,10 +29,10 @@ Run them in `app/`.
 | `npm run release:continue` | Uploads the current version again, without a bump: for a stopped release, or iOS following on a Mac. `SKIP_ANDROID=1` / `SKIP_IOS=1` leave a platform out. Both stores get the next free build number. |
 | `npm run release:production` | Sends the tested builds for review. Android: promotes the newest internal build to production (with managed publishing it then waits for "Publish" in the Play Console). iOS: submits the prepared version with its newest build; it goes live by hand after approval, or by itself with `AUTO_RELEASE=1`. Safe to run twice. |
 | `npm run store:metadata` | Uploads the listing texts in `fastlane/metadata/` and the App Review notes to both stores. |
-| `npm run store:shots` | Renders the store screenshots into `fastlane/screenshots/` ([Screenshots](#screenshots)). |
+| `npm run store:shots` | Renders the store screenshots and banners into `fastlane/screenshots/` ([Screenshots](#screenshots)). |
 | `npm run store:screenshots` | Replaces the screenshots in both stores with `fastlane/screenshots/`, plus the Play icon and feature graphic. |
 | `npm run build:ios` / `npm run build:android` | Web build plus `cap sync` for development; then `npx cap open ios` / `npx cap open android`. |
-| `npm run native-assets` | Renders icons, splash screens and the Play graphics from `branding/kubernanny-ok.svg`. Commit the PNGs. |
+| `npm run native-assets` | Renders icons, splash screens and the Play icon from `branding/kubernanny-ok.svg`. Commit the PNGs. |
 
 Switches: `RELEASE_YES=1` answers the question with yes, `ALLOW_DIRTY=1` skips the clean-tree check, `PUSH=0` keeps commit and tag local, `VERSION_CODE=…` forces an Android version code, `PLAY_RELEASE_STATUS=draft` uploads Play releases as drafts (only needed until the app's first production release on Play).
 
@@ -145,12 +145,20 @@ The app implements end-to-end encryption itself (Noise with `@noble/*`, HPKE for
 
 ### Screenshots
 
-`npm run store:shots` (`scripts/store-screenshots/run.sh`) renders the store screenshots; how it works is described at the top of that script.
+`npm run store:shots` (`scripts/store-screenshots/run.sh`) renders the store screenshots and banners; how it works is described at the top of that script.
 
-- It starts the three demo agents of the docs screenshots, takes eight screens in English and German, frames them like a store gallery and checks sizes and counts. Sizes and devices are in `targets.cjs`: iPhone 6.9" and iPad 13" for the App Store, phone and ten-inch tablet for Play.
-- `SKIP_BUILD=1` reuses the existing builds; `ONLY=iphone69,phone` renders only those sizes. To change only a headline or the frame, edit `frame/texts.cjs` or `frame/template.html` and run `NODE_PATH=e2e/node_modules node scripts/store-screenshots/frame/frame.cjs`.
+- It starts the three demo agents of the docs screenshots, takes seven screens in English and German, adds the home-screen widgets (below), frames them like a store gallery and checks sizes and counts. Sizes and devices are in `targets.cjs`: iPhone 6.9" and iPad 13" for the App Store, phone and ten-inch tablet for Play.
+- `SKIP_BUILD=1` reuses the existing builds; `ONLY=iphone69,phone` renders only those sizes (and no banners). To change only a headline or the frame, edit `frame/texts.cjs` or `frame/template.html` and run `NODE_PATH=e2e/node_modules node scripts/store-screenshots/frame/frame.cjs`.
 - Headlines: short, true, the same in both languages (German with "du"), no em or en dashes.
 - The rendered files (about 50 MB) are not committed. Look at every picture, then `npm run store:screenshots`.
+
+**The widgets shot (08).** Widgets exist only on a device, so this one is a whole device screenshot, committed in `scripts/store-screenshots/device/` (`<size>-<locale>-08-widgets.jpg`) and framed without a drawn status bar: the device's own is in it. Retake them when the widgets change:
+
+- The app as a debug build on a simulator or emulator per size (iPhone 17 Pro Max, iPad Pro 13-inch, a 9:20 phone such as the Pixel 9 Pro XL, the Pixel Tablet in portrait), paired with the three demo agents of `scripts/screenshots/demo-agents.sh`. Those allow only the web UI's origin: for the native app add `capacitor://localhost` and `https://localhost` to `CORS_ORIGINS`, and on Android `adb reverse tcp:8081 tcp:8081` (and 8082, 8083) so `localhost` reaches them. Pair by opening `kubernanny://pair?url=http%3A%2F%2Flocalhost%3A8081&code=DEMO000000&name=homelab&key=…` (`xcrun simctl openurl`, `adb shell am start -a android.intent.action.VIEW -d …`; the key from `/api/identity`) and tapping "Pair".
+- Dark appearance, the language of the shot, both kinds of widget: all clusters and one cluster (iPhone small and medium, iPad medium and large, Android wide). Open the app for a minute so the widgets carry fresh data. On iOS the app reloads only the all-clusters kind; installing the same build again reloads all of them.
+- Status bar: iOS `xcrun simctl status_bar <udid> override --time 9:41 --batteryState discharging --batteryLevel 100`; Android the System UI demo mode (`sysui_demo_allowed`, clock set to the real time, since the widgets show the time of the check). Screenshot with `xcrun simctl io <udid> screenshot` / `adb exec-out screencap -p`, scale to about the width the frame shows (1100 px iPhone, 1650 iPad, 1000 phone, 1300 tablet) and save as JPEG.
+
+**Banners.** The same run renders the App Store's product page header (`apple-header.png`, 3840 × 1646) and search result asset (`apple-search.png`, 3840 × 2560) into `fastlane/screenshots/banners/<locale>/`, and Play's feature graphic (`featureGraphic.png`, 1024 × 500, committed) next to the Play screenshots. Texts: `banner` in `frame/texts.cjs`; layout: `renderBanner` in `frame/template.html`, `BANNERS` in `frame/frame.cjs`. fastlane does not upload the two App Store assets yet: upload them by hand in App Store Connect, in the app's Asset Library, one per language. `npm run store:screenshots` uploads the feature graphic.
 
 ## Before each release
 
