@@ -3,6 +3,7 @@
 // the receiver in src/main/AndroidManifest.xml is merged into the app.
 ext {
     androidxCoreVersion = project.hasProperty('androidxCoreVersion') ? rootProject.ext.androidxCoreVersion : '1.17.0'
+    androidxAppCompatVersion = project.hasProperty('androidxAppCompatVersion') ? rootProject.ext.androidxAppCompatVersion : '1.7.1'
 }
 
 buildscript {
@@ -51,5 +52,7 @@ repositories {
 dependencies {
     implementation project(':capacitor-android')
     implementation "androidx.core:core-ktx:$androidxCoreVersion"
+    // Capacitor's Plugin.getActivity() is an AppCompatActivity (moveToBack); the app ships it already.
+    compileOnly "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     testImplementation "junit:junit:4.13.2"
 }

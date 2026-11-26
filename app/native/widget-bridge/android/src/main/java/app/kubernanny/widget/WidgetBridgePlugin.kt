@@ -45,4 +45,20 @@ class WidgetBridgePlugin : Plugin() {
         }
         call.resolve(JSObject().put("count", count))
     }
+
+    /**
+     * After a refresh from the widget's button (kubernanny://refresh): back to
+     * the home screen the person came from, the app staying in the background.
+     */
+    @PluginMethod
+    fun moveToBack(call: PluginCall) {
+        val host = activity
+        if (host == null) {
+            call.resolve(JSObject().put("moved", false))
+            return
+        }
+        host.runOnUiThread {
+            call.resolve(JSObject().put("moved", host.moveTaskToBack(true)))
+        }
+    }
 }

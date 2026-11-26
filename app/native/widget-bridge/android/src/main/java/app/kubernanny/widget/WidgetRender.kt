@@ -23,7 +23,8 @@ import java.text.DateFormat
  * shows the time of the check, and a cluster whose check is over two hours
  * old (WidgetStore.STALE_AFTER_MS) is drawn grey with "Not current" and "Open
  * Kubernanny": an alarm redraws at that moment (not waking the device), and
- * updatePeriodMillis every 30 minutes as a fallback.
+ * updatePeriodMillis every 30 minutes as a fallback. Every layout has a
+ * refresh button beside the time (refreshIntent).
  *
  * Responsive: from Android 12 the launcher picks the layout for the widget's
  * size from a map; before, the size the launcher reports decides.
@@ -57,6 +58,7 @@ object WidgetRender {
     private fun overviewSmall(context: Context, list: List<WidgetCluster>, now: Long): RemoteViews {
         val v = RemoteViews(context.packageName, R.layout.kn_overview_small)
         v.setOnClickPendingIntent(R.id.kn_root, openIntent(context, list.firstOrNull()?.id))
+        v.setOnClickPendingIntent(R.id.kn_refresh, refreshIntent(context))
         if (list.isEmpty()) {
             v.setViewVisibility(R.id.kn_empty, View.VISIBLE)
             v.setViewVisibility(R.id.kn_headline, View.GONE)
@@ -103,6 +105,15 @@ object WidgetRender {
         v.setViewVisibility(R.id.kn_empty, if (list.isEmpty()) View.VISIBLE else View.GONE)
         val shown = list.take(OverviewLayout.shown(list.size, spec))
         v.setViewVisibility(R.id.kn_header, if (header && list.isNotEmpty()) View.VISIBLE else View.GONE)
+        // The refresh button sits in the header where there is one, else at the end of the first row
+        // (the other rows keep a spacer as wide, so the times stay in one column).
+        val inHeader = header && list.isNotEmpty()
+        v.setOnClickPendingIntent(R.id.kn_refresh, refreshIntent(context))
+        v.setOnClickPendingIntent(R.id.kn_refresh_row, refreshIntent(context))
+        v.setViewVisibility(R.id.kn_refresh_row, if (inHeader) View.GONE else View.VISIBLE)
+        for (i in 1 until 5) {
+            v.setViewVisibility(id(context, "kn_refresh_slot_$i"), if (inHeader) View.GONE else View.INVISIBLE)
+        }
         if (header && list.isNotEmpty()) {
             val total = summary(list)
             v.setImageViewResource(R.id.kn_eye, eye(total.light, list.all { it.isStale(now) }))
@@ -175,6 +186,7 @@ object WidgetRender {
     private fun clusterViews(context: Context, layout: Int, cluster: WidgetCluster?, now: Long): RemoteViews {
         val v = RemoteViews(context.packageName, layout)
         v.setOnClickPendingIntent(R.id.kn_root, openIntent(context, cluster?.id))
+        v.setOnClickPendingIntent(R.id.kn_refresh, refreshIntent(context))
         if (cluster == null) {
             v.setViewVisibility(R.id.kn_empty, View.VISIBLE)
             for (gone in listOf(R.id.kn_name, R.id.kn_line1, R.id.kn_time)) {
@@ -389,6 +401,24 @@ object WidgetRender {
             alarms.set(AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime() + (next - now) + 1_000, intent)
         }
     }
+
+    /**
+     * The refresh button: the widget cannot ask an agent itself (no key), so it
+     * opens the app with kubernanny://refresh. The app asks every agent, writes
+     * the widget's list and goes back to the home screen (WidgetRefresh in
+     * app/src/app/core/widget/). Explicit like openIntent.
+     */
+    private fun refreshIntent(context: Context): PendingIntent {
+        val intent = (context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent()).apply {
+            action = Intent.ACTION_VIEW
+            data = Uri.Builder().scheme("kubernanny").authority("refresh").build()
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        return PendingIntent.getActivity(context, REFRESH_REQUEST, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    }
+
+    /** Apart from the cluster links' request codes (their ids' hash codes); the data differs anyway. */
+    private const val REFRESH_REQUEST = 0x6b6e5246
 
     /**
      * Opens the app's own launcher activity, with kubernanny://cluster?id=…

@@ -20,3 +20,22 @@ export function clusterLinkId(link: string): string | null {
     return null;
   }
 }
+
+/**
+ * "kubernanny://refresh": the refresh button on an Android home-screen widget
+ * (WidgetRender.refreshIntent). Exactly that link, nothing more in it.
+ */
+export function isRefreshLink(link: string): boolean {
+  try {
+    const u = new URL(link);
+    return (
+      u.protocol === 'kubernanny:' &&
+      u.hostname === 'refresh' &&
+      (u.pathname === '' || u.pathname === '/') &&
+      u.search === '' &&
+      u.hash === ''
+    );
+  } catch {
+    return false;
+  }
+}

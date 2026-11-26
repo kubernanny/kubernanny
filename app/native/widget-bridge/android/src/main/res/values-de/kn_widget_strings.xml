@@ -8,6 +8,7 @@
     <string name="kn_widget_stale_tag">Nicht aktuell</string>
     <string name="kn_widget_stale_time">Nicht aktuell · Stand %1$s</string>
     <string name="kn_widget_stale_open">Öffne Kubernanny</string>
+    <string name="kn_widget_refresh">Aktualisieren</string>
     <string name="kn_widget_silent">Agent antwortet nicht</string>
     <string name="kn_widget_silent_many">%1$d Agenten antworten nicht</string>
     <string name="kn_widget_demo">Demo</string>

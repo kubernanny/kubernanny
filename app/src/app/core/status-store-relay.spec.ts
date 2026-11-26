@@ -72,3 +72,44 @@ describe('StatusStore learns the relay in the background', () => {
     expect(saved).toEqual([{ ...cluster, relayUrl: 'https://relay.kubernanny.app' }]);
   });
 });
+
+describe('StatusStore.refreshAll', () => {
+  it('joins a round under way (resume and the widget button together), but force always asks', async () => {
+    const cluster: ClusterConfig = {
+      id: 'c1',
+      name: 'home',
+      url: 'http://10.0.0.5',
+      agentKey: 'k',
+      deviceKey: 'd',
+      deviceId: 'x',
+      demo: 'healthy',
+    };
+    let calls = 0;
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: AgentClient,
+          useValue: {
+            status: async () => {
+              calls++;
+              return { cluster: 'home', light: 'green' };
+            },
+          },
+        },
+        {
+          provide: ClusterStore,
+          useValue: { loaded: Promise.resolve(), clusters: () => [cluster], find: () => cluster },
+        },
+      ],
+    });
+    const store = TestBed.inject(StatusStore);
+    const first = store.refreshAll();
+    expect(store.refreshAll()).toBe(first);
+    await first;
+    expect(calls).toBe(1);
+    await store.refreshAll();
+    expect(calls).toBe(2);
+    await Promise.all([store.refreshAll(), store.refreshAll(true)]);
+    expect(calls).toBe(4);
+  });
+});

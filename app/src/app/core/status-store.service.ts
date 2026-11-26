@@ -34,6 +34,8 @@ export class StatusStore {
   private readonly state = signal<Record<string, ClusterState>>({});
   readonly states = this.state.asReadonly();
   private timer?: ReturnType<typeof setInterval>;
+  /** The round of refreshAll() under way, if any. */
+  private round?: Promise<void>;
   /** When each cluster was last asked for its relay (see learnRelay). */
   private readonly relayAsked = new Map<string, number>();
 
@@ -69,9 +71,24 @@ export class StatusStore {
     this.timer = undefined;
   }
 
-  async refreshAll(force = false): Promise<void> {
-    await this.clusters.loaded;
-    await Promise.all(this.clusters.clusters().map((c) => this.refresh(c, force)));
+  /**
+   * Asks every agent. A round already running is joined rather than started
+   * again (a resume and the widget's refresh button arrive together), unless
+   * `force` asks for fresh checks.
+   */
+  refreshAll(force = false): Promise<void> {
+    if (!force && this.round) {
+      return this.round;
+    }
+    const round = (async () => {
+      await this.clusters.loaded;
+      await Promise.all(this.clusters.clusters().map((c) => this.refresh(c, force)));
+    })();
+    if (!force) {
+      this.round = round.finally(() => (this.round = undefined));
+      return this.round;
+    }
+    return round;
   }
 
   /** `force` asks the agent to run its checks now instead of answering from its last run. */

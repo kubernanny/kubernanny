@@ -10,7 +10,8 @@ import { PushNative } from './core/push/push-native';
 import { PushRegistration } from './core/push/push-registration.service';
 import { clusterIdForPushKey, knownClusterId } from './core/push/push-tap';
 import { ScanPairing } from './core/scan/scan-pairing.service';
-import { clusterLinkId } from './core/widget/widget-link';
+import { clusterLinkId, isRefreshLink } from './core/widget/widget-link';
+import { WidgetRefresh } from './core/widget/widget-refresh.service';
 import { WidgetSync } from './core/widget/widget-sync.service';
 
 // Kept importable from here for the specs written against it.
@@ -25,6 +26,7 @@ export class App {
   private readonly router = inject(Router);
   private readonly store = inject(ClusterStore);
   private readonly scanPairing = inject(ScanPairing);
+  private readonly widgetRefresh = inject(WidgetRefresh);
 
   constructor() {
     registerIcons();
@@ -33,6 +35,11 @@ export class App {
       const params = pairingRoute(url);
       if (params) {
         void this.router.navigate(['/pair'], { queryParams: params });
+      }
+      // The refresh button on an Android widget: ask the agents, update the widget, back to the home screen.
+      if (isRefreshLink(url)) {
+        void this.widgetRefresh.run();
+        return;
       }
       // A tap on a home-screen widget or an Android push opens that cluster.
       this.openCluster(() => knownClusterId(clusterLinkId(url), this.store.clusters()));
@@ -54,7 +61,9 @@ export class App {
     // A tap that cold-starts the app may only show up as the launch URL; a second navigation to the same cluster is harmless.
     void CapApp.getLaunchUrl()
       .then((launch) => {
-        if (launch) {
+        if (launch && isRefreshLink(launch.url)) {
+          void this.widgetRefresh.run();
+        } else if (launch) {
           this.openCluster(() => knownClusterId(clusterLinkId(launch.url), this.store.clusters()));
         }
       })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { clusterLinkId } from './widget-link';
+import { clusterLinkId, isRefreshLink } from './widget-link';
 
 describe('clusterLinkId', () => {
   it('reads the id of a widget link', () => {
@@ -20,5 +20,21 @@ describe('clusterLinkId', () => {
     expect(clusterLinkId('kubernanny://evil/cluster?id=a')).toBeNull();
     expect(clusterLinkId('kubernanny://xcluster?id=a')).toBeNull();
     expect(clusterLinkId('kubernanny://cluster/x?id=a')).toBeNull();
+  });
+});
+
+describe('isRefreshLink', () => {
+  it('reads the refresh button of the Android widget', () => {
+    expect(isRefreshLink('kubernanny://refresh')).toBe(true);
+    expect(isRefreshLink('kubernanny://refresh/')).toBe(true);
+  });
+
+  it('refuses anything else', () => {
+    expect(isRefreshLink('kubernanny://cluster?id=a')).toBe(false);
+    expect(isRefreshLink('kubernanny://refresh?id=a')).toBe(false);
+    expect(isRefreshLink('kubernanny://refresh/x')).toBe(false);
+    expect(isRefreshLink('kubernanny://xrefresh')).toBe(false);
+    expect(isRefreshLink('https://refresh')).toBe(false);
+    expect(isRefreshLink('not a url')).toBe(false);
   });
 });

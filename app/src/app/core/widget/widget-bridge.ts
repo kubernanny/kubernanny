@@ -14,6 +14,8 @@ interface WidgetBridgePlugin {
   write(options: { clusters: WidgetCluster[] }): Promise<void>;
   /** How many widgets of the app are placed on the home screen (and, on iOS, the Lock Screen), of every kind. */
   placed(): Promise<{ count: number }>;
+  /** Android only: sends the app to the background, back to the home screen it was opened from. */
+  moveToBack(): Promise<{ moved: boolean }>;
 }
 
 /** On the web there are no widgets: nothing stored, nothing written. */
@@ -22,6 +24,7 @@ const native = registerPlugin<WidgetBridgePlugin>('WidgetBridge', {
     read: async () => ({ clusters: [] }),
     write: async () => undefined,
     placed: async () => ({ count: 0 }),
+    moveToBack: async () => ({ moved: false }),
   },
 });
 
@@ -51,6 +54,22 @@ export class WidgetBridge {
     }
     try {
       return (await native.placed()).count > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * After a refresh from the widget's button: back to the home screen. Only
+   * Android has the button (and the method); elsewhere, and on any failure, the
+   * app simply stays open.
+   */
+  async moveToBack(): Promise<boolean> {
+    if (Capacitor.getPlatform() !== 'android') {
+      return false;
+    }
+    try {
+      return (await native.moveToBack()).moved;
     } catch {
       return false;
     }
