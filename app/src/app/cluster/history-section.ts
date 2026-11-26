@@ -53,12 +53,12 @@ import { HISTORY_PREVIEW, HistoryVM } from './history-view';
                     <span>
                       {{ r.meta }}
                       @if (r.flapping; as flapping) {
-                        <span class="badge"
+                        <span class="badge flapping"
                           ><ion-icon name="pulse-outline" aria-hidden="true" />{{ flapping }}</span
                         >
                       }
                       @if (r.silenced) {
-                        <span class="badge"
+                        <span class="badge silenced"
                           ><ion-icon name="notifications-off-outline" aria-hidden="true" />{{
                             t('history.silenced')
                           }}</span
