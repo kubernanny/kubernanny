@@ -14,8 +14,8 @@ For maintainers: how the agent, the chart, the relay, the website and the apps g
 
 A release of the agent:
 
-1. Bump `version` and `appVersion` in `deploy/helm/kubernanny/Chart.yaml`, the image tag in `deploy/install.yaml` and `AGENT_VERSION` in `agent/src/version.ts` (and `KNOWN_AGENT_VERSION` in `app/src/app/core/version.ts`, so the app offers the update).
-2. Add the `CHANGELOG.md` entry.
+1. Bump `version` and `appVersion` in `deploy/helm/kubernanny/Chart.yaml`, the image tags in `deploy/install.yaml` and `deploy/relay/relay.yaml`, `version` in `agent/package.json` and `relay/package.json`, `AGENT_VERSION` in `agent/src/version.ts` (and `KNOWN_AGENT_VERSION` in `app/src/app/core/version.ts`, so the app offers the update).
+2. Add the `CHANGELOG.md` entry (`## X.Y.Z (YYYY-MM-DD)…`). CI's `release-check` refuses a tag that disagrees with any of these files or has no dated entry, before anything is published.
 3. Commit, tag `vX.Y.Z`, push both.
 4. The first time only: make the GHCR packages `agent`, `relay` and `charts/kubernanny` public (organisation → Packages → package settings), and optionally add the chart repository to Artifact Hub.
 

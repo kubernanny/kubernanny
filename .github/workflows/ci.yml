@@ -63,6 +63,16 @@ jobs:
             hit '^(protocol|agent|app|relay|website|e2e)/|^(package(-lock)?\.json|eslint\.config\.mjs|\.prettierrc)$' lint
           } | tee -a "$GITHUB_OUTPUT"
 
+  # A v* tag publishes images and the chart under the tag's version: refuse it
+  # before anything is pushed when Chart.yaml, the manifests, the agent or the
+  # changelog say otherwise.
+  release-check:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: scripts/check-release-version.sh "$GITHUB_REF_NAME"
+
   protocol:
     needs: changes
     if: needs.changes.outputs.protocol == 'true'
@@ -252,7 +262,7 @@ jobs:
           path: e2e/playwright-report
 
   image:
-    needs: [changes, protocol, agent, app, chart, e2e]
+    needs: [changes, release-check, protocol, agent, app, chart, e2e]
     # Skipped test jobs (nothing of theirs changed) do not block it; a failed or cancelled one does.
     if: github.event_name == 'push' && !cancelled() && !failure() && needs.changes.outputs.image == 'true'
     runs-on: ubuntu-latest
@@ -312,7 +322,7 @@ jobs:
           cosign sign --yes "ghcr.io/$OWNER/agent@$DIGEST"
 
   relay-image:
-    needs: [changes, protocol, relay]
+    needs: [changes, release-check, protocol, relay]
     if: github.event_name == 'push' && !cancelled() && !failure() && needs.changes.outputs.relay_image == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -359,7 +369,7 @@ jobs:
           cosign sign --yes "ghcr.io/$OWNER/relay@$DIGEST"
 
   helm-release:
-    needs: [image]
+    needs: [release-check, image]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
