@@ -1,6 +1,6 @@
 # Self-hosted relay
 
-`relay.yaml` runs the Kubernanny relay with a Service, an Ingress (TLS, WebSockets) and a NetworkPolicy. Change the host (in the Ingress and in `RELAY_PUBLIC_URL`), the ingress controller's namespace and the image tag (`RELAY_VERSION`, a placeholder the release replaces with the version it publishes; pick a released version, never `latest`), then `kubectl apply -f relay.yaml`.
+`relay.yaml` runs the Kubernanny relay with a Service, an Ingress (TLS, WebSockets) and a NetworkPolicy. Change the host (in the Ingress and in `RELAY_PUBLIC_URL`), the ingress controller's namespace and the image tag if you want another released version (never `latest`), then `kubectl apply -f relay.yaml`.
 
 Plain Docker on a VPS works just as well (TLS from a reverse proxy in front, e.g. Caddy):
 

@@ -2,7 +2,11 @@
 
 Agent, chart and relay. The apps in the App Store and on Google Play have their own release notes (`fastlane/release-notes/`).
 
-## 0.3.0 (unreleased): first public release
+## 0.3.0 (2026-11-26): first public release
+
+Install: `helm install kubernanny oci://ghcr.io/kubernanny/charts/kubernanny --version 0.3.0 -n kubernanny --create-namespace`, or `kubectl apply -f deploy/install.yaml` from the `v0.3.0` tag. Images: `ghcr.io/kubernanny/agent:0.3.0`, `ghcr.io/kubernanny/relay:0.3.0`.
+
+### Added
 
 - **An agent in your cluster** that recognises about 75 components by their images (Longhorn, Argo CD, cert-manager, CloudNativePG, Prometheus, Velero, Flux, Rook Ceph, Traefik, Trivy Operator and more, plus your own via `customComponents`), checks them every 60 seconds and on changes, and sums it up as a traffic light, a score and one sentence. [CHECKS.md](docs/CHECKS.md), [COMPONENTS.md](docs/COMPONENTS.md).
 - **Core checks**: nodes, etcd, the API server, workloads, CronJobs and Jobs, rollouts, volumes, disruption budgets, autoscalers, node clocks, Kubernetes end of support and deprecated APIs still in use.
@@ -20,5 +24,11 @@ Agent, chart and relay. The apps in the App Store and on Google Play have their 
 - **Supply chain**: agent and relay images and the chart signed with cosign (keyless), with SBOM and provenance; CI actions pinned by commit. [SECURITY.md](docs/SECURITY.md).
 - **A demo**: `DEMO=broken|warning|healthy` on the agent, the demo button in the app, and demo.kubernanny.app.
 - **Reviewed**: an independent security review and a pentest before the release; what they found and what changed is summarised in [SECURITY.md](docs/SECURITY.md).
+
+### Changed
+
+For anyone who ran a 0.2 test build:
+
+- **Devices pair with their own key pair** instead of a bearer token, and the admin token is gone (admin tasks run with `kubectl exec`). Pair every device again after the upgrade. [ADR 0002](docs/decisions/0002-device-keys-instead-of-tokens.md).
 
 Earlier versions were never published.

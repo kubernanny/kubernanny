@@ -42,9 +42,9 @@ spec:
           type: RuntimeDefault
       containers:
         - name: relay
-          # Pinned to a released version: the release replaces RELAY_VERSION with the version it publishes
-          # (e.g. 0.3.0). Never :latest, which changes under a running relay and cannot be rolled back.
-          image: ghcr.io/kubernanny/relay:RELAY_VERSION
+          # Pinned to a released version, bumped with every release (docs/RELEASING.md). Never :latest,
+          # which changes under a running relay and cannot be rolled back.
+          image: ghcr.io/kubernanny/relay:0.3.0
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
