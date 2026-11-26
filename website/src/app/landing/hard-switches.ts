@@ -40,7 +40,7 @@ export const HARD_SWITCHES: HardSwitch[] = [
     value: 'rbac.allowActions',
     default: true,
     removes: ['write', 'route'],
-    detail: 'The ClusterRole loses every patch and create verb, and the action routes answer 403. Strictly read-only.',
+    detail: 'The ClusterRole loses every patch, create and delete verb, and the action routes answer 403. Strictly read-only.',
   },
   {
     goal: 'No restarts, but syncs are fine',
@@ -48,16 +48,17 @@ export const HARD_SWITCHES: HardSwitch[] = [
     value: 'actions.disabled',
     default: null,
     removes: ['write', 'route'],
-    detail: 'Each action alone: restart, argocd-sync, argocd-refresh, argocd-rollback, cnpg-backup, logs. Its permission leaves the RBAC once nothing else needs it.',
+    detail:
+      'Each action alone: restart, argocd-sync, argocd-refresh, cnpg-backup, longhorn-backup, velero-backup, reconcile-now, uncordon, cleanup-pods, logs, and the opt-in ones. Its permission leaves the RBAC once nothing else needs it.',
   },
   {
-    goal: 'Rollbacks only if I allow them',
+    goal: 'Wider-reaching actions only if I allow them',
     setting: 'actions.enabled: [] (default)',
     value: 'actions.enabled',
     default: [],
     removes: ['write', 'route'],
     detail:
-      'Rolling a manual-sync Argo CD app back to an earlier deployment is off unless you add argocd-rollback here. Until then the route answers 403 and the admission policy has no branch that would allow it. On, every rollback is announced.',
+      'Five actions are off unless you name them here: argocd-rollback, job-rerun, force-delete-terminating, argocd-terminate-op, pvc-expand. Until then their routes answer 403, the chart grants no permission of their own and the admission policy has no branch that would allow them. On, every rollback is announced.',
   },
   {
     goal: 'Do not look into Argo CD',

@@ -86,8 +86,9 @@ const CHANNELS = ['ntfy', 'Discord', 'Slack', 'Gotify', 'JSON webhook'];
             <span class="badge"><kn-icon name="wrench" /></span>
             <h3>Actions bound to issues</h3>
             <p>
-              Sync, hard refresh, restart, back up now: offered only on an open problem, always confirmed first. The
-              agent takes the target from its own check, never from the request.
+              Restart, back up now, reconcile, renew, uncordon, clean up: offered only on an open problem, always
+              confirmed first, with what exactly happens. A crash loop shows its logs first; after an OOMKill there is
+              no restart button. The agent takes the target from its own check, never from the request.
             </p>
           </div>
           <div class="shot">
