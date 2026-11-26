@@ -42,5 +42,16 @@
     "keyId": "XIwBWYFMoGuRdRE4",
     "plaintext": "{\"t\":\"\",\"b\":\"\",\"p\":0,\"s\":1795003600000,\"w\":{\"l\":\"yellow\",\"c\":0,\"n\":1,\"a\":1795003590000,\"i\":[{\"s\":\"w\",\"t\":\"Certificate shop.example expires in 9 days\"}]}}",
     "message": "0121c3332b61be6a7b6ab8461e155651b17501b6e07532ecf9ab6661bd5a2ca575fc224bd8087d542aff6342df4772304c88e65452e1be360caa4dbb253c991b2fdf9a678aa059402158439acf8ab89c3502b67c48eaead0e42fe0ef48c296666b02a0ebfd41a0055d8dcbc5859e13eef1ba2e55c7e25675e9da9f2d8b7bc7313e204b5656741e5c6148196b0262a4117650fc548d7699dbc735e5d9a060b5895dd76ef03693e13563fa492050575d5b7885e0166cb62255d0da31aec4a0f52570363a6f5d608c45a4fc"
+  },
+  {
+    "name": "deadman",
+    "agentStaticSecret": "1112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f30",
+    "agentStaticPublic": "4d27bcee3135c4944b28d27dd809b07be10c35160d20131caa7e85575498d07c",
+    "pushSecret": "b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0",
+    "pushPublic": "cd700e88f9e99b19c1a8a8dcd58182fd101e5e032a69ce317fde23e8ee265c51",
+    "ephemeralSecret": "f1f2f3f4f5f6f7f8f9fafbfcfdfeff000102030405060708090a0b0c0d0e0f10",
+    "keyId": "TLhdUG5VD-3qbP5Q",
+    "plaintext": "{\"t\":\"homelab: Kubernanny is silent\",\"b\":\"No word from Kubernanny for 15 min. Check the cluster or the agent.\",\"p\":3,\"s\":1795000000000,\"d\":{\"u\":1795010800000,\"g\":15}}",
+    "message": "0135fdea9e30d3a32c8c366dd18e1eee4c13266995fd5c1c04ea694206cea3087c8586ab13ea627a9299681611ae8af17c1ee56dcc94f1864a5a8dd644eee77afa24c143662b9fd41d91ba22ddb3ff5722808a3e2061f734e8d35c8f4656ed55d6fb36c746629960c1f8d92d16174d6caa1be60f68b43dc2de9e881bb0357ba3661a3f34372d50bde85845fea673c2a8eed54731d0a2f18ef2e36eb313bc4a757c8b58290fefe15e98ce9bea1b08cb513568c838d228cff64ff721274859e214c31a6b4f821a09a68c4a4fbaf39c342f09f800eb95640e"
   }
 ]

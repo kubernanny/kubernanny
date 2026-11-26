@@ -128,6 +128,53 @@ export interface PushContent {
    * none, and phones before it ignore it. Left out when it would not fit.
    */
   w?: PushStatus;
+  /**
+   * Present only on a dead man's switch message (docs/PROTOCOL.md, "Dead
+   * man's switch"): sealed ahead of time, deposited with the relay, and sent
+   * by the relay when the agent goes silent. The phone applies a freshness
+   * rule of its own to it (sealed within the window `u`, a replay marker of
+   * its own).
+   */
+  d?: PushDeadman;
+}
+
+/**
+ * What a dead man's switch message carries besides its text: `u`, the
+ * agent's clock until which the message may be shown (ms since the epoch),
+ * and `g`, the grace in minutes the relay waits after the agent's connection
+ * dropped. Keys in this order.
+ */
+export interface PushDeadman {
+  u: number;
+  g: number;
+}
+
+/** The graces a device may choose, in minutes; 15 is the app's default. */
+export const DEADMAN_GRACE_MINUTES: readonly number[] = [10, 15, 30, 60];
+/** The longest a deposited message may stay valid: three hours, plus a maintenance window of up to 24 hours it waits out. */
+export const DEADMAN_MAX_VALIDITY_MS = 27 * 3_600_000;
+
+/** A dead man's switch message: shown (priority 3, like a warning) when the relay sends it, never carrying a state for the widget. */
+export function deadmanPushContent(title: string, body: string, sealedAt: number, validUntil: number, graceMinutes: number): PushContent {
+  return { t: title, b: body, p: 3, s: sealedAt, d: { u: validUntil, g: graceMinutes } };
+}
+
+export function isDeadman(content: PushContent): content is PushContent & { d: PushDeadman } {
+  return content.d !== undefined;
+}
+
+/** A malformed descriptor is null; decodePushContent then refuses the whole message. */
+export function decodePushDeadman(value: unknown): PushDeadman | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const d = value as Record<string, unknown>;
+  const u = d['u'];
+  const g = d['g'];
+  if (typeof u !== 'number' || !Number.isFinite(u) || typeof g !== 'number' || !DEADMAN_GRACE_MINUTES.includes(g)) {
+    return null;
+  }
+  return { u, g };
 }
 
 /**
@@ -200,7 +247,16 @@ export function decodePushContent(bytes: Uint8Array): PushContent {
     throw new Error('not push content');
   }
   const status = decodePushStatus(value.w);
-  return status ? { t: value.t, b: value.b, p: value.p, s: value.s, w: status } : { t: value.t, b: value.b, p: value.p, s: value.s };
+  const content: PushContent = status ? { t: value.t, b: value.b, p: value.p, s: value.s, w: status } : { t: value.t, b: value.b, p: value.p, s: value.s };
+  if (value.d !== undefined) {
+    // A dead man's switch message with a descriptor that does not parse is not shown under any rule.
+    const deadman = decodePushDeadman(value.d);
+    if (!deadman) {
+      throw new Error('not push content');
+    }
+    content.d = deadman;
+  }
+  return content;
 }
 
 function withoutStatus(content: PushContent): PushContent {

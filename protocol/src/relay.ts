@@ -33,6 +33,10 @@ export const FrameType = {
   Push: 0x05,
   /** relay -> agent: what became of that push (`{"s": PushOutcome}`), same id. */
   PushResult: 0x06,
+  /** agent -> relay: the dead man's switch messages to hold (DeadmanDeposit as JSON), replacing any held before. Only when Ready said `deadman: true`. */
+  Deposit: 0x07,
+  /** relay -> agent: what became of that deposit (`{"s": DepositOutcome}`), same id. */
+  DepositResult: 0x08,
   /** relay -> agent, call id 0: `nonce (32) | relay ephemeral public key (32)`. */
   Challenge: 0x10,
   /** agent -> relay, call id 0: `agent static public key (32) | proof (32)`. */
@@ -94,6 +98,19 @@ export interface RelayLimitsInfo {
    * iOS alert for each one.
    */
   statusPush?: boolean;
+  /**
+   * The relay holds dead man's switch deposits (Deposit frames) and sends
+   * them when this agent stays away longer than their grace. Absent or
+   * false: the agent deposits nothing, and the app says the relay does not
+   * support it.
+   */
+  deadman?: boolean;
+  /**
+   * Since the last registration the relay sent deposited messages: their key
+   * ids (`k`) and how long the agent was away until this registration, in ms
+   * (`m`). The agent then sends those devices a "reachable again" push.
+   */
+  deadmanFired?: { k: string[]; m: number };
 }
 
 /**
@@ -172,6 +189,96 @@ export function decodePushResult(payload: Uint8Array): PushOutcome {
     return PUSH_OUTCOMES.includes(s as PushOutcome) ? (s as PushOutcome) : 'failed';
   } catch {
     return 'failed';
+  }
+}
+
+/**
+ * One dead man's switch message as the agent deposits it with the relay: a
+ * push like any other (token, platform, key id, sealed message, language of
+ * the generic iOS alert), plus the grace in minutes this device chose.
+ */
+export interface DeadmanItem {
+  token: string;
+  platform: 'ios' | 'android';
+  kid: string;
+  message: string;
+  lang?: 'en' | 'de';
+  graceMinutes: number;
+}
+
+/**
+ * Everything the relay holds for one agent (docs/RELAY.md, "Dead man's
+ * switch"). Replaces what it held before; an empty list clears it.
+ * `validitySeconds`: how long the relay may keep and send it, from when it
+ * took it. `holdSeconds`: the relay sends nothing before this many seconds
+ * after it took it (a maintenance window on the agent); 0 for none.
+ */
+export interface DeadmanDeposit {
+  validitySeconds: number;
+  holdSeconds: number;
+  items: DeadmanItem[];
+}
+
+/** stored: held (or cleared, for an empty list). invalid: malformed or over this relay's limits. rate_limited, full: the previous deposit stays. disabled: no dead man's switch here. */
+export type DepositOutcome = 'stored' | 'invalid' | 'rate_limited' | 'full' | 'disabled';
+export const DEPOSIT_OUTCOMES: readonly DepositOutcome[] = ['stored', 'invalid', 'rate_limited', 'full', 'disabled'];
+/** The largest Deposit frame payload either side accepts. Each relay has a smaller limit of its own (items, message size). */
+export const MAX_DEPOSIT_FRAME = 128 * 1024;
+/** The longest validity a deposit may ask for: DEADMAN_MAX_VALIDITY_MS in seconds. */
+export const MAX_DEPOSIT_VALIDITY_SECONDS = 27 * 3600;
+const GRACES = [10, 15, 30, 60];
+
+export function encodeDeposit(id: number, deposit: DeadmanDeposit): Uint8Array {
+  const items = deposit.items.map((i) => ({ t: i.token, o: i.platform, k: i.kid, m: i.message, ...(i.lang ? { l: i.lang } : {}), g: i.graceMinutes }));
+  return encodeFrame(FrameType.Deposit, id, encoder.encode(JSON.stringify({ x: deposit.validitySeconds, h: deposit.holdSeconds, d: items })));
+}
+
+/** The relay's side: the deposit, or null when it is not one (the relay then answers `invalid`). */
+export function decodeDeposit(payload: Uint8Array): DeadmanDeposit | null {
+  if (payload.length > MAX_DEPOSIT_FRAME) {
+    return null;
+  }
+  try {
+    const raw = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(payload)) as Record<string, unknown> | null;
+    const { x, h, d } = raw ?? {};
+    const whole = (n: unknown, max: number): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= max;
+    if (!whole(x, MAX_DEPOSIT_VALIDITY_SECONDS) || x === 0 || !whole(h, MAX_DEPOSIT_VALIDITY_SECONDS) || h >= x || !Array.isArray(d)) {
+      return null;
+    }
+    const items: DeadmanItem[] = [];
+    for (const entry of d as unknown[]) {
+      const { t, o, k, m, l, g } = (entry ?? {}) as Record<string, unknown>;
+      if (
+        !isPushToken(t) ||
+        (o !== 'ios' && o !== 'android') ||
+        typeof k !== 'string' ||
+        !/^[A-Za-z0-9_-]{16}$/.test(k) ||
+        typeof m !== 'string' ||
+        !/^[A-Za-z0-9_-]{66,4000}$/.test(m) ||
+        typeof g !== 'number' ||
+        !GRACES.includes(g)
+      ) {
+        return null;
+      }
+      items.push({ token: t, platform: o, kid: k, message: m, ...(l === 'de' || l === 'en' ? { lang: l } : {}), graceMinutes: g });
+    }
+    return { validitySeconds: x, holdSeconds: h, items };
+  } catch {
+    return null;
+  }
+}
+
+export function encodeDepositResult(id: number, outcome: DepositOutcome): Uint8Array {
+  return encodeFrame(FrameType.DepositResult, id, encoder.encode(JSON.stringify({ s: outcome })));
+}
+
+/** The agent's side; anything it does not know reads as `invalid`. */
+export function decodeDepositResult(payload: Uint8Array): DepositOutcome {
+  try {
+    const s = (JSON.parse(new TextDecoder().decode(payload)) as { s?: unknown } | null)?.s;
+    return DEPOSIT_OUTCOMES.includes(s as DepositOutcome) ? (s as DepositOutcome) : 'invalid';
+  } catch {
+    return 'invalid';
   }
 }
 

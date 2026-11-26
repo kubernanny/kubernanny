@@ -4,6 +4,8 @@ import { CipherSuite, HkdfSha256 } from '@hpke/core';
 import { DhkemX25519HkdfSha256 } from '@hpke/dhkem-x25519';
 import { describe, expect, it } from 'vitest';
 import { generateKeyPair, keyPairFromSecret } from '../src/noise.js';
+import { DEADMAN_GRACE_MINUTES, deadmanPushContent, isDeadman } from '../src/push.js';
+import { DEPOSIT_OUTCOMES, MAX_DEPOSIT_VALIDITY_SECONDS, decodeDeposit, decodeDepositResult, encodeDeposit, encodeDepositResult } from '../src/relay.js';
 import { MAX_PUSH_PLAINTEXT, PUSH_INFO, PUSH_STATUS_ONLY, decodePushContent, decodePushStatus, encodePushContent, isStatusOnly, openPush, pushKeyId, sealPush, statusPushContent } from '../src/push.js';
 import { decodePushRequest, decodePushResult, decodeFrame, encodePushRequest, encodePushResult, FrameType } from '../src/relay.js';
 import { toBase64Url } from '../src/keys.js';
@@ -58,6 +60,7 @@ const expected: PushVector[] = [
     0x51,
   ),
   build('status-only', '{"t":"","b":"","p":0,"s":1795003600000,"w":{"l":"yellow","c":0,"n":1,"a":1795003590000,"i":[{"s":"w","t":"Certificate shop.example expires in 9 days"}]}}', 0x71),
+  build('deadman', '{"t":"homelab: Kubernanny is silent","b":"No word from Kubernanny for 15 min. Check the cluster or the agent.","p":3,"s":1795000000000,"d":{"u":1795010800000,"g":15}}', 0x91),
 ];
 
 if (process.env['UPDATE_VECTORS']) {
@@ -224,4 +227,57 @@ describe('push vectors', () => {
       expect(new TextDecoder().decode(await recipient.open(message.slice(33).buffer))).toBe(vector.plaintext);
     });
   }
+});
+
+describe('dead man\'s switch messages', () => {
+  it('encode in key order and decode with their descriptor', () => {
+    const content = deadmanPushContent('homelab: Kubernanny is silent', 'No word from Kubernanny for 15 min. Check the cluster or the agent.', 1795000000000, 1795010800000, 15);
+    const bytes = encodePushContent(content);
+    expect(new TextDecoder().decode(bytes)).toBe(expected.find((v) => v.name === 'deadman')!.plaintext);
+    const decoded = decodePushContent(bytes);
+    expect(isDeadman(decoded)).toBe(true);
+    expect(decoded.d).toEqual({ u: 1795010800000, g: 15 });
+    expect(isDeadman(decodePushContent(text.encode('{"t":"x","b":"y","p":3,"s":1}')))).toBe(false);
+  });
+
+  it('refuse a message whose descriptor does not parse, instead of showing it as an ordinary push', () => {
+    for (const d of ['{"u":1}', '{"u":1,"g":20}', '{"u":"soon","g":15}', '[]', 'null']) {
+      expect(() => decodePushContent(text.encode(`{"t":"x","b":"y","p":3,"s":1,"d":${d}}`))).toThrow();
+    }
+    expect(DEADMAN_GRACE_MINUTES).toEqual([10, 15, 30, 60]);
+  });
+});
+
+describe('deposit frames', () => {
+  const item = { token: 'cXVpdGUtYS10b2tlbg:APA91bHPRgkF-test_token', platform: 'ios' as const, kid: 'LbUGLxX9BNGEjdbP', message: 'A'.repeat(200), lang: 'de' as const, graceMinutes: 30 };
+
+  it('round-trip, an empty list included', () => {
+    for (const deposit of [{ validitySeconds: 10800, holdSeconds: 0, items: [item] }, { validitySeconds: 10800, holdSeconds: 3600, items: [] }]) {
+      const frame = decodeFrame(encodeDeposit(9, deposit));
+      expect(frame.type).toBe(FrameType.Deposit);
+      expect(frame.callId).toBe(9);
+      expect(decodeDeposit(frame.payload)).toEqual(deposit);
+    }
+  });
+
+  it('refuse anything malformed', () => {
+    const enc = (v: unknown) => text.encode(JSON.stringify(v));
+    const wire = { t: item.token, o: 'ios', k: item.kid, m: item.message, g: 30 };
+    expect(decodeDeposit(enc({ x: 10800, h: 0, d: [wire] }))).not.toBeNull();
+    expect(decodeDeposit(enc({ x: 10800, h: 0, d: [{ ...wire, g: 20 }] }))).toBeNull();
+    expect(decodeDeposit(enc({ x: 10800, h: 0, d: [{ ...wire, k: 'x' }] }))).toBeNull();
+    expect(decodeDeposit(enc({ x: 10800, h: 0, d: [{ ...wire, o: 'web' }] }))).toBeNull();
+    expect(decodeDeposit(enc({ x: 0, h: 0, d: [] }))).toBeNull();
+    expect(decodeDeposit(enc({ x: MAX_DEPOSIT_VALIDITY_SECONDS + 1, h: 0, d: [] }))).toBeNull();
+    expect(decodeDeposit(enc({ x: 3600, h: 3600, d: [] }))).toBeNull();
+    expect(decodeDeposit(enc({ x: 3600, h: 0, d: {} }))).toBeNull();
+    expect(decodeDeposit(text.encode('nope'))).toBeNull();
+  });
+
+  it('results round-trip; unknown ones read as invalid', () => {
+    for (const outcome of DEPOSIT_OUTCOMES) {
+      expect(decodeDepositResult(decodeFrame(encodeDepositResult(3, outcome)).payload)).toBe(outcome);
+    }
+    expect(decodeDepositResult(text.encode('{"s":"eaten"}'))).toBe('invalid');
+  });
 });
