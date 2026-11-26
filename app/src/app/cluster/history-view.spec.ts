@@ -130,6 +130,28 @@ describe('historyView', () => {
     expect(v.summary).toBe('2 issues in 7 days');
   });
 
+  it('marks a flapping episode with its count, and every other row not', () => {
+    const flapping = incident({
+      issueId: 'flap',
+      module: 'nodes',
+      start: at(0, 8),
+      end: at(0, 8, 40),
+      durationMs: 40 * 60_000,
+      severity: 'critical',
+      title: 'Node rke2-node-2 NotReady',
+      flaps: 4,
+    });
+    const v = historyView({ ...view, incidents: [flapping] }, modules, NOW, de);
+    expect(v.groups[0].rows[0]).toMatchObject({ flapping: 'flattert: 4-mal', duration: '40 min' });
+    expect(v.summary).toBe('1 Problem in 7 Tagen');
+    expect(
+      historyView({ ...view, incidents: [flapping] }, modules, NOW, en).groups[0].rows[0].flapping,
+    ).toBe('flapping: 4 times');
+    expect(
+      historyView(view, modules, NOW, de).groups.flatMap((g) => g.rows.map((r) => r.flapping)),
+    ).toEqual([null, null, null, null, null]);
+  });
+
   it('reads calm without incidents', () => {
     const v = historyView({ ...view, incidents: [] }, modules, NOW, en);
     expect(v.summary).toBe('No issues in the last 7 days.');

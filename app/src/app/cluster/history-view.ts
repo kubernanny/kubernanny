@@ -29,6 +29,8 @@ export interface IncidentRow {
   duration: string;
   open: boolean;
   silenced: boolean;
+  /** "flattert: 4-mal" for an episode of short blips that kept coming back. */
+  flapping: string | null;
 }
 
 export interface IncidentDay {
@@ -155,6 +157,7 @@ export function historyView(
         : span(i.durationMs, tr.lang),
       open,
       silenced: i.silenced,
+      flapping: i.flaps ? tr.n('history.flapping', i.flaps) : null,
     };
     return { row, day: startOfDay(start) };
   });

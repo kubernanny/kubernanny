@@ -402,6 +402,11 @@ export interface IncidentView {
   end: string | null;
   durationMs: number;
   silenced: boolean;
+  /**
+   * Flapping (newer agents only): the issue came and went this many times, each
+   * time shorter than a notification waits, and the episode spans them.
+   */
+  flaps?: number;
 }
 
 export interface IncidentsView {

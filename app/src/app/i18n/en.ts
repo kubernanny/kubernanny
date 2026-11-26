@@ -371,6 +371,7 @@ export const en: Dictionary = {
     none: 'No issues in the last 7 days.',
     stillOpen: 'still open, for {{span}}',
     silenced: 'silenced',
+    flapping: { one: 'flapping: {{count}} time', other: 'flapping: {{count}} times' },
     coveredSince: 'Nothing known before {{when}}: that is when the agent started watching.',
     showAll: 'Show all {{count}}',
     showLess: 'Show less',

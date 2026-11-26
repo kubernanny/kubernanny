@@ -52,8 +52,13 @@ import { HISTORY_PREVIEW, HistoryVM } from './history-view';
                   <span class="meta">
                     <span>
                       {{ r.meta }}
+                      @if (r.flapping; as flapping) {
+                        <span class="badge"
+                          ><ion-icon name="pulse-outline" aria-hidden="true" />{{ flapping }}</span
+                        >
+                      }
                       @if (r.silenced) {
-                        <span class="silenced"
+                        <span class="badge"
                           ><ion-icon name="notifications-off-outline" aria-hidden="true" />{{
                             t('history.silenced')
                           }}</span
@@ -196,7 +201,7 @@ import { HISTORY_PREVIEW, HistoryVM } from './history-view';
       color: var(--mute);
       font-size: 0.8125rem;
     }
-    .silenced {
+    .badge {
       display: inline-flex;
       align-items: center;
       gap: 0.2rem;

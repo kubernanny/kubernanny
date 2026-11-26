@@ -372,6 +372,7 @@ export const de = {
     none: 'Keine Probleme in den letzten 7 Tagen.',
     stillOpen: 'noch offen, seit {{span}}',
     silenced: 'stummgeschaltet',
+    flapping: { one: 'flattert: {{count}}-mal', other: 'flattert: {{count}}-mal' },
     coveredSince: 'Vor {{when}} ist nichts bekannt: Seitdem beobachtet der Agent erst.',
     showAll: 'Alle {{count}} zeigen',
     showLess: 'Weniger zeigen',
