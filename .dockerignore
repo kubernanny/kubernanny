@@ -1,9 +1,19 @@
-node_modules
+# Both images (Dockerfile: agent + web UI, relay/Dockerfile: relay) are built
+# from the repository root. Only what they copy is sent as build context:
+# everything else (docs, website, e2e, fastlane, vendor/bundle, screenshot
+# rigs) stays out, so the context is small and nothing local leaks in.
+*
+!protocol
+!agent
+!app
+!relay
+
+# Inside those: local installs, build output and the native projects.
 **/node_modules
 **/dist
 **/.angular
 **/coverage
-# Native projects and store tooling: not part of the agent image.
+agent/bundle
 app/ios
 app/android
-fastlane
+relay/cloudflare

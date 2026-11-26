@@ -5,7 +5,12 @@
 # Runs as non-root and writes nothing: fine with readOnlyRootFilesystem and
 # no volumes at all.
 
-FROM node:24-alpine AS protocol
+# node:24-alpine, pinned by digest like the agent's image (see the Dockerfile at
+# the root); bump both together, with the digest from
+# `docker buildx imagetools inspect node:24-alpine`.
+ARG NODE_IMAGE=node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5
+
+FROM ${NODE_IMAGE} AS protocol
 WORKDIR /build/protocol
 COPY protocol/package*.json ./
 RUN npm ci
@@ -13,7 +18,7 @@ COPY protocol/tsconfig*.json ./
 COPY protocol/src ./src
 RUN npm run build && npm prune --omit=dev
 
-FROM node:24-alpine AS relay
+FROM ${NODE_IMAGE} AS relay
 COPY --from=protocol /build/protocol /build/protocol
 WORKDIR /build/relay
 COPY relay/package*.json ./
@@ -22,7 +27,7 @@ COPY relay/tsconfig*.json ./
 COPY relay/src ./src
 RUN npm run build && npm prune --omit=dev
 
-FROM node:24-alpine
+FROM ${NODE_IMAGE}
 ENV NODE_ENV=production
 COPY --from=protocol /build/protocol/package.json /protocol/package.json
 COPY --from=protocol /build/protocol/dist /protocol/dist
