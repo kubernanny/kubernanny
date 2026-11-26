@@ -44,6 +44,11 @@ interface WorkloadSpec {
   pvc?: { size: string; class: string };
   /** Broken scenario only: no securityContext and no memory limit, for the security posture check. */
   loose?: boolean;
+  /**
+   * Broken scenario only: runs without securityContext (the root hint) and
+   * accepts that in its `kubernanny.io/accept` annotation, with this reason.
+   */
+  acceptRoot?: string;
   /** Runs in the broken scenario only (Gatus, Uptime Kuma), so the others keep their reviewed shape. */
   brokenOnly?: boolean;
 }
@@ -326,6 +331,7 @@ const W: WorkloadSpec[] = [
     ready: 1,
     ports: [{ port: 3000 }],
     host: 'community.shop.example',
+    acceptRoot: 'the image boots runit as root and drops privileges itself',
   },
   {
     kind: 'Deployment',
@@ -603,7 +609,7 @@ function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): Map<str
     const template = {
       metadata: { labels },
       spec: {
-        ...(loose ? {} : { securityContext: HARDENED }),
+        ...(loose || (broken && w.acceptRoot) ? {} : { securityContext: HARDENED }),
         // Some workloads also cap CPU (four times the request), as real charts do; the loose ones set no limit at all.
         containers: [
           {
@@ -639,6 +645,9 @@ function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): Map<str
       creationTimestamp: iso(age),
       annotations: {} as Record<string, string>,
     };
+    if (broken && w.acceptRoot) {
+      meta.annotations['kubernanny.io/accept'] = `root: ${w.acceptRoot}`;
+    }
     if (w.name === 'kured' && broken) {
       meta.annotations['weave.works/kured-node-lock'] = JSON.stringify({
         nodeID: 'rke2-node-5',

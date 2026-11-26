@@ -169,7 +169,8 @@ const CHANNELS = ['ntfy', 'Discord', 'Slack', 'Gotify', 'JSON webhook'];
           <p>
             Privileged containers, host access, missing limits. And, if you switch it on, the versions you run checked
             against OSV.dev, with the release that fixes them. The built-in lookup covers Kubernetes and well-known
-            components only; every image, your own included, is covered when Trivy Operator runs in the cluster.
+            components only; every image, your own included, is covered when Trivy Operator runs in the cluster. A hint
+            you live with on purpose is accepted in Git, with a reason, by an annotation on the workload.
           </p>
           <a routerLink="/docs/security-checks" class="more">Security checks <kn-icon name="arrowRight" /></a>
         </article>

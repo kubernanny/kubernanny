@@ -43,7 +43,10 @@ export interface Workload {
   spec?: {
     replicas?: number;
     selector?: { matchLabels?: Record<string, string> };
-    template?: { metadata?: { labels?: Record<string, string> }; spec?: PodSpecLite };
+    template?: {
+      metadata?: { labels?: Record<string, string>; annotations?: Record<string, string> };
+      spec?: PodSpecLite;
+    };
   };
   status?: {
     replicas?: number;
@@ -74,7 +77,14 @@ export interface CronJob {
   spec?: {
     schedule?: string;
     suspend?: boolean;
-    jobTemplate?: { spec?: { template?: { metadata?: { labels?: Record<string, string> }; spec?: PodSpecLite } } };
+    jobTemplate?: {
+      spec?: {
+        template?: {
+          metadata?: { labels?: Record<string, string>; annotations?: Record<string, string> };
+          spec?: PodSpecLite;
+        };
+      };
+    };
   };
   status?: { lastScheduleTime?: string; lastSuccessfulTime?: string };
 }

@@ -15,7 +15,11 @@ const KEPT_ANNOTATIONS = [
   'kubernetes.io/ingress.class',
   'storageclass.kubernetes.io/is-default-class',
   'weave.works/kured-node-lock',
+  'kubernanny.io/accept',
 ] as const;
+
+/** The security hints a workload accepts (modules/security/accept-annotation.ts), also kept on pod templates. */
+const ACCEPT = 'kubernanny.io/accept';
 
 /** Longest event message kept (a stuck pod's scheduler message can be long). */
 const MAX_EVENT_MESSAGE = 1024;
@@ -136,7 +140,12 @@ function stripTemplate(template: unknown): Obj | undefined {
   if (!isObj(template)) {
     return undefined;
   }
-  return { metadata: pick(template.metadata, ['labels']), spec: stripPodSpec(template.spec) };
+  const metadata = pick(template.metadata, ['labels']);
+  const annotations = isObj(template.metadata) ? template.metadata.annotations : undefined;
+  if (metadata && isObj(annotations) && typeof annotations[ACCEPT] === 'string') {
+    metadata.annotations = { [ACCEPT]: annotations[ACCEPT] };
+  }
+  return { metadata, spec: stripPodSpec(template.spec) };
 }
 
 export function stripPod(o: unknown): Obj {

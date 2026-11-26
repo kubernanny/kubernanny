@@ -127,6 +127,7 @@ export async function runComponent(
       error: result.error,
       ...(result.accepted ? { accepted: result.accepted } : {}),
       ...(result.canAccept !== undefined ? { canAccept: result.canAccept } : {}),
+      ...(result.acceptedFindings?.length ? { acceptedFindings: result.acceptedFindings } : {}),
       ...(result.rollbacks ? { rollbacks: result.rollbacks } : {}),
       ...(result.pendingSyncs?.length ? { pendingSyncs: result.pendingSyncs } : {}),
     },
@@ -158,6 +159,7 @@ export async function runCoreCheck(
       error: result.error,
       ...(result.accepted ? { accepted: result.accepted } : {}),
       ...(result.canAccept !== undefined ? { canAccept: result.canAccept } : {}),
+      ...(result.acceptedFindings?.length ? { acceptedFindings: result.acceptedFindings } : {}),
     },
   };
 }

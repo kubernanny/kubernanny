@@ -206,6 +206,18 @@ export const en = {
   'security.mutable-image.why':
     'With latest or no tag, every restart can pull a different version, and nobody sees what is running.',
   'security.mutable-image.fix': 'Pin a version or a digest.',
+  'security.host-access.short': 'access to the node',
+  'security.root.short': 'may run as root',
+  'security.no-memory-limit.short': 'no memory limit',
+  'security.mutable-image.short': 'image without a fixed version',
+  'security.privileged.short': 'privileged container',
+  'security.accept.noReason': (p) =>
+    `kubernanny.io/accept on ${p.names} names ${p.key} without a reason, so it still counts. Add a reason after the colon.`,
+  'security.accept.title': (p) => `${p.ns}: kubernanny.io/accept not understood on ${workloads(p.n)}`,
+  'security.accept.unknown': (p) => `${p.name}: unknown key ${p.keys}.`,
+  'security.accept.refused': (p) => `${p.name}: ${p.keys} cannot be accepted, a privileged container stays a warning.`,
+  'security.accept.keys': (p) =>
+    `Known keys: ${p.keys}. Every entry needs a reason, for example "root: the image starts as root and drops privileges itself".`,
   'security.cause': (p) => `${p.why} Affected: ${p.affected}. ${p.fix}`,
   'security.affectedMore': (p) => `${p.names} and ${p.more} more`,
   'security.stat.findings': 'Findings',
@@ -214,6 +226,7 @@ export const en = {
   'security.stat.exempt': 'Exempt',
   'security.stat.exemptValue': (p) => n1(p.n, 'system namespace', 'system namespaces'),
   'security.summary.ok': 'Nothing stands out',
+  'security.summary.okAccepted': (p) => `Nothing stands out, ${p.n} accepted`,
   'security.summary.privileged': (p) => `Privileged containers in ${n1(p.n, 'namespace', 'namespaces')}`,
   'security.summary.hints': (p) => `${n1(p.n, 'hint', 'hints')} in ${n1(p.namespaces, 'namespace', 'namespaces')}`,
 

@@ -78,6 +78,18 @@ describe('demo scenarios', () => {
       ['security/pgadmin/root', 'info'],
       ['security/pgadmin/no-memory-limit', 'info'],
     ]);
+    // Discourse runs as root too, and accepts it in its kubernanny.io/accept annotation.
+    expect(s.modules.find((m) => m.id === 'security')?.acceptedFindings).toEqual([
+      {
+        key: 'root',
+        finding: 'läuft womöglich als root',
+        namespace: 'discourse',
+        kind: 'Deployment',
+        name: 'discourse',
+        reason: 'the image boots runit as root and drops privileges itself',
+        source: 'workload',
+      },
+    ]);
   });
 
   it('broken runs Trivy Operator: a fixable high in the own-image app, an unfixed medium as a hint on Valkey', async () => {

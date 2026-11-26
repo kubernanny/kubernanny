@@ -75,7 +75,7 @@ describe('message catalogs', () => {
 /** Keys built at run time from an id: `t(\`action.${type}.label\`)` and the like. */
 const DYNAMIC_KEYS = [
   /^action\.[a-z-]+\.(label|description|effect)$/,
-  /^security\.[a-z-]+\.(title|why|fix)$/,
+  /^security\.[a-z-]+\.(title|why|fix|short)$/,
   /^error\.[A-Z_]+$/,
 ];
 

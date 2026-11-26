@@ -1,9 +1,10 @@
 import { t } from '../../i18n/text';
 import { CoreCheck } from '../module';
 import { ModuleContext, ModuleResult } from '../types';
+import { ACCEPT_ANNOTATION } from './accept-annotation';
 import {
   cronJobTemplatePods,
-  evaluateSecurity,
+  evaluateSecurityPosture,
   HOST_LEVEL_COMPONENTS,
   SecurityPod,
   SYSTEM_NAMESPACES,
@@ -32,7 +33,28 @@ export class SecurityCheck extends CoreCheck {
     );
     const systemNamespaces = new Set([...SYSTEM_NAMESPACES, ...ctx.config.securitySystemNamespaces]);
     const pods = [...(ctx.inv.pods as SecurityPod[]), ...cronJobTemplatePods(ctx.inv.cronjobs)];
-    const issues = evaluateSecurity({ pods, cronOfJob, systemNamespaces, hostLevel });
+    // The workloads' own annotations; their pod templates' arrive on the pods.
+    const workloadAccept = new Map<string, string>();
+    for (const [kind, list] of [
+      ['Deployment', ctx.inv.deployments],
+      ['StatefulSet', ctx.inv.statefulsets],
+      ['DaemonSet', ctx.inv.daemonsets],
+      ['CronJob', ctx.inv.cronjobs],
+    ] as const) {
+      for (const w of list) {
+        const value = w.metadata.annotations?.[ACCEPT_ANNOTATION];
+        if (value) {
+          workloadAccept.set(`${w.metadata.namespace ?? 'default'}/${kind}/${w.metadata.name}`, value);
+        }
+      }
+    }
+    const { issues, accepted } = evaluateSecurityPosture({
+      pods,
+      cronOfJob,
+      systemNamespaces,
+      hostLevel,
+      workloadAccept,
+    });
     const privileged = issues.filter((i) => i.severity === 'warning').length;
     const namespaces = new Set(issues.map((i) => i.id.split('/')[1])).size;
     return {
@@ -43,9 +65,12 @@ export class SecurityCheck extends CoreCheck {
         { label: t('security.stat.namespaces'), value: String(namespaces) },
         { label: t('security.stat.exempt'), value: t('security.stat.exemptValue', { n: systemNamespaces.size }) },
       ],
+      ...(accepted.length ? { acceptedFindings: accepted } : {}),
       summary:
         issues.length === 0
-          ? t('security.summary.ok')
+          ? accepted.length
+            ? t('security.summary.okAccepted', { n: accepted.length })
+            : t('security.summary.ok')
           : privileged > 0
             ? t('security.summary.privileged', { n: privileged })
             : t('security.summary.hints', { n: issues.length, namespaces }),

@@ -1,7 +1,8 @@
 import { podOwner } from '../../checks/pods.check';
 import { Issue, IssueSeverity, ObjectMeta } from '../../checks/types';
 import { imageVersion } from '../../discovery/discovery';
-import { raw, t } from '../../i18n/text';
+import { raw, t, Text } from '../../i18n/text';
+import { ACCEPT_ANNOTATION, ACCEPTABLE_KEYS, AcceptSource, mergeAccept, ParsedAccept } from './accept-annotation';
 
 /** The fields of a pod spec the posture check reads; the inventory holds the full objects. */
 export interface SecurityContextLite {
@@ -144,7 +145,10 @@ export function podFindings(pod: SecurityPod): { type: FindingType; detail?: str
 export function cronJobTemplatePods(
   cronjobs: readonly {
     metadata: ObjectMeta;
-    spec?: { suspend?: boolean; jobTemplate?: { spec?: { template?: { spec?: unknown } } } };
+    spec?: {
+      suspend?: boolean;
+      jobTemplate?: { spec?: { template?: { metadata?: { annotations?: Record<string, string> }; spec?: unknown } } };
+    };
   }[],
 ): SecurityPod[] {
   return cronjobs
@@ -154,13 +158,23 @@ export function cronJobTemplatePods(
         name: c.metadata.name,
         namespace: c.metadata.namespace,
         ownerReferences: [{ kind: 'CronJob', name: c.metadata.name }],
+        ...(c.spec?.jobTemplate?.spec?.template?.metadata?.annotations
+          ? { annotations: c.spec.jobTemplate.spec.template.metadata.annotations }
+          : {}),
       },
       spec: c.spec!.jobTemplate!.spec!.template!.spec as SecurityPod['spec'],
       status: { phase: 'Pending' },
     }));
 }
 
-const ORDER: FindingType[] = ['privileged', 'host-access', 'root', 'no-memory-limit', 'mutable-image'];
+const ORDER: (FindingType | 'accept-annotation')[] = [
+  'privileged',
+  'host-access',
+  'root',
+  'no-memory-limit',
+  'mutable-image',
+  'accept-annotation',
+];
 
 export interface SecurityInput {
   pods: SecurityPod[];
@@ -169,37 +183,102 @@ export interface SecurityInput {
   systemNamespaces: ReadonlySet<string>;
   /** "ns/Kind/name" of workloads of HOST_LEVEL_COMPONENTS. */
   hostLevel: ReadonlySet<string>;
+  /** "ns/Kind/name" -> the workload's own `kubernanny.io/accept` annotation. */
+  workloadAccept?: ReadonlyMap<string, string>;
+}
+
+/** A hint someone accepted in the workload's annotation: left out of the issues, listed on the module sheet. */
+export interface AcceptedFinding {
+  /** The annotation key: `root`, `host-access`, … */
+  key: FindingType;
+  /** What was found, in words ("may run as root"). */
+  finding: Text;
+  namespace: string;
+  /** Deployment, StatefulSet, DaemonSet, CronJob, or the owner of the pods. */
+  kind: string;
+  name: string;
+  reason: string;
+  /** The workload's own annotation, or its pod template's. */
+  source: AcceptSource;
+}
+
+export interface SecurityOutcome {
+  issues: Issue[];
+  /** Sorted by namespace, workload and finding. */
+  accepted: AcceptedFinding[];
+}
+
+interface Group {
+  ns: string;
+  type: FindingType;
+  workloads: Map<string, string | undefined>;
+  /** Workloads that name this finding in their annotation without a reason. */
+  noReason: Set<string>;
 }
 
 /**
  * One issue per finding type and namespace, not per pod: ten replicas or a
  * namespace of twenty charts without limits are one line. Hints only, except
  * privileged containers outside the system namespaces (a warning: that pod is
- * the node).
+ * the node). A hint the workload accepts in its `kubernanny.io/accept`
+ * annotation, with a reason, is listed apart and counts nowhere; a warning is
+ * never accepted.
  */
-export function evaluateSecurity(input: SecurityInput): Issue[] {
-  const byGroup = new Map<string, { ns: string; type: FindingType; workloads: Map<string, string | undefined> }>();
+export function evaluateSecurityPosture(input: SecurityInput): SecurityOutcome {
+  const byGroup = new Map<string, Group>();
+  const accepted = new Map<string, AcceptedFinding>();
+  /** Per namespace, per workload: what its annotation names that cannot count. */
+  const misread = new Map<string, Map<string, { unknown: Set<string>; refused: Set<string> }>>();
+  const acceptOf = new Map<string, ParsedAccept & { source: Map<FindingType, AcceptSource> }>();
   for (const pod of input.pods) {
     const ns = pod.metadata.namespace ?? 'default';
     if (input.systemNamespaces.has(ns) || pod.status?.phase === 'Succeeded') {
       continue;
     }
     const w = workloadOf(pod, input.cronOfJob);
+    const accept =
+      acceptOf.get(w.key) ??
+      mergeAccept(input.workloadAccept?.get(w.key), pod.metadata.annotations?.[ACCEPT_ANNOTATION]);
+    acceptOf.set(w.key, accept);
+    if (accept.unknown.length || accept.refused.length) {
+      const inNs = misread.get(ns) ?? new Map();
+      const entry = inNs.get(w.label) ?? { unknown: new Set<string>(), refused: new Set<string>() };
+      accept.unknown.forEach((k) => entry.unknown.add(k));
+      accept.refused.forEach((k) => entry.refused.add(k));
+      inNs.set(w.label, entry);
+      misread.set(ns, inNs);
+    }
     for (const f of podFindings(pod)) {
       if (input.hostLevel.has(w.key) && (f.type === 'privileged' || f.type === 'host-access' || f.type === 'root')) {
         continue;
       }
+      const reason = severityOf(f.type) === 'info' ? accept.accepted.get(f.type) : undefined;
+      if (reason !== undefined) {
+        const [, kind, name] = w.key.split('/');
+        accepted.set(`${w.key}/${f.type}`, {
+          key: f.type,
+          finding: t(`security.${f.type}.short`),
+          namespace: ns,
+          kind,
+          name: name ?? w.label,
+          reason,
+          source: accept.source.get(f.type) ?? 'workload',
+        });
+        continue;
+      }
       const key = `${ns}/${f.type}`;
-      const group = byGroup.get(key) ?? { ns, type: f.type, workloads: new Map() };
+      const group = byGroup.get(key) ?? { ns, type: f.type, workloads: new Map(), noReason: new Set() };
       if (!group.workloads.has(w.label)) {
         group.workloads.set(w.label, f.detail);
+      }
+      if (accept.missingReason.has(f.type)) {
+        group.noReason.add(w.label);
       }
       byGroup.set(key, group);
     }
   }
-  return [...byGroup.values()]
-    .sort((a, b) => a.ns.localeCompare(b.ns) || ORDER.indexOf(a.type) - ORDER.indexOf(b.type))
-    .map(({ ns, type, workloads }) => {
+  const issues: { ns: string; order: number; issue: Issue }[] = [...byGroup.values()].map(
+    ({ ns, type, workloads, noReason }) => {
       const names = [...workloads]
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([name, detail]) => (detail ? `${name} (${detail})` : name));
@@ -207,14 +286,65 @@ export function evaluateSecurity(input: SecurityInput): Issue[] {
         names.length > 5
           ? t('security.affectedMore', { names: names.slice(0, 5).join(', '), more: names.length - 5 })
           : raw(names.join(', '));
-      const severity: IssueSeverity = type === 'privileged' ? 'warning' : 'info';
+      const cause = t('security.cause', { why: t(`security.${type}.why`), affected, fix: t(`security.${type}.fix`) });
+      const missing = [...noReason].sort((a, b) => a.localeCompare(b));
       return {
-        id: `security/${ns}/${type}`,
-        check: 'security',
-        severity,
-        title: t(`security.${type}.title`, { ns, n: workloads.size }),
-        cause: t('security.cause', { why: t(`security.${type}.why`), affected, fix: t(`security.${type}.fix`) }),
-        actions: [],
+        ns,
+        order: ORDER.indexOf(type),
+        issue: {
+          id: `security/${ns}/${type}`,
+          check: 'security',
+          severity: severityOf(type),
+          title: t(`security.${type}.title`, { ns, n: workloads.size }),
+          cause: missing.length
+            ? t('common.sentences', {
+                parts: [cause, t('security.accept.noReason', { names: missing.join(', '), key: type })],
+              })
+            : cause,
+          actions: [],
+        },
       };
+    },
+  );
+  for (const [ns, byWorkload] of misread) {
+    const parts = [...byWorkload]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .flatMap(([name, { unknown, refused }]) => [
+        ...(unknown.size ? [t('security.accept.unknown', { name, keys: [...unknown].join(', ') })] : []),
+        ...(refused.size ? [t('security.accept.refused', { name, keys: [...refused].join(', ') })] : []),
+      ]);
+    issues.push({
+      ns,
+      order: ORDER.indexOf('accept-annotation'),
+      issue: {
+        id: `security/${ns}/accept-annotation`,
+        check: 'security',
+        severity: 'info',
+        title: t('security.accept.title', { ns, n: byWorkload.size }),
+        cause: t('common.sentences', {
+          parts: [...parts, t('security.accept.keys', { keys: ACCEPTABLE_KEYS.join(', ') })],
+        }),
+        actions: [],
+      },
     });
+  }
+  return {
+    issues: issues.sort((a, b) => a.ns.localeCompare(b.ns) || a.order - b.order).map((x) => x.issue),
+    accepted: [...accepted.values()].sort(
+      (a, b) =>
+        a.namespace.localeCompare(b.namespace) ||
+        a.name.localeCompare(b.name) ||
+        ORDER.indexOf(a.key) - ORDER.indexOf(b.key),
+    ),
+  };
+}
+
+/** Privileged containers are a warning, everything else a hint. */
+function severityOf(type: FindingType): IssueSeverity {
+  return type === 'privileged' ? 'warning' : 'info';
+}
+
+/** The issues alone. */
+export function evaluateSecurity(input: SecurityInput): Issue[] {
+  return evaluateSecurityPosture(input).issues;
 }

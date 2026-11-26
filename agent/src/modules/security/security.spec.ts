@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { de } from '../../testing/i18n';
+import { parseAccept } from './accept-annotation';
 import {
   cronJobTemplatePods,
   evaluateSecurity,
+  evaluateSecurityPosture,
   podFindings,
   SecurityPod,
   SYSTEM_NAMESPACES,
@@ -209,5 +211,113 @@ describe('security posture', () => {
     expect(check.defaultOff).toBe(false);
     expect(check.reads).toEqual([]);
     expect(check.privacy({} as never)).toBeUndefined();
+  });
+});
+
+describe('accepting hints in the kubernanny.io/accept annotation', () => {
+  const rootPod = (
+    name: string,
+    annotations?: Record<string, string>,
+    extra: Partial<NonNullable<SecurityPod['spec']>> = {},
+  ): SecurityPod => {
+    const p = pod(
+      `${name}-5d9f8-x`,
+      'forum',
+      { containers: [{ name: 'c', image: 'discourse:3.4', resources: limits }], ...extra },
+      { kind: 'ReplicaSet', name: `${name}-5d9f8` },
+      { 'pod-template-hash': '5d9f8' },
+    );
+    return annotations ? { ...p, metadata: { ...p.metadata, annotations } } : p;
+  };
+  const run = (pods: SecurityPod[], workloadAccept: Record<string, string> = {}) =>
+    de(evaluateSecurityPosture({ ...input(pods), workloadAccept: new Map(Object.entries(workloadAccept)) }));
+
+  it('parses entries split by commas and line breaks, keeping commas inside a reason', () => {
+    const p = parseAccept(
+      'root: starts as root, then drops it\nno-memory-limit: sized by the operator, mutable-image:',
+    );
+    expect([...p.accepted]).toEqual([
+      ['root', 'starts as root, then drops it'],
+      ['no-memory-limit', 'sized by the operator'],
+    ]);
+    expect([...p.missingReason]).toEqual(['mutable-image']);
+    expect(parseAccept('Writable-Root-FS: x, privileged: needs /dev').unknown).toEqual(['writable-root-fs']);
+    expect(parseAccept('privileged: needs /dev').refused).toEqual(['privileged']);
+    expect(parseAccept('root: ' + 'a'.repeat(500)).accepted.get('root')).toHaveLength(200);
+    expect(parseAccept('root: a\u0000b').accepted.get('root')).toBe('a b');
+  });
+
+  it('leaves an accepted hint out of the issues and lists it with its reason and source', () => {
+    const out = run([rootPod('discourse'), rootPod('forum-api')], {
+      'forum/Deployment/discourse': 'root: the official image boots runit as root and drops privileges itself',
+    });
+    expect(out.issues.map((i) => [i.id, i.title])).toEqual([
+      ['security/forum/root', 'forum: 1 Workload läuft womöglich als root'],
+    ]);
+    expect(out.issues[0].cause).toContain('Betroffen: forum-api.');
+    expect(out.accepted).toEqual([
+      {
+        key: 'root',
+        finding: 'läuft womöglich als root',
+        namespace: 'forum',
+        kind: 'Deployment',
+        name: 'discourse',
+        reason: 'the official image boots runit as root and drops privileges itself',
+        source: 'workload',
+      },
+    ]);
+  });
+
+  it('reads the pod template too, the workload winning for the same key', () => {
+    const out = run([rootPod('discourse', { 'kubernanny.io/accept': 'root: from the template' })]);
+    expect(out.issues).toEqual([]);
+    expect(out.accepted.map((a) => [a.reason, a.source])).toEqual([['from the template', 'pod-template']]);
+    const both = run([rootPod('discourse', { 'kubernanny.io/accept': 'root: from the template' })], {
+      'forum/Deployment/discourse': 'root: from the Deployment',
+    });
+    expect(both.accepted.map((a) => [a.reason, a.source])).toEqual([['from the Deployment', 'workload']]);
+  });
+
+  it('keeps counting without a reason, and says so in the hint', () => {
+    const out = run([rootPod('discourse')], { 'forum/Deployment/discourse': 'root:' });
+    expect(out.accepted).toEqual([]);
+    expect(out.issues[0].cause).toContain(
+      'kubernanny.io/accept bei discourse nennt root ohne Grund, deshalb zählt es weiter.',
+    );
+  });
+
+  it('never accepts a privileged container, and names unknown keys with the known ones', () => {
+    const priv = rootPod('agent', undefined, {
+      securityContext: safe,
+      containers: [{ name: 'c', image: 'x:1', securityContext: { privileged: true }, resources: limits }],
+    });
+    const out = run([priv], { 'forum/Deployment/agent': 'privileged: needs the GPU, writable-root-fs: fine' });
+    expect(out.issues.map((i) => [i.id, i.severity])).toEqual([
+      ['security/forum/privileged', 'warning'],
+      ['security/forum/accept-annotation', 'info'],
+    ]);
+    expect(out.issues[1].title).toBe('forum: kubernanny.io/accept bei 1 Workload nicht verstanden');
+    expect(out.issues[1].cause).toBe(
+      'agent: unbekannter Schlüssel writable-root-fs. agent: privileged lässt sich nicht akzeptieren, ein privilegierter Container bleibt eine Warnung. Bekannte Schlüssel: host-access, root, no-memory-limit, mutable-image. Jeder Eintrag braucht einen Grund, etwa "root: das Image startet als root und gibt die Rechte selbst ab".',
+    );
+  });
+
+  it('accepts on a CronJob through its template annotations', () => {
+    const cron = {
+      metadata: { name: 'backup', namespace: 'forum' },
+      spec: {
+        jobTemplate: {
+          spec: {
+            template: {
+              metadata: { annotations: { 'kubernanny.io/accept': 'mutable-image: rebuilt nightly by us' } },
+              spec: { securityContext: safe, containers: [{ name: 'c', image: 'tool:latest', resources: limits }] },
+            },
+          },
+        },
+      },
+    };
+    const out = run(cronJobTemplatePods([cron]));
+    expect(out.issues).toEqual([]);
+    expect(out.accepted.map((a) => [a.kind, a.name, a.key])).toEqual([['CronJob', 'backup', 'mutable-image']]);
   });
 });

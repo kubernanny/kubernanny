@@ -12,6 +12,7 @@ import type { Text } from '../i18n/text';
 import { Inventory } from '../inventory/inventory';
 import { KubeClient } from '../kube/kube-client';
 import type { VeleroBackup } from './integrations/velero';
+import type { AcceptedFinding } from './security/evaluate';
 import { Prometheus } from './service-proxy';
 import type { AcceptanceState } from './vulnerabilities/acceptance';
 import type { VulnDb } from './vulnerabilities/osv-client';
@@ -77,6 +78,8 @@ export interface ModuleResult {
   /** Vulnerabilities only: advisories someone marked as not applicable, shown on the module sheet. */
   accepted?: AcceptedAdvisory[];
   canAccept?: boolean;
+  /** Security posture only: hints accepted in the workloads' `kubernanny.io/accept` annotation, listed folded on the sheet. */
+  acceptedFindings?: AcceptedFinding[];
   /** Argo CD only, while `argocd-rollback` is on: manual-sync apps and the earlier deployments they can go back to. */
   rollbacks?: RollbackApp[];
   /** Argo CD only: manual apps with a change waiting ("Bereit zum Sync"), not issues. */
@@ -186,6 +189,8 @@ export interface ModuleView {
   accepted?: AcceptedAdvisory[];
   /** Vulnerabilities only: advisories can be accepted (not locked in Helm). */
   canAccept?: boolean;
+  /** Security posture only: hints accepted in the workloads' `kubernanny.io/accept` annotation. */
+  acceptedFindings?: AcceptedFinding[];
   /** Argo CD only, while `argocd-rollback` is on. */
   rollbacks?: RollbackApp[];
   /** Argo CD only: manual apps ready to sync, shown on the overview as one calm card. */
