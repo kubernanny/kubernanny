@@ -4,7 +4,7 @@ import { RouterLink } from '@angular/router';
 interface Question {
   q: string;
   a: string;
-  link?: { route: string; label: string };
+  link?: { route: string; label: string; fragment?: string };
 }
 
 /**
@@ -36,6 +36,11 @@ export const QUESTIONS: Question[] = [
     link: { route: '/docs/permissions', label: 'Every permission' },
   },
   {
+    q: 'What happens if my cluster or the agent goes down?',
+    a: 'Then nothing in the cluster can tell you, so the relay does. With native push on, the agent leaves a warning for your phone with the relay, sealed in advance so the relay cannot read or change it. When the agent stays silent longer than you chose (10 to 60 minutes; a rollout hands over in seconds), the relay sends it once and the widget turns to "Agent not answering". When the agent is back, it tells you how long it was gone. A relay can send that warning early or not at all, but it can never make you believe all is fine.',
+    link: { route: '/docs/notifications', fragment: 'when-the-agent-goes-silent', label: 'When the agent goes silent' },
+  },
+  {
     q: 'Does anything leave my network?',
     a: 'Only what you switch on: notifications to the channels you configure, the sealed messages through the relay, and component names and versions for the vulnerability and image update lookups. No account, no telemetry.',
     link: { route: '/docs/communication', label: 'Every connection' },
@@ -62,7 +67,7 @@ export const QUESTIONS: Question[] = [
             <summary>{{ item.q }}</summary>
             <p>{{ item.a }}</p>
             @if (item.link) {
-              <a [routerLink]="item.link.route">{{ item.link.label }}</a>
+              <a [routerLink]="item.link.route" [fragment]="item.link.fragment">{{ item.link.label }}</a>
             }
           </details>
         }

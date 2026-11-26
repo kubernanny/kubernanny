@@ -163,7 +163,8 @@ const CHANNELS = ['ntfy', 'Discord', 'Slack', 'Gotify', 'JSON webhook'];
           <p>
             A problem is sent once it has lasted five minutes, so rollouts and planned reboots never wake you. Again if
             it turns critical, and once more when it is resolved. Straight to the app as a native push, sealed for your
-            device so neither the relay nor Google can read it, and the home-screen widget updates with it. Or to
+            device so neither the relay nor Google can read it, and the home-screen widget updates with it. If the
+            agent or the whole cluster goes silent, the relay sends the warning it holds sealed for your phone. Or to
             your own channels:
           </p>
           <ul class="channels" aria-label="Channels">

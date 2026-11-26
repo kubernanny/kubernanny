@@ -81,14 +81,26 @@ const VM = {
         delivers it, to iPhones through Apple. Neither the relay nor Google nor Apple can read the message.
       </p>
       <p>
-        The relay processes the token, the platform, the key id, the agent id and the size and time of each push. It
-        does not store the token. To limit how many pushes go out, it keeps per agent a counter and one-way hashes
+        The relay processes the token, the platform, the key id, the agent id and the size and time of each push. For
+        ordinary pushes it does not store the token (for the warning below it does). To limit how many pushes go out, it keeps per agent a counter and one-way hashes
         of the tokens it pushed to in the last 24 hours (older entries are dropped at the next push), and per token a
         counter under a one-way hash of the token. Google and Apple process the token, the app, and the size and
         time of each message, under their own privacy policies:
         <a href="https://firebase.google.com/support/privacy">Firebase</a> and
         <a href="https://www.apple.com/legal/privacy/">Apple</a>. The legal basis is delivering the notifications you
         asked for (Art. 6(1)(b) GDPR).
+      </p>
+      <p>
+        "Warn when the agent goes silent" (on by default when push is on, switchable per device in the push section)
+        works differently: so that the relay can warn you when your agent or cluster stops answering, the agent
+        leaves with the relay, in advance, a message sealed for your device, together with the push token, the
+        platform, the key id and the waiting time you chose. The relay stores these, per agent id, until the agent
+        replaces them (about every 30 minutes) and at most for their validity of 3 hours (up to 27 hours during a
+        maintenance window you started), on the public relay in the agent's Durable Object at Cloudflare. If the
+        agent's connection stays away longer than your waiting time, the relay sends the message once and keeps, until
+        the agent connects again, the key ids it was sent to. The relay cannot read or change the message. The legal
+        basis is again delivering the notifications you asked for (Art. 6(1)(b) GDPR). Switching the warning or push
+        off for the device, or pausing notifications, makes the agent clear what the relay holds at its next run.
       </p>
       <p>
         Switching push off, or removing the device in the app, deletes the token from your agent; after that nothing

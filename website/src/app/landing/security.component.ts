@@ -32,7 +32,7 @@ const PILLARS: Pillar[] = [
   {
     icon: 'radar',
     title: 'Nothing leaves without your yes',
-    text: 'No backend of ours, no account, no telemetry. Out of the cluster goes only what you switch on: notifications (reducible to counts), the relay (sealed messages only) and the vulnerability lookup (names and versions only).',
+    text: 'No backend of ours, no account, no telemetry. Out of the cluster goes only what you switch on: notifications (reducible to counts), the relay (sealed messages only, including the warning it holds for your phone in case the agent goes silent) and the vulnerability lookup (names and versions only).',
     link: { route: '/docs/communication', label: 'Every connection' },
   },
 ];
