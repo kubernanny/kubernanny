@@ -6,7 +6,7 @@ const esc = (v: string) => v.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace
  * The agent's own state in Prometheus' text format, so Grafana can chart it
  * and Alertmanager can alert on it. Served on a port the ingress never sees.
  */
-export function renderMetrics(s: Snapshot): string {
+export function renderMetrics(s: Snapshot, extra: { widgetPushes?: ReadonlyMap<string, number> } = {}): string {
   const lines: string[] = [];
   const metric = (name: string, help: string, type: 'gauge' | 'counter', samples: [Record<string, string>, number][]) => {
     lines.push(`# HELP ${name} ${help}`, `# TYPE ${name} ${type}`);
@@ -37,6 +37,10 @@ export function renderMetrics(s: Snapshot): string {
   }
   if (s.checkedAt) {
     metric('kubernanny_last_run_timestamp_seconds', 'Time of the last check run that read the cluster.', 'gauge', [[{}, Math.floor(Date.parse(s.checkedAt) / 1000)]]);
+  }
+  if (extra.widgetPushes && extra.widgetPushes.size > 0) {
+    // Outcomes only: never a device, a token or a key id.
+    metric('kubernanny_widget_pushes_total', 'Silent status pushes for home-screen widgets handed to the relay, by outcome.', 'counter', [...extra.widgetPushes].map(([outcome, n]) => [{ outcome }, n]));
   }
   return `${lines.join('\n')}\n`;
 }

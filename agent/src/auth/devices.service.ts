@@ -28,6 +28,13 @@ export interface DevicePush {
   /** pushKeyId(key), sent next to each message so the phone picks the key. */
   kid: string;
   since: string;
+  /**
+   * The device has a home-screen widget showing this cluster (the app says so
+   * at registration and again when it changes): it then gets a silent status
+   * push when nothing else reached it for WIDGET_REFRESH_MINUTES. Absent from
+   * older apps, which never get one.
+   */
+  widget?: boolean;
 }
 
 /** A device to push to: its id and push registration. */
@@ -175,7 +182,14 @@ export class DevicesService {
       if (!device) {
         return false;
       }
-      const entry: DevicePush = { ...push, kid: pushKeyId(parsePublicKey(push.key)), since: new Date().toISOString() };
+      const kid = pushKeyId(parsePublicKey(push.key));
+      const before = device.push;
+      // The app says again when only its widget changed: an unchanged registration is not written again.
+      if (before && before.token === push.token && before.platform === push.platform && before.key === push.key && (before.widget === true) === (push.widget === true)) {
+        return true;
+      }
+      const { widget, ...rest } = push;
+      const entry: DevicePush = { ...rest, kid, since: new Date().toISOString(), ...(widget ? { widget: true } : {}) };
       await this.save(this.devices.map((d) => (d.id === id ? { ...d, push: entry } : d)));
       return true;
     });

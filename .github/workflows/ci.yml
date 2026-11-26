@@ -191,6 +191,9 @@ jobs:
           # notifications.appPush.enabled: false must reach the agent as APP_PUSH=off.
           ! render | grep -q 'APP_PUSH'
           render --set notifications.appPush.enabled=false | grep -A1 'name: APP_PUSH' | grep -q '"off"'
+          # notifications.appPush.widgetRefreshMinutes: the default sets nothing, 0 reaches the agent as off.
+          ! render | grep -q 'WIDGET_REFRESH_MINUTES'
+          render --set notifications.appPush.widgetRefreshMinutes=0 | grep -A1 'name: WIDGET_REFRESH_MINUTES' | grep -q '"0"'
           render | grep -q 'ceph.rook.io'
           ! render --set 'checks.disabled={rook-ceph,kyverno,gatekeeper}' | grep -Eq 'ceph.rook.io|kyverno.io|wgpolicyk8s.io|gatekeeper.sh'
           # image-updates: off unless enabled, and no registry egress once checks.disabled names it.

@@ -175,6 +175,26 @@ export class Notifier {
   }
 
   /**
+   * The hourly status push for home-screen widgets (AppPushService.refreshWidgets),
+   * after each run on the pod holding the lease, once the run's own messages
+   * went out (they count as a push to the device). Also during a maintenance
+   * window: it is not a notification, and the widget should show the truth.
+   * Not when notifications are paused in the app or locked in the chart:
+   * those mean nothing leaves for the phones. Never throws.
+   */
+  async refreshWidgets(snapshot: Snapshot): Promise<void> {
+    const appPush = this.appPush;
+    if (!appPush || this.locked) {
+      return;
+    }
+    try {
+      await appPush.refreshWidgets(pushStatus(snapshot, this.config.notifyDetail, this.config.language));
+    } catch (err) {
+      this.logger.warn(`widget status push failed: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  /**
    * Sends one test message through every channel, for the app's "test
    * notification" button. Throws when any channel failed, naming it, so a
    * broken webhook shows up there. Nothing when locked (the route refuses first).

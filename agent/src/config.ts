@@ -126,6 +126,21 @@ export function parseAppPush(raw: string | undefined): boolean {
   return parseSwitch('APP_PUSH', raw, true);
 }
 
+/**
+ * WIDGET_REFRESH_MINUTES: how often a device with a home-screen widget gets a
+ * silent status push when nothing else was pushed to it (docs/NOTIFICATIONS.md,
+ * "The home-screen widget"). Default 60; 0 switches these pushes off; below 30
+ * stops the start (the relay allows two an hour per device, and iOS throttles
+ * background pushes that come more often).
+ */
+export function parseWidgetRefreshMinutes(raw: string | undefined): number {
+  const value = int('WIDGET_REFRESH_MINUTES', raw, 60, 0, 1440);
+  if (value > 0 && value < 30) {
+    throw new Error(`WIDGET_REFRESH_MINUTES must be 0 (off) or from 30 to 1440, got "${raw}"`);
+  }
+  return value;
+}
+
 /** A component of your own, recognised by image prefix: `{ "name": "Shop API", "images": ["ghcr.io/acme/shop-api"] }`. */
 export interface CustomComponent {
   id: string;
@@ -223,6 +238,8 @@ export interface Config {
   relayUrl?: string;
   /** APP_PUSH: native push to the app through the relay (docs/NOTIFICATIONS.md). False: switched off in the deployment. */
   appPush: boolean;
+  /** WIDGET_REFRESH_MINUTES: silent status push to devices with a widget when nothing else went to them for this long; 0 off. */
+  widgetRefreshMinutes?: number;
   /** UPTIME_KUMA_STATUS_PAGE: slug of a published Uptime Kuma status page whose monitors the `uptime-kuma` module reads. */
   uptimeKumaStatusPage?: string;
   /** PAIRING_LOG: print a pairing code and QR code to the log on start (default on). */
@@ -301,6 +318,7 @@ export function loadConfig(): Config {
     ]),
     relayUrl: checkRelayUrl(process.env.RELAY_URL || undefined),
     appPush: parseAppPush(process.env.APP_PUSH),
+    widgetRefreshMinutes: parseWidgetRefreshMinutes(process.env.WIDGET_REFRESH_MINUTES),
     // The demo cluster publishes a status page under this slug, so the module has something to show.
     uptimeKumaStatusPage: checkStatusPageSlug(process.env.UPTIME_KUMA_STATUS_PAGE || (demo ? 'homelab' : undefined)),
     pairingLog: parseSwitch('PAIRING_LOG', process.env.PAIRING_LOG, true),

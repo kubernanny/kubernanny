@@ -186,7 +186,7 @@ describe('RelayClient as the push carrier', () => {
   });
 
   /** A relay that registers the agent, says whether it offers push, and answers Push frames with `outcome`. */
-  async function relay(offersPush: boolean, appPush: boolean) {
+  async function relay(offersPush: boolean, appPush: boolean, offersStatusPush = false) {
     wss = new WebSocketServer({ port: 0 });
     const port = (wss.address() as AddressInfo).port;
     const pushes: PushRequest[] = [];
@@ -198,7 +198,7 @@ describe('RelayClient as the push carrier', () => {
           }
           const frame = decodeFrame(new Uint8Array(data));
           if (frame.type === FrameType.Proof) {
-            ws.send(encodeFrame(FrameType.Ready, 0, new TextEncoder().encode(JSON.stringify({ push: offersPush }))));
+            ws.send(encodeFrame(FrameType.Ready, 0, new TextEncoder().encode(JSON.stringify({ push: offersPush, ...(offersStatusPush ? { statusPush: true } : {}) }))));
             setTimeout(resolve, 20);
           } else if (frame.type === FrameType.Push) {
             pushes.push(decodePushRequest(frame.payload)!);
@@ -222,6 +222,20 @@ describe('RelayClient as the push carrier', () => {
     expect(transport.available()).toBe(true);
     expect(await transport.send(request)).toBe('sent');
     expect(pushes).toEqual([request]);
+  });
+
+  it('sends a status push only to a relay that promised to keep it silent (Ready statusPush)', async () => {
+    const silent = { ...request, silent: true };
+    const before = await relay(true, true);
+    expect(before.transport.statusAvailable()).toBe(false);
+    expect(await before.transport.send(silent)).toBe('disabled');
+    expect(before.pushes).toEqual([]);
+    client!.onModuleDestroy();
+    await new Promise<void>((resolve) => wss!.close(() => resolve()));
+    const after = await relay(true, true, true);
+    expect(after.transport.statusAvailable()).toBe(true);
+    expect(await after.transport.send(silent)).toBe('sent');
+    expect(after.pushes).toEqual([silent]);
   });
 
   it('sends nothing to a relay that offers no push', async () => {

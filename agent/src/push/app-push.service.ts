@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '../http/errors';
 import { Logger } from '../logger';
-import { PUSH_PLATFORMS, PushOutcome, PushPlatform, PushStatus, encodePushContent, isPushToken, parsePublicKey, sealPush, toBase64Url } from '@kubernanny/protocol';
+import { PUSH_PLATFORMS, PushContent, PushOutcome, PushPlatform, PushStatus, encodePushContent, isPushToken, parsePublicKey, sealPush, statusPushContent, toBase64Url } from '@kubernanny/protocol';
 import { DevicesService, Principal, PushTarget, validKey } from '../auth/devices.service';
 import { IdentityService } from '../auth/identity.service';
 import type { Config } from '../config';
@@ -31,6 +31,9 @@ export interface AppPushMessage {
   status?: PushStatus;
 }
 
+/** A status push that did not go out is tried again after this long. */
+const RETRY_MS = 10 * 60_000;
+
 /**
  * The "app" notification channel (docs/NOTIFICATIONS.md, "Native push"):
  * each registered device gets every message sealed for its own push key
@@ -47,13 +50,24 @@ export class AppPushService {
   private readonly audit = new Logger('audit');
   /** The relay's `unregistered` is believed only after repeated strikes (a hostile relay must not wipe registrations). */
   private readonly unregistered = new UnregisteredStrikes();
+  /** When a push (of any kind) last reached each device, by device id; in memory, so it starts over with the pod. */
+  private readonly lastSent = new Map<string, number>();
+  /** Until a full interval has passed since start, a device counts as just pushed to: a restart or a new leader does not send a round at once. */
+  private readonly startedAt: number;
+  /** After a status push that did not go out: not before this again (ms), so a refusing relay is not asked on every run. */
+  private readonly retryAt = new Map<string, number>();
+  /** Status pushes by outcome, for the metrics (`kubernanny_widget_pushes_total`). */
+  private readonly widgetOutcomes = new Map<PushOutcome, number>();
 
   constructor(
     private readonly config: Config,
     private readonly devices: DevicesService,
     private readonly identity: IdentityService,
     private readonly transport: PushTransport,
-  ) {}
+    private readonly now: () => number = () => Date.now(),
+  ) {
+    this.startedAt = now();
+  }
 
   /** After every onModuleInit, so the device list is loaded. */
   async onApplicationBootstrap(): Promise<void> {
@@ -97,14 +111,15 @@ export class AppPushService {
     if (!this.config.relayUrl) {
       throw new ConflictException({ code: 'PUSH_NO_RELAY', message: t('error.pushNoRelay') });
     }
-    const { token, platform, key } = (body ?? {}) as { token?: unknown; platform?: unknown; key?: unknown };
-    if (!isPushToken(token) || !PUSH_PLATFORMS.includes(platform as PushPlatform) || !validKey(key)) {
+    const { token, platform, key, widget } = (body ?? {}) as { token?: unknown; platform?: unknown; key?: unknown; widget?: unknown };
+    // `widget` is optional (apps before it never send it); anything but a boolean is a malformed call.
+    if (!isPushToken(token) || !PUSH_PLATFORMS.includes(platform as PushPlatform) || !validKey(key) || (widget !== undefined && typeof widget !== 'boolean')) {
       throw new BadRequestException({ code: 'PUSH_INVALID', message: t('error.pushInvalid') });
     }
-    if (!(await this.devices.setPush(who.id, { token, platform: platform as PushPlatform, key }))) {
+    if (!(await this.devices.setPush(who.id, { token, platform: platform as PushPlatform, key, widget: widget === true }))) {
       throw new NotFoundException({ code: 'DEVICE_UNKNOWN', message: t('error.pushDeviceOnly') });
     }
-    this.audit.log(`push registered for "${who.name}" (${who.id}), ${platform}`);
+    this.audit.log(`push registered for "${who.name}" (${who.id}), ${platform}${widget === true ? ', with a widget' : ''}`);
   }
 
   async unregister(who: Principal): Promise<void> {
@@ -140,22 +155,66 @@ export class AppPushService {
     return outcome!;
   }
 
-  private async sendTo(targets: PushTarget[], message: AppPushMessage): Promise<PushOutcome[]> {
+  /**
+   * The silent status push for home-screen widgets (docs/NOTIFICATIONS.md,
+   * "The home-screen widget"): to every device that registered with a widget
+   * and got no push of any kind for WIDGET_REFRESH_MINUTES, the cluster's
+   * state alone (`p: 0`, no text), marked silent for the relay. Only to a
+   * relay that promised to deliver it silently (Ready `statusPush`). The
+   * notifier calls it after each run on the pod that holds the lease.
+   */
+  async refreshWidgets(status: PushStatus): Promise<{ due: number; sent: number }> {
+    const minutes = this.config.widgetRefreshMinutes ?? 60;
+    if (!this.config.appPush || minutes <= 0 || !this.transport.statusAvailable()) {
+      return { due: 0, sent: 0 };
+    }
+    const now = this.now();
+    const interval = minutes * 60_000;
+    const due = this.devices
+      .pushTargets()
+      .filter((target) => target.push.widget === true && now - Math.max(this.startedAt, this.lastSent.get(target.deviceId) ?? 0) >= interval && now >= (this.retryAt.get(target.deviceId) ?? 0));
+    if (due.length === 0) {
+      return { due: 0, sent: 0 };
+    }
+    const outcomes = await this.sendTo(due, statusPushContent(status, now), true);
+    outcomes.forEach((outcome, i) => {
+      this.widgetOutcomes.set(outcome, (this.widgetOutcomes.get(outcome) ?? 0) + 1);
+      // Every refused push still costs the agent's allowance at the relay: try again in ten minutes, not every run.
+      if (outcome !== 'sent') {
+        this.retryAt.set(due[i]!.deviceId, now + RETRY_MS);
+      }
+    });
+    const sent = outcomes.filter((o) => o === 'sent').length;
+    this.logger.log(`widget status push: ${sent} of ${due.length} device(s)`);
+    return { due: due.length, sent };
+  }
+
+  /** Status pushes by outcome since start (metrics). */
+  widgetPushCounts(): ReadonlyMap<PushOutcome, number> {
+    return this.widgetOutcomes;
+  }
+
+  private async sendTo(targets: PushTarget[], message: AppPushMessage | PushContent, silent = false): Promise<PushOutcome[]> {
     if (targets.length === 0) {
       return [];
     }
-    const content = encodePushContent({ t: message.title, b: message.body, p: message.priority, s: Date.now(), ...(message.status ? { w: message.status } : {}) });
+    const content = encodePushContent('t' in message ? message : { t: message.title, b: message.body, p: message.priority, s: this.now(), ...(message.status ? { w: message.status } : {}) });
     const outcomes = await Promise.all(
       targets.map(async ({ push }) => {
         try {
           const sealed = sealPush(this.identity.keyPair, parsePublicKey(push.key), content);
-          return await this.transport.send({ token: push.token, platform: push.platform, kid: push.kid, message: toBase64Url(sealed), lang: this.config.language });
+          return await this.transport.send({ token: push.token, platform: push.platform, kid: push.kid, message: toBase64Url(sealed), lang: this.config.language, ...(silent ? { silent: true } : {}) });
         } catch {
           return 'failed' as const;
         }
       }),
     );
-    const now = Date.now();
+    const now = this.now();
+    targets.forEach((target, i) => {
+      if (outcomes[i] === 'sent') {
+        this.lastSent.set(target.deviceId, now);
+      }
+    });
     const gone = targets.filter((target, i) => this.unregistered.record(target.push.token, outcomes[i]!, now)).map((target) => target.deviceId);
     if (gone.length > 0) {
       await this.devices.clearPush(gone).catch(() => undefined);

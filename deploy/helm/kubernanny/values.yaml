@@ -55,6 +55,12 @@ notifications:
   # agent never sends a push to the relay, and the app shows it as locked.
   appPush:
     enabled: true
+    # Phones with a home-screen widget of this cluster get a silent status
+    # push (the state only, nothing shown) when nothing else was pushed to
+    # them for this many minutes, so the widget stays fresh. 0 = off, at
+    # least 30 otherwise (WIDGET_REFRESH_MINUTES). Also during a maintenance
+    # window; not while notifications are paused.
+    widgetRefreshMinutes: 60
 
 # Time zone for the weekly report and log times, e.g. Europe/Berlin. Empty: UTC.
 timezone: ""

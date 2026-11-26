@@ -6,7 +6,7 @@ import { renderMetrics } from './metrics/exporter';
 async function bootstrap(): Promise<void> {
   const logger = new Logger('kubernanny');
   const agent = new Agent();
-  const { config, identity, pairing, status } = agent;
+  const { config, identity, pairing, status, appPush } = agent;
   await agent.init();
 
   // The API lives under /api so the web UI can own every other path.
@@ -21,7 +21,7 @@ async function bootstrap(): Promise<void> {
   if (config.metricsPort > 0) {
     createServer((req, res) => {
       if (req.url === '/metrics') {
-        res.writeHead(200, { 'content-type': 'text/plain; version=0.0.4' }).end(renderMetrics(status.snapshot()));
+        res.writeHead(200, { 'content-type': 'text/plain; version=0.0.4' }).end(renderMetrics(status.snapshot(), { widgetPushes: appPush.widgetPushCounts() }));
       } else {
         res.writeHead(404).end();
       }

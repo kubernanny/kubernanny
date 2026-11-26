@@ -371,6 +371,10 @@ export class StatusService {
         this.logger.error(`notifications failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
+    // The widgets' hourly state, after the run's own messages; maintenance does not stop it (it shows nothing).
+    if (this.notifies() && this.settings.notificationsOn()) {
+      await this.notifier.refreshWidgets(snapshot);
+    }
   }
 
   private record(now: Date, o: Overview): void {

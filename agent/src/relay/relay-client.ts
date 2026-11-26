@@ -79,6 +79,8 @@ interface Session {
   cancelled: Set<number>;
   /** The relay's Ready said it delivers native push. */
   push: boolean;
+  /** ... and status pushes as silent background messages (`statusPush`). */
+  statusPush: boolean;
   /** Pushes sent on this connection, waiting for their PushResult. */
   pushes: Map<number, (outcome: PushOutcome) => void>;
 }
@@ -169,6 +171,11 @@ export class RelayClient implements PushCarrier {
     return this.session?.readyAt ? this.session.push : null;
   }
 
+  /** Whether the live connection delivers status pushes silently; false while not connected. */
+  statusAvailable(): boolean {
+    return Boolean(this.session?.readyAt && this.session.push && this.session.statusPush);
+  }
+
   /**
    * Hands one sealed push to the relay (docs/RELAY.md, "Native push").
    * Never throws: without a connection, a relay without push or APP_PUSH off
@@ -183,7 +190,8 @@ export class RelayClient implements PushCarrier {
     if (!session?.readyAt || session.socket.readyState !== WebSocket.OPEN) {
       return Promise.resolve('unavailable');
     }
-    if (!session.push) {
+    // A relay that did not offer status pushes would show its generic alert for one: never sent there.
+    if (!session.push || (push.silent && !session.statusPush)) {
       return Promise.resolve('disabled');
     }
     if (session.pushes.size >= MAX_PUSHES_IN_FLIGHT) {
@@ -223,7 +231,7 @@ export class RelayClient implements PushCarrier {
     }
     const agentId = relayAgentId(this.identity.keyPair.publicKey);
     const socket = new WebSocket(relaySocketUrl(this.config.relayUrl!, agentId), { maxPayload: MAX_RELAY_MESSAGE, perMessageDeflate: false, handshakeTimeout: 10_000 });
-    const session: Session = { socket, answered: false, readyAt: 0, inFlight: new Set(), cancelled: new Set(), push: false, pushes: new Map() };
+    const session: Session = { socket, answered: false, readyAt: 0, inFlight: new Set(), cancelled: new Set(), push: false, statusPush: false, pushes: new Map() };
     this.session = session;
     this.lastHeard = Date.now();
     // Every handler checks that it still belongs to the current session (isCurrent): a dead one may report late.
@@ -274,6 +282,7 @@ export class RelayClient implements PushCarrier {
         if (session.answered && !session.readyAt) {
           session.readyAt = Date.now();
           session.push = readyOffersPush(frame.payload);
+          session.statusPush = session.push && readyFlag(frame.payload, 'statusPush');
           this.connected = true;
           this.logger.log(`connected to the relay ${relayHttpUrl(this.config.relayUrl!)}`);
         }
@@ -415,8 +424,13 @@ function toBytes(data: RawData): Uint8Array {
 
 /** The Ready payload's `push` flag (RelayLimitsInfo); a relay that does not say so offers none. */
 function readyOffersPush(payload: Uint8Array): boolean {
+  return readyFlag(payload, 'push');
+}
+
+/** A flag of the Ready payload; a relay that does not say so does not offer it. */
+function readyFlag(payload: Uint8Array, name: 'push' | 'statusPush'): boolean {
   try {
-    return (JSON.parse(new TextDecoder().decode(payload)) as { push?: unknown } | null)?.push === true;
+    return (JSON.parse(new TextDecoder().decode(payload)) as Record<string, unknown> | null)?.[name] === true;
   } catch {
     return false;
   }

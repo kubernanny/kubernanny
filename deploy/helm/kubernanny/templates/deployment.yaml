@@ -163,6 +163,11 @@ spec:
             - name: APP_PUSH
               value: "off"
             {{- end }}
+            {{- $widgetRefresh := .Values.notifications.appPush.widgetRefreshMinutes }}
+            {{- if and (not (kindIs "invalid" $widgetRefresh)) (ne (int $widgetRefresh) 60) }}
+            - name: WIDGET_REFRESH_MINUTES
+              value: {{ int $widgetRefresh | toString | quote }}
+            {{- end }}
             {{- if .Values.relay.enabled }}
             - name: RELAY_URL
               value: {{ required "relay.url is required when relay.enabled is true" .Values.relay.url | quote }}
