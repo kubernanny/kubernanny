@@ -24,6 +24,7 @@ import { Config, loadConfig, parseAppPush } from '../config';
 import { DemoKubeClient } from '../demo/demo-cluster';
 import { E2eService } from '../e2e/e2e.service';
 import { NotFoundError } from '../http/errors';
+import { Logger } from '../logger';
 import { RelayClient } from '../relay/relay-client';
 import { AppPushService } from './app-push.service';
 import { PushApi } from './push.routes';
@@ -140,6 +141,22 @@ describe('push registration', () => {
       vi.useRealTimers();
     }
     expect(c.devices.pushTargets()).toEqual([]);
+  });
+
+  it("passes the relay's outcome to the test push answer and the log, unchanged", async () => {
+    const { config, device, push } = await setup({}, 'fcm_permission');
+    await push.register(device, registration);
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      expect(await new PushApi(push, config).test(device)).toEqual({ outcome: 'fcm_permission' });
+      expect(warn).toHaveBeenCalledWith(
+        `app push: 0 of 1 delivered (fcm_permission); the relay's Firebase setup refused it, see docs/NOTIFICATIONS.md "Test push fails"`,
+      );
+      // FCM's setup refusals never count against the token.
+      expect(push.view(device).registered).toBe(true);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('survives a restart of the agent (kept in the devices Secret)', async () => {

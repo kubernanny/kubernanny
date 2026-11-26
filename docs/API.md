@@ -287,7 +287,7 @@ The last 300 lines (with timestamps) of the pod named by the issue's `logs` acti
 | `GET /push` | native push for the calling device: `{ state, relay, registered }`; `state` `on`, `locked` (`APP_PUSH=off` in the deployment) or `no-relay`; `relay`: the relay is connected and delivers push now |
 | `POST /push/register` | `{ "token": "<FCM token>", "platform": "ios" \| "android", "key": "<push public key, base64url>", "widget": true \| false }`: native push to the calling device, sealed for that key (204). Replaces an earlier registration of the same device; an unchanged one is not stored again. `widget` (optional): the device has a home-screen widget showing this cluster, and then gets a silent status push when no other push reached it for `WIDGET_REFRESH_MINUTES` ([NOTIFICATIONS.md](NOTIFICATIONS.md#the-home-screen-widget)); the app sends it again when that changes. 400 `PUSH_INVALID`, `PUSH_DEVICE_ONLY`; 409 `PUSH_NO_RELAY`. The token is never logged; `GET /devices` shows only `push: true`. |
 | `DELETE /push/register` | turns native push off for the calling device (204); its token and key are deleted |
-| `POST /push/test` | one test push to the calling device only: `{ outcome }` (`sent`, `unavailable`, `rate_limited`, …); 409 `PUSH_NOT_REGISTERED` |
+| `POST /push/test` | one test push to the calling device only: `{ outcome }`, the relay's answer unchanged (`sent`, `unavailable`, `rate_limited`, `fcm_permission`, …; all of them in [NOTIFICATIONS.md](NOTIFICATIONS.md#test-push-fails)); 409 `PUSH_NOT_REGISTERED` |
 
 The three push writes answer `404 PUSH_OFF` before reading or writing anything when the deployment switched native push off (`notifications.appPush.enabled: false`).
 

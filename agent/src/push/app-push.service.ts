@@ -52,6 +52,9 @@ export interface AppPushMessage {
   status?: PushStatus;
 }
 
+/** Outcomes that mean the relay's Firebase project refuses (protocol/src/relay.ts): its operator has to fix them, not the agent. */
+const RELAY_SETUP_OUTCOMES: readonly PushOutcome[] = ['fcm_permission', 'fcm_auth', 'apns_auth'];
+
 /** A status push that did not go out is tried again after this long. */
 const RETRY_MS = 10 * 60_000;
 
@@ -323,8 +326,11 @@ export class AppPushService {
     const failed = outcomes.filter((o) => o !== 'sent');
     if (failed.length > 0) {
       // Outcomes only: never a token or a device's key.
+      const setup = failed.some((o) => RELAY_SETUP_OUTCOMES.includes(o))
+        ? `; the relay's Firebase setup refused it, see docs/NOTIFICATIONS.md "Test push fails"`
+        : '';
       this.logger.warn(
-        `app push: ${outcomes.length - failed.length} of ${outcomes.length} delivered (${[...new Set(failed)].join(', ')})`,
+        `app push: ${outcomes.length - failed.length} of ${outcomes.length} delivered (${[...new Set(failed)].join(', ')})${setup}`,
       );
     }
     return outcomes;
