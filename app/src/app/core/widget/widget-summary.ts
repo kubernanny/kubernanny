@@ -39,6 +39,14 @@ const MAX_NAME = 64;
 /** As many as the large widget lists; the same limits as a push's status (PUSH_STATUS_PROBLEMS, PUSH_STATUS_TITLE). */
 export const MAX_PROBLEMS = 3;
 export const MAX_PROBLEM_TITLE = 120;
+/**
+ * After this long without a check the widgets draw a cluster grey ("Not
+ * current"). Two hours: a quiet cluster gets a status push about hourly, so
+ * one missed (iOS throttles them) does not grey it out. Kept in step with
+ * WidgetCluster.staleAfter (iOS) and WidgetStore.STALE_AFTER_MS (Android);
+ * the app only names it in the widget settings.
+ */
+export const WIDGET_STALE_HOURS = 2;
 
 function clip(text: string, max: number): string {
   const chars = Array.from(text);

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, input, signal } from '@angular/core';
 import { IonButton, ToastController } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
 import { AgentClient, describeError } from '../core/agent-client.service';
@@ -74,6 +74,7 @@ export class PushSectionComponent {
   private readonly client = inject(AgentClient);
   private readonly toasts = inject(ToastController);
   private readonly language = inject(LanguageService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   private readonly nativeStatus = signal<NativePushStatus | null>(null);
   private readonly agent = signal<AgentPushView | null>(null);
@@ -109,6 +110,13 @@ export class PushSectionComponent {
       // An agent before native push (no /push) or out of reach: the section stays hidden.
       this.agent.set(null);
     }
+  }
+
+  /** Scrolls the section into view and focuses its button (the widget section's "Turn push on"). */
+  reveal(): void {
+    const el = this.host.nativeElement;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.querySelector<HTMLElement>('ion-button')?.focus({ preventScroll: true });
   }
 
   async toggle(): Promise<void> {

@@ -97,9 +97,9 @@ import { WidgetSectionComponent } from './widget-section.component';
               <ion-button fill="outline" [routerLink]="modulesLink()">{{ t('form.modules') }}</ion-button>
             </section>
 
-            <app-push-section [cluster]="saved()" />
+            <app-push-section #pushSection [cluster]="saved()" />
             <app-maintenance-section [cluster]="saved()" />
-            <app-widget-section [cluster]="saved()" />
+            <app-widget-section [cluster]="saved()" [push]="pushSection" />
             <app-devices-section [cluster]="saved()" (revokedSelf)="forget($event)" />
             <app-pairing-section [cluster]="saved()" />
             <ion-button expand="block" fill="clear" color="danger" (click)="remove()">{{ t('form.removeCluster') }}</ion-button>
