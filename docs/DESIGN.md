@@ -78,6 +78,10 @@ Status colours are reserved for status. Charts use `--chart`, never a status col
 
 Single series, so no legend: the title names it, the current value sits top right. A 2 px line with a soft fill, two recessive gridlines, start and end on the time axis, the maximum in the middle. Hover or touch shows a crosshair with value and time. Ratios are drawn against 100 %, other units against their own peak. Nodes get small multiples (one CPU and one RAM chart each) instead of one chart with three colours.
 
+## Toasts
+
+Every toast goes through `ReadableToastController` (`app/src/app/core/readable-toasts.ts`), which replaces Ionic's `ToastController` app-wide: call sites keep `create({ message, color, duration })`. A toast is one dark surface in both modes (light text far above 4.5:1), with its kind as an icon and a coloured edge (`danger` error, `warning`, `success`, anything else info); Ionic's colour fills are not used, since white on the dark mode's light tones stays below 3:1. It stays up long enough to read (1.5 s plus 60 ms per character, at most 15 s), and an error or a toast of more than 5 s gets a close button; a swipe dismisses any. Text sizes are in rem and long texts wrap, so a toast stays readable at the largest system text size. An error toast says what to do, like any error.
+
 ## Copy
 
 German, informal, plain verbs, sentence case. No em dashes. Numbers in German format ("1,5 GiB", "5,40 Kerne"). Errors say what happened and what to do ("Agent nicht erreichbar. Bist du im VPN?"). Kubernetes terms stay as they are (Pod, Deployment, CrashLoopBackOff): the audience knows them, and translating them would hide them from search.

@@ -196,6 +196,88 @@ ion-toast {
   --border-radius: var(--radius-m);
 }
 
+/*
+ * Toasts (core/readable-toasts.ts adds the classes to every one): one dark
+ * surface in both modes, so the text stays far above 4.5:1, with the kind as
+ * an icon and an edge in the dark mode's tones, which read on it. Ionic's
+ * colour fills are not used: white on the dark mode's light tones fell below
+ * 3:1. Sizes in rem, so the text grows with the system's text size; long
+ * texts wrap.
+ */
+ion-toast.kn-toast {
+  --toast-bg: #121a2c;
+  --toast-ink: #f3f5f9;
+  --toast-tone: #8ea2ff;
+  --background: var(--toast-bg);
+  --color: var(--toast-ink);
+  --button-color: var(--toast-ink);
+  --border-color: rgba(233, 237, 247, 0.14);
+  --border-style: solid;
+  --border-width: 1px;
+  --box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+  --white-space: normal;
+  --max-width: 34rem;
+  --start: max(16px, env(safe-area-inset-left));
+  --end: max(16px, env(safe-area-inset-right));
+  --width: auto;
+}
+
+@mixin dark-toast {
+  --toast-bg: #2a3656;
+  --toast-ink: #f3f5fb;
+  --border-color: rgba(233, 237, 247, 0.12);
+  --box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) ion-toast.kn-toast {
+    @include dark-toast;
+  }
+}
+:root[data-theme='dark'] ion-toast.kn-toast {
+  @include dark-toast;
+}
+
+ion-toast.kn-toast-error {
+  --toast-tone: #ff7a8c;
+}
+ion-toast.kn-toast-warning {
+  --toast-tone: #f5b83d;
+}
+ion-toast.kn-toast-success {
+  --toast-tone: #36d6a8;
+}
+
+ion-toast.kn-toast::part(container) {
+  border-inline-start: 4px solid var(--toast-tone);
+  border-radius: inherit;
+  padding-block: 0.25rem;
+}
+
+ion-toast.kn-toast::part(icon) {
+  color: var(--toast-tone);
+  font-size: 1.375rem;
+  align-self: flex-start;
+  margin-top: 0.75rem;
+}
+
+ion-toast.kn-toast::part(message) {
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+/* Ionic draws the cancel button in a step colour, which the dark tokens make navy. */
+ion-toast.kn-toast::part(button),
+ion-toast.kn-toast::part(button cancel) {
+  color: var(--toast-ink);
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  font-size: 1.25rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
