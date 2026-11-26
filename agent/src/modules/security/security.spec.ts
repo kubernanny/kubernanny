@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { de } from '../../testing/i18n';
+import { de, en } from '../../testing/i18n';
 import { parseAccept } from './accept-annotation';
 import {
   cronJobTemplatePods,
@@ -135,7 +135,7 @@ describe('security posture', () => {
       ['security/apps/no-memory-limit', 'info', 'apps: 2 Workloads ohne Speicherlimit'],
     ]);
     expect(issues[0].cause).toBe(
-      'Weder runAsNonRoot noch eine runAsUser über 0 ist gesetzt, also entscheidet das Image, und viele Images laufen als root. Betroffen: api, web. securityContext.runAsNonRoot: true setzen, dazu runAsUser, falls das Image keinen eigenen Nutzer hat.',
+      'Weder runAsNonRoot noch eine runAsUser über 0 ist gesetzt, also entscheidet das Image, und viele Images laufen als root. Betroffen: api, web. securityContext.runAsNonRoot: true setzen, dazu runAsUser, falls das Image keinen eigenen Nutzer hat. Bewusst so? Am Workload die Annotation kubernanny.io/accept: "root: <Grund>" setzen.',
     );
   });
 
@@ -153,6 +153,7 @@ describe('security posture', () => {
     const issues = de(evaluateSecurity(input([priv('apps'), priv('kube-system'), priv('longhorn-system')])));
     expect(issues.map((i) => [i.id, i.severity])).toEqual([['security/apps/privileged', 'warning']]);
     expect(issues[0].cause).toContain('securityContext.privileged entfernen');
+    expect(issues[0].cause).not.toContain('kubernanny.io/accept');
   });
 
   it('leaves host-level components alone for host access, privileges and root, but not for limits', () => {
@@ -189,13 +190,20 @@ describe('security posture', () => {
     });
     const running = pod('compact-29402640-x', 'apps', template, { kind: 'Job', name: 'compact-29402640' });
     const pods = [running, ...cronJobTemplatePods([cron('compact'), cron('cleanup'), cron('paused', true)])];
-    const issues = de(evaluateSecurity(input(pods, [], new Map([['apps/compact-29402640', 'compact']]))));
+    const posture = evaluateSecurity(input(pods, [], new Map([['apps/compact-29402640', 'compact']])));
+    const issues = de(posture);
     expect(issues.map((i) => [i.id, i.title])).toEqual([
       ['security/apps/root', 'apps: 2 Workloads laufen womöglich als root'],
       ['security/apps/no-memory-limit', 'apps: 2 Workloads ohne Speicherlimit'],
       ['security/apps/mutable-image', 'apps: 2 Workloads mit Image ohne feste Version'],
     ]);
     expect(issues[2].cause).toContain('Betroffen: cleanup (curl:latest), compact (curl:latest).');
+    expect(issues[2].cause).toContain(
+      'Am Workload die Annotation kubernanny.io/accept: "mutable-image: <Grund>" setzen.',
+    );
+    expect(en(posture)[0].cause).toMatch(
+      / Deliberate\? Set the annotation kubernanny\.io\/accept: "root: <reason>" on the workload\.$/,
+    );
   });
 
   it('ignores finished pods', () => {
@@ -284,6 +292,7 @@ describe('accepting hints in the kubernanny.io/accept annotation', () => {
     expect(out.issues[0].cause).toContain(
       'kubernanny.io/accept bei discourse nennt root ohne Grund, deshalb zählt es weiter.',
     );
+    expect(out.issues[0].cause).not.toContain('Bewusst so?');
   });
 
   it('never accepts a privileged container, and names unknown keys with the known ones', () => {
@@ -298,7 +307,7 @@ describe('accepting hints in the kubernanny.io/accept annotation', () => {
     ]);
     expect(out.issues[1].title).toBe('forum: kubernanny.io/accept bei 1 Workload nicht verstanden');
     expect(out.issues[1].cause).toBe(
-      'agent: unbekannter Schlüssel writable-root-fs. agent: privileged lässt sich nicht akzeptieren, ein privilegierter Container bleibt eine Warnung. Bekannte Schlüssel: host-access, root, no-memory-limit, mutable-image. Jeder Eintrag braucht einen Grund, etwa "root: das Image startet als root und gibt die Rechte selbst ab".',
+      'agent: unbekannter Schlüssel writable-root-fs. agent: privileged lässt sich nicht akzeptieren, ein privilegierter Container bleibt eine Warnung. Erlaubte Schlüssel: host-access, root, no-memory-limit, mutable-image. Jeder Eintrag braucht einen Grund, etwa "root: das Image startet als root und gibt die Rechte selbst ab".',
     );
   });
 

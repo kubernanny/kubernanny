@@ -296,11 +296,15 @@ export function evaluateSecurityPosture(input: SecurityInput): SecurityOutcome {
           check: 'security',
           severity: severityOf(type),
           title: t(`security.${type}.title`, { ns, n: workloads.size }),
+          // A hint that can be accepted says how, with the snippet for this finding; one that names it
+          // without a reason already uses the annotation and gets told what is missing instead.
           cause: missing.length
             ? t('common.sentences', {
                 parts: [cause, t('security.accept.noReason', { names: missing.join(', '), key: type })],
               })
-            : cause,
+            : ACCEPTABLE_KEYS.includes(type)
+              ? t('common.sentences', { parts: [cause, t('security.accept.how', { key: type })] })
+              : cause,
           actions: [],
         },
       };

@@ -213,11 +213,13 @@ export const en = {
   'security.privileged.short': 'privileged container',
   'security.accept.noReason': (p) =>
     `kubernanny.io/accept on ${p.names} names ${p.key} without a reason, so it still counts. Add a reason after the colon.`,
+  'security.accept.how': (p) =>
+    `Deliberate? Set the annotation kubernanny.io/accept: "${p.key}: <reason>" on the workload.`,
   'security.accept.title': (p) => `${p.ns}: kubernanny.io/accept not understood on ${workloads(p.n)}`,
   'security.accept.unknown': (p) => `${p.name}: unknown key ${p.keys}.`,
   'security.accept.refused': (p) => `${p.name}: ${p.keys} cannot be accepted, a privileged container stays a warning.`,
   'security.accept.keys': (p) =>
-    `Known keys: ${p.keys}. Every entry needs a reason, for example "root: the image starts as root and drops privileges itself".`,
+    `Allowed keys: ${p.keys}. Every entry needs a reason, for example "root: the image starts as root and drops privileges itself".`,
   'security.cause': (p) => `${p.why} Affected: ${p.affected}. ${p.fix}`,
   'security.affectedMore': (p) => `${p.names} and ${p.more} more`,
   'security.stat.findings': 'Findings',

@@ -241,13 +241,15 @@ export const de = {
   'security.privileged.short': 'privilegierter Container',
   'security.accept.noReason': (p: { names: string; key: string }) =>
     `kubernanny.io/accept bei ${p.names} nennt ${p.key} ohne Grund, deshalb zählt es weiter. Nach dem Doppelpunkt einen Grund angeben.`,
+  'security.accept.how': (p: { key: string }) =>
+    `Bewusst so? Am Workload die Annotation kubernanny.io/accept: "${p.key}: <Grund>" setzen.`,
   'security.accept.title': (p: { ns: string; n: number }) =>
     `${p.ns}: kubernanny.io/accept bei ${workloads(p.n)} nicht verstanden`,
   'security.accept.unknown': (p: { name: string; keys: string }) => `${p.name}: unbekannter Schlüssel ${p.keys}.`,
   'security.accept.refused': (p: { name: string; keys: string }) =>
     `${p.name}: ${p.keys} lässt sich nicht akzeptieren, ein privilegierter Container bleibt eine Warnung.`,
   'security.accept.keys': (p: { keys: string }) =>
-    `Bekannte Schlüssel: ${p.keys}. Jeder Eintrag braucht einen Grund, etwa "root: das Image startet als root und gibt die Rechte selbst ab".`,
+    `Erlaubte Schlüssel: ${p.keys}. Jeder Eintrag braucht einen Grund, etwa "root: das Image startet als root und gibt die Rechte selbst ab".`,
   'security.cause': (p: { why: string; affected: string; fix: string }) =>
     `${p.why} Betroffen: ${p.affected}. ${p.fix}`,
   'security.affectedMore': (p: { names: string; more: number }) => `${p.names} und ${p.more} weitere`,

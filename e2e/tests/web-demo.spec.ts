@@ -145,6 +145,9 @@ test.describe('web demo (no agent, nothing leaves the browser)', () => {
     await expect(
       sheet.locator('app-issue-list .title', { hasText: 'pgadmin: 1 Workload läuft womöglich als root' }),
     ).toBeVisible();
+    await expect(sheet.locator('app-issue-list .cause').first()).toContainText(
+      'Bewusst so? Am Workload die Annotation kubernanny.io/accept: "root: <Grund>" setzen.',
+    );
     await expect(sheet.locator('app-issue-list')).not.toContainText('discourse');
     const fold = sheet.getByRole('button', { name: '1 bewusst akzeptiert' });
     await expect(fold).toHaveAttribute('aria-expanded', 'false');
