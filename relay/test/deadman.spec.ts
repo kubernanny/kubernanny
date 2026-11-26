@@ -71,6 +71,7 @@ describe('dead man rules', () => {
       config,
       1000,
     ));
+    expect(outcome).toBe('stored');
     expect(state.items.map((i) => i.kid)).toEqual(['BBBBBBBBBBBBBBBB', 'CCCCCCCCCCCCCCCC']);
     expect(depositInto(state, null, config, 2000).outcome).toBe('invalid');
     expect(

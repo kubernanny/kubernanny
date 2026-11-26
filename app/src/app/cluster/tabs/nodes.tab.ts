@@ -4,7 +4,7 @@ import { TranslocoDirective } from '@jsverse/transloco';
 
 import { HistoryView, NodeView, Series, Tone } from '../../core/agent.model';
 import { Loadable } from '../../core/cluster-data.store';
-import { age, bytes, cores, NO_VALUE, percent, ratio, sinceText } from '../../core/format';
+import { age, NO_VALUE, percent, ratio, sinceText } from '../../core/format';
 import { LanguageService } from '../../i18n/language.service';
 import { Translator } from '../../i18n/translator';
 import { AreaChart } from '../../ui/area-chart';

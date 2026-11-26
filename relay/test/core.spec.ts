@@ -1,4 +1,5 @@
 import {
+  answerChallenge,
   decodeFrame,
   encodeFrame,
   encodeReply,
@@ -8,7 +9,6 @@ import {
   relayAgentId,
   RelayClose,
 } from '@kubernanny/protocol';
-import { answerChallenge } from '@kubernanny/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Admission } from '../src/core/admission';

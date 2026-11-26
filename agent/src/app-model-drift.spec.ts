@@ -15,7 +15,7 @@ describe("the app's copy of the agent types (app/src/app/core/agent.model.ts)", 
       });
     } catch (err) {
       const { stdout, stderr } = err as { stdout?: string; stderr?: string };
-      throw new Error(`agent.model.ts drifted from the agent's types:\n${stdout ?? ''}${stderr ?? ''}`);
+      throw new Error(`agent.model.ts drifted from the agent's types:\n${stdout ?? ''}${stderr ?? ''}`, { cause: err });
     }
   }, 60_000);
 });

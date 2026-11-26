@@ -30,7 +30,10 @@ export function openSession(agentId: string, origin: string, now: number): { ses
   };
 }
 
-export type ProofResult = { session: Session; outcome: RegistrationOutcome | null };
+export interface ProofResult {
+  session: Session;
+  outcome: RegistrationOutcome | null;
+}
 
 /**
  * The first binary message of a pending connection. A session that is not

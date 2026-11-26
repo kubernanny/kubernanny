@@ -3,12 +3,12 @@ import { TestBed } from '@angular/core/testing';
 import {
   encodePushContent,
   generateKeyPair,
+  isDeadman,
   parsePublicKey,
   pushKeyId,
   sealPush,
   toBase64Url,
 } from '@kubernanny/protocol';
-import { isDeadman } from '@kubernanny/protocol';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { translatorFor } from '../../i18n/translator';
@@ -328,9 +328,9 @@ describe('PushRegistration', () => {
 
   it("turns the dead man's switch on with push, changes its grace and switches it off, registering again each time", async () => {
     await registration.enable(config());
-    let cluster = await registration.setDeadman(store.clusters()[0]!, 60);
+    const cluster = await registration.setDeadman(store.clusters()[0]!, 60);
     expect(client.registered.at(-1)).toMatchObject({ key: cluster.push!.key, deadman: 60 });
-    cluster = await registration.setDeadman(cluster, false);
+    await registration.setDeadman(cluster, false);
     expect(client.registered.at(-1)!.deadman).toBe(false);
     expect(store.clusters()[0]!.push!.deadman).toBe(false);
     // An explicit off survives the next start.

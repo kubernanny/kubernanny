@@ -191,7 +191,7 @@ describe('M3: OSV and registry answers are bounded', () => {
 describe('error texts from outside', () => {
   it('lose control characters and are bounded (pentest finding)', () => {
     const text = render(errorText(new Error('bad\u0007answer\u202e' + 'x'.repeat(500))), 'en');
-    expect(text).not.toMatch(/[\u0000-\u001f\u202e]/);
+    expect(text).not.toMatch(/[\p{Cc}\u202e]/u);
     expect(text.length).toBeLessThanOrEqual(300);
   });
 });

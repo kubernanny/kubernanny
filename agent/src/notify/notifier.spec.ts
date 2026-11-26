@@ -2,8 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { loadConfig } from '../config';
 import { raw, t } from '../i18n/text';
-import type { Snapshot } from '../status/status.service';
-import type { IssueView } from '../status/status.service';
+import type { IssueView, Snapshot } from '../status/status.service';
 import { formatPush, Notifier, planNotifications, Pushed } from './notifier';
 
 const NOW = new Date('2026-11-24T04:10:00Z');

@@ -70,7 +70,9 @@ class FakeState implements AgentObjectState {
   getWebSockets(): HibernatableSocket[] {
     return [...this.sockets];
   }
-  setWebSocketAutoResponse(): void {}
+  setWebSocketAutoResponse(): void {
+    // The fake answers pings itself.
+  }
   getWebSocketAutoResponseTimestamp(socket: HibernatableSocket): Date | null {
     const at = this.heard.get(socket);
     return at === undefined ? null : new Date(at);

@@ -1711,7 +1711,7 @@ function prometheusAnswer(path: string, now: Date, scenario: DemoScenario): unkn
         NODES.map((n, i) => ({
           metric: { instance: `${n.ip}:9100` },
           seed: i + (memory ? 7 : 0),
-          base: memory ? n.usedMem / Number.parseInt(n.mem) : n.usedCpu / (Number(n.cpu) * 1000),
+          base: memory ? n.usedMem / Number.parseInt(n.mem, 10) : n.usedCpu / (Number(n.cpu) * 1000),
           amp: memory ? 0.04 : 0.12,
         })),
       );

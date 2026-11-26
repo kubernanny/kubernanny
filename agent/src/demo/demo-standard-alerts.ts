@@ -10,7 +10,10 @@
  */
 import { PROM_RULES } from '../modules/core/standard-alerts/rules';
 
-type Sample = { metric: Record<string, string>; value: number };
+interface Sample {
+  metric: Record<string, string>;
+  value: number;
+}
 type Scenario = 'broken' | 'warning' | 'healthy';
 
 const NODES = [

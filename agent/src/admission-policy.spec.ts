@@ -15,7 +15,9 @@ import { BASELINE_CAPABILITIES, BASELINE_SELINUX_TYPES, BASELINE_SYSCTLS } from 
  */
 const DEPLOY = join(__dirname, '../../deploy');
 const chart = (file: string) => readFileSync(join(DEPLOY, 'helm/kubernanny', file), 'utf8');
+
 const install = parseAllDocuments(readFileSync(join(DEPLOY, 'install.yaml'), 'utf8')).map(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- parsed YAML that the tests read deep into
   (d) => d.toJS() as Record<string, any>,
 );
 
@@ -139,7 +141,7 @@ describe('admission policy for the agent (security review M4)', () => {
     const helpers = chart('templates/_helpers.tpl');
     expect(helpers).toContain('define "kubernanny.offActions"');
     expect(helpers).toContain('actions.enabled: %q cannot be enabled');
-    expect(chart('values.yaml')).toMatch(/\n  enabled: \[\]\n/);
+    expect(chart('values.yaml')).toMatch(/\n {2}enabled: \[\]\n/);
   });
 
   it('is rendered by the chart only on clusters that have the API, and while a write action is on', () => {

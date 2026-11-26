@@ -173,7 +173,7 @@ export function configMapQuestions(pods: Pod[], now: Date): Map<string, ConfigMa
 }
 
 /** One issue per broken workload, not per pod: three crashing replicas are one problem. `changed`: per pod, a ConfigMap of its environment changed after its last start. */
-export function evaluatePods(pods: Pod[], now: Date, changed: Map<string, string> = new Map()): Issue[] {
+export function evaluatePods(pods: Pod[], now: Date, changed = new Map<string, string>()): Issue[] {
   const byOwner = new Map<string, { owner: Owner; namespace: string; findings: Finding[] }>();
   for (const pod of pods) {
     const finding = findProblem(pod, now);

@@ -540,7 +540,7 @@ function parseJson(text: string): unknown {
   if (text.length === 0) {
     return {};
   }
-  const first = /^[\x20\x09\x0a\x0d]*(.)/.exec(text)?.[1];
+  const first = /^[ \t\n\r]*(.)/.exec(text)?.[1];
   if (first !== '{' && first !== '[') {
     throw new BodyError(400, `Unexpected token ${first ?? ''} in JSON at position 0`);
   }

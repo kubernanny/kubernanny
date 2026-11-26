@@ -111,7 +111,7 @@ import { AcceptedRow, acceptedRows } from './vulnerability-acceptance';
           <app-detail-section
             [section]="sec"
             [expanded]="expanded().has(sec.key)"
-            (toggle)="toggle(sec.key)"
+            (toggled)="toggle(sec.key)"
           />
         }
 

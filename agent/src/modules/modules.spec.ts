@@ -202,7 +202,7 @@ describe('notifications and pairing', () => {
 
   it('prints the QR code without ANSI escapes, light modules as blocks, the image link right under it', async () => {
     const banner = await new PairingService({ ...loadConfig(), language: 'en' }, fakeIdentity).banner('ABCDE23456');
-    expect(banner).not.toMatch(/\x1b/);
+    expect(banner).not.toContain('\x1b');
     const qr = terminalQr('kubernanny://pair?url=https%3A%2F%2Fa&code=ABCDE23456');
     const rows = qr.split('\n');
     // Quiet zone of four light modules on top: two full lines of blocks, as wide as the code.

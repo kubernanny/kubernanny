@@ -229,12 +229,18 @@ export class SoleLeader {
   isLeader(): boolean {
     return true;
   }
-  onChange(_listener: (leader: boolean) => void): void {}
-  start(): void {}
+  onChange(_listener: (leader: boolean) => void): void {
+    // Never changes.
+  }
+  start(): void {
+    // Nothing to elect.
+  }
   async tryNow(): Promise<boolean> {
     return true;
   }
-  async release(): Promise<void> {}
+  async release(): Promise<void> {
+    // Nothing to hand over.
+  }
 }
 
 export type Leader = Pick<LeaderElection, 'isLeader' | 'onChange' | 'start' | 'release' | 'tryNow'>;

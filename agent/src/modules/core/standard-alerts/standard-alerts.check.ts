@@ -77,7 +77,7 @@ export async function runPromRules(
   const applicable = rules.filter((r) => !r.when || r.when(env));
   const names = [...new Set(applicable.flatMap((r) => r.needs))];
   const present = new Set(
-    (await prom.query(`group by (__name__) ({__name__=~"${names.join('|')}"})`)).map((s) => s.metric.__name__),
+    (await prom.query(`group by (__name__) ({__name__=~"${names.join('|')}"})`)).map((s) => s.metric['__name__']),
   );
   const runnable = applicable.filter((r) => r.needs.every((n) => present.has(n)));
   const peerRule = runnable.some((r) => r.key === 'etcd-peer-rtt');

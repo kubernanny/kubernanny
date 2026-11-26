@@ -31,9 +31,8 @@ describe('every route is guarded unless marked public (fail closed)', () => {
     for (const route of guarded) {
       // Parameters get a well-formed value, so a parameter check cannot answer before the principal check would.
       const path = `${route.path.replace(':id', '00000000-0000-4000-8000-000000000000').replace(/:[a-z]+/g, 'x')}?issue=x&hours=1`;
-      const res = await request(agent.app.getHttpServer())
-        [route.method.toLowerCase() as 'get' | 'post' | 'delete'](path)
-        .set('x-kubernanny-principal', 'demo');
+      const method = route.method.toLowerCase() as 'get' | 'post' | 'delete';
+      const res = await request(agent.app.getHttpServer())[method](path).set('x-kubernanny-principal', 'demo');
       expect(res.status, `${route.method} ${route.path}`).toBe(401);
       expect(res.body.code, `${route.method} ${route.path}`).toBe('E2E_REQUIRED');
     }

@@ -73,11 +73,11 @@ import { SheetSection } from './module-sheet-view';
               }
             </ul>
             @if (s.folded > 0) {
-              <button type="button" class="more" (click)="toggle.emit()">
+              <button type="button" class="more" (click)="toggled.emit()">
                 {{ s.expandLabel }}
               </button>
             } @else if (expanded()) {
-              <button type="button" class="more" (click)="toggle.emit()">
+              <button type="button" class="more" (click)="toggled.emit()">
                 {{ t('module.showLess') }}
               </button>
             }
@@ -281,5 +281,5 @@ export class DetailSectionView {
   readonly section = input.required<SheetSection>();
   /** Healthy rows are all shown. */
   readonly expanded = input(false);
-  readonly toggle = output<void>();
+  readonly toggled = output<void>();
 }

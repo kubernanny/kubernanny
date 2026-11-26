@@ -7,11 +7,13 @@ import { describe, expect, it } from 'vitest';
 
 import { toBase64Url } from '../src/keys.js';
 import { generateKeyPair, keyPairFromSecret } from '../src/noise.js';
-import { DEADMAN_GRACE_MINUTES, deadmanPushContent, isDeadman } from '../src/push.js';
 import {
+  DEADMAN_GRACE_MINUTES,
+  deadmanPushContent,
   decodePushContent,
   decodePushStatus,
   encodePushContent,
+  isDeadman,
   isStatusOnly,
   MAX_PUSH_PLAINTEXT,
   openPush,
@@ -24,18 +26,16 @@ import {
 import {
   decodeDeposit,
   decodeDepositResult,
-  DEPOSIT_OUTCOMES,
-  encodeDeposit,
-  encodeDepositResult,
-  MAX_DEPOSIT_VALIDITY_SECONDS,
-} from '../src/relay.js';
-import {
   decodeFrame,
   decodePushRequest,
   decodePushResult,
+  DEPOSIT_OUTCOMES,
+  encodeDeposit,
+  encodeDepositResult,
   encodePushRequest,
   encodePushResult,
   FrameType,
+  MAX_DEPOSIT_VALIDITY_SECONDS,
 } from '../src/relay.js';
 
 /**

@@ -58,6 +58,7 @@ describe('an agent that never reads (review H1)', () => {
       }),
     );
     // From here on the agent reads nothing: the kernel buffers fill, then the relay's queue would.
+    // eslint-disable-next-line no-underscore-dangle -- ws keeps its net.Socket there; pausing it is the point of the test
     (socket as unknown as { _socket: { pause(): void } })._socket.pause();
     socket.removeAllListeners('message');
 

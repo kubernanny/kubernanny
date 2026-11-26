@@ -108,7 +108,7 @@ export class DevicesService {
         ...(delaysMs ? { delaysMs } : {}),
       },
     );
-    let parsed: Device[] = [];
+    let parsed: Device[];
     try {
       parsed = secret
         ? (JSON.parse(Buffer.from(secret.data?.devices ?? '', 'base64').toString('utf8') || '[]') as Device[])

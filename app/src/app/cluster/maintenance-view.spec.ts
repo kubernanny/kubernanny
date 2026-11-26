@@ -8,7 +8,7 @@ import { maintenanceChoices, maintenanceView } from './maintenance-view';
 const de = translatorFor('de');
 const en = translatorFor('en');
 const NOW = new Date(2026, 10, 24, 12, 0);
-const plain = (s: string) => s.replace(/[  ]/g, ' ');
+const plain = (s: string) => s.replace(/[\u00a0\u202f]/g, ' ');
 
 describe('maintenanceView', () => {
   it('says until when notifications wait, in both languages', () => {

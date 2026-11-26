@@ -16,7 +16,7 @@ import {
   TranslocoLoader,
   TranslocoService,
 } from '@jsverse/transloco';
-import { of } from 'rxjs';
+import { Observable, of } from 'rxjs';
 
 import { flatten, TranslationKey } from './dictionary';
 import { Lang, LANGS } from './lang';
@@ -30,7 +30,7 @@ import { DICTIONARIES } from './translator';
  */
 @Injectable({ providedIn: 'root' })
 export class BundledLoader implements TranslocoLoader {
-  getTranslation(lang: string) {
+  getTranslation(lang: string): Observable<Translation> {
     return of(flatten(DICTIONARIES[lang as Lang] ?? DICTIONARIES.en) as Translation);
   }
 }

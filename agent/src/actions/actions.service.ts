@@ -273,13 +273,13 @@ export class ActionsService {
   /** A new Job from a CronJob's template (`kubectl create job --from=cronjob/…`), or a copy of a failed stand-alone Job. */
   private async rerunJob(action: Extract<IssueAction, { type: 'job-rerun' }>): Promise<Text> {
     const base = `/apis/batch/v1/namespaces/${enc(action.namespace)}`;
-    type Meta = {
+    interface Meta {
       name?: string;
       uid?: string;
       labels?: Record<string, string>;
       annotations?: Record<string, string>;
       ownerReferences?: unknown[];
-    };
+    }
     if (action.from === 'CronJob') {
       const cron = await this.kube.get<{
         metadata: Meta;
