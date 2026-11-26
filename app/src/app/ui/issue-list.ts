@@ -61,6 +61,7 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
               @if (item.buttons.length > 0 || item.silencedText) {
                 <div class="actions">
                   @for (button of item.buttons; track button.type + button.index) {
+                    @if (button.emphasis !== 'secondary') {
                     <button type="button" [class]="button.emphasis" [disabled]="busy() !== null" (click)="run(item, button)">
                       @if (busy() === item.issue.id + button.type + button.index) {
                         <ion-spinner name="crescent" />
@@ -69,6 +70,7 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
                       }
                       {{ button.label }}
                     </button>
+                    }
                   }
                   @if (item.canSilence) {
                     <button type="button" class="quiet icon-only" [disabled]="busy() !== null" (click)="silence(item)" [attr.aria-label]="t('issues.silence')" [title]="t('issues.silence')">
@@ -81,9 +83,22 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
                     </button>
                   }
                 </div>
+                <!-- A second choice (the crash loop's restart) sits on a row of its own, with when it helps. -->
                 @for (button of item.buttons; track button.type + button.index) {
-                  @if (button.hint) {
-                    <p class="hint"><ion-icon [name]="button.icon" aria-hidden="true" />{{ button.hint }}</p>
+                  @if (button.emphasis === 'secondary') {
+                    <div class="second">
+                      <button type="button" class="secondary" [disabled]="busy() !== null" (click)="run(item, button)">
+                        @if (busy() === item.issue.id + button.type + button.index) {
+                          <ion-spinner name="crescent" />
+                        } @else {
+                          <ion-icon [name]="button.icon" aria-hidden="true" />
+                        }
+                        {{ button.label }}
+                      </button>
+                      @if (button.hint) {
+                        <p class="hint">{{ button.hint }}</p>
+                      }
+                    </div>
                   }
                 }
               }
@@ -216,75 +231,26 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
     .actions button.primary:hover:not(:disabled) {
       filter: brightness(1.08);
     }
-    .actions button.secondary {
+    .second {
+      margin-top: 0.6rem;
+      padding-top: 0.6rem;
+      border-top: 1px solid var(--line);
+    }
+    .second button.secondary {
       background: transparent;
       color: var(--ink-2);
-      font-weight: 550;
+      font-weight: 600;
+      max-width: 100%;
+      text-align: left;
     }
-    .actions button.secondary ion-icon {
+    .second button.secondary ion-icon {
       color: var(--mute);
     }
     .hint {
-      display: flex;
-      gap: 0.4rem;
-      align-items: flex-start;
-      margin: 0.5rem 0 0;
+      margin: 0.4rem 0 0;
       color: var(--mute);
       font-size: 0.8125rem;
       line-height: 1.4;
-    }
-    .hint ion-icon {
-      font-size: 0.9rem;
-      margin-top: 0.1rem;
-      color: var(--mute);
-    }
-    .advisories {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.35rem 0.5rem;
-      margin: 0.5rem 0 0;
-      background: none;
-      border-radius: 0;
-      overflow: visible;
-    }
-    .advisories li {
-      display: contents;
-    }
-    .advisories a {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.25rem;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 0.8125rem;
-      color: var(--accent);
-      text-decoration: none;
-      overflow-wrap: anywhere;
-    }
-    .advisories a:hover {
-      text-decoration: underline;
-    }
-    .advisories ion-icon {
-      font-size: 0.8125rem;
-      margin: 0;
-      color: inherit;
-    }
-    .advisories button.accept {
-      padding: 0.1rem 0.5rem;
-      font-size: 0.75rem;
-      font-weight: 600;
-      background: transparent;
-      color: var(--ink-2);
-    }
-    .silenced {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.25rem;
-      margin-left: 0.35rem;
-    }
-    .silenced ion-icon {
-      font-size: 0.9rem;
-      margin: 0;
-      color: var(--mute);
     }
   `,
 })

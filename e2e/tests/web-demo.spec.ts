@@ -54,6 +54,26 @@ test.describe('web demo (no agent, nothing leaves the browser)', () => {
     expect(errors).toEqual([]);
   });
 
+  test('offers the logs of a crash loop first and the restart second, and no restart after an OOMKill', async ({ page }) => {
+    await page.goto(`${DEMO}/#/demo`);
+    await page.locator('app-clusters a', { hasText: 'homelab' }).first().click();
+    const cluster = visiblePage(page);
+    const card = (title: string) => cluster.locator('app-issue-list li').filter({ has: page.locator('.title', { hasText: title }) }).first();
+    const crash = card('default/social-importer: CrashLoopBackOff');
+    await expect(crash.locator('.actions button.primary')).toHaveText(/Logs vor dem Absturz/);
+    await expect(crash.locator('.second button.secondary')).toHaveText(/social-importer neu starten/);
+    await expect(crash.locator('.second .hint')).toContainText('Hilft, wenn du die Ursache schon behoben hast');
+    const oom = card('default/shop-mcp-chart: OOMKilled');
+    await expect(oom).toContainText('erhöhe das Memory-Limit');
+    await expect(oom.locator('button', { hasText: 'neu starten' })).toHaveCount(0);
+    // A ConfigMap of the environment changed: the restart is the fix, first and filled.
+    await expect(card('default/newsletter-worker').locator('.actions button.primary')).toHaveText(/newsletter-worker neu starten/);
+    // A forgotten cordon: confirmed with what exactly happens.
+    await card('Node rke2-node-4').locator('button', { hasText: 'Wieder freigeben' }).click();
+    await expect(page.locator('ion-alert')).toContainText('spec.unschedulable auf false, wie kubectl uncordon');
+    await page.locator('ion-alert button', { hasText: 'Abbrechen' }).click();
+  });
+
   test('rolls a manual-sync Argo CD app back from its sheet, simulated', async ({ page }) => {
     const errors = watchErrors(page, [/healthz/, /404/]);
     await page.goto(`${DEMO}/#/demo`);

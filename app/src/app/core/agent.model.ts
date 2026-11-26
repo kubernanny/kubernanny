@@ -26,7 +26,7 @@ export type IssueAction =
 
 export type IssueActionType = IssueAction['type'];
 /** Every action type with a switch; `argocd-rollback` stands on its own (the Argo CD sheet), off unless the Helm chart opts in. */
-export type ActionType = IssueActionType | 'argocd-rollback';
+export type ActionType = IssueActionType | 'argocd-rollback' | 'config-change-hint';
 
 export interface Issue {
   id: string;

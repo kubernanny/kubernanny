@@ -148,7 +148,7 @@ export const de = {
     logsBeforeCrash: 'Logs vor dem Absturz',
     backup: 'Backup starten',
     backupConfirm: 'Ein Base-Backup von {{cluster}} starten?',
-    restartHint: 'Hilft, wenn du die Ursache schon behoben hast, z. B. ein Secret geändert oder eine Abhängigkeit ist wieder da.',
+    restartHint: 'Hilft, wenn du die Ursache schon behoben hast, z.\u00a0B. ein Secret geändert oder eine Abhängigkeit ist wieder da.',
     restartConfirmChanged: '{{kind}} {{target}} neu starten? Die Pods werden nacheinander ersetzt und lesen dabei die geänderte ConfigMap {{configMap}}.',
     uncordon: 'Wieder freigeben',
     uncordonConfirm: 'Node {{node}} wieder für neue Pods öffnen? Kubernanny setzt spec.unschedulable auf false, wie kubectl uncordon. Laufende Pods bleiben, wo sie sind.',

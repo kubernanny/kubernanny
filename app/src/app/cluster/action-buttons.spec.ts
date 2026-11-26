@@ -48,7 +48,7 @@ describe('action buttons', () => {
     );
     expect(card!.buttons.map((b) => [b.label, b.emphasis, b.hint])).toEqual([
       ['Logs vor dem Absturz', 'primary', null],
-      ['web neu starten', 'secondary', 'Hilft, wenn du die Ursache schon behoben hast, z. B. ein Secret geändert oder eine Abhängigkeit ist wieder da.'],
+      ['web neu starten', 'secondary', 'Hilft, wenn du die Ursache schon behoben hast, z.\u00a0B. ein Secret geändert oder eine Abhängigkeit ist wieder da.'],
     ]);
   });
 
