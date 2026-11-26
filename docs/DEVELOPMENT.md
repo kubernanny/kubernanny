@@ -79,6 +79,10 @@ cd agent && npm run lint    # one package; npm run lint:fix sorts imports and fo
 
 The root's TypeScript 6 is only for the linter: agent, relay and protocol compile with TypeScript 7, which typescript-eslint cannot read yet. The CI job `lint` runs the same. Large mechanical reformats go into `.git-blame-ignore-revs`.
 
+## Diagrams
+
+`docs/communication.png` (README, COMMUNICATION) is rendered from `docs/diagrams/communication.svg`: edit the SVG, then `node scripts/diagrams/render.mjs` (needs `e2e/` installed for Playwright's Chromium). Its numbers are the channels of COMMUNICATION.md.
+
 ## The demo in the app
 
 The app's demo (first screen, `/#/demo`, and demo.kubernanny.app) does not run an agent: `app/src/app/core/demo/demo-agent.ts` answers from recordings in `app/public/demo/<scenario>.<lang>.json` and shifts their times to now, so the demo never looks stale. The recordings are made from the agent's demo cluster:

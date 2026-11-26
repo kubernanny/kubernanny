@@ -66,8 +66,8 @@ describe('rewriteUrl', () => {
       `${REPO_URL}/blob/main/protocol/test/vectors.json`,
     );
     expect(rewriteUrl('../agent/src', ctx('PROTOCOL.md')).url).toBe(`${REPO_URL}/tree/main/agent/src`);
-    expect(rewriteUrl('diagrams/communication.html', ctx('README.md')).url).toBe(
-      `${REPO_URL}/blob/main/docs/diagrams/communication.html`,
+    expect(rewriteUrl('../scripts/diagrams/render.mjs', ctx('README.md')).url).toBe(
+      `${REPO_URL}/blob/main/scripts/diagrams/render.mjs`,
     );
     expect(rewriteUrl('UNKNOWN.md', ctx('README.md')).url).toBe(`${REPO_URL}/blob/main/docs/UNKNOWN.md`);
   });
