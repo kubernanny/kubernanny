@@ -21,7 +21,10 @@ import { qrModules } from './pseudo-qr';
         </p>
         <div class="other">
           <p>
-            <strong>Other ways:</strong> <code>kubectl apply -f https://raw.githubusercontent.com/kubernanny/kubernanny/v0.3.0/deploy/install.yaml</code>, or an Argo CD Application.
+            <strong>Other ways:</strong>
+            <code
+              >kubectl apply -f https://raw.githubusercontent.com/kubernanny/kubernanny/v0.3.0/deploy/install.yaml</code
+            >, or an Argo CD Application.
           </p>
           <p>
             <strong>No ingress?</strong> Port-forward the service: the agent serves the full web UI itself.

@@ -390,4 +390,6 @@ jobs:
           helm package deploy/helm/kubernanny --version "${GITHUB_REF_NAME#v}" --app-version "${GITHUB_REF_NAME#v}"
           helm push kubernanny-*.tgz "oci://ghcr.io/$OWNER/charts" 2>&1 | tee push.log
           DIGEST=$(grep -o 'sha256:[0-9a-f]*' push.log | head -1)
+          # cosign keeps its own registry login; helm's does not reach it.
+          echo "$REGISTRY_TOKEN" | cosign login ghcr.io -u "$REGISTRY_USER" --password-stdin
           cosign sign --yes "ghcr.io/$OWNER/charts/kubernanny@$DIGEST"
