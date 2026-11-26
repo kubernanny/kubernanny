@@ -7,8 +7,9 @@
 # for `npm run store:screenshots`; and the store banners (App Store header and
 # search result asset into fastlane/screenshots/banners/, Play's feature
 # graphic). Needs Playwright with Chromium (the one of e2e/
-# is used when none is installed elsewhere) and Python 3 with Pillow
-# (docs/RELEASING.md, Screenshots).
+# is used when none is installed elsewhere) and Python 3: Pillow comes from
+# the first python3 on PATH, or else from a venv the script creates under raw/
+# on first use (docs/RELEASING.md, Screenshots).
 #   SKIP_BUILD=1   use the existing dist/ of protocol, agent and app
 #   ONLY=iphone69,phone   only these sizes (iphone69, ipad13, phone, tablet)
 # To change only the headlines or the frame: node frame/frame.cjs (from raw/).
@@ -22,12 +23,26 @@ OUT=$(pwd)/raw
 mkdir -p "$OUT"
 export OUT
 export NODE_PATH="$ROOT/e2e/node_modules${NODE_PATH:+:$NODE_PATH}"
+# The size check below needs Pillow. The first python3 on PATH often lacks
+# it (Homebrew's or pyenv's), so it then comes from a venv under raw/ (ignored
+# by git), created once; checked before anything is rendered.
+PY=python3
+if ! python3 -c 'import PIL' 2>/dev/null; then
+  VENV="$OUT/.venv"
+  if ! "$VENV/bin/python" -c 'import PIL' 2>/dev/null; then
+    echo "Pillow missing: installing it into $VENV" >&2
+    python3 -m venv "$VENV"
+    "$VENV/bin/python" -m pip install --quiet --disable-pip-version-check Pillow
+  fi
+  PY="$VENV/bin/python"
+fi
+
 source ../screenshots/demo-agents.sh
 
 node capture.cjs
 
 # Every file at its store size, 6 to 8 per folder, no transparency.
-python3 - "$ROOT/fastlane/screenshots" <<'PY'
+"$PY" - "$ROOT/fastlane/screenshots" <<'PY'
 import os, sys
 from PIL import Image
 root = sys.argv[1]
