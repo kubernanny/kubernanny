@@ -4,7 +4,7 @@ import { CipherSuite, HkdfSha256 } from '@hpke/core';
 import { DhkemX25519HkdfSha256 } from '@hpke/dhkem-x25519';
 import { describe, expect, it } from 'vitest';
 import { generateKeyPair, keyPairFromSecret } from '../src/noise.js';
-import { MAX_PUSH_PLAINTEXT, PUSH_INFO, decodePushContent, decodePushStatus, encodePushContent, openPush, pushKeyId, sealPush } from '../src/push.js';
+import { MAX_PUSH_PLAINTEXT, PUSH_INFO, PUSH_STATUS_ONLY, decodePushContent, decodePushStatus, encodePushContent, isStatusOnly, openPush, pushKeyId, sealPush, statusPushContent } from '../src/push.js';
 import { decodePushRequest, decodePushResult, decodeFrame, encodePushRequest, encodePushResult, FrameType } from '../src/relay.js';
 import { toBase64Url } from '../src/keys.js';
 
@@ -57,6 +57,7 @@ const expected: PushVector[] = [
     '{"t":"homelab: 2 problems","b":"🔴 default/api: CrashLoopBackOff","p":5,"s":1795000120000,"w":{"l":"red","c":1,"n":1,"a":1795000110000,"i":[{"s":"c","t":"default/api: CrashLoopBackOff"},{"s":"w","t":"Certificate shop.example expires in 9 days"}]}}',
     0x51,
   ),
+  build('status-only', '{"t":"","b":"","p":0,"s":1795003600000,"w":{"l":"yellow","c":0,"n":1,"a":1795003590000,"i":[{"s":"w","t":"Certificate shop.example expires in 9 days"}]}}', 0x71),
 ];
 
 if (process.env['UPDATE_VECTORS']) {
@@ -160,6 +161,16 @@ describe('push content', () => {
     expect(decodePushContent(encoded).w).toBeUndefined();
   });
 
+  it('a status push has no text, priority 0, and keeps its status', () => {
+    const status = { l: 'green' as const, c: 0, n: 0, a: 1795003590000 };
+    const content = statusPushContent(status, 1795003600000);
+    expect(content).toEqual({ t: '', b: '', p: PUSH_STATUS_ONLY, s: 1795003600000, w: status });
+    const decoded = decodePushContent(encodePushContent(content));
+    expect(isStatusOnly(decoded)).toBe(true);
+    expect(decoded.w).toEqual(status);
+    expect(isStatusOnly({ t: 'x', b: 'y', p: 2, s: 1 })).toBe(false);
+  });
+
   it('refuses content that is not push content', () => {
     expect(() => decodePushContent(text.encode('{"t":1}'))).toThrow();
   });
@@ -174,6 +185,17 @@ describe('push frames on the relay socket', () => {
     expect(frame.callId).toBe(7);
     expect(decodePushRequest(frame.payload)).toEqual(request);
     expect(decodePushResult(decodeFrame(encodePushResult(7, 'unregistered')).payload)).toBe('unregistered');
+  });
+
+  it('carry the silent flag as "q": 1, and only that value', () => {
+    const silent = { ...request, silent: true };
+    const payload = decodeFrame(encodePushRequest(8, silent)).payload;
+    expect(JSON.parse(new TextDecoder().decode(payload)).q).toBe(1);
+    expect(decodePushRequest(payload)).toEqual(silent);
+    expect(JSON.parse(new TextDecoder().decode(decodeFrame(encodePushRequest(9, request)).payload)).q).toBeUndefined();
+    const enc = (v: unknown) => text.encode(JSON.stringify(v));
+    expect(decodePushRequest(enc({ t: request.token, o: 'ios', k: request.kid, m: request.message, q: true }))).toBeNull();
+    expect(decodePushRequest(enc({ t: request.token, o: 'ios', k: request.kid, m: request.message, q: 0 }))).toBeNull();
   });
 
   it('refuse malformed requests and read unknown results as failed', () => {

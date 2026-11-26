@@ -27,6 +27,8 @@ export interface PushConfig {
   agentPerHour: number;
   /** Per FCM token, across every agent of this relay (on a Worker: across all objects, through the token limiter object). */
   tokenPerHour: number;
+  /** Status pushes (silent, for the widget) per FCM token: a budget of their own, apart from `tokenPerHour`. */
+  statusTokenPerHour: number;
   /** Distinct FCM tokens one agent may push to within a day. */
   tokensPerDay: number;
   /** Per client address of the agents' connections, all its agents together (Node only). */
@@ -44,7 +46,7 @@ export interface ServiceAccount {
   tokenUri: string;
 }
 
-export const DEFAULT_PUSH = { agentBurst: 20, agentPerHour: 60, tokenPerHour: 30, tokensPerDay: 32, addressPerHour: 240, relayPerHour: 20_000, maxInFlight: 4 } as const;
+export const DEFAULT_PUSH = { agentBurst: 20, agentPerHour: 60, tokenPerHour: 30, statusTokenPerHour: 2, tokensPerDay: 32, addressPerHour: 240, relayPerHour: 20_000, maxInFlight: 4 } as const;
 const GOOGLE_TOKEN_URI = 'https://oauth2.googleapis.com/token';
 const FCM_SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
 /** Tokens kept for the per-token limit; past this the least recently used goes. */
@@ -53,7 +55,8 @@ const MAX_TRACKED_TOKENS = 20_000;
 /**
  * RELAY_PUSH (`off` disables), FCM_SERVICE_ACCOUNT (the service account's
  * JSON key, from a Secret), RELAY_PUSHES_PER_HOUR, RELAY_PUSH_BURST,
- * RELAY_PUSHES_PER_TOKEN_PER_HOUR, RELAY_PUSH_TOKENS_PER_DAY,
+ * RELAY_PUSHES_PER_TOKEN_PER_HOUR, RELAY_STATUS_PUSHES_PER_TOKEN_PER_HOUR,
+ * RELAY_PUSH_TOKENS_PER_DAY,
  * RELAY_PUSHES_PER_ADDRESS_PER_HOUR, RELAY_PUSHES_TOTAL_PER_HOUR. A service account that does not parse
  * stops the start: a relay that silently dropped every push would look
  * like a working one.
@@ -79,6 +82,7 @@ export function parsePushConfig(env: Record<string, string | undefined>): PushCo
     agentBurst: num('RELAY_PUSH_BURST', DEFAULT_PUSH.agentBurst),
     agentPerHour: num('RELAY_PUSHES_PER_HOUR', DEFAULT_PUSH.agentPerHour),
     tokenPerHour: num('RELAY_PUSHES_PER_TOKEN_PER_HOUR', DEFAULT_PUSH.tokenPerHour),
+    statusTokenPerHour: num('RELAY_STATUS_PUSHES_PER_TOKEN_PER_HOUR', DEFAULT_PUSH.statusTokenPerHour),
     tokensPerDay: num('RELAY_PUSH_TOKENS_PER_DAY', DEFAULT_PUSH.tokensPerDay),
     addressPerHour: num('RELAY_PUSHES_PER_ADDRESS_PER_HOUR', DEFAULT_PUSH.addressPerHour),
     relayPerHour: num('RELAY_PUSHES_TOTAL_PER_HOUR', DEFAULT_PUSH.relayPerHour),
@@ -120,9 +124,32 @@ const FALLBACK = {
  * (docs/NOTIFICATIONS.md, "Is this push real?"). Whoever holds the service
  * account can still send a message of a different shape that the phone
  * shows on its own; the marker is what tells the two apart.
+ *
+ * A status push (`silent`, for the home-screen widget) is built from a
+ * separate, fixed shape that has no alert at all: Android data-only at
+ * normal priority, iOS a background push (`apns-push-type: background`,
+ * priority 5, `content-available`, no alert, no sound, no
+ * `mutable-content`), which iOS hands to the app in the background, when it
+ * allows, and never shows. Nothing an agent sends can put text into it.
  */
 export function fcmMessage(push: PushRequest): unknown {
   const data = { k: push.kid, m: push.message };
+  if (push.silent) {
+    // An hour: a status older than that is not worth waking a phone for (the phone drops it anyway).
+    if (push.platform === 'android') {
+      return { message: { token: push.token, data, android: { priority: 'NORMAL', ttl: '3600s' } } };
+    }
+    return {
+      message: {
+        token: push.token,
+        data,
+        apns: {
+          headers: { 'apns-priority': '5', 'apns-push-type': 'background', 'apns-expiration': String(Math.floor(Date.now() / 1000) + 3600) },
+          payload: { aps: { 'content-available': 1 } },
+        },
+      },
+    };
+  }
   if (push.platform === 'android') {
     return { message: { token: push.token, data, android: { priority: 'HIGH', ttl: '86400s' } } };
   }
@@ -329,22 +356,34 @@ export function tokenBucket(perHour: number, now: number, saved?: BucketState): 
   return new TokenBucket(Math.max(1, Math.ceil(perHour / 6)), perHour / 3_600_000, now, saved);
 }
 
-/** Where the per-token limit lives: in this process (Node), or in a Durable Object per token (Worker). */
+/**
+ * Where the per-token limit lives: in this process (Node), or in a Durable
+ * Object per token (Worker). `silent` asks the status pushes' own, smaller
+ * budget: status pushes never use up the alerts' budget, and alerts never
+ * travel on the status budget.
+ */
 export interface TokenGate {
-  take(token: string): boolean | Promise<boolean>;
+  take(token: string, silent?: boolean): boolean | Promise<boolean>;
+}
+
+/** The Node relay's gate: one TokenLimiter for alerts, one for status pushes. */
+export function memoryTokenGate(config: Pick<PushConfig, 'tokenPerHour' | 'statusTokenPerHour'>, now: () => number = Date.now): TokenGate {
+  const alerts = new TokenLimiter(config.tokenPerHour, now);
+  const status = new TokenLimiter(config.statusTokenPerHour, now);
+  return { take: (token, silent) => (silent ? status : alerts).take(token) };
 }
 
 /** What an AgentLink calls for a Push frame: per-token limit, then FCM. */
 export type PushSender = (push: PushRequest) => Promise<PushOutcome>;
 
-export function pushSender(config: PushConfig, client: FcmClient | null = config.account ? new FcmClient(config.account) : null, tokens: TokenGate = new TokenLimiter(config.tokenPerHour)): PushSender | null {
+export function pushSender(config: PushConfig, client: FcmClient | null = config.account ? new FcmClient(config.account) : null, tokens: TokenGate = memoryTokenGate(config)): PushSender | null {
   if (!config.enabled || !client) {
     return null;
   }
   return async (push) => {
     let allowed: boolean;
     try {
-      allowed = await tokens.take(push.token);
+      allowed = await tokens.take(push.token, push.silent === true);
     } catch {
       return 'unavailable'; // the limiter could not be asked: fail closed
     }

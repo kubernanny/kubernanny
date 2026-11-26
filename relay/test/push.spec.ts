@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AgentLink, LinkPush, LinkSocket } from '../src/core/agent-link';
 import { DEFAULT_LIMITS } from '../src/core/limits';
 import { AgentPushPolicy, PENALTY } from '../src/core/push-policy';
-import { FcmClient, ServiceAccount, TokenLimiter, fcmMessage, outcomeOf, parsePushConfig, parseServiceAccount, pushSender } from '../src/core/push';
+import { FcmClient, ServiceAccount, TokenLimiter, fcmMessage, memoryTokenGate, outcomeOf, parsePushConfig, parseServiceAccount, pushSender } from '../src/core/push';
 
 const accountJson = (overrides: Record<string, unknown> = {}) =>
   JSON.stringify({ client_email: 'relay@kubernanny-test.iam.gserviceaccount.com', private_key: '-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n', project_id: 'kubernanny-test', ...overrides });
@@ -32,6 +32,9 @@ describe('push configuration', () => {
     expect(() => parsePushConfig({ RELAY_PUSH: 'maybe' })).toThrow(/RELAY_PUSH/);
     expect(parsePushConfig({})).toMatchObject({ agentBurst: 20, agentPerHour: 60, tokenPerHour: 30 });
     expect(parsePushConfig({ RELAY_PUSHES_PER_HOUR: '10' }).agentPerHour).toBe(10);
+    expect(parsePushConfig({}).statusTokenPerHour).toBe(2);
+    expect(parsePushConfig({ RELAY_STATUS_PUSHES_PER_TOKEN_PER_HOUR: '4' }).statusTokenPerHour).toBe(4);
+    expect(() => parsePushConfig({ RELAY_STATUS_PUSHES_PER_TOKEN_PER_HOUR: '0' })).toThrow(/STATUS/);
   });
 
   it('only ever sends the assertion to Google, whatever the key file says', () => {
@@ -149,7 +152,49 @@ describe('FcmClient', () => {
   });
 });
 
+describe('the FCM message of a status push', () => {
+  it('is data only at normal priority on Android', () => {
+    expect(fcmMessage(request({ silent: true }))).toEqual({ message: { token: request().token, data: { k: request().kid, m: request().message }, android: { priority: 'NORMAL', ttl: '3600s' } } });
+  });
+
+  it('is a background push on iOS: content-available, priority 5, no alert, no sound, no mutable-content', () => {
+    const message = fcmMessage(request({ platform: 'ios', silent: true })) as { message: { apns: { headers: Record<string, string>; payload: { aps: Record<string, unknown> } }; data: unknown } };
+    expect(message.message.data).toEqual({ k: request().kid, m: request().message });
+    expect(message.message.apns.headers['apns-push-type']).toBe('background');
+    expect(message.message.apns.headers['apns-priority']).toBe('5');
+    expect(message.message.apns.payload).toEqual({ aps: { 'content-available': 1 } });
+  });
+
+  // The status path must never be a way to show something: whatever the agent sends, no shape of it has text.
+  it('never carries anything a phone would show, in any language', () => {
+    for (const platform of ['android', 'ios'] as const) {
+      for (const lang of [undefined, 'en', 'de'] as const) {
+        const json = JSON.stringify(fcmMessage(request({ platform, silent: true, ...(lang ? { lang } : {}) })));
+        expect(json).not.toMatch(/notification|alert|mutable-content|sound|Kubernanny|"HIGH"/);
+      }
+    }
+  });
+});
+
 describe('the per-token limit', () => {
+  it('gives status pushes a small budget of their own, apart from the alerts', async () => {
+    let now = 0;
+    const gate = memoryTokenGate(parsePushConfig({}), () => now);
+    const sent: PushRequest[] = [];
+    const send = pushSender(parsePushConfig({ FCM_SERVICE_ACCOUNT: accountJson() }), { send: async (r: PushRequest) => (sent.push(r), 'sent' as const) } as unknown as FcmClient, gate)!;
+    expect(await send(request({ silent: true }))).toBe('sent');
+    expect(await send(request({ silent: true }))).toBe('rate_limited'); // burst 1 of the hourly 2
+    // The alerts' budget is untouched by status pushes.
+    for (let i = 0; i < 5; i++) {
+      expect(await send(request())).toBe('sent');
+    }
+    expect(await send(request())).toBe('rate_limited');
+    // ... and a used-up alert budget does not open the status one either way.
+    now += 31 * 60_000;
+    expect(await send(request({ silent: true }))).toBe('sent');
+    expect(sent.filter((r) => r.silent)).toHaveLength(2);
+  });
+
   it('holds across every agent of the relay', async () => {
     const tokens = new TokenLimiter(30, () => 0);
     const sent: string[] = [];
@@ -193,6 +238,22 @@ describe('AgentLink and Push frames', () => {
     expect(send).toHaveBeenCalledTimes(1);
     expect(results(s)).toEqual([[9, 'sent']]);
     expect(done).toHaveBeenCalled();
+  });
+
+  it('says statusPush with push on, and hands a status push to FCM as a silent message (agent frame to FCM body)', async () => {
+    const off = new AgentLink(socket(), DEFAULT_LIMITS);
+    expect(off.info().statusPush).toBe(false);
+    const s = socket();
+    const google = await fakeGoogle();
+    const client = new FcmClient(google.account, google.fetchFn);
+    const send = pushSender(parsePushConfig({ FCM_SERVICE_ACCOUNT: accountJson() }), client)!;
+    const link = new AgentLink(s, DEFAULT_LIMITS, { push: { send, policy: policy(20), maxInFlight: 4 } });
+    expect(link.info().statusPush).toBe(true);
+    link.onFrame(decodeFrame(encodePushRequest(11, request({ platform: 'ios', silent: true }))));
+    await vi.waitFor(() => expect(results(s)).toEqual([[11, 'sent']]));
+    const apns = (google.messages[0]!.body as { message: { apns: { headers: Record<string, string>; payload: unknown } } }).message.apns;
+    expect(apns.headers['apns-push-type']).toBe('background');
+    expect(apns.payload).toEqual({ aps: { 'content-available': 1 } });
   });
 
   it('refuses malformed pushes and keeps to the agent budget and its pushes in flight', async () => {

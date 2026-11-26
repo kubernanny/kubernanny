@@ -31,5 +31,16 @@
     "keyId": "VqgMM02Dnwo01bdV",
     "plaintext": "{\"t\":\"homelab: 2 problems\",\"b\":\"🔴 default/api: CrashLoopBackOff\",\"p\":5,\"s\":1795000120000,\"w\":{\"l\":\"red\",\"c\":1,\"n\":1,\"a\":1795000110000,\"i\":[{\"s\":\"c\",\"t\":\"default/api: CrashLoopBackOff\"},{\"s\":\"w\",\"t\":\"Certificate shop.example expires in 9 days\"}]}}",
     "message": "01cd700e88f9e99b19c1a8a8dcd58182fd101e5e032a69ce317fde23e8ee265c51bc5b349ec2e4c9e789fcda74fe12e9c9fda3492bebf602d84238c8e1d0cd63031added136f28e28215c2ffc0f0ce9644cbba3ba235776c1a76d465dc056c42a34aa5e90c1af671bb8132c9237ce959359eb0f819af3e3efb62f258409c22d3c6da9c2bc4b80604dfc00c9f50cd40d71fec5d85183fd39039394a4145d5865f7759118b01cee2f44790ff2eae73b8383e1b365fe9f70310108a24db9e13e600334b5179bea7ee5b271f2f3b7dc80a4623f14833ed43688bd3390d6fe4fe5a86922f250330c29e2b853102adaca9761c4b827d45841c691d4c779bc7bcdb7b26b16a87f783ad9907098d1d5f42a906d2204c28ffb379434bca6649fcce74af51e2f69c3e6195caab7418"
+  },
+  {
+    "name": "status-only",
+    "agentStaticSecret": "f1f2f3f4f5f6f7f8f9fafbfcfdfeff000102030405060708090a0b0c0d0e0f10",
+    "agentStaticPublic": "35fdea9e30d3a32c8c366dd18e1eee4c13266995fd5c1c04ea694206cea3087c",
+    "pushSecret": "9192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0",
+    "pushPublic": "9cced751b301bbd16c4fb8deddd82f18925d71ed90c844fa0158f845b0fa7f4b",
+    "ephemeralSecret": "d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0",
+    "keyId": "XIwBWYFMoGuRdRE4",
+    "plaintext": "{\"t\":\"\",\"b\":\"\",\"p\":0,\"s\":1795003600000,\"w\":{\"l\":\"yellow\",\"c\":0,\"n\":1,\"a\":1795003590000,\"i\":[{\"s\":\"w\",\"t\":\"Certificate shop.example expires in 9 days\"}]}}",
+    "message": "0121c3332b61be6a7b6ab8461e155651b17501b6e07532ecf9ab6661bd5a2ca575fc224bd8087d542aff6342df4772304c88e65452e1be360caa4dbb253c991b2fdf9a678aa059402158439acf8ab89c3502b67c48eaead0e42fe0ef48c296666b02a0ebfd41a0055d8dcbc5859e13eef1ba2e55c7e25675e9da9f2d8b7bc7313e204b5656741e5c6148196b0262a4117650fc548d7699dbc735e5d9a060b5895dd76ef03693e13563fa492050575d5b7885e0166cb62255d0da31aec4a0f52570363a6f5d608c45a4fc"
   }
 ]

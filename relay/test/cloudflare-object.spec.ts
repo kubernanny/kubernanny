@@ -1,6 +1,6 @@
 import { FrameType, KeyPair, answerChallenge, decodeFrame, decodePushResult, encodePushRequest, encodeReply, generateKeyPair, relayAgentId, toBase64Url } from '@kubernanny/protocol';
 import type { PushSender, TokenGate } from '../src/core/push';
-import { TokenLimiterCore } from '../cloudflare/src/token-limiter';
+import { TokenLimiterCore, durableTokenGate } from '../cloudflare/src/token-limiter';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentObjectCore, AgentObjectState, HibernatableSocket, MAX_PENDING_PER_OBJECT } from '../cloudflare/src/agent-object';
 
@@ -290,6 +290,22 @@ describe('Cloudflare agent object', () => {
       expect(limiterState.stored.has('bucket')).toBe(true);
     });
 
+    it('keeps status pushes in an object of their own, with the status budget', async () => {
+      const limiter = new TokenLimiterCore(new FakeState().storage, { RELAY_PUSHES_PER_TOKEN_PER_HOUR: '60' }, () => Date.now());
+      const take = async (path: string) => (await limiter.fetch({ url: `https://token-limiter${path}` })).status;
+      expect(await take('/take-status')).toBe(204);
+      expect(await take('/take-status')).toBe(429); // 2 per hour: burst 1
+      const names: string[] = [];
+      const gate = durableTokenGate({
+        idFromName: (name) => (names.push(name), name),
+        get: () => ({ fetch: async (url: string) => new Response(null, { status: url.endsWith('/take-status') ? 204 : 429 }) }),
+      });
+      expect(await gate.take('device-token-0123456789abc', true)).toBe(true);
+      expect(await gate.take('device-token-0123456789abc')).toBe(false);
+      expect(names[0]).toMatch(/^status:/);
+      expect(names[1]).not.toMatch(/^status:/);
+    });
+
     it('delivers with a service account, and keeps the agent push budget across a hibernation', async () => {
       const env = { FCM_SERVICE_ACCOUNT: fcm, RELAY_PUSH_BURST: '1', RELAY_PUSHES_PER_HOUR: '1' };
       const send = vi.fn(async () => 'sent' as const);
@@ -297,6 +313,7 @@ describe('Cloudflare agent object', () => {
       const socket = await connect();
       await prove(socket);
       expect(ready(socket).push).toBe(true);
+      expect(ready(socket).statusPush).toBe(true);
       await object.webSocketMessage(socket, push(1).slice().buffer);
       await vi.advanceTimersByTimeAsync(0);
       object = wake(env, send);

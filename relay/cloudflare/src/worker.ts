@@ -91,8 +91,8 @@ export class TokenLimiter {
     this.core = new TokenLimiterCore(state.storage, env);
   }
 
-  fetch(): Promise<Response> {
-    return this.core.fetch();
+  fetch(request: Request): Promise<Response> {
+    return this.core.fetch(request);
   }
 }
 

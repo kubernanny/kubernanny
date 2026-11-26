@@ -114,6 +114,7 @@ export class AgentLink {
       maxConcurrent: this.limits.maxConcurrent,
       callTimeoutMs: this.limits.callTimeoutMs,
       push: this.push !== null,
+      statusPush: this.push !== null,
     };
   }
 

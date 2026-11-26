@@ -87,6 +87,13 @@ export interface RelayLimitsInfo {
   callTimeoutMs: number;
   /** The relay delivers native push (Push frames); absent or false: it does not, and the agent sends none. */
   push?: boolean;
+  /**
+   * The relay delivers status pushes (`silent` Push frames) as silent
+   * background messages, never as a visible alert. Absent or false: the
+   * agent sends none, because a relay before them would show its generic
+   * iOS alert for each one.
+   */
+  statusPush?: boolean;
 }
 
 /**
@@ -104,6 +111,15 @@ export interface PushRequest {
   message: string;
   /** Language of the generic iOS alert shown when the phone cannot open the message (the agent's LANGUAGE). */
   lang?: 'en' | 'de';
+  /**
+   * A status push for the home-screen widget (wire `"q": 1`, docs/RELAY.md):
+   * the relay sends it as a silent background message (Android data-only at
+   * normal priority, iOS `apns-push-type: background` with
+   * `content-available`), never with an alert, under a per-token budget of
+   * its own. The sealed content says the same (`p: 0`), so the phone shows
+   * nothing whatever the relay does.
+   */
+  silent?: boolean;
 }
 
 /**
@@ -117,7 +133,7 @@ export const PUSH_OUTCOMES: readonly PushOutcome[] = ['sent', 'unregistered', 'r
 export const MAX_PUSH_FRAME = 8 * 1024;
 
 export function encodePushRequest(id: number, push: PushRequest): Uint8Array {
-  return encodeFrame(FrameType.Push, id, encoder.encode(JSON.stringify({ t: push.token, o: push.platform, k: push.kid, m: push.message, ...(push.lang ? { l: push.lang } : {}) })));
+  return encodeFrame(FrameType.Push, id, encoder.encode(JSON.stringify({ t: push.token, o: push.platform, k: push.kid, m: push.message, ...(push.lang ? { l: push.lang } : {}), ...(push.silent ? { q: 1 } : {}) })));
 }
 
 /** The relay's side: the request, or null when it is not one (the relay then answers `invalid`). */
@@ -127,18 +143,19 @@ export function decodePushRequest(payload: Uint8Array): PushRequest | null {
   }
   try {
     const raw = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(payload)) as Record<string, unknown> | null;
-    const { t, o, k, m, l } = raw ?? {};
+    const { t, o, k, m, l, q } = raw ?? {};
     if (
       !isPushToken(t) ||
       (o !== 'ios' && o !== 'android') ||
       typeof k !== 'string' ||
       !/^[A-Za-z0-9_-]{16}$/.test(k) ||
       typeof m !== 'string' ||
-      !/^[A-Za-z0-9_-]{66,4000}$/.test(m)
+      !/^[A-Za-z0-9_-]{66,4000}$/.test(m) ||
+      (q !== undefined && q !== 1)
     ) {
       return null;
     }
-    return { token: t, platform: o, kid: k, message: m, ...(l === 'de' || l === 'en' ? { lang: l } : {}) };
+    return { token: t, platform: o, kid: k, message: m, ...(l === 'de' || l === 'en' ? { lang: l } : {}), ...(q === 1 ? { silent: true } : {}) };
   } catch {
     return null;
   }

@@ -114,7 +114,11 @@ export interface PushContent {
   t: string;
   /** Body. */
   b: string;
-  /** Priority as in docs/NOTIFICATIONS.md: 5 critical, 4 security, 3 warnings, 2 resolved only. */
+  /**
+   * Priority as in docs/NOTIFICATIONS.md: 5 critical, 4 security, 3 warnings,
+   * 2 resolved only. 0 (PUSH_STATUS_ONLY): a status push for the widget, with
+   * an empty title and body, that the phone never shows.
+   */
   p: number;
   /** The agent's clock when it sealed this, ms since the epoch. */
   s: number;
@@ -124,6 +128,24 @@ export interface PushContent {
    * none, and phones before it ignore it. Left out when it would not fit.
    */
   w?: PushStatus;
+}
+
+/**
+ * The priority of a status push (docs/PROTOCOL.md, "Status pushes"): it only
+ * carries `w` for the home-screen widget, and the phone shows nothing for it.
+ * Sealed like every push, so neither the relay nor Google can turn a real
+ * alert into one, or one into an alert with a real cluster's text.
+ */
+export const PUSH_STATUS_ONLY = 0;
+
+/** A status push: the phone updates its widget from `w` and shows nothing. */
+export function isStatusOnly(content: PushContent): boolean {
+  return content.p === PUSH_STATUS_ONLY;
+}
+
+/** The content of a status push: no text, only the state. */
+export function statusPushContent(status: PushStatus, sealedAt: number): PushContent {
+  return { t: '', b: '', p: PUSH_STATUS_ONLY, s: sealedAt, w: status };
 }
 
 /** Lights as the agent and the app name them. */
