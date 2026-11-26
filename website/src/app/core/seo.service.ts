@@ -10,6 +10,8 @@ export interface PageMeta {
   path: string;
   noindex?: boolean;
   type?: 'website' | 'article';
+  /** Structured data (schema.org) for the page, written as one JSON-LD block. */
+  jsonLd?: Record<string, unknown>;
 }
 
 /** Title, description, canonical URL and Open Graph / Twitter tags per page. */
@@ -46,6 +48,25 @@ export class SeoService {
       this.meta.updateTag({ [attr]: key, content }, `${attr}="${key}"`);
     }
     this.canonical(url);
+    this.structuredData(page.jsonLd);
+  }
+
+  /** One JSON-LD block per page; a page without data removes the previous page's. */
+  private structuredData(data: Record<string, unknown> | undefined): void {
+    const head = this.document.head;
+    let script = head.querySelector<HTMLScriptElement>('script#structured-data');
+    if (!data) {
+      script?.remove();
+      return;
+    }
+    if (!script) {
+      script = this.document.createElement('script');
+      script.setAttribute('id', 'structured-data');
+      script.setAttribute('type', 'application/ld+json');
+      head.appendChild(script);
+    }
+    // `<` escaped, so no text in the data can close the script element.
+    script.textContent = JSON.stringify(data).replace(/</g, '\\u003c');
   }
 
   private canonical(url: string): void {
