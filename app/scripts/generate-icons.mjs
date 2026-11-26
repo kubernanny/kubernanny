@@ -22,7 +22,8 @@ chevron-back open-outline search-outline close copy-outline notifications-outlin
 qr-code-outline link-outline hardware-chip-outline cube-outline albums-outline layers-outline globe-outline
 lock-closed-outline flash-outline ellipse help-circle-outline arrow-forward pause-circle-outline power-outline
 information-circle-outline swap-vertical-outline bug-outline shield-half-outline cloud-upload-outline
-share-outline chevron-up archive-outline construct-outline`.split(/\s+/);
+share-outline chevron-up archive-outline construct-outline lock-open-outline play-outline git-pull-request-outline
+ribbon-outline close-circle-outline stop-circle-outline resize-outline`.split(/\s+/);
 
 const available = new Set([...readFileSync(join(root, 'node_modules/ionicons/icons/index.d.ts'), 'utf8').matchAll(/export declare var (\w+)/g)].map((m) => m[1]));
 const camel = (s) => s.replace(/-(\w)/g, (_, c) => c.toUpperCase());

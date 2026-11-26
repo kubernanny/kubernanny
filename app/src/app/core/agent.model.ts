@@ -10,9 +10,19 @@ export type Health = 'ok' | 'warning' | 'critical';
 export type IssueAction =
   | { type: 'argocd-sync'; namespace: string; app: string }
   | { type: 'argocd-refresh'; namespace: string; app: string }
-  | { type: 'restart'; kind: string; namespace: string; name: string }
+  /** `secondary`: after the logs, with a hint (a crash loop). `changed`: a ConfigMap of the environment changed since the start, so the restart is the fix. */
+  | { type: 'restart'; kind: string; namespace: string; name: string; secondary?: boolean; changed?: { kind: string; name: string } }
   | { type: 'logs'; namespace: string; pod: string; container?: string; previous?: boolean }
-  | { type: 'cnpg-backup'; namespace: string; cluster: string };
+  | { type: 'cnpg-backup'; namespace: string; cluster: string }
+  | { type: 'uncordon'; node: string }
+  | { type: 'job-rerun'; namespace: string; from: 'CronJob' | 'Job'; name: string }
+  | { type: 'reconcile-now'; kind: string; namespace: string; name: string }
+  | { type: 'cleanup-pods'; namespace: string; pods: string[] }
+  | { type: 'force-delete-terminating'; namespace: string; pod: string; node: string; statefulSet?: string }
+  | { type: 'longhorn-backup'; namespace: string; volume: string; label: string }
+  | { type: 'velero-backup'; namespace: string; schedule: string }
+  | { type: 'argocd-terminate-op'; namespace: string; app: string }
+  | { type: 'pvc-expand'; namespace: string; name: string; from: string; to: string; template?: string };
 
 export type IssueActionType = IssueAction['type'];
 /** Every action type with a switch; `argocd-rollback` stands on its own (the Argo CD sheet), off unless the Helm chart opts in. */

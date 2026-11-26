@@ -61,7 +61,7 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
               @if (item.buttons.length > 0 || item.silencedText) {
                 <div class="actions">
                   @for (button of item.buttons; track button.type + button.index) {
-                    <button type="button" [disabled]="busy() !== null" (click)="run(item, button)">
+                    <button type="button" [class]="button.emphasis" [disabled]="busy() !== null" (click)="run(item, button)">
                       @if (busy() === item.issue.id + button.type + button.index) {
                         <ion-spinner name="crescent" />
                       } @else {
@@ -81,6 +81,11 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
                     </button>
                   }
                 </div>
+                @for (button of item.buttons; track button.type + button.index) {
+                  @if (button.hint) {
+                    <p class="hint"><ion-icon [name]="button.icon" aria-hidden="true" />{{ button.hint }}</p>
+                  }
+                }
               }
             </div>
           </li>
@@ -198,6 +203,40 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
     }
     button.quiet {
       background: transparent;
+    }
+    /* What to try first: filled. A second choice (the crash loop's restart): no fill, lighter text, explained by the hint below. */
+    .actions button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--ion-color-primary-contrast);
+    }
+    .actions button.primary ion-icon {
+      color: inherit;
+    }
+    .actions button.primary:hover:not(:disabled) {
+      filter: brightness(1.08);
+    }
+    .actions button.secondary {
+      background: transparent;
+      color: var(--ink-2);
+      font-weight: 550;
+    }
+    .actions button.secondary ion-icon {
+      color: var(--mute);
+    }
+    .hint {
+      display: flex;
+      gap: 0.4rem;
+      align-items: flex-start;
+      margin: 0.5rem 0 0;
+      color: var(--mute);
+      font-size: 0.8125rem;
+      line-height: 1.4;
+    }
+    .hint ion-icon {
+      font-size: 0.9rem;
+      margin-top: 0.1rem;
+      color: var(--mute);
     }
     .advisories {
       display: flex;

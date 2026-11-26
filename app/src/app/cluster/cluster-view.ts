@@ -15,6 +15,10 @@ export interface ActionButton {
   icon: string;
   /** Question to confirm before running; null runs at once. */
   confirm: string | null;
+  /** primary: what to do first (filled). secondary: a second choice, quieter, with `hint` under the row. */
+  emphasis: 'primary' | 'normal' | 'secondary';
+  /** One sentence on when this action helps, shown under the buttons (the crash loop's restart). */
+  hint: string | null;
 }
 
 export interface IssueCard {
@@ -147,7 +151,12 @@ const STATUS_KEY: Record<CheckStatus, TranslationKey> = {
   skipped: 'status.skipped',
 };
 
-export function actionButton(action: IssueAction, index: number, tr: Translator): ActionButton {
+type ButtonBase = Omit<ActionButton, 'emphasis' | 'hint'> & { secondary?: boolean; hint?: string };
+
+const FLUX_KINDS = new Set(['Kustomization', 'HelmRelease']);
+
+function buttonBase(action: IssueAction, index: number, tr: Translator): ButtonBase {
+  const target = 'namespace' in action && 'name' in action ? `${action.namespace}/${action.name}` : '';
   switch (action.type) {
     case 'argocd-sync':
       return { type: action.type, index, label: tr.t('actions.sync'), icon: 'sync-outline', confirm: tr.t('actions.syncConfirm', { app: action.app }) };
@@ -159,21 +168,85 @@ export function actionButton(action: IssueAction, index: number, tr: Translator)
         index,
         label: tr.t('actions.restart', { name: action.name }),
         icon: 'reload-outline',
-        confirm: tr.t('actions.restartConfirm', { kind: action.kind, target: `${action.namespace}/${action.name}` }),
+        confirm: action.changed
+          ? tr.t('actions.restartConfirmChanged', { kind: action.kind, target, configMap: action.changed.name })
+          : tr.t('actions.restartConfirm', { kind: action.kind, target }),
+        ...(action.secondary ? { secondary: true, hint: tr.t('actions.restartHint') } : {}),
       };
     case 'logs':
       return { type: action.type, index, label: tr.t(action.previous ? 'actions.logsBeforeCrash' : 'actions.logs'), icon: 'document-text-outline', confirm: null };
     case 'cnpg-backup':
       return { type: action.type, index, label: tr.t('actions.backup'), icon: 'save-outline', confirm: tr.t('actions.backupConfirm', { cluster: action.cluster }) };
+    case 'longhorn-backup':
+      return { type: action.type, index, label: tr.t('actions.backup'), icon: 'save-outline', confirm: tr.t('actions.longhornBackupConfirm', { volume: action.label }) };
+    case 'velero-backup':
+      return { type: action.type, index, label: tr.t('actions.backup'), icon: 'save-outline', confirm: tr.t('actions.veleroBackupConfirm', { schedule: action.schedule }) };
+    case 'uncordon':
+      return { type: action.type, index, label: tr.t('actions.uncordon'), icon: 'lock-open-outline', confirm: tr.t('actions.uncordonConfirm', { node: action.node }) };
+    case 'job-rerun':
+      return {
+        type: action.type,
+        index,
+        label: tr.t('actions.rerun'),
+        icon: 'play-outline',
+        confirm: tr.t(action.from === 'CronJob' ? 'actions.rerunCronConfirm' : 'actions.rerunJobConfirm', { target }),
+      };
+    case 'reconcile-now':
+      if (action.kind === 'Certificate') {
+        return { type: action.type, index, label: tr.t('actions.renew'), icon: 'ribbon-outline', confirm: tr.t('actions.renewConfirm', { target }) };
+      }
+      return {
+        type: action.type,
+        index,
+        label: tr.t('actions.reconcile'),
+        icon: 'git-pull-request-outline',
+        confirm: FLUX_KINDS.has(action.kind)
+          ? tr.t('actions.reconcileFluxConfirm', { kind: action.kind, target })
+          : tr.t(action.kind === 'ExternalSecret' ? 'actions.reconcileExternalSecretConfirm' : 'actions.reconcileInfisicalConfirm', { target }),
+      };
+    case 'cleanup-pods':
+      return { type: action.type, index, label: tr.t('actions.cleanup'), icon: 'trash-outline', confirm: tr.n('actions.cleanupConfirm', action.pods.length, { namespace: action.namespace }) };
+    case 'force-delete-terminating':
+      return {
+        type: action.type,
+        index,
+        label: tr.t('actions.forceDelete'),
+        icon: 'close-circle-outline',
+        confirm: action.statefulSet
+          ? tr.t('actions.forceDeleteConfirmStatefulSet', { target: `${action.namespace}/${action.pod}`, node: action.node, statefulSet: action.statefulSet })
+          : tr.t('actions.forceDeleteConfirm', { target: `${action.namespace}/${action.pod}`, node: action.node }),
+      };
+    case 'argocd-terminate-op':
+      return { type: action.type, index, label: tr.t('actions.terminate'), icon: 'stop-circle-outline', confirm: tr.t('actions.terminateConfirm', { app: action.app }) };
+    case 'pvc-expand':
+      return {
+        type: action.type,
+        index,
+        label: tr.t('actions.expand', { size: action.to }),
+        icon: 'resize-outline',
+        confirm: action.template
+          ? tr.t('actions.expandConfirmTemplate', { target, from: action.from, to: action.to, template: action.template })
+          : tr.t('actions.expandConfirm', { target, from: action.from, to: action.to }),
+      };
   }
+}
+
+/**
+ * One button. `first`: the issue's first action, what to try first, drawn
+ * filled; a secondary one (the restart of a crash loop) is drawn quiet and
+ * explains under the row when it helps.
+ */
+export function actionButton(action: IssueAction, index: number, tr: Translator, first = false): ActionButton {
+  const { secondary, hint, ...base } = buttonBase(action, index, tr);
+  return { ...base, emphasis: secondary ? 'secondary' : first ? 'primary' : 'normal', hint: hint ?? null };
 }
 
 function buttonsFor(issue: Issue, tr: Translator): ActionButton[] {
   const seen = new Map<IssueActionType, number>();
-  return issue.actions.map((action) => {
+  return issue.actions.map((action, i) => {
     const index = seen.get(action.type) ?? 0;
     seen.set(action.type, index + 1);
-    return actionButton(action, index, tr);
+    return actionButton(action, index, tr, i === 0);
   });
 }
 
