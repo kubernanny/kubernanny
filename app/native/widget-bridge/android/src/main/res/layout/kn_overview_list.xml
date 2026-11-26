@@ -102,4 +102,6 @@
     </LinearLayout>
     <TextView android:id="@+id/kn_no_problems" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="2" android:textColor="@color/kn_ink_2" android:textSize="13sp" android:textStyle="bold" android:layout_marginTop="8dp" android:drawableStart="@drawable/kn_dot_ok" android:drawablePadding="8dp" android:gravity="center_vertical" android:text="@string/kn_widget_no_problems" android:visibility="gone" />
     <TextView android:id="@+id/kn_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="4" android:textColor="@color/kn_ink_2" android:textSize="14sp" android:layout_marginTop="8dp" android:text="@string/kn_widget_empty" android:visibility="gone" />
+    <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
+    <TextView android:id="@+id/kn_stale_hint" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:textColor="@color/kn_warn_soft" android:textSize="11sp" android:textStyle="bold" android:layout_marginTop="6dp" android:visibility="gone" />
 </LinearLayout>

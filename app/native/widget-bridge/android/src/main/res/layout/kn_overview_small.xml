@@ -26,5 +26,5 @@
         <ImageView android:id="@+id/kn_sdot_6" android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="5dp" android:importantForAccessibility="no" android:src="@drawable/kn_dot_off" android:visibility="gone" />
         <ImageView android:id="@+id/kn_sdot_7" android:layout_width="10dp" android:layout_height="10dp" android:layout_marginEnd="5dp" android:importantForAccessibility="no" android:src="@drawable/kn_dot_off" android:visibility="gone" />
     </LinearLayout>
-    <TextView android:id="@+id/kn_time" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:textColor="@color/kn_mute" android:textSize="11sp" android:textStyle="bold" android:layout_marginTop="5dp" />
+    <TextView android:id="@+id/kn_time" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="2" android:textColor="@color/kn_mute" android:textSize="11sp" android:textStyle="bold" android:layout_marginTop="5dp" />
 </LinearLayout>

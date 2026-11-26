@@ -118,6 +118,9 @@ private struct OverviewMedium: View {
             }
             if shown.count < 4 {
                 Spacer(minLength: 0)
+                if clusters.allSatisfy({ $0.isStale(at: now) }) {
+                    StaleHint()
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -175,8 +178,25 @@ private struct OverviewLarge: View {
                 }
             }
             Spacer(minLength: 0)
+            if clusters.allSatisfy({ $0.isStale(at: now) }) {
+                StaleHint()
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+/// Under a list whose every cluster is grey: what to do about it ("Not current · Open Kubernanny").
+private struct StaleHint: View {
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "clock.badge.exclamationmark")
+            Text("\(String(localized: "widget.staleTag")) · \(String(localized: "widget.staleOpen"))")
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .font(.caption2.weight(.semibold))
+        .foregroundColor(Palette.warnSoft)
     }
 }
 
@@ -530,7 +550,7 @@ private struct NoProblems: View {
     }
 }
 
-/// "2 min ago", or "Not current · 47 min ago" in grey once the check is over 30 minutes old.
+/// "2 min ago", or "Not current · 3 h ago" with "Open Kubernanny" under it once the check is too old (WidgetCluster.staleAfter).
 private struct AgeLine: View {
     let date: Date?
     let stale: Bool
@@ -539,13 +559,23 @@ private struct AgeLine: View {
 
     var body: some View {
         if let date {
-            HStack(spacing: 4) {
-                Image(systemName: stale ? "clock.badge.exclamationmark" : "clock")
-                    .font(.caption2.weight(.semibold))
-                Text(text(date))
-                    .font(.caption2.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 4) {
+                    Image(systemName: stale ? "clock.badge.exclamationmark" : "clock")
+                        .font(.caption2.weight(.semibold))
+                    Text(text(date))
+                        .font(.caption2.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                if stale {
+                    // What to do about it, under the clock's text: the age stays readable in the small sizes.
+                    Text(String(localized: "widget.staleOpen"))
+                        .font(.caption2.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .padding(.leading, 18)
+                }
             }
             .foregroundColor(stale ? Palette.warnSoft : Palette.mute)
         }

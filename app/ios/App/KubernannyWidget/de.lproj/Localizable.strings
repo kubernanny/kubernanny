@@ -4,8 +4,7 @@
 "widget.clusterName" = "Cluster";
 "widget.clusterDescription" = "Ein Cluster mit seinen größten Problemen. Aktualisiert mit jeder Push-Nachricht und solange die App offen ist.";
 "widget.empty" = "Öffne Kubernanny, um deine Cluster hier zu sehen.";
-"widget.stale" = "Seit über 30 Minuten nicht aktualisiert.";
-"widget.staleShort" = "Zum Aktualisieren App öffnen";
+"widget.staleOpen" = "Öffne Kubernanny";
 "widget.staleTag" = "Nicht aktuell";
 "widget.justNow" = "gerade eben";
 "widget.noProblems" = "Keine offenen Probleme";

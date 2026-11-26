@@ -4,8 +4,7 @@
 "widget.clusterName" = "Cluster";
 "widget.clusterDescription" = "One cluster with its worst problems. Updated by every push and while the app is open.";
 "widget.empty" = "Open Kubernanny to see your clusters here.";
-"widget.stale" = "Not updated for over 30 minutes.";
-"widget.staleShort" = "Open the app to refresh";
+"widget.staleOpen" = "Open Kubernanny";
 "widget.staleTag" = "Not current";
 "widget.justNow" = "just now";
 "widget.noProblems" = "No open problems";

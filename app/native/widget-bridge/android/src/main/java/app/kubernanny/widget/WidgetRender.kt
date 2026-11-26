@@ -20,9 +20,10 @@ import java.text.DateFormat
  * Draws both home-screen widgets from the stored list (WidgetStore). They never
  * talk to an agent and hold no key; the list is written by the app while it is
  * open and updated from every native push (WidgetPushStatus.java). Each widget
- * shows the time of the check, and a cluster whose check is over 30 minutes
- * old is drawn grey with "Not current": an alarm redraws at that moment (not
- * waking the device), and updatePeriodMillis every 30 minutes as a fallback.
+ * shows the time of the check, and a cluster whose check is over two hours
+ * old (WidgetStore.STALE_AFTER_MS) is drawn grey with "Not current" and "Open
+ * Kubernanny": an alarm redraws at that moment (not waking the device), and
+ * updatePeriodMillis every 30 minutes as a fallback.
  *
  * Responsive: from Android 12 the launcher picks the layout for the widget's
  * size from a map; before, the size the launcher reports decides.
@@ -123,6 +124,11 @@ object WidgetRender {
             v.setViewVisibility(R.id.kn_more, View.VISIBLE)
             v.setTextViewText(R.id.kn_more, context.resources.getQuantityString(R.plurals.kn_widget_more, list.size - shown.size, list.size - shown.size))
         }
+        // Every cluster grey: say what to do about it, where a free row or the large size leaves room.
+        if (list.isNotEmpty() && list.all { it.isStale(now) } && (problems || list.size < rows)) {
+            v.setViewVisibility(R.id.kn_stale_hint, View.VISIBLE)
+            v.setTextViewText(R.id.kn_stale_hint, context.getString(R.string.kn_widget_stale_tag) + " · " + context.getString(R.string.kn_widget_stale_open))
+        }
         if (problems && list.isNotEmpty()) {
             v.setViewVisibility(R.id.kn_divider, View.VISIBLE)
             val top = list.flatMap { c -> c.problems.map { c to it } }.sortedBy { if (it.second.critical) 0 else 1 }.take(3)
@@ -220,14 +226,17 @@ object WidgetRender {
         }
     }
 
-    /** "as of 10:42", or "Not current · as of 9:20" in a softer amber once the check is over 30 minutes old. */
+    /**
+     * "as of 10:42", or once the check is too old "Not current · as of 9:20" with "Open Kubernanny"
+     * on a second line, in a softer amber (the time view allows two lines in every layout).
+     */
     private fun time(context: Context, v: RemoteViews, viewId: Int, checkedAt: Long?, stale: Boolean, now: Long) {
         if (checkedAt == null) {
             v.setViewVisibility(viewId, View.GONE)
             return
         }
         val text = formatTime(checkedAt, now)
-        v.setTextViewText(viewId, context.getString(if (stale) R.string.kn_widget_stale_time else R.string.kn_widget_as_of, text))
+        v.setTextViewText(viewId, if (stale) context.getString(R.string.kn_widget_stale_time, text) + "\n" + context.getString(R.string.kn_widget_stale_open) else context.getString(R.string.kn_widget_as_of, text))
         v.setTextColor(viewId, context.getColor(if (stale) R.color.kn_warn_soft else R.color.kn_mute))
     }
 

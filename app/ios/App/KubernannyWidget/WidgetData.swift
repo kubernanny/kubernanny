@@ -47,8 +47,10 @@ struct WidgetCluster: Decodable, Identifiable {
         problems = (try? c.decodeIfPresent([WidgetProblem].self, forKey: .problems)) ?? []
     }
 
-    /// Nothing refreshes the widget but the open app and pushes, so a check older than this is shown grey.
-    static let staleAfter: TimeInterval = 30 * 60
+    /// Nothing refreshes the widget but the open app and pushes (on a quiet day a status push about hourly,
+    /// when iOS delivers it), so a check older than this is shown grey. Two hours: one missed status push
+    /// does not grey a healthy cluster. Same as STALE_AFTER_MS on Android and WIDGET_STALE_HOURS in the app.
+    static let staleAfter: TimeInterval = 2 * 60 * 60
 
     func isStale(at now: Date) -> Bool {
         guard let checkedAt else { return true }

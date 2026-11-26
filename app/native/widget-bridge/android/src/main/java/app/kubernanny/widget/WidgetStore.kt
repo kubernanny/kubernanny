@@ -43,8 +43,12 @@ object WidgetStore {
     private const val FILE = "kubernanny_widget"
     private const val KEY = "clusters.v1"
 
-    /** After this long without a check the widget greys out: only the open app and pushes refresh it. */
-    const val STALE_AFTER_MS = 30 * 60 * 1000L
+    /**
+     * After this long without a check the widget greys out: only the open app and pushes refresh it
+     * (on a quiet day a status push about hourly). Two hours: one missed status push does not grey a
+     * healthy cluster. Same as staleAfter on iOS and WIDGET_STALE_HOURS in the app.
+     */
+    const val STALE_AFTER_MS = 2 * 60 * 60 * 1000L
 
     fun readJson(context: Context): String? =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY, null)

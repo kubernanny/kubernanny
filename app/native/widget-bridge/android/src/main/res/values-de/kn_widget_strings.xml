@@ -7,6 +7,7 @@
     <string name="kn_widget_empty">Öffne Kubernanny, um deine Cluster hier zu sehen.</string>
     <string name="kn_widget_stale_tag">Nicht aktuell</string>
     <string name="kn_widget_stale_time">Nicht aktuell · Stand %1$s</string>
+    <string name="kn_widget_stale_open">Öffne Kubernanny</string>
     <string name="kn_widget_demo">Demo</string>
     <string name="kn_widget_as_of">Stand %1$s</string>
     <string name="kn_widget_not_checked">Noch nicht geprüft</string>
