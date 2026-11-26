@@ -32,7 +32,7 @@ export const QUESTIONS: Question[] = [
   },
   {
     q: 'Can it change anything in my cluster?',
-    a: 'Only on an open problem, and only what that problem needs. On by default: sync and hard refresh an Argo CD app, restart a workload, back up now (CloudNativePG, Longhorn, Velero), reconcile Flux, External Secrets or Infisical, renew a certificate, uncordon a forgotten node, clean up evicted pods. Off until you name them in actions.enabled: run a failed job again, force-delete a pod stuck on a dead node, stop a hanging Argo CD sync, grow a full volume, roll an Argo CD app back. Each one is confirmed in the app, the agent takes the target from its own check, never from the request, and admission policies hold every permission to its action. rbac.allowActions: false makes it strictly read-only.',
+    a: 'Only on an open problem, and only what that problem needs. On by default: sync and hard refresh an Argo CD app, restart a workload, back up now (CloudNativePG, Longhorn, Velero), reconcile Flux, External Secrets or Infisical, renew a certificate, uncordon a forgotten node, clean up evicted pods. Off until you name them in actions.enabled: run a failed job again, force-delete a pod stuck on a dead node, stop a hanging Argo CD sync, grow a full volume, roll an Argo CD app back, and let an Argo CD sync delete what is no longer in Git or replace objects Kubernetes refused to patch. Each one is confirmed in the app, the agent takes the target from its own check, never from the request, and admission policies hold every permission to its action. rbac.allowActions: false makes it strictly read-only.',
     link: { route: '/docs/permissions', label: 'Every permission' },
   },
   {
