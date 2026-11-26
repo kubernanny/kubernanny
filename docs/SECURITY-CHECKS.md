@@ -26,7 +26,7 @@ Only the Trivy integration needs permissions of its own (read Trivy Operator's r
 
 ## Security posture (`security`)
 
-Purely from the inventory: every pod's spec, grouped by the workload that owns it (Deployment, StatefulSet, DaemonSet, CronJob, an operator's resource such as a CNPG `Cluster`, or the bare pod).
+Purely from the inventory: every pod's spec, grouped by the workload that owns it (Deployment, StatefulSet, DaemonSet, CronJob, an operator's resource such as a CNPG `Cluster`, or the bare pod). CronJobs are judged by their pod template as well, so they count whether or not a run is going on at that moment (suspended ones are left out).
 
 | Finding | Severity | When | Fix in the text |
 |---|---|---|---|

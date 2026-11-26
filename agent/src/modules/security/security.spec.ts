@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { de } from '../../testing/i18n';
-import { SYSTEM_NAMESPACES, SecurityPod, evaluateSecurity, podFindings, workloadOf } from './evaluate';
+import { SYSTEM_NAMESPACES, SecurityPod, cronJobTemplatePods, evaluateSecurity, podFindings, workloadOf } from './evaluate';
 import { SecurityCheck } from './security.check';
 
 const safe = { runAsNonRoot: true };
@@ -90,6 +90,20 @@ describe('security posture', () => {
     const [issue] = de(evaluateSecurity(input(pods)));
     expect(issue.title).toBe('apps: 7 Workloads mit Image ohne feste Version');
     expect(issue.cause).toContain('Betroffen: w0 (app0:latest), w1 (app1:latest), w2 (app2:latest), w3 (app3:latest), w4 (app4:latest) und 2 weitere.');
+  });
+
+  it('judges CronJobs by their template, running or not, and once with their running pod', () => {
+    const template = { containers: [{ name: 'c', image: 'curl:latest' }] };
+    const cron = (name: string, suspend?: boolean) => ({ metadata: { name, namespace: 'apps' }, spec: { suspend, jobTemplate: { spec: { template: { spec: template } } } } });
+    const running = pod('compact-29402640-x', 'apps', template, { kind: 'Job', name: 'compact-29402640' });
+    const pods = [running, ...cronJobTemplatePods([cron('compact'), cron('cleanup'), cron('paused', true)])];
+    const issues = de(evaluateSecurity(input(pods, [], new Map([['apps/compact-29402640', 'compact']]))));
+    expect(issues.map((i) => [i.id, i.title])).toEqual([
+      ['security/apps/root', 'apps: 2 Workloads laufen womöglich als root'],
+      ['security/apps/no-memory-limit', 'apps: 2 Workloads ohne Speicherlimit'],
+      ['security/apps/mutable-image', 'apps: 2 Workloads mit Image ohne feste Version'],
+    ]);
+    expect(issues[2].cause).toContain('Betroffen: cleanup (curl:latest), compact (curl:latest).');
   });
 
   it('ignores finished pods', () => {

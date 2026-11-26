@@ -127,6 +127,23 @@ export function podFindings(pod: SecurityPod): { type: FindingType; detail?: str
   return out;
 }
 
+/**
+ * A CronJob's pod template as a pod, so the CronJob counts on every run of
+ * the check, not only in the seconds one of its Jobs happens to be running
+ * (a CronJob every 5 minutes otherwise showed up and vanished again, and
+ * seventy CronJobs from one template showed as one). Suspended CronJobs
+ * start no pods and are left out.
+ */
+export function cronJobTemplatePods(cronjobs: readonly { metadata: ObjectMeta; spec?: { suspend?: boolean; jobTemplate?: { spec?: { template?: { spec?: unknown } } } } }[]): SecurityPod[] {
+  return cronjobs
+    .filter((c) => c.spec?.suspend !== true && c.spec?.jobTemplate?.spec?.template?.spec)
+    .map((c) => ({
+      metadata: { name: c.metadata.name, namespace: c.metadata.namespace, ownerReferences: [{ kind: 'CronJob', name: c.metadata.name }] },
+      spec: c.spec!.jobTemplate!.spec!.template!.spec as SecurityPod['spec'],
+      status: { phase: 'Pending' },
+    }));
+}
+
 const ORDER: FindingType[] = ['privileged', 'host-access', 'root', 'no-memory-limit', 'mutable-image'];
 
 export interface SecurityInput {
