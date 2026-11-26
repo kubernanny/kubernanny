@@ -20,21 +20,22 @@ const COMPONENT_COUNT = componentGroups.reduce((sum, g) => sum + g.components.le
           <p class="eyebrow"><span class="live" aria-hidden="true"></span>Kubernetes health for self-hosters</p>
           <h1 id="hero-title">Your cluster's nanny.</h1>
           <p class="lead">
-            One light per cluster. Below it, <strong>only what is broken</strong>: the cause, and the one action that
-            usually fixes it.
+            A small agent in your cluster, an app on your phone. One light per cluster, and below it
+            <strong>only what is broken</strong>: the cause, and the one action that usually fixes it.
           </p>
           <div class="ctas">
-            <a class="btn btn-primary" href="#install">
-              Install in a minute
-              <kn-icon name="arrowRight" />
-            </a>
-            <a class="btn btn-ghost" [href]="vm.demoUrl">
+            <a class="btn btn-primary" [href]="vm.demoUrl">
               <kn-icon name="play" />
               Try the live demo
+            </a>
+            <a class="btn btn-ghost" href="#install">
+              Install with Helm
+              <kn-icon name="arrowRight" />
             </a>
           </div>
           <ul class="facts" aria-label="At a glance">
             <li><strong>{{ vm.count }}</strong> components recognised</li>
+            <li>iPhone, Android and web</li>
             <li>End-to-end encrypted</li>
             <li>No account, no telemetry</li>
             <li>Open source, {{ vm.licence }}</li>

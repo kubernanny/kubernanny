@@ -127,13 +127,15 @@ h1 {
 }
 
 .facts li {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  position: relative;
+  padding-left: 14px;
 }
 
 .facts li::before {
   content: '';
+  position: absolute;
+  left: 0;
+  top: calc(0.75em - 3px);
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -145,12 +147,12 @@ h1 {
   color: var(--ink);
 }
 
-/* The phone with the icon peeking over its corner. */
+/* The phone with the icon peeking over its top right corner, clear of the cluster's name. */
 .visual {
   position: relative;
   justify-self: center;
   width: min(100%, 340px);
-  padding: 40px 0 0 52px;
+  padding: 40px 52px 0 0;
 }
 
 @media (min-width: 960px) {
@@ -192,11 +194,11 @@ h1 {
 .nanny {
   position: absolute;
   top: 0;
-  left: 0;
+  right: 0;
   width: clamp(92px, 26vw, 124px);
   border-radius: 30%;
   box-shadow: 0 20px 40px -14px rgba(0, 0, 0, 0.65);
-  transform: rotate(-6deg);
+  transform: rotate(6deg);
 }
 
 .chip {
@@ -218,13 +220,13 @@ h1 {
 }
 
 .chip-fix {
-  right: -8px;
+  left: -12px;
   bottom: 18%;
 }
 
 @media (max-width: 420px) {
   .chip-fix {
-    right: -4px;
+    left: -4px;
     font-size: 0.8125rem;
   }
 }
