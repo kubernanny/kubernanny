@@ -2,6 +2,12 @@
 
 Agent, chart and relay. The apps in the App Store and on Google Play have their own release notes (`fastlane/release-notes/`).
 
+## 0.3.1 (2026-11-26)
+
+### Fixed
+
+- **The chart is signed again**: 0.3.0 was published, but its cosign signature was refused by the registry. Same chart and images as 0.3.0 otherwise; [SECURITY.md](docs/SECURITY.md) shows how to verify.
+
 ## 0.3.0 (2026-11-26): first public release
 
 Install: `helm install kubernanny oci://ghcr.io/kubernanny/charts/kubernanny --version 0.3.0 -n kubernanny --create-namespace`, or `kubectl apply -f deploy/install.yaml` from the `v0.3.0` tag. Images: `ghcr.io/kubernanny/agent:0.3.0`, `ghcr.io/kubernanny/relay:0.3.0`.

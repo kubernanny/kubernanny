@@ -1,6 +1,6 @@
 {
   "name": "kubernanny-agent",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "In-cluster agent for Kubernanny: runs homelab health checks and offers safe actions bound to the problems it finds.",
   "license": "Apache-2.0",
