@@ -20,11 +20,30 @@ describe('admission policy for the agent (security review M4)', () => {
 
   it('covers every resource a write action patches or creates, for the agent only, failing closed', () => {
     const resources = policies.flatMap((p) => p.spec.matchConstraints.resourceRules.flatMap((r: { apiGroups: string[]; resources: string[] }) => r.resources.map((x) => `${r.apiGroups[0]}/${x}`)));
-    expect(resources.sort()).toEqual(['apps/daemonsets', 'apps/deployments', 'apps/statefulsets', 'argoproj.io/applications', 'postgresql.cnpg.io/backups']);
+    expect(resources.sort()).toEqual([
+      '/nodes',
+      '/pods',
+      'apps/daemonsets',
+      'apps/deployments',
+      'apps/statefulsets',
+      'argoproj.io/applications',
+      'cert-manager.io/certificates',
+      'cert-manager.io/certificates/status',
+      'external-secrets.io/externalsecrets',
+      'helm.toolkit.fluxcd.io/helmreleases',
+      'kustomize.toolkit.fluxcd.io/kustomizations',
+      'longhorn.io/backups',
+      'longhorn.io/snapshots',
+      'postgresql.cnpg.io/backups',
+      'secrets.infisical.com/infisicalstaticsecrets',
+      'velero.io/backups',
+    ]);
     for (const p of policies) {
       expect(p.spec.failurePolicy).toBe('Fail');
       expect(p.spec.matchConditions[0].expression).toBe('request.userInfo.username == "system:serviceaccount:kubernanny:kubernanny"');
-      expect(p.spec.matchConstraints.resourceRules[0].operations.sort()).toEqual(['CREATE', 'DELETE', 'UPDATE']);
+      for (const rule of p.spec.matchConstraints.resourceRules) {
+        expect(rule.operations.sort()).toEqual(['CREATE', 'DELETE', 'UPDATE']);
+      }
     }
   });
 
@@ -41,6 +60,31 @@ describe('admission policy for the agent (security review M4)', () => {
     for (const field of ['revision', 'revisions', 'source', 'sources', 'manifests']) {
       expect(argo).toContain(`object.operation.?sync.?${field} == optional.none()`);
     }
+  });
+
+  it('keeps the opt-in policies and branches out of install.yaml and renders them only on opt-in', () => {
+    const names = policies.map((p) => p.metadata.name);
+    for (const optIn of ['kubernanny-jobs', 'kubernanny-pvcs']) {
+      expect(names).not.toContain(optIn);
+    }
+    const pods = JSON.stringify(policies.find((p) => p.metadata.name === 'kubernanny-pods'));
+    expect(pods).toContain("oldObject.status.?phase.orValue('') in ['Failed', 'Succeeded']");
+    expect(pods).not.toContain('deletionTimestamp');
+    expect(JSON.stringify(policies.find((p) => p.metadata.name === 'kubernanny-argocd-applications'))).not.toContain("optional.of('Terminating')");
+    const template = chart('templates/admission-policy.yaml');
+    expect(template).toContain('{{- if has "job-rerun" $writes }}');
+    expect(template).toContain('{{- if has "pvc-expand" $writes }}');
+    expect(template).toContain('{{- $force := has "force-delete-terminating" $writes }}');
+    expect(template).toContain('{{- $terminate := has "argocd-terminate-op" $writes }}');
+  });
+
+  it('holds uncordon to spec.unschedulable and a renew to the Issuing condition', () => {
+    const nodes = JSON.stringify(policies.find((p) => p.metadata.name === 'kubernanny-nodes'));
+    expect(nodes).toContain("oldObject.spec.?unschedulable.orValue(false) == true");
+    expect(nodes).toContain('object.spec.?taints == oldObject.spec.?taints');
+    const certs = JSON.stringify(policies.find((p) => p.metadata.name === 'kubernanny-certificates'));
+    expect(certs).toContain("request.subResource == 'status'");
+    expect(certs).toContain("ManuallyTriggered");
   });
 
   it('keeps the rollback branch out of install.yaml (argocd-rollback is off by default) and renders it only on opt-in', () => {
@@ -85,7 +129,23 @@ describe('chart hardening (security review H3, M1, M2, LOW)', () => {
     expect(deployment).toContain('include "kubernanny.validateSwitches"');
     const rbac = JSON.parse(chart('files/rbac.json')) as { knownModules: string[]; actionTypes: string[] };
     expect(rbac.knownModules).toEqual(expect.arrayContaining(['notifications', 'prometheus', 'vulnerabilities', 'argocd']));
-    expect(rbac.actionTypes).toEqual(['argocd-refresh', 'argocd-rollback', 'argocd-sync', 'cnpg-backup', 'logs', 'restart']);
+    expect(rbac.actionTypes).toEqual([
+      'argocd-refresh',
+      'argocd-rollback',
+      'argocd-sync',
+      'argocd-terminate-op',
+      'cleanup-pods',
+      'cnpg-backup',
+      'force-delete-terminating',
+      'job-rerun',
+      'logs',
+      'longhorn-backup',
+      'pvc-expand',
+      'reconcile-now',
+      'restart',
+      'uncordon',
+      'velero-backup',
+    ]);
   });
 
   it('can limit the API-server egress rule to its addresses', () => {

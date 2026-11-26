@@ -1,4 +1,4 @@
-import { Issue, condition } from '../../checks/types';
+import { Issue, ReconcileKind, condition } from '../../checks/types';
 import { raw, rawOr, t } from '../../i18n/text';
 import { Integration } from '../module';
 import { ApiRead, ModuleContext, ModuleResult, Stat } from '../types';
@@ -13,6 +13,8 @@ export interface ReadyKind {
   conditionType?: string;
   /** True when the condition reports a failure with status True (Infisical's InfisicalPushSecret `Reconcile`). */
   failureWhenTrue?: boolean;
+  /** Its controller reconciles at once on an annotation (`reconcile-now`); unset: no such offer. */
+  reconcile?: ReconcileKind;
 }
 
 /**
@@ -41,7 +43,7 @@ export abstract class ReadyConditionIntegration extends Integration {
     const stats: Stat[] = [];
     let total = 0;
     let readyTotal = 0;
-    for (const { kind, items, conditionType = 'Ready', failureWhenTrue = false } of lists) {
+    for (const { kind, items, conditionType = 'Ready', failureWhenTrue = false, reconcile } of lists) {
       let ready = 0;
       const shortType = conditionType.split('/').pop()!;
       for (const item of items) {
@@ -59,7 +61,7 @@ export abstract class ReadyConditionIntegration extends Integration {
             severity: 'warning',
             title: t('ready.notReady.title', { kind, name: `${ns}/${item.metadata.name}` }),
             cause: rawOr(c?.message ?? c?.reason, t('ready.notReady.cause', { label: this.label, condition: `${shortType}=${c?.status}` })),
-            actions: [],
+            actions: reconcile ? [{ type: 'reconcile-now', kind: reconcile, namespace: ns, name: item.metadata.name }] : [],
           });
         }
       }

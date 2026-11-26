@@ -305,6 +305,38 @@
         }
       ]
     },
+    "argocd-terminate-op": {
+      "modules": [
+        "argocd"
+      ],
+      "rules": [
+        {
+          "group": "argoproj.io",
+          "resources": [
+            "applications"
+          ],
+          "verbs": [
+            "patch"
+          ]
+        }
+      ]
+    },
+    "cleanup-pods": {
+      "modules": [
+        "pods"
+      ],
+      "rules": [
+        {
+          "group": "",
+          "resources": [
+            "pods"
+          ],
+          "verbs": [
+            "delete"
+          ]
+        }
+      ]
+    },
     "cnpg-backup": {
       "modules": [
         "cnpg"
@@ -314,6 +346,38 @@
           "group": "postgresql.cnpg.io",
           "resources": [
             "backups"
+          ],
+          "verbs": [
+            "create"
+          ]
+        }
+      ]
+    },
+    "force-delete-terminating": {
+      "modules": [
+        "pods"
+      ],
+      "rules": [
+        {
+          "group": "",
+          "resources": [
+            "pods"
+          ],
+          "verbs": [
+            "delete"
+          ]
+        }
+      ]
+    },
+    "job-rerun": {
+      "modules": [
+        "pods"
+      ],
+      "rules": [
+        {
+          "group": "batch",
+          "resources": [
+            "jobs"
           ],
           "verbs": [
             "create"
@@ -339,6 +403,94 @@
         }
       ]
     },
+    "longhorn-backup": {
+      "modules": [
+        "longhorn"
+      ],
+      "rules": [
+        {
+          "group": "longhorn.io",
+          "resources": [
+            "snapshots",
+            "backups"
+          ],
+          "verbs": [
+            "create"
+          ]
+        }
+      ]
+    },
+    "pvc-expand": {
+      "modules": [
+        "volumes"
+      ],
+      "rules": [
+        {
+          "group": "",
+          "resources": [
+            "persistentvolumeclaims"
+          ],
+          "verbs": [
+            "patch"
+          ]
+        }
+      ]
+    },
+    "reconcile-now": {
+      "modules": [
+        "cert-manager",
+        "external-secrets",
+        "flux",
+        "infisical"
+      ],
+      "rules": [
+        {
+          "group": "kustomize.toolkit.fluxcd.io",
+          "resources": [
+            "kustomizations"
+          ],
+          "verbs": [
+            "patch"
+          ]
+        },
+        {
+          "group": "helm.toolkit.fluxcd.io",
+          "resources": [
+            "helmreleases"
+          ],
+          "verbs": [
+            "patch"
+          ]
+        },
+        {
+          "group": "external-secrets.io",
+          "resources": [
+            "externalsecrets"
+          ],
+          "verbs": [
+            "patch"
+          ]
+        },
+        {
+          "group": "secrets.infisical.com",
+          "resources": [
+            "infisicalstaticsecrets"
+          ],
+          "verbs": [
+            "patch"
+          ]
+        },
+        {
+          "group": "cert-manager.io",
+          "resources": [
+            "certificates/status"
+          ],
+          "verbs": [
+            "patch"
+          ]
+        }
+      ]
+    },
     "restart": {
       "modules": [
         "argocd",
@@ -355,6 +507,56 @@
           "verbs": [
             "patch"
           ]
+        },
+        {
+          "group": "",
+          "resources": [
+            "configmaps"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ]
+    },
+    "uncordon": {
+      "modules": [
+        "nodes"
+      ],
+      "rules": [
+        {
+          "group": "",
+          "resources": [
+            "nodes"
+          ],
+          "verbs": [
+            "patch"
+          ]
+        }
+      ]
+    },
+    "velero-backup": {
+      "modules": [
+        "velero"
+      ],
+      "rules": [
+        {
+          "group": "velero.io",
+          "resources": [
+            "schedules"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "group": "velero.io",
+          "resources": [
+            "backups"
+          ],
+          "verbs": [
+            "create"
+          ]
         }
       ]
     }
@@ -364,7 +566,16 @@
     "argocd-sync",
     "argocd-refresh",
     "argocd-rollback",
-    "cnpg-backup"
+    "argocd-terminate-op",
+    "cnpg-backup",
+    "uncordon",
+    "job-rerun",
+    "reconcile-now",
+    "cleanup-pods",
+    "force-delete-terminating",
+    "longhorn-backup",
+    "velero-backup",
+    "pvc-expand"
   ],
   "knownModules": [
     "alertmanager",
@@ -465,11 +676,24 @@
     "argocd-refresh",
     "argocd-rollback",
     "argocd-sync",
+    "argocd-terminate-op",
+    "cleanup-pods",
     "cnpg-backup",
+    "force-delete-terminating",
+    "job-rerun",
     "logs",
-    "restart"
+    "longhorn-backup",
+    "pvc-expand",
+    "reconcile-now",
+    "restart",
+    "uncordon",
+    "velero-backup"
   ],
   "optInActions": [
-    "argocd-rollback"
+    "argocd-rollback",
+    "argocd-terminate-op",
+    "force-delete-terminating",
+    "job-rerun",
+    "pvc-expand"
   ]
 }

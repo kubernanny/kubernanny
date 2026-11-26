@@ -41,7 +41,7 @@ export type WriteActionType = Exclude<ActionType, 'logs'>;
 export const WRITE_EFFECTS: Record<WriteActionType, { changes: string; marker: string; admission: string }> = {
   restart: {
     changes:
-      'merge patch of `spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"]` on the Deployment, StatefulSet or DaemonSet the issue names: the same as `kubectl rollout restart`',
+      'merge patch of `spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"]` on the Deployment, StatefulSet or DaemonSet the issue names: the same as `kubectl rollout restart`. Also `get` on ConfigMaps: for a crash-looping pod, the metadata (never the data, `PartialObjectMetadata`) of the ConfigMaps it reads through env/envFrom, to tell whether one changed after its last start',
     marker: 'kubectl.kubernetes.io/restartedAt',
     admission: 'only an UPDATE that changes nothing but that annotation (spec, template spec and labels, the other annotations, metadata compared); no create, no delete',
   },
@@ -66,7 +66,59 @@ export const WRITE_EFFECTS: Record<WriteActionType, { changes: string; marker: s
     changes: 'creates one `Backup` object (`generateName: <cluster>-kubernanny-`, label `app.kubernetes.io/created-by: kubernanny`) for the database cluster the issue names: the same as `kubectl cnpg backup`',
     marker: "kind: 'Backup'",
     admission: 'only CREATE of a Backup naming a cluster, without `method`, `target`, `online`, `onlineConfiguration` or `pluginConfiguration`; whether the cluster exists is not checked (CNPG fails such a Backup)',
+  },  uncordon: {
+    changes: 'merge patch of `spec.unschedulable: false` on the node the issue names (Ready, cordoned for 30 minutes, no kured lock, no drain under way): the same as `kubectl uncordon`',
+    marker: '{ spec: { unschedulable: false } }',
+    admission: 'only an UPDATE that turns `spec.unschedulable` from true to false; labels, annotations, taints and the rest of the spec unchanged; no create, no delete',
   },
+  'job-rerun': {
+    changes:
+      'off unless named in `actions.enabled`. Creates one Job: from the jobTemplate of the CronJob the issue names, owned by it and annotated `cronjob.kubernetes.io/instantiate: manual` (like `kubectl create job --from=cronjob/…`), or a copy of a failed Job without owner, without its controller-uid labels and selector, labelled `kubernanny.io/rerun-of`',
+    marker: "'cronjob.kubernetes.io/instantiate': 'manual'",
+    admission:
+      'only CREATE of a Job labelled `app.kubernetes.io/created-by: kubernanny` that is either owned by a CronJob (`controller: true`) or carries `kubernanny.io/rerun-of`, with no selector of its own. The policy cannot compare the pod template with the CronJob (it sees only the request): a compromised pod could create a Job with any template, which is why the action is opt-in',
+  },
+  'reconcile-now': {
+    changes:
+      'merge patch of one annotation on the object the issue names: `reconcile.fluxcd.io/requestedAt` on a Flux Kustomization or HelmRelease (`flux reconcile`), `force-sync` on an ExternalSecret, `kubernanny.io/requested-at` on an InfisicalStaticSecret. On a cert-manager Certificate a merge patch of its status subresource that sets the `Issuing` condition to True with reason `ManuallyTriggered` (`cmctl renew`)',
+    marker: "reason: 'ManuallyTriggered'",
+    admission:
+      'Flux, External Secrets, Infisical: only an UPDATE that changes nothing but those annotations (spec, labels, the other annotations unchanged). Certificates: only an UPDATE of `certificates/status` that adds or changes the `Issuing` condition to True with reason `ManuallyTriggered`, every other condition and status field unchanged',
+  },
+  'cleanup-pods': {
+    changes: 'deletes the finished pods the issue lists (phase Failed, evicted ones included, or Succeeded of a Job that is gone; at most 50, one namespace), with their normal grace period',
+    marker: '/pods/${enc(pod)}`).then(',
+    admission: 'only a DELETE of a pod whose phase is Failed or Succeeded; no create, no update, never a running or pending pod',
+  },
+  'force-delete-terminating': {
+    changes:
+      'off unless named in `actions.enabled`. Deletes the pod the issue names with `gracePeriodSeconds: 0`: a pod in Terminating for over 10 minutes whose node is NotReady or gone (`kubectl delete --force --grace-period=0`). Shares `delete` on pods with `cleanup-pods`',
+    marker: '{ gracePeriodSeconds: 0 }',
+    admission: 'rendered only with `actions.enabled: [force-delete-terminating]`: additionally a DELETE of a pod that already has a `deletionTimestamp`. Whether its node is down cannot be checked there; the agent checks it',
+  },
+  'longhorn-backup': {
+    changes: 'creates one Longhorn `Snapshot` (`createSnapshot: true`) of the volume the issue names and one `Backup` of it (label `backup-volume`), both labelled `app.kubernetes.io/created-by: kubernanny`: the CR way to take a backup now',
+    marker: "kind: 'Snapshot'",
+    admission: 'only CREATE of a Snapshot with `createSnapshot: true` naming a volume, and of a Backup naming a snapshot with the `backup-volume` label, both labelled by kubernanny, Backups without `backupMode: full`; no update, no delete',
+  },
+  'velero-backup': {
+    changes: 'reads the Velero `Schedule` the issue names and creates one `Backup` with its template, named `<schedule>-<timestamp>` and labelled `velero.io/schedule-name`: the same as `velero backup create --from-schedule`',
+    marker: "'velero.io/schedule-name': action.schedule",
+    admission: 'only CREATE of a Backup labelled with a schedule name and `app.kubernetes.io/created-by: kubernanny`. The policy cannot compare it with the schedule; Velero writes it only to the storage locations already configured',
+  },
+  'argocd-terminate-op': {
+    changes:
+      'off unless named in `actions.enabled`. Merge patch of `status.operationState.phase: Terminating` on the Application the issue names, whose sync has run for over 30 minutes: what `argocd app terminate-op` has the API server do. Adds no RBAC verb (the same `patch` as `argocd-sync`), only a branch of the admission policy',
+    marker: "status: { operationState: { phase: 'Terminating' } }",
+    admission: 'rendered only with `actions.enabled: [argocd-terminate-op]`: additionally an UPDATE that turns `status.operationState.phase` from Running to Terminating, the rest of the status, the spec and `operation` unchanged',
+  },
+  'pvc-expand': {
+    changes:
+      'off unless named in `actions.enabled`. Merge patch of `spec.resources.requests.storage` on the PVC the issue names (85 % full, Bound, its StorageClass with `allowVolumeExpansion`, not a CloudNativePG volume): a quarter more, rounded up to whole Gi. A volume cannot be shrunk again',
+    marker: 'spec: { resources: { requests: { storage: action.to } } }',
+    admission: 'rendered only while the action is enabled: only an UPDATE that raises the storage request, by at most half or 1 Gi, with everything else on the claim unchanged',
+  },
+
 };
 
 /** The Role in the agent's own namespace, row by row (checked against the chart and install.yaml). */
@@ -109,7 +161,11 @@ export interface RbacRule {
 }
 
 export const NEVER: readonly { what: string; matches: (r: RbacRule, kind: 'ClusterRole' | 'Role') => boolean }[] = [
-  { what: '`delete` or `deletecollection` on anything', matches: (r) => r.verbs.some((v) => v === 'delete' || v === 'deletecollection') },
+  // cleanup-pods and force-delete-terminating delete pods; the admission policy holds that to finished or already terminating ones.
+  {
+    what: '`deletecollection` on anything, or `delete` on anything but pods (pods only for `cleanup-pods` and `force-delete-terminating`, held to finished or already terminating pods by the admission policy)',
+    matches: (r) => r.verbs.includes('deletecollection') || (r.verbs.includes('delete') && !(r.apiGroups.length === 1 && r.apiGroups[0] === '' && r.resources.every((x) => x === 'pods'))),
+  },
   // A policy engine's constraint kinds are created by its users, so reading "every resource of constraints.gatekeeper.sh" needs `*`; only for get and list.
   {
     what: 'wildcards (`*`) in API groups or verbs, or a wildcard resource with anything but get and list',
@@ -120,6 +176,13 @@ export const NEVER: readonly { what: string; matches: (r: RbacRule, kind: 'Clust
   { what: '`pods/exec`, `pods/attach`, `pods/portforward`', matches: (r) => r.resources.some((x) => ['pods/exec', 'pods/attach', 'pods/portforward'].includes(x)) },
   { what: '`services/proxy`, `nodes/proxy`, `pods/proxy` (the API server proxy into the cluster network)', matches: (r) => r.resources.some((x) => x.endsWith('/proxy')) },
   { what: '`escalate`, `bind`, `impersonate`, or any write on RBAC objects', matches: (r) => r.verbs.some((v) => ['escalate', 'bind', 'impersonate'].includes(v)) || (r.apiGroups.includes('rbac.authorization.k8s.io') && r.verbs.some((v) => v !== 'get' && v !== 'list')) },
-  { what: '`create` of pods or workloads, `update` of anything', matches: (r) => r.verbs.includes('update') || (r.verbs.includes('create') && r.resources.some((x) => ['pods', 'deployments', 'statefulsets', 'daemonsets', 'jobs', 'cronjobs'].includes(x))) },
-  { what: 'anything on nodes but reading them (no cordon, drain or label)', matches: (r) => r.apiGroups.includes('') && r.resources.includes('nodes') && r.verbs.some((v) => v !== 'get' && v !== 'list' && v !== 'watch') },
+  // Jobs only for the opt-in job-rerun.
+  {
+    what: '`create` of pods or workloads (Jobs only with the opt-in `job-rerun`), `update` of anything',
+    matches: (r) => r.verbs.includes('update') || (r.verbs.includes('create') && r.resources.some((x) => ['pods', 'deployments', 'statefulsets', 'daemonsets', 'cronjobs'].includes(x))),
+  },
+  {
+    what: 'anything on nodes but reading them and the `patch` of `uncordon` (held to `spec.unschedulable` by the admission policy): no cordon, drain, label or delete',
+    matches: (r) => r.apiGroups.includes('') && r.resources.includes('nodes') && r.verbs.some((v) => !['get', 'list', 'watch', 'patch'].includes(v)),
+  },
 ];

@@ -122,10 +122,33 @@ describe('declared reads of the modules', () => {
 
   it('gives every action type a permission line, and only the declared modules offer it', () => {
     const generated = rbacExport();
-    expect(Object.keys(generated.actions).sort()).toEqual(['argocd-refresh', 'argocd-rollback', 'argocd-sync', 'cnpg-backup', 'logs', 'restart']);
+    expect(Object.keys(generated.actions).sort()).toEqual([
+      'argocd-refresh',
+      'argocd-rollback',
+      'argocd-sync',
+      'argocd-terminate-op',
+      'cleanup-pods',
+      'cnpg-backup',
+      'force-delete-terminating',
+      'job-rerun',
+      'logs',
+      'longhorn-backup',
+      'pvc-expand',
+      'reconcile-now',
+      'restart',
+      'uncordon',
+      'velero-backup',
+    ]);
     // The rollback shares the sync's verb; what it adds is an admission branch, and only on opt-in.
     expect(generated.actions['argocd-rollback']!.rules).toEqual(generated.actions['argocd-sync']!.rules);
-    expect(generated.optInActions).toEqual(['argocd-rollback']);
+    expect(generated.optInActions).toEqual(['argocd-rollback', 'argocd-terminate-op', 'force-delete-terminating', 'job-rerun', 'pvc-expand']);
+    expect(generated.actions['argocd-terminate-op']!.rules).toEqual(generated.actions['argocd-sync']!.rules);
+    expect(generated.actions['uncordon']!.modules).toEqual(['nodes']);
+    expect(generated.actions['reconcile-now']!.modules).toEqual(['cert-manager', 'external-secrets', 'flux', 'infisical']);
+    expect(generated.actions['pvc-expand']!.modules).toEqual(['volumes']);
+    expect(generated.actions['longhorn-backup']!.modules).toEqual(['longhorn']);
+    expect(generated.actions['velero-backup']!.modules).toEqual(['velero']);
+    expect(generated.actions['job-rerun']!.modules).toEqual(['pods']);
     expect(INTEGRATIONS.find((i) => i.id === 'argocd')!.actions).toContain('argocd-sync');
     // An action's permission is tied to the modules offering it: switching off Argo CD also drops its patch.
     expect(generated.actions['argocd-sync']!.modules).toEqual(['argocd']);

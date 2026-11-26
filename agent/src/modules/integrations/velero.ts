@@ -1,5 +1,5 @@
 import { Integration } from '../module';
-import { Condition, Issue, ageText } from '../../checks/types';
+import { Condition, Issue, IssueAction, ageText } from '../../checks/types';
 import { DetailMeta, DetailRow, ModuleContext, ModuleResult, Stat } from '../types';
 import { listSection, sections } from '../details';
 import { raw, rawOr, t } from '../../i18n/text';
@@ -15,6 +15,7 @@ export const MANUAL = '(manuell)';
 
 export class VeleroIntegration extends Integration {
   readonly id = 'velero';
+  override readonly actions = ['velero-backup'] as const;
   readonly reads = [{ group: 'velero.io', resource: 'backups', why: 'phase and age of the newest backup per schedule' }];
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
     const backups = (await ctx.kube.list<VeleroBackup>('/apis/velero.io/v1/backups')) ?? [];
@@ -43,6 +44,8 @@ export class VeleroIntegration extends Integration {
       }
       rows.push({ name, value: t('state.veleroPhase', { s: phase }), tone: phase === 'Completed' ? 'ok' : phase === 'Failed' ? 'critical' : 'warning', ...(meta.length ? { meta } : {}) });
       newest = Math.max(newest, Number.isFinite(at) ? at : -Infinity);
+      // Like `velero backup create --from-schedule`: only for a schedule, in the namespace Velero keeps its backups in.
+      const now: IssueAction[] = schedule === MANUAL ? [] : [{ type: 'velero-backup', namespace: b.metadata.namespace ?? 'velero', schedule }];
       if (phase === 'Failed' || phase === 'PartiallyFailed') {
         issues.push({
           id: `velero/${schedule}`,
@@ -50,10 +53,10 @@ export class VeleroIntegration extends Integration {
           severity: phase === 'Failed' ? 'critical' : 'warning',
           title: t('velero.failed.title', { schedule: name, phase: t('state.veleroPhase', { s: phase }) }),
           cause: rawOr(b.status?.failureReason, t('velero.failed.cause', { errors: b.status?.errors ?? 0, warnings: b.status?.warnings ?? 0, backup: b.metadata.name })),
-          actions: [],
+          actions: now,
         });
       } else if (schedule !== MANUAL && Number.isFinite(at) && age > ctx.config.backupMaxAgeHours * 3_600_000) {
-        issues.push({ id: `velero/${schedule}`, check: 'cnpg', severity: 'warning', title: t('velero.old.title', { schedule: name, age: ageText(age) }), cause: t('velero.old.cause'), actions: [] });
+        issues.push({ id: `velero/${schedule}`, check: 'cnpg', severity: 'warning', title: t('velero.old.title', { schedule: name, age: ageText(age) }), cause: t('velero.old.cause'), actions: now });
       }
     }
     stats.push({ label: t('stat.schedules'), value: String([...bySchedule.keys()].filter((k) => k !== MANUAL).length) });

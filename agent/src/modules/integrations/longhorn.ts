@@ -9,6 +9,7 @@ import { LonghornReplica, longhornDetails } from '../details';
 
 export class LonghornIntegration extends Integration {
   readonly id = 'longhorn';
+  override readonly actions = ['longhorn-backup'] as const;
   readonly reads = [
     { group: 'longhorn.io', resource: 'volumes', why: 'robustness (degraded, faulted) and size of every volume' },
     { group: 'longhorn.io', resource: 'nodes', why: 'disk space and schedulability per storage node' },

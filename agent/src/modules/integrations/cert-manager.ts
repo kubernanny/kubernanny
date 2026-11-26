@@ -12,6 +12,7 @@ interface Issuer extends Conditioned {
 
 export class CertManagerIntegration extends Integration {
   readonly id = 'cert-manager';
+  override readonly actions = ['reconcile-now'] as const;
   readonly reads = [
     { group: 'cert-manager.io', resource: 'certificates', why: 'expiry and Ready condition of every certificate' },
     { group: 'cert-manager.io', resource: 'clusterissuers', why: 'whether the issuers are ready' },

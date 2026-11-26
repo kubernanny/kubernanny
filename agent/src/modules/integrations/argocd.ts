@@ -9,7 +9,7 @@ import { ModuleContext, ModuleResult } from '../types';
 export class ArgoCdIntegration extends Integration {
   readonly id = 'argocd';
   // argocd-rollback is no issue action: it is offered on the sheet (`rollbacks`), for apps without a problem too.
-  override readonly actions = ['argocd-sync', 'argocd-refresh', 'argocd-rollback', 'restart'] as const;
+  override readonly actions = ['argocd-sync', 'argocd-refresh', 'argocd-rollback', 'argocd-terminate-op', 'restart'] as const;
   readonly reads = [{ group: 'argoproj.io', resource: 'applications', why: 'sync and health status of every app' }];
   protected async inspect(ctx: ModuleContext): Promise<ModuleResult> {
     const apps = (await ctx.kube.list<ArgoApplication>('/apis/argoproj.io/v1alpha1/applications')) ?? [];

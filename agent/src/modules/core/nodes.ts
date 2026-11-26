@@ -1,4 +1,4 @@
-import { evaluateNodes } from '../../checks/nodes.check';
+import { evaluateCordoned, evaluateNodes, kuredLockHolders } from '../../checks/nodes.check';
 import { ageText, condition, Issue } from '../../checks/types';
 import { raw, t } from '../../i18n/text';
 import { buildNodes } from '../../views/nodes';
@@ -73,12 +73,26 @@ export class NodesCheck extends CoreCheck {
   readonly icon = 'hardware-chip-outline';
   readonly description = t('module.nodes.description');
   readonly reads = [];
+  override readonly actions = ['uncordon'] as const;
+  /** When this agent first saw each node cordoned, for nodes whose managedFields do not say. */
+  private readonly cordonSeen = new Map<string, number>();
 
   protected async check(ctx: ModuleContext): Promise<ModuleResult> {
     if (ctx.prom) {
       ctx.data.nodeDisk = await nodeDiskUsage(ctx).catch(() => undefined);
     }
-    const issues = [...evaluateNodes(ctx.inv.nodes), ...evaluateNodeUsage(ctx.inv, ctx.data.nodeDisk)];
+    for (const n of ctx.inv.nodes) {
+      if (n.spec?.unschedulable !== true) {
+        this.cordonSeen.delete(n.metadata.name);
+      } else if (!this.cordonSeen.has(n.metadata.name)) {
+        this.cordonSeen.set(n.metadata.name, ctx.now.getTime());
+      }
+    }
+    const issues = [
+      ...evaluateNodes(ctx.inv.nodes),
+      ...evaluateCordoned(ctx.inv.nodes, ctx.inv.pods, kuredLockHolders(ctx.inv.daemonsets), this.cordonSeen, ctx.now),
+      ...evaluateNodeUsage(ctx.inv, ctx.data.nodeDisk),
+    ];
     const notReady = issues.filter((i) => i.id.endsWith('/not-ready')).length;
     return {
       issues,

@@ -31,9 +31,28 @@ export type WorkloadKind = 'Deployment' | 'StatefulSet' | 'DaemonSet';
 export type IssueAction =
   | { type: 'argocd-sync'; namespace: string; app: string }
   | { type: 'argocd-refresh'; namespace: string; app: string }
-  | { type: 'restart'; kind: WorkloadKind; namespace: string; name: string }
+  /**
+   * `secondary`: offered after the logs, with a hint that it only helps once the
+   * cause is gone (a crash loop). `changed`: a ConfigMap the pod reads through
+   * env/envFrom changed after its last start, so the restart is the fix.
+   */
+  | { type: 'restart'; kind: WorkloadKind; namespace: string; name: string; secondary?: boolean; changed?: { kind: 'ConfigMap'; name: string } }
   | { type: 'logs'; namespace: string; pod: string; container?: string; previous?: boolean }
-  | { type: 'cnpg-backup'; namespace: string; cluster: string };
+  | { type: 'cnpg-backup'; namespace: string; cluster: string }
+  | { type: 'uncordon'; node: string }
+  /** `from: 'CronJob'`: a new Job from the CronJob's jobTemplate. `from: 'Job'`: a copy of a failed stand-alone Job. */
+  | { type: 'job-rerun'; namespace: string; from: 'CronJob' | 'Job'; name: string }
+  | { type: 'reconcile-now'; kind: ReconcileKind; namespace: string; name: string }
+  | { type: 'cleanup-pods'; namespace: string; pods: string[] }
+  | { type: 'force-delete-terminating'; namespace: string; pod: string; node: string; statefulSet?: string }
+  | { type: 'longhorn-backup'; namespace: string; volume: string; label: string }
+  | { type: 'velero-backup'; namespace: string; schedule: string }
+  | { type: 'argocd-terminate-op'; namespace: string; app: string }
+  /** `from` and `to` are quantities ("8Gi" -> "10Gi"); `template`: the StatefulSet whose volumeClaimTemplates made the claim. */
+  | { type: 'pvc-expand'; namespace: string; name: string; from: string; to: string; template?: string };
+
+/** The objects `reconcile-now` can ask their controller to reconcile at once. */
+export type ReconcileKind = 'Kustomization' | 'HelmRelease' | 'ExternalSecret' | 'InfisicalStaticSecret' | 'Certificate';
 
 export type IssueActionType = IssueAction['type'];
 
@@ -47,8 +66,11 @@ export type ActionType = IssueActionType | 'argocd-rollback';
 /**
  * Action types that stay locked until the deployment opts in (Helm
  * `actions.enabled`, env `ENABLED_ACTIONS`). The app cannot switch them on.
+ * Each needs a permission whose misuse by a compromised pod reaches further
+ * than the action itself (create Jobs, force-delete pods, end an Argo CD
+ * operation, grow volumes), see docs/SECURITY.md.
  */
-export const OPT_IN_ACTIONS: readonly ActionType[] = ['argocd-rollback'];
+export const OPT_IN_ACTIONS: readonly ActionType[] = ['argocd-rollback', 'job-rerun', 'force-delete-terminating', 'argocd-terminate-op', 'pvc-expand'];
 
 export interface Issue {
   /** Stable across runs, so the app and the notifier can follow one problem. */

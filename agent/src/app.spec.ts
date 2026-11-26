@@ -254,8 +254,21 @@ describe('agent against the demo cluster', () => {
     expect(ids).toEqual(expect.arrayContaining(['argocd/argocd/weblate-chart/sync', 'cnpg/default/shop-api-pg/backup', 'certificates/weblate/weblate-tls', 'alertmanager/BlackboxProbeFailed', 'kured/lock']));
     // Kubernetes 1.33 ended in June 2026, Gatus sees the forum down, Velero's nightly run partly failed.
     expect(ids).toEqual(expect.arrayContaining(['kubernetes-support/1.33', 'gatus/group/shop', 'velero/daily-apps']));
+    // One case for each issue action: OOM, a changed ConfigMap, a forgotten cordon, a pod on a lost node, evicted pods, a hanging sync, a full volume, a failed secret sync.
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        'pods/default/Deployment/shop-mcp-chart',
+        'pods/default/Deployment/newsletter-worker',
+        'nodes/rke2-node-4/cordoned',
+        'pods/terminating/monitoring/uptime-kuma-0',
+        'pods/finished/default',
+        'argocd/argocd/discourse-new/operation-stuck',
+        'volumes/monitoring/data-prometheus-monitoring-chart-kube-prom-prometheus-0/full',
+        'infisical/InfisicalStaticSecret/default/cloudflare-api-token',
+      ]),
+    );
     expect(body.light).toBe('red');
-    expect(body.score).toBeGreaterThan(10);
+    expect(body.score).toBeGreaterThan(0);
     expect(body.score).toBeLessThan(40);
     // Critical first.
     expect(body.issues[0].severity).toBe('critical');
@@ -344,6 +357,42 @@ describe('agent against the demo cluster', () => {
     expect(kube.writes.at(-1)).toMatchObject({ method: 'POST', path: '/apis/postgresql.cnpg.io/v1/namespaces/default/backups' });
   });
 
+  it('runs the default-on issue actions through the route, each on the object its issue names', async () => {
+    // A device of its own: the calls below would eat into the phone's request budget.
+    const { client: tablet } = await paired('tablet');
+    const run = async (type: string, issue: string) => {
+      await tablet.post(`/actions/${type}?${new URLSearchParams({ issue })}`, undefined, 200);
+      return kube.writes.at(-1)!;
+    };
+    expect(await run('uncordon', 'nodes/rke2-node-4/cordoned')).toMatchObject({ method: 'PATCH', path: '/api/v1/nodes/rke2-node-4', body: { spec: { unschedulable: false } } });
+    expect(await run('cleanup-pods', 'pods/finished/default')).toMatchObject({ method: 'DELETE', path: '/api/v1/namespaces/default/pods/shop-web-app-chart-6b8f9c7d4-x8m4d' });
+    expect(await run('reconcile-now', 'certificates/weblate/weblate-tls')).toMatchObject({ method: 'PATCH', path: '/apis/cert-manager.io/v1/namespaces/weblate/certificates/weblate-tls/status' });
+    expect(await run('reconcile-now', 'infisical/InfisicalStaticSecret/default/cloudflare-api-token')).toMatchObject({
+      method: 'PATCH',
+      path: '/apis/secrets.infisical.com/v1beta1/namespaces/default/infisicalstaticsecrets/cloudflare-api-token',
+    });
+    expect(await run('velero-backup', 'velero/daily-apps')).toMatchObject({ method: 'POST', path: '/apis/velero.io/v1/namespaces/velero/backups' });
+    expect(await run('longhorn-backup', 'longhorn/backup/' + (await tablet.get('/status', 200)).body.issues.find((i: { id: string }) => i.id.startsWith('longhorn/backup/')).id.split('/')[2])).toMatchObject({
+      method: 'POST',
+      path: '/apis/longhorn.io/v1beta2/namespaces/longhorn-system/backups',
+    });
+    // The crash loop whose ConfigMap changed offers the restart as the fix.
+    const status = (await tablet.get('/status', 200)).body;
+    expect(status.issues.find((i: { id: string }) => i.id === 'pods/default/Deployment/newsletter-worker').actions[0]).toEqual({
+      type: 'restart',
+      kind: 'Deployment',
+      namespace: 'default',
+      name: 'newsletter-worker',
+      changed: { kind: 'ConfigMap', name: 'newsletter-config' },
+    });
+    // Opt-in actions stay locked outside the demo: no rerun, force delete, terminate or growth is offered.
+    const offered = status.issues.flatMap((i: { actions: { type: string }[] }) => i.actions.map((a) => a.type));
+    for (const type of ['job-rerun', 'force-delete-terminating', 'argocd-terminate-op', 'pvc-expand']) {
+      expect(offered).not.toContain(type);
+      await tablet.post(`/actions/${type}?${new URLSearchParams({ issue: 'jobs/default/appstore-metrics-reviews' })}`, undefined, 403);
+    }
+  });
+
   it('refuses actions an issue does not offer, and issues that are gone', async () => {
     const before = kube.writes.length;
     await phone.post(`/actions/cnpg-backup?${new URLSearchParams({ issue: 'pods/default/Deployment/social-importer' })}`, undefined, 404);
@@ -356,7 +405,23 @@ describe('agent against the demo cluster', () => {
     const before = (await phone.get('/settings', 200)).body;
     expect(before.modules.find((m: { id: string }) => m.id === 'argocd')).toMatchObject({ state: 'on', detected: true, deep: true });
     expect(before.modules.find((m: { id: string }) => m.id === 'nodes')).toMatchObject({ category: 'core', state: 'on' });
-    expect(before.actions.map((a: { type: string }) => a.type)).toEqual(['restart', 'argocd-sync', 'argocd-refresh', 'argocd-rollback', 'cnpg-backup', 'logs']);
+    expect(before.actions.map((a: { type: string }) => a.type)).toEqual([
+      'restart',
+      'argocd-sync',
+      'argocd-refresh',
+      'argocd-rollback',
+      'cnpg-backup',
+      'longhorn-backup',
+      'velero-backup',
+      'reconcile-now',
+      'uncordon',
+      'cleanup-pods',
+      'job-rerun',
+      'force-delete-terminating',
+      'argocd-terminate-op',
+      'pvc-expand',
+      'logs',
+    ]);
     // Opt-in: locked until the deployment names it, and the app cannot switch it on.
     expect(before.actions.find((a: { type: string }) => a.type === 'argocd-rollback').state).toBe('locked');
     expect((await phone.post('/settings', { actions: { 'argocd-rollback': true } })).status).toBe(403);

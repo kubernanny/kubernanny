@@ -1,5 +1,5 @@
 import { raw, t } from '../i18n/text';
-import { Condition, Issue, ObjectMeta, ageText, condition } from './types';
+import { Condition, Issue, IssueAction, ObjectMeta, ageText, condition } from './types';
 
 export interface Certificate {
   metadata: ObjectMeta;
@@ -22,6 +22,8 @@ export function evaluateCertificates(certs: Certificate[], now: Date, opts: Cert
     const host = cert.spec?.dnsNames?.[0] ?? name;
     const notAfter = Date.parse(cert.status?.notAfter ?? '');
     const left = notAfter - now.getTime();
+    // Renew (what `cmctl renew` does), unless cert-manager is issuing right now anyway.
+    const renew: IssueAction[] = condition(cert.status?.conditions, 'Issuing')?.status === 'True' ? [] : [{ type: 'reconcile-now', kind: 'Certificate', namespace: ns, name }];
 
     if (Number.isFinite(notAfter) && left <= 0) {
       issues.push({
@@ -30,7 +32,7 @@ export function evaluateCertificates(certs: Certificate[], now: Date, opts: Cert
         severity: 'critical',
         title: t('certificates.expired.title', { host }),
         cause: t('certificates.expired.cause', { age: ageText(-left), message: condition(cert.status?.conditions, 'Ready')?.message }),
-        actions: [],
+        actions: renew,
       });
       continue;
     }
@@ -45,7 +47,7 @@ export function evaluateCertificates(certs: Certificate[], now: Date, opts: Cert
         severity: Number.isFinite(left) && left < opts.criticalDays * 86_400_000 ? 'critical' : 'warning',
         title: t('certificates.notReady.title', { host }),
         cause: message ? raw(message) : t('certificates.notReady.cause'),
-        actions: [],
+        actions: renew,
       });
       continue;
     }
@@ -57,7 +59,7 @@ export function evaluateCertificates(certs: Certificate[], now: Date, opts: Cert
         severity: left < opts.criticalDays * 86_400_000 ? 'critical' : 'warning',
         title: t('certificates.expiring.title', { host, age: ageText(left) }),
         cause: t('certificates.expiring.cause', { planned: cert.status?.renewalTime?.slice(0, 10) }),
-        actions: [],
+        actions: renew,
       });
     }
   }

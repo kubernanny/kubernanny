@@ -1,9 +1,52 @@
-import { ageText, Issue } from '../../checks/types';
+import { ageText, Issue, IssueAction } from '../../checks/types';
 import { t } from '../../i18n/text';
-import { Inventory, parseQuantity } from '../../inventory/inventory';
+import { Inventory, Pvc, parseQuantity } from '../../inventory/inventory';
 import { bytes } from '../format';
 import { CoreCheck } from '../module';
 import { ModuleContext, ModuleResult } from '../types';
+
+const GI = 2 ** 30;
+
+/** The request after growing by a quarter, rounded up to whole Gi and at least 1 Gi more. */
+export function grownSize(current: string): string | null {
+  const bytesNow = parseQuantity(current);
+  if (!(bytesNow > 0)) {
+    return null;
+  }
+  const gi = Math.max(Math.ceil((bytesNow * 1.25) / GI), Math.floor(bytesNow / GI) + 1);
+  return `${gi}Gi`;
+}
+
+/**
+ * Whether a full volume can be grown from the app: only when its StorageClass
+ * allows expansion and nothing else owns the claim's size. A CloudNativePG
+ * instance volume follows the Cluster's `storage.size` (the operator would
+ * resize it back or fight it), so the hint points there instead. A claim made
+ * from a StatefulSet's volumeClaimTemplates grows, but the template stays.
+ */
+export function expansion(inv: Inventory, pvc: Pvc): { actions: IssueAction[]; cnpg?: string } {
+  const ns = pvc.metadata.namespace ?? 'default';
+  const name = pvc.metadata.name;
+  const cnpg = pvc.metadata.ownerReferences?.find((o) => o.kind === 'Cluster' && (o.apiVersion ?? '').startsWith('postgresql.cnpg.io/'));
+  if (cnpg) {
+    return { actions: [], cnpg: cnpg.name };
+  }
+  const sc = inv.storageClasses.find((c) => c.metadata.name === pvc.spec?.storageClassName);
+  const from = pvc.spec?.resources?.requests?.storage;
+  const to = from ? grownSize(from) : null;
+  if (!sc?.allowVolumeExpansion || pvc.status?.phase !== 'Bound' || !from || !to) {
+    return { actions: [] };
+  }
+  const template = inv.statefulsets.find(
+    (s) =>
+      s.metadata.namespace === ns &&
+      ((s.spec as { volumeClaimTemplates?: { metadata?: { name?: string } }[] } | undefined)?.volumeClaimTemplates ?? []).some((v) => {
+        const prefix = `${v.metadata?.name}-${s.metadata.name}-`;
+        return v.metadata?.name !== undefined && name.startsWith(prefix) && /^\d+$/.test(name.slice(prefix.length));
+      }),
+  );
+  return { actions: [{ type: 'pvc-expand', namespace: ns, name, from, to, ...(template ? { template: template.metadata.name } : {}) }] };
+}
 
 export function evaluateVolumes(inv: Inventory, usage: Map<string, { used: number; capacity: number }> | undefined): Issue[] {
   const issues: Issue[] = [];
@@ -27,13 +70,14 @@ export function evaluateVolumes(inv: Inventory, usage: Map<string, { used: numbe
     const u = usage?.get(key);
     if (u && u.capacity > 0 && u.used / u.capacity >= 0.85) {
       const share = u.used / u.capacity;
+      const grow = expansion(inv, pvc);
       issues.push({
         id: `volumes/${key}/full`,
         check: 'longhorn',
         severity: share >= 0.95 ? 'critical' : 'warning',
         title: t('volumes.full.title', { volume: key, pct: Math.round(share * 100) }),
-        cause: t('volumes.full.cause', { used: bytes(u.used), total: bytes(u.capacity) }),
-        actions: [],
+        cause: grow.cnpg ? t('volumes.full.cnpg', { used: bytes(u.used), total: bytes(u.capacity), cluster: grow.cnpg }) : t('volumes.full.cause', { used: bytes(u.used), total: bytes(u.capacity) }),
+        actions: grow.actions,
       });
     }
   }
@@ -47,6 +91,7 @@ export class VolumesCheck extends CoreCheck {
   readonly icon = 'albums-outline';
   readonly description = t('module.volumes.description');
   readonly reads = [];
+  override readonly actions = ['pvc-expand'] as const;
 
   protected async check(ctx: ModuleContext): Promise<ModuleResult> {
     if (ctx.prom) {

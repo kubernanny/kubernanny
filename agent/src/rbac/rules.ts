@@ -14,13 +14,36 @@ export interface Rule {
  * while the action is enabled (`actions.disabled`, `rbac.allowActions`).
  */
 export const ACTION_PERMISSIONS: Record<ActionType, Rule[]> = {
-  restart: [{ group: 'apps', resources: ['deployments', 'statefulsets', 'daemonsets'], verbs: ['patch'] }],
+  // `get` on ConfigMaps (metadata only, never listed) tells whether one a crashing pod reads through env changed after its start.
+  restart: [
+    { group: 'apps', resources: ['deployments', 'statefulsets', 'daemonsets'], verbs: ['patch'] },
+    { group: '', resources: ['configmaps'], verbs: ['get'] },
+  ],
   'argocd-sync': [{ group: 'argoproj.io', resources: ['applications'], verbs: ['patch'] }],
   'argocd-refresh': [{ group: 'argoproj.io', resources: ['applications'], verbs: ['patch'] }],
   // The same verb as a sync: what a rollback adds is a branch of the admission policy, not RBAC.
   'argocd-rollback': [{ group: 'argoproj.io', resources: ['applications'], verbs: ['patch'] }],
+  // Likewise: ending an operation is a patch of status.operationState.phase, allowed by its own admission branch.
+  'argocd-terminate-op': [{ group: 'argoproj.io', resources: ['applications'], verbs: ['patch'] }],
   'cnpg-backup': [{ group: 'postgresql.cnpg.io', resources: ['backups'], verbs: ['create'] }],
   logs: [{ group: '', resources: ['pods/log'], verbs: ['get'] }],
+  uncordon: [{ group: '', resources: ['nodes'], verbs: ['patch'] }],
+  'job-rerun': [{ group: 'batch', resources: ['jobs'], verbs: ['create'] }],
+  'reconcile-now': [
+    { group: 'kustomize.toolkit.fluxcd.io', resources: ['kustomizations'], verbs: ['patch'] },
+    { group: 'helm.toolkit.fluxcd.io', resources: ['helmreleases'], verbs: ['patch'] },
+    { group: 'external-secrets.io', resources: ['externalsecrets'], verbs: ['patch'] },
+    { group: 'secrets.infisical.com', resources: ['infisicalstaticsecrets'], verbs: ['patch'] },
+    { group: 'cert-manager.io', resources: ['certificates/status'], verbs: ['patch'] },
+  ],
+  'cleanup-pods': [{ group: '', resources: ['pods'], verbs: ['delete'] }],
+  'force-delete-terminating': [{ group: '', resources: ['pods'], verbs: ['delete'] }],
+  'longhorn-backup': [{ group: 'longhorn.io', resources: ['snapshots', 'backups'], verbs: ['create'] }],
+  'velero-backup': [
+    { group: 'velero.io', resources: ['schedules'], verbs: ['get'] },
+    { group: 'velero.io', resources: ['backups'], verbs: ['create'] },
+  ],
+  'pvc-expand': [{ group: '', resources: ['persistentvolumeclaims'], verbs: ['patch'] }],
 };
 
 /** "notifications" is not a module but switches every channel off (checks.disabled). */
@@ -32,7 +55,22 @@ export function knownModuleIds(): string[] {
 }
 
 /** Action types that change the cluster: `rbac.allowActions: false` switches all of them off. */
-export const WRITE_ACTIONS: ActionType[] = ['restart', 'argocd-sync', 'argocd-refresh', 'argocd-rollback', 'cnpg-backup'];
+export const WRITE_ACTIONS: ActionType[] = [
+  'restart',
+  'argocd-sync',
+  'argocd-refresh',
+  'argocd-rollback',
+  'argocd-terminate-op',
+  'cnpg-backup',
+  'uncordon',
+  'job-rerun',
+  'reconcile-now',
+  'cleanup-pods',
+  'force-delete-terminating',
+  'longhorn-backup',
+  'velero-backup',
+  'pvc-expand',
+];
 
 /**
  * deploy/helm/kubernanny/files/rbac.json, generated from the modules'

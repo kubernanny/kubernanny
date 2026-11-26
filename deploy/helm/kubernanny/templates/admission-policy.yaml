@@ -9,7 +9,18 @@ ServiceAccount may only
     revision, source or manifests) and the refresh annotation, nothing else;
     only with actions.enabled: [argocd-rollback], also a sync of a manual-sync,
     single-source app to a revision from its own status.history;
-  - on CNPG Backups: create one that names only a cluster.
+  - on CNPG Backups: create one that names only a cluster;
+  - on nodes: turn spec.unschedulable from true to false (uncordon);
+  - on pods: delete one that has finished (Failed or Succeeded); only with
+    actions.enabled: [force-delete-terminating], also one already terminating;
+  - on Flux Kustomizations and HelmReleases, ExternalSecrets and
+    InfisicalStaticSecrets: set their reconcile annotation, nothing else;
+  - on certificates/status: set the Issuing condition (cmctl renew);
+  - on Longhorn: create a Snapshot and a Backup; on Velero: create a Backup
+    labelled with its schedule;
+  - opt-in only: create a Job owned by a CronJob or labelled as a rerun
+    (job-rerun), end a running Argo CD operation (argocd-terminate-op), raise
+    a PVC's storage request by at most half (pvc-expand).
 Everything else from the agent on these resources (other fields, create,
 delete) is denied. Other users and controllers are not matched at all.
 
@@ -86,7 +97,8 @@ spec:
 {{- end }}
 {{- end }}
 {{- $rollback := has "argocd-rollback" $writes }}
-{{- if or (has "argocd-sync" $writes) (has "argocd-refresh" $writes) $rollback }}
+{{- $terminate := has "argocd-terminate-op" $writes }}
+{{- if or (has "argocd-sync" $writes) (has "argocd-refresh" $writes) $rollback $terminate }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -119,8 +131,37 @@ spec:
       message: the Kubernanny agent may not create or delete Applications
       reason: Forbidden
     - expression: >-
+        object.?status == oldObject.?status
+        {{- if $terminate }} || (
+          oldObject.status.?operationState.?phase == optional.of('Running') &&
+          object.status.?operationState.?phase == optional.of('Terminating') &&
+          object.status.?operationState.?operation == oldObject.status.?operationState.?operation &&
+          object.status.?operationState.?startedAt == oldObject.status.?operationState.?startedAt &&
+          object.status.?operationState.?finishedAt == oldObject.status.?operationState.?finishedAt &&
+          object.status.?operationState.?message == oldObject.status.?operationState.?message &&
+          object.status.?operationState.?retryCount == oldObject.status.?operationState.?retryCount &&
+          object.status.?operationState.?syncResult == oldObject.status.?operationState.?syncResult &&
+          object.status.?sync == oldObject.status.?sync &&
+          object.status.?health == oldObject.status.?health &&
+          object.status.?history == oldObject.status.?history &&
+          object.status.?resources == oldObject.status.?resources &&
+          object.status.?conditions == oldObject.status.?conditions &&
+          object.status.?summary == oldObject.status.?summary &&
+          object.status.?sourceType == oldObject.status.?sourceType &&
+          object.status.?sourceTypes == oldObject.status.?sourceTypes &&
+          object.status.?reconciledAt == oldObject.status.?reconciledAt &&
+          object.status.?observedAt == oldObject.status.?observedAt &&
+          object.status.?controllerNamespace == oldObject.status.?controllerNamespace &&
+          object.status.?resourceHealthSource == oldObject.status.?resourceHealthSource &&
+          object.status.?sourceHydrator == oldObject.status.?sourceHydrator
+        )
+        {{- end }}
+      # With actions.enabled: [argocd-terminate-op] (and only then): what `argocd app terminate-op`
+      # has the API server write, a running operation's phase set to Terminating, nothing else of the status.
+      message: the Kubernanny agent may not change an Application's status{{ if $terminate }}, except ending a running operation{{ end }}
+      reason: Forbidden
+    - expression: >-
         object.?spec == oldObject.?spec &&
-        object.?status == oldObject.?status &&
         object.metadata.?labels == oldObject.metadata.?labels &&
         object.metadata.?finalizers == oldObject.metadata.?finalizers &&
         object.metadata.?ownerReferences == oldObject.metadata.?ownerReferences
@@ -246,6 +287,405 @@ metadata:
     {{- include "kubernanny.labels" . | nindent 4 }}
 spec:
   policyName: {{ $prefix }}-cnpg-backups
+  validationActions: [Deny]
+{{- end }}
+{{- $cleanup := has "cleanup-pods" $writes }}
+{{- $force := has "force-delete-terminating" $writes }}
+{{- if has "uncordon" $writes }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $prefix }}-nodes
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [nodes]
+  matchConditions:
+    - name: only-the-agent
+      expression: request.userInfo.username == {{ $agent | quote }}
+  validations:
+    - expression: request.operation == 'UPDATE'
+      message: the Kubernanny agent may not create or delete nodes
+      reason: Forbidden
+    - expression: >-
+        oldObject.spec.?unschedulable.orValue(false) == true &&
+        object.spec.?unschedulable.orValue(false) == false &&
+        object.spec.?taints == oldObject.spec.?taints &&
+        object.spec.?podCIDR == oldObject.spec.?podCIDR &&
+        object.spec.?podCIDRs == oldObject.spec.?podCIDRs &&
+        object.spec.?providerID == oldObject.spec.?providerID &&
+        object.spec.?configSource == oldObject.spec.?configSource &&
+        object.metadata.?labels == oldObject.metadata.?labels &&
+        object.metadata.?annotations == oldObject.metadata.?annotations &&
+        object.metadata.?finalizers == oldObject.metadata.?finalizers &&
+        object.metadata.?ownerReferences == oldObject.metadata.?ownerReferences
+      message: the Kubernanny agent may only uncordon a node
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $prefix }}-nodes
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  policyName: {{ $prefix }}-nodes
+  validationActions: [Deny]
+{{- end }}
+{{- if or $cleanup $force }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $prefix }}-pods
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [pods]
+  matchConditions:
+    - name: only-the-agent
+      expression: request.userInfo.username == {{ $agent | quote }}
+  validations:
+    - expression: request.operation == 'DELETE'
+      message: the Kubernanny agent may not create or change pods
+      reason: Forbidden
+    # cleanup-pods: a finished pod. force-delete-terminating (opt-in): a pod already being deleted;
+    # whether its node is down is checked by the agent, a policy cannot see the node.
+    - expression: >-
+        {{- if $cleanup }}
+        oldObject.status.?phase.orValue('') in ['Failed', 'Succeeded']
+        {{- end }}
+        {{- if and $cleanup $force }} ||{{ end }}
+        {{- if $force }}
+        has(oldObject.metadata.deletionTimestamp)
+        {{- end }}
+      message: the Kubernanny agent may only delete {{ if $cleanup }}finished pods{{ end }}{{ if and $cleanup $force }} or {{ end }}{{ if $force }}pods already terminating{{ end }}
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $prefix }}-pods
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  policyName: {{ $prefix }}-pods
+  validationActions: [Deny]
+{{- end }}
+{{- if has "job-rerun" $writes }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $prefix }}-jobs
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [batch]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [jobs]
+  matchConditions:
+    - name: only-the-agent
+      expression: request.userInfo.username == {{ $agent | quote }}
+  variables:
+    - name: labels
+      expression: object.metadata.?labels.orValue({})
+  validations:
+    - expression: request.operation == 'CREATE'
+      message: the Kubernanny agent may only create Jobs
+      reason: Forbidden
+    # The template cannot be compared with the CronJob's here (a policy sees only the request);
+    # that is why job-rerun is opt-in (docs/SECURITY.md).
+    - expression: >-
+        variables.labels.?['app.kubernetes.io/created-by'] == optional.of('kubernanny') &&
+        object.spec.?manualSelector.orValue(false) == false &&
+        (object.metadata.?ownerReferences.orValue([]).exists(o, o.kind == 'CronJob' && o.apiVersion == 'batch/v1' && o.?controller.orValue(false) == true) ||
+          'kubernanny.io/rerun-of' in variables.labels)
+      message: the Kubernanny agent may only create a Job run of a CronJob or a rerun of a failed Job
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $prefix }}-jobs
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  policyName: {{ $prefix }}-jobs
+  validationActions: [Deny]
+{{- end }}
+{{- if has "reconcile-now" $writes }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $prefix }}-reconcile
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [kustomize.toolkit.fluxcd.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [kustomizations]
+      - apiGroups: [helm.toolkit.fluxcd.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [helmreleases]
+      - apiGroups: [external-secrets.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [externalsecrets]
+      - apiGroups: [secrets.infisical.com]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [infisicalstaticsecrets]
+  matchConditions:
+    - name: only-the-agent
+      expression: request.userInfo.username == {{ $agent | quote }}
+  variables:
+    - name: allowed
+      expression: "['reconcile.fluxcd.io/requestedAt', 'force-sync', 'kubernanny.io/requested-at']"
+    - name: newAnn
+      expression: "request.operation == 'UPDATE' ? object.metadata.?annotations.orValue({}) : {}"
+    - name: oldAnn
+      expression: "request.operation == 'UPDATE' ? oldObject.metadata.?annotations.orValue({}) : {}"
+  validations:
+    - expression: request.operation == 'UPDATE'
+      message: the Kubernanny agent may not create or delete these objects
+      reason: Forbidden
+    - expression: >-
+        object.?spec == oldObject.?spec &&
+        object.metadata.?labels == oldObject.metadata.?labels &&
+        object.metadata.?finalizers == oldObject.metadata.?finalizers &&
+        object.metadata.?ownerReferences == oldObject.metadata.?ownerReferences &&
+        variables.newAnn.all(k, k in variables.allowed || (k in variables.oldAnn && variables.oldAnn[k] == variables.newAnn[k])) &&
+        variables.oldAnn.all(k, k in variables.allowed || k in variables.newAnn)
+      message: the Kubernanny agent may only set the reconcile annotation
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $prefix }}-reconcile
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  policyName: {{ $prefix }}-reconcile
+  validationActions: [Deny]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $prefix }}-certificates
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [cert-manager.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [certificates, certificates/status]
+  matchConditions:
+    - name: only-the-agent
+      expression: request.userInfo.username == {{ $agent | quote }}
+  variables:
+    - name: others
+      expression: "request.operation == 'UPDATE' ? object.status.?conditions.orValue([]).filter(c, c.type != 'Issuing') : []"
+    - name: oldOthers
+      expression: "request.operation == 'UPDATE' ? oldObject.status.?conditions.orValue([]).filter(c, c.type != 'Issuing') : []"
+  validations:
+    - expression: request.operation == 'UPDATE' && request.subResource == 'status'
+      message: the Kubernanny agent may only renew a Certificate
+      reason: Forbidden
+    # cmctl renew: the Issuing condition True with reason ManuallyTriggered, nothing else.
+    - expression: >-
+        variables.others == variables.oldOthers &&
+        object.status.?conditions.orValue([]).exists(c, c.type == 'Issuing' && c.status == 'True' && c.?reason.orValue('') == 'ManuallyTriggered') &&
+        object.status.?notAfter == oldObject.status.?notAfter &&
+        object.status.?notBefore == oldObject.status.?notBefore &&
+        object.status.?renewalTime == oldObject.status.?renewalTime &&
+        object.status.?revision == oldObject.status.?revision &&
+        object.status.?nextPrivateKeySecretName == oldObject.status.?nextPrivateKeySecretName &&
+        object.status.?lastFailureTime == oldObject.status.?lastFailureTime &&
+        object.status.?failedIssuanceAttempts == oldObject.status.?failedIssuanceAttempts &&
+        object.metadata.?labels == oldObject.metadata.?labels &&
+        object.metadata.?annotations == oldObject.metadata.?annotations
+      message: the Kubernanny agent may only set the Issuing condition of a Certificate
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $prefix }}-certificates
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  policyName: {{ $prefix }}-certificates
+  validationActions: [Deny]
+{{- end }}
+{{- if has "longhorn-backup" $writes }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $prefix }}-longhorn-backups
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [longhorn.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [snapshots, backups]
+  matchConditions:
+    - name: only-the-agent
+      expression: request.userInfo.username == {{ $agent | quote }}
+  variables:
+    - name: labels
+      expression: "request.operation == 'CREATE' ? object.metadata.?labels.orValue({}) : {}"
+  validations:
+    - expression: request.operation == 'CREATE'
+      message: the Kubernanny agent may only create Longhorn snapshots and backups
+      reason: Forbidden
+    - expression: >-
+        variables.labels.?['app.kubernetes.io/created-by'] == optional.of('kubernanny') &&
+        (request.resource.resource == 'snapshots'
+          ? object.spec.?createSnapshot.orValue(false) == true && object.spec.?volume.orValue('') != ''
+          : object.spec.?snapshotName.orValue('') != '' && 'backup-volume' in variables.labels && object.spec.?backupMode.orValue('incremental') != 'full')
+      message: the Kubernanny agent may only take a snapshot of a volume and back it up
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $prefix }}-longhorn-backups
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  policyName: {{ $prefix }}-longhorn-backups
+  validationActions: [Deny]
+{{- end }}
+{{- if has "velero-backup" $writes }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $prefix }}-velero-backups
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [velero.io]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [backups]
+  matchConditions:
+    - name: only-the-agent
+      expression: request.userInfo.username == {{ $agent | quote }}
+  validations:
+    - expression: request.operation == 'CREATE'
+      message: the Kubernanny agent may only create Velero backups
+      reason: Forbidden
+    # Whether the spec equals the schedule's template cannot be checked here; Velero writes only to configured locations.
+    - expression: >-
+        object.metadata.?labels.orValue({}).?['app.kubernetes.io/created-by'] == optional.of('kubernanny') &&
+        object.metadata.?labels.orValue({}).?['velero.io/schedule-name'].orValue('') != ''
+      message: the Kubernanny agent may only create a backup from a schedule
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $prefix }}-velero-backups
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  policyName: {{ $prefix }}-velero-backups
+  validationActions: [Deny]
+{{- end }}
+{{- if has "pvc-expand" $writes }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $prefix }}-pvcs
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [persistentvolumeclaims]
+  matchConditions:
+    - name: only-the-agent
+      expression: request.userInfo.username == {{ $agent | quote }}
+  variables:
+    - name: newSize
+      expression: "request.operation == 'UPDATE' ? quantity(object.spec.resources.requests.storage).asApproximateFloat() : 0.0"
+    - name: oldSize
+      expression: "request.operation == 'UPDATE' ? quantity(oldObject.spec.resources.requests.storage).asApproximateFloat() : 0.0"
+  validations:
+    - expression: request.operation == 'UPDATE'
+      message: the Kubernanny agent may not create or delete volume claims
+      reason: Forbidden
+    - expression: >-
+        object.spec.?accessModes == oldObject.spec.?accessModes &&
+        object.spec.?selector == oldObject.spec.?selector &&
+        object.spec.?storageClassName == oldObject.spec.?storageClassName &&
+        object.spec.?volumeName == oldObject.spec.?volumeName &&
+        object.spec.?volumeMode == oldObject.spec.?volumeMode &&
+        object.spec.?dataSource == oldObject.spec.?dataSource &&
+        object.spec.?dataSourceRef == oldObject.spec.?dataSourceRef &&
+        object.spec.?volumeAttributesClassName == oldObject.spec.?volumeAttributesClassName &&
+        object.spec.resources.?limits == oldObject.spec.resources.?limits &&
+        object.metadata.?labels == oldObject.metadata.?labels &&
+        object.metadata.?annotations == oldObject.metadata.?annotations &&
+        object.metadata.?finalizers == oldObject.metadata.?finalizers
+      message: the Kubernanny agent may only change the size of a volume claim
+      reason: Forbidden
+    - expression: >-
+        variables.newSize > variables.oldSize &&
+        (variables.newSize <= variables.oldSize * 1.5 || variables.newSize <= variables.oldSize + 1073741824.0)
+      message: the Kubernanny agent may only grow a volume claim, by half or 1 Gi at most
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $prefix }}-pvcs
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+spec:
+  policyName: {{ $prefix }}-pvcs
   validationActions: [Deny]
 {{- end }}
 {{- end }}

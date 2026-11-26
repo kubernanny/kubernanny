@@ -128,33 +128,49 @@ customComponents: []
 
 actions:
   # Action types to switch off for good: restart, argocd-sync, argocd-refresh,
-  # cnpg-backup, logs; the app cannot switch them on. A permission is dropped
-  # once no enabled action of an enabled module needs it (argocd-sync and
-  # argocd-refresh share `patch` on Applications: disable both to drop it).
+  # cnpg-backup, longhorn-backup, velero-backup, reconcile-now, uncordon,
+  # cleanup-pods, logs (and the opt-in ones below); the app cannot switch them
+  # on. A permission is dropped once no enabled action of an enabled module
+  # needs it (argocd-sync and argocd-refresh share `patch` on Applications:
+  # disable both to drop it).
   disabled: []
-  # Action types that are off until named here. Only argocd-rollback: roll a
-  # manual-sync, single-source Argo CD app back to an earlier deployment from
-  # its own history, from the Argo CD sheet, also when nothing looks wrong.
-  # Adds no RBAC verb (the same `patch` on Applications as argocd-sync), but
-  # renders an extra branch of the admission policy that allows exactly that
-  # sync. Every rollback is announced through the notification channels.
+  # Action types that are off until named here, each because its permission
+  # reaches further than the action if the agent pod were compromised
+  # (docs/SECURITY.md):
+  # - argocd-rollback: roll a manual-sync, single-source Argo CD app back to an
+  #   earlier deployment from its own history, from the Argo CD sheet, also
+  #   when nothing looks wrong. No new RBAC verb, an extra admission branch.
+  # - job-rerun: run a failed Job again, from its CronJob's template or as a
+  #   copy. Needs `create` on Jobs, which no admission policy can hold to the
+  #   CronJob's template.
+  # - force-delete-terminating: force-delete a pod stuck in Terminating on a
+  #   NotReady or vanished node. A StatefulSet pod could run twice if the node
+  #   is in fact alive.
+  # - argocd-terminate-op: end an Argo CD sync running for over 30 minutes.
+  #   No new RBAC verb, an extra admission branch.
+  # - pvc-expand: grow an almost full volume by a quarter. Cannot be undone.
   # actions.disabled and rbac.allowActions: false win over this list.
-  # Leave it empty unless you need it (docs/SECURITY.md).
+  # Leave it empty unless you need them.
   enabled: []
 
 rbac:
   # Sync and refresh Argo CD apps, restart Deployments/StatefulSets/DaemonSets,
-  # start CNPG backups. The agent only runs an action an open issue offers.
+  # start CNPG, Longhorn and Velero backups, reconcile Flux, External Secrets,
+  # Infisical and cert-manager objects, uncordon nodes, delete finished pods.
+  # The agent only runs an action an open issue offers.
   # false: strictly read-only (adds every write action to actions.disabled,
   # argocd-rollback included). Pod logs stay readable: that is no write; set
   # actions.disabled: [logs] to drop pods/log as well.
   allowActions: true
-  # A ValidatingAdmissionPolicy that limits the agent's write permissions to
+  # ValidatingAdmissionPolicies that limit the agent's write permissions to
   # what its actions change: on Deployments, StatefulSets and DaemonSets only
   # the restartedAt annotation of the pod template, on Argo CD Applications
-  # only a plain sync and the refresh annotation, on CNPG only creating a
-  # plain Backup. A compromised agent pod then cannot change images, service
-  # accounts or Argo CD sources with the permissions the actions need.
+  # only a plain sync and the refresh annotation, on nodes only uncordon, on
+  # pods only deleting finished ones, on Flux, External Secrets and Infisical
+  # objects only their reconcile annotation, on cert-manager only the renew
+  # condition, and only creating plain backups. A compromised agent pod then
+  # cannot change images, service accounts or sources with the permissions
+  # the actions need.
   # Rendered while any write action is enabled; needs Kubernetes 1.30+
   # (skipped, with a note, on older clusters). docs/PERMISSIONS.md.
   admissionPolicy:

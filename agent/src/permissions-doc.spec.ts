@@ -141,7 +141,10 @@ describe('docs/PERMISSIONS.md', () => {
 
   it('would catch a forbidden rule (the predicates are not vacuous)', () => {
     const bad: [RbacRule, Kind][] = [
-      [{ apiGroups: [''], resources: ['pods'], verbs: ['delete'] }, 'ClusterRole'],
+      [{ apiGroups: [''], resources: ['pods'], verbs: ['deletecollection'] }, 'ClusterRole'],
+      [{ apiGroups: ['apps'], resources: ['deployments'], verbs: ['delete'] }, 'ClusterRole'],
+      [{ apiGroups: [''], resources: ['nodes'], verbs: ['delete'] }, 'ClusterRole'],
+      [{ apiGroups: [''], resources: ['pods'], verbs: ['create'] }, 'ClusterRole'],
       [{ apiGroups: [''], resources: ['secrets'], verbs: ['get'] }, 'ClusterRole'],
       [{ apiGroups: [''], resources: ['services/proxy'], verbs: ['get'] }, 'ClusterRole'],
       [{ apiGroups: [''], resources: ['pods/exec'], verbs: ['create'] }, 'ClusterRole'],

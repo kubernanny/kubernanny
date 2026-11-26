@@ -121,6 +121,17 @@ export class KubeClient {
     return (await this.json(res)) as T;
   }
 
+  /**
+   * Only the metadata of one object (`PartialObjectMetadata`): name,
+   * resourceVersion, managedFields with their times, never `data`. Used for
+   * ConfigMaps, whose contents the agent has no reason to see.
+   */
+  async metadata<T>(path: string): Promise<T> {
+    const res = await this.request(path, { headers: { accept: 'application/json;as=PartialObjectMetadata;g=meta.k8s.io;v=v1' } });
+    await this.assertOk(res, path);
+    return (await this.json(res)) as T;
+  }
+
   /** `max`: a smaller cap for callers that know their answer is small (pod logs). */
   async text(path: string, max = MAX_KUBE_RESPONSE): Promise<string> {
     const res = await this.request(path);
@@ -137,6 +148,16 @@ export class KubeClient {
       method: 'PATCH',
       headers: { 'content-type': 'application/merge-patch+json' },
       body: JSON.stringify(body),
+    });
+    await this.assertOk(res, path);
+  }
+
+  /** DELETE; `gracePeriodSeconds: 0` with `force` (a pod whose node is gone). */
+  async delete(path: string, opts: { gracePeriodSeconds?: number } = {}): Promise<void> {
+    const res = await this.request(path, {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind: 'DeleteOptions', apiVersion: 'v1', ...(opts.gracePeriodSeconds !== undefined ? { gracePeriodSeconds: opts.gracePeriodSeconds } : {}) }),
     });
     await this.assertOk(res, path);
   }
@@ -173,7 +194,9 @@ export class KubeClient {
     if (token) {
       headers.set('authorization', `Bearer ${token}`);
     }
-    headers.set('accept', 'application/json');
+    if (!headers.has('accept')) {
+      headers.set('accept', 'application/json');
+    }
     return fetch(`${this.baseUrl}${path}`, { ...init, headers, signal: init.signal ?? AbortSignal.timeout(15_000) });
   }
 

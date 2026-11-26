@@ -20,7 +20,7 @@ Against a real cluster: `kubectl proxy`, then `K8S_API_URL=http://127.0.0.1:8001
 | `src/modules` | core modules, inspectors, in-cluster HTTP and Prometheus |
 | `src/status` | run loop, snapshot, light, score, history |
 | `src/views` | detail views and history for the app's tabs |
-| `src/actions` | the four actions and logs |
+| `src/actions` | the issue actions, logs and the opt-in rollback |
 | `src/notify` | when and how to notify |
 | `src/auth`, `src/pairing` | agent key pair, paired device keys, one-time pairing codes |
 | `src/e2e` | `POST /api/e2e` (Noise, replay cache, rate limit) and the internal Unix socket |

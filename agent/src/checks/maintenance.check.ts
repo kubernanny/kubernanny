@@ -1,5 +1,5 @@
 import { raw, rawOr, t } from '../i18n/text';
-import { Condition, Issue, ObjectMeta, ageText, condition } from './types';
+import { Condition, Issue, IssueAction, ObjectMeta, ageText, condition } from './types';
 
 // ---------- PodDisruptionBudgets ----------
 
@@ -302,6 +302,8 @@ export function evaluateLonghornBackups(
     // allow-recurring-job-while-volume-detached is on), so its backups age by
     // design: nothing writes to it either. Worth knowing, not a fault.
     const detached = volume.status?.state === 'detached';
+    // A snapshot (and so a backup) needs the volume attached.
+    const backupNow: IssueAction[] = volume.status?.state === 'attached' ? [{ type: 'longhorn-backup', namespace: volume.metadata.namespace ?? 'longhorn-system', volume: name, label }] : [];
     const sorted = list.filter((b) => Number.isFinite(time(b))).sort((a, b) => time(b) - time(a));
     const lastOk = sorted.find((b) => b.status?.state === 'Completed');
     const newest = sorted[0];
@@ -312,7 +314,7 @@ export function evaluateLonghornBackups(
         severity: 'warning',
         title: t('longhorn.backup.failed.title', { volume: label }),
         cause: rawOr(newest.status.error || Object.values(newest.status.messages ?? {})[0], t('longhorn.backup.failed.cause')),
-        actions: [],
+        actions: backupNow,
       });
       continue;
     }
@@ -324,7 +326,7 @@ export function evaluateLonghornBackups(
         severity: detached ? 'info' : age > 2 * maxAgeHours * 3_600_000 ? 'critical' : 'warning',
         title: lastOk ? t('longhorn.backup.old.title', { volume: label, age: ageText(age) }) : t('longhorn.backup.none.title', { volume: label }),
         cause: detached ? t('longhorn.backup.detached.cause') : t('longhorn.backup.old.cause'),
-        actions: [],
+        actions: backupNow,
       });
     }
   }

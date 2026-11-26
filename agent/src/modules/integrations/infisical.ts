@@ -13,10 +13,12 @@ import { ReadyConditionIntegration } from './ready-condition';
 export class InfisicalIntegration extends ReadyConditionIntegration {
   readonly id = 'infisical';
 
+  override readonly actions = ['reconcile-now'] as const;
+
   constructor() {
     super('Infisical', [
       { path: '/apis/secrets.infisical.com/v1alpha1/infisicalsecrets', kind: 'InfisicalSecret', conditionType: 'secrets.infisical.com/ReadyToSyncSecrets' },
-      { path: '/apis/secrets.infisical.com/v1beta1/infisicalstaticsecrets', kind: 'InfisicalStaticSecret', conditionType: 'secrets.infisical.com/LastReconcileStatus' },
+      { path: '/apis/secrets.infisical.com/v1beta1/infisicalstaticsecrets', kind: 'InfisicalStaticSecret', conditionType: 'secrets.infisical.com/LastReconcileStatus', reconcile: 'InfisicalStaticSecret' },
       { path: '/apis/secrets.infisical.com/v1alpha1/infisicaldynamicsecrets', kind: 'InfisicalDynamicSecret', conditionType: 'secrets.infisical.com/Reconcile' },
       { path: '/apis/secrets.infisical.com/v1alpha1/infisicalpushsecrets', kind: 'InfisicalPushSecret', conditionType: 'secrets.infisical.com/Reconcile', failureWhenTrue: true },
     ]);

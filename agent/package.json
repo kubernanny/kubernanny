@@ -2,7 +2,7 @@
   "name": "kubernanny-agent",
   "version": "0.3.0",
   "private": true,
-  "description": "In-cluster agent for Kubernanny: runs homelab health checks and offers a few safe actions.",
+  "description": "In-cluster agent for Kubernanny: runs homelab health checks and offers safe actions bound to the problems it finds.",
   "license": "Apache-2.0",
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",

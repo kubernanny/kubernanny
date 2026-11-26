@@ -140,6 +140,8 @@ export interface ModuleContext {
   rollbackOn?: boolean;
   /** `argocd-sync` is on: apps ready to sync can be synced from the app. */
   syncOn?: boolean;
+  /** `restart` is on: the workloads check may read ConfigMap metadata to tell a restart that fixes from one that does not. */
+  restartOn?: boolean;
 }
 
 /** An API resource a module reads; the RBAC test checks the chart and install.yaml grant it. */

@@ -35,6 +35,15 @@ export const ACTION_TYPES: readonly { type: ActionType; label: Text; description
   action('argocd-refresh', true),
   action('argocd-rollback', true),
   action('cnpg-backup', true),
+  action('longhorn-backup', true),
+  action('velero-backup', true),
+  action('reconcile-now', true),
+  action('uncordon', true),
+  action('cleanup-pods', true),
+  action('job-rerun', true),
+  action('force-delete-terminating', true),
+  action('argocd-terminate-op', true),
+  action('pvc-expand', true),
   action('logs', false),
 ];
 

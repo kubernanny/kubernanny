@@ -41,7 +41,10 @@ interface WorkloadSpec {
   host?: string;
   cpu?: string;
   mem?: string;
-  crash?: { reason: string; restarts: number; message?: string };
+  /** `lastReason`: how the last run ended (OOMKilled when the limit is too small); Error by default. */
+  crash?: { reason: string; restarts: number; message?: string; lastReason?: string };
+  /** A ConfigMap the container reads through env/envFrom; it changed after the last start (broken scenario). */
+  envConfigMap?: string;
   pvc?: { size: string; class: string };
   /** Broken scenario only: no securityContext and no memory limit, for the security posture check. */
   loose?: boolean;
@@ -92,8 +95,28 @@ const W: WorkloadSpec[] = [
   // apps
   { kind: 'Deployment', ns: 'default', name: 'shop-api-chart', image: 'ghcr.io/acme/shop-api:2026-11-24-412', replicas: 3, ports: [{ port: 3000 }], host: 'api.shop.example', cpu: '250m', mem: '512Mi' },
   { kind: 'Deployment', ns: 'default', name: 'shop-web-app-chart', image: 'ghcr.io/acme/shop-web-app:2026-11-24-118', replicas: 2, ports: [{ port: 4000 }], host: 'shop.example' },
-  { kind: 'Deployment', ns: 'default', name: 'shop-mcp-chart', image: 'ghcr.io/acme/shop-mcp:2026-06-02-0', replicas: 2, ports: [{ port: 8787 }], host: 'mcp.shop.example' },
+  // Broken: its memory limit is too small since the last release, so restarting cannot help.
+  {
+    kind: 'Deployment',
+    ns: 'default',
+    name: 'shop-mcp-chart',
+    image: 'ghcr.io/acme/shop-mcp:2026-06-02-0',
+    replicas: 2,
+    ports: [{ port: 8787 }],
+    host: 'mcp.shop.example',
+    crash: { reason: 'CrashLoopBackOff', restarts: 9, message: 'back-off 2m40s restarting failed container', lastReason: 'OOMKilled' },
+  },
   { kind: 'Deployment', ns: 'default', name: 'social-importer', image: 'ghcr.io/acme/social-importer:2026-11-20-3', crash: { reason: 'CrashLoopBackOff', restarts: 14, message: 'back-off 5m0s restarting failed container' } },
+  // Crashed on a missing setting; the ConfigMap it reads through env has been fixed since its last start.
+  {
+    kind: 'Deployment',
+    ns: 'default',
+    name: 'newsletter-worker',
+    image: 'ghcr.io/acme/newsletter-worker:2026-11-25-2',
+    crash: { reason: 'CrashLoopBackOff', restarts: 6, message: 'back-off 2m40s restarting failed container' },
+    envConfigMap: 'newsletter-config',
+    brokenOnly: true,
+  },
   { kind: 'StatefulSet', ns: 'weblate', name: 'weblate', image: 'weblate/weblate:5.13.0', ports: [{ port: 8080 }], host: 'translate.shop.example', pvc: { size: '20Gi', class: 'longhorn' } },
   { kind: 'Deployment', ns: 'discourse', name: 'discourse', image: 'docker.io/bitnami/discourse:3.4.6', replicas: 2, ready: 1, ports: [{ port: 3000 }], host: 'community.shop.example' },
   { kind: 'Deployment', ns: 'pgadmin', name: 'pgadmin', image: 'dpage/pgadmin4:9.6', ports: [{ port: 80 }], host: 'pgadmin.home.example', loose: true },
@@ -218,8 +241,17 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
         name: n.name,
         creationTimestamp: iso((210 - i * 60) * D),
         labels: { 'node-role.kubernetes.io/control-plane': 'true', 'node-role.kubernetes.io/etcd': 'true', 'node-role.kubernetes.io/master': 'true' },
+        // Broken: rke2-node-4 was cordoned for a disk swap five hours ago and never opened again.
+        ...(broken && n.name === 'rke2-node-4'
+          ? {
+              managedFields: [
+                { manager: 'kubectl-cordon', operation: 'Update', apiVersion: 'v1', time: iso(5.2 * H), fieldsType: 'FieldsV1', fieldsV1: { 'f:spec': { 'f:unschedulable': {} } } },
+                { manager: 'kubelet', operation: 'Update', apiVersion: 'v1', time: iso(40_000), fieldsType: 'FieldsV1', fieldsV1: { 'f:status': { 'f:conditions': {} } }, subresource: 'status' },
+              ],
+            }
+          : {}),
       },
-      spec: {},
+      spec: broken && n.name === 'rke2-node-4' ? { unschedulable: true, taints: [{ key: 'node.kubernetes.io/unschedulable', effect: 'NoSchedule' }] } : {},
       status: {
         conditions: [...ready(), { type: 'MemoryPressure', status: 'False' }, { type: 'DiskPressure', status: 'False' }, { type: 'PIDPressure', status: 'False' }],
         capacity: { cpu: n.cpu, memory: n.mem, pods: '110' },
@@ -268,6 +300,7 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
           {
             name: w.name.split('-')[0],
             image,
+            ...(w.envConfigMap ? { envFrom: [{ configMapRef: { name: w.envConfigMap } }], env: [{ name: 'SMTP_HOST', valueFrom: { configMapKeyRef: { name: w.envConfigMap, key: 'smtp_host' } } }] } : {}),
             resources: { requests: { cpu: w.cpu ?? '50m', memory: w.mem ?? '128Mi' }, ...(loose ? {} : { limits: { memory: memLimit, ...(hash(w.name) % 3 === 0 ? { cpu: `${cpuMilli(w.cpu ?? '50m') * 4}m` } : {}) } }) },
           },
         ],
@@ -282,7 +315,9 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
       w.kind === 'DaemonSet'
         ? { desiredNumberScheduled: desired, numberReady: readyCount }
         : { replicas: desired, readyReplicas: readyCount, availableReplicas: readyCount, updatedReplicas: desired };
-    const obj = { metadata: meta, spec: { replicas: desired, selector: { matchLabels: labels }, template }, status };
+    // A StatefulSet's volume comes from its volumeClaimTemplates (data-<name>-0), as charts make them.
+    const claims = w.kind === 'StatefulSet' && w.pvc ? { volumeClaimTemplates: [{ metadata: { name: 'data' }, spec: { accessModes: ['ReadWriteOnce'], storageClassName: w.pvc.class, resources: { requests: { storage: w.pvc.size } } } }] } : {};
+    const obj = { metadata: meta, spec: { replicas: desired, selector: { matchLabels: labels }, template, ...claims }, status };
     ({ Deployment: deployments, StatefulSet: statefulsets, DaemonSet: daemonsets })[w.kind].push(obj);
 
     const hashPart = (hash(w.name) % 0xfffff).toString(16).padStart(5, '0').slice(0, 5);
@@ -293,6 +328,8 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
       const isReady = i < readyCount;
       const owner = w.kind === 'Deployment' ? { kind: 'ReplicaSet', name: `${w.name}-${hashPart}` } : { kind: w.kind, name: w.name };
       const restarts = crash ? crash.restarts : hash(podName) % 7 === 0 ? 1 + (hash(podName) % 3) : 0;
+      // Broken: Uptime Kuma's pod was on a node that died and was removed; it hangs in Terminating.
+      const stranded = broken && w.name === 'uptime-kuma';
       pods.push({
         metadata: {
           name: podName,
@@ -300,8 +337,9 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
           labels: { ...labels, ...(w.kind === 'Deployment' ? { 'pod-template-hash': hashPart } : {}) },
           ownerReferences: [owner],
           creationTimestamp: iso(crash ? 2 * H : isReady ? age / 3 : 40 * 60_000),
+          ...(stranded ? { deletionTimestamp: iso(26 * 60_000) } : {}),
         },
-        spec: { ...template.spec, nodeName: node },
+        spec: { ...template.spec, nodeName: stranded ? 'rke2-node-2' : node },
         status: {
           phase: isReady || crash ? 'Running' : 'Pending',
           conditions: [{ type: 'Ready', status: isReady ? 'True' : 'False' }, { type: 'PodScheduled', status: isReady || crash ? 'True' : 'False', message: isReady ? undefined : '0/3 nodes are available: 3 Insufficient memory.' }],
@@ -313,7 +351,7 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
               state: crash ? { waiting: { reason: crash.reason, message: crash.message } } : { running: {} },
               // How the previous run ended: the crash, or for a few healthy pods an OOMKill or an error some hours ago.
               lastState: crash
-                ? { terminated: { reason: 'Error', exitCode: 1, finishedAt: iso(4 * 60_000) } }
+                ? { terminated: { reason: crash.lastReason ?? 'Error', exitCode: crash.lastReason === 'OOMKilled' ? 137 : 1, startedAt: iso(4.5 * 60_000), finishedAt: iso(4 * 60_000) } }
                 : restarts > 0
                   ? { terminated: hash(podName) % 2 === 0 ? { reason: 'OOMKilled', exitCode: 137, finishedAt: iso((2 + (hash(podName) % 30)) * H) } : { reason: 'Error', exitCode: 2, finishedAt: iso((1 + (hash(podName) % 50)) * H) } }
                   : {},
@@ -426,6 +464,22 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
     status: { phase: 'Failed', conditions: ready('False'), containerStatuses: [{ name: 'reviews', ready: false, restartCount: 0, state: { terminated: { reason: 'Error' } } }] },
   });
 
+  // Broken: two web app pods the kubelet evicted under memory pressure last night; the ReplicaSet replaced them.
+  if (broken) {
+    for (const suffix of ['k2v9q', 'x8m4d']) {
+      pods.push({
+        metadata: {
+          name: `shop-web-app-chart-6b8f9c7d4-${suffix}`,
+          namespace: 'default',
+          labels: { 'app.kubernetes.io/name': 'shop-web-app-chart' },
+          ownerReferences: [{ kind: 'ReplicaSet', name: 'shop-web-app-chart-6b8f9c7d4' }],
+          creationTimestamp: iso(11 * H),
+        },
+        spec: { nodeName: 'rke2-node-5', securityContext: HARDENED, containers: [{ name: 'shop', image: 'ghcr.io/acme/shop-web-app:2026-11-24-118', resources: { limits: { memory: '256Mi' } } }] },
+        status: { phase: 'Failed', reason: 'Evicted', message: 'The node was low on resource: memory. Threshold quantity: 100Mi, available: 87316Ki.' },
+      });
+    }
+  }
   list('/api/v1/pods', pods);
   list('/api/v1/namespaces/kube-system/pods', pods.filter((p) => (p.metadata as Obj).namespace === 'kube-system'));
   list('/apis/metrics.k8s.io/v1beta1/pods', podMetrics);
@@ -496,6 +550,8 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
       },
       status: {
         sync: { status: sync, ...(name === ROLLBACK_APP ? { revision: ROLLBACK_HISTORY[2]!.revision } : PENDING_APPS[name] ? { revision: '9b1d0c3e5f7a2b4c6d8e0f1a3b5c7d9e1f2a4b6c' } : {}) },
+        // Broken: discourse-new's sync waits for a migration hook Job that never finishes.
+        ...(broken && name === 'discourse-new' ? { operationState: { phase: 'Running', startedAt: iso(47 * 60_000), message: 'waiting for completion of hook batch/Job/discourse-migrate' } } : {}),
         ...(PENDING_APPS[name]
           ? {
               operationState: { phase: 'Succeeded', finishedAt: iso((broken && name === 'weblate-chart' ? 9 * 24 : PENDING_APPS[name]!.hoursAgo) * H), syncResult: { revision: '4e6a8c0b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2c' } },
@@ -563,7 +619,10 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
       status: {
         error: false,
         conditions: [
-          { type: 'secrets.infisical.com/LastReconcileStatus', status: 'True', reason: 'OK', message: 'Reconciliation successful' },
+          // Broken: the token of the machine identity expired; it has been renewed since, the operator retries only every few minutes.
+          broken && name === 'cloudflare-api-token'
+            ? { type: 'secrets.infisical.com/LastReconcileStatus', status: 'False', reason: 'Error', message: 'Failed to authenticate: 401 token expired' }
+            : { type: 'secrets.infisical.com/LastReconcileStatus', status: 'True', reason: 'OK', message: 'Reconciliation successful' },
           { type: 'secrets.infisical.com/LastReconcileAuthMethod', status: 'True', reason: 'OK', message: 'kubernetes' },
         ],
       },
@@ -689,6 +748,10 @@ export function buildDemoCluster(now: Date, scenario: DemoScenario = 'broken'): 
     list('/apis/templates.gatekeeper.sh/v1/constrainttemplates', [{ metadata: { name: 'k8srequiredlabels' }, spec: { crd: { spec: { names: { kind: 'K8sRequiredLabels' } } } }, status: { created: true, byPod: [{ id: 'gatekeeper-audit' }] } }]);
     list('/apis/constraints.gatekeeper.sh/v1beta1/k8srequiredlabels', [{ kind: 'K8sRequiredLabels', metadata: { name: 'ns-must-have-owner' }, spec: { enforcementAction: 'dryrun' }, status: { totalViolations: 0, byPod: [{ id: 'gatekeeper-audit' }] } }]);
   }
+  list('/apis/velero.io/v1/schedules', [
+    { metadata: { name: 'daily-apps', namespace: 'velero' }, spec: { schedule: '0 3 * * *', template: { includedNamespaces: ['default', 'weblate', 'discourse'], storageLocation: 'default', ttl: '720h0m0s' } } },
+    { metadata: { name: 'weekly-full', namespace: 'velero' }, spec: { schedule: '0 4 * * 0', template: { storageLocation: 'default', ttl: '2160h0m0s' } } },
+  ]);
   list('/apis/velero.io/v1/backups', [
     velero('daily-apps', 1, 52),
     velero('daily-apps', 2, 28),
@@ -819,7 +882,7 @@ function prometheusAnswer(path: string, now: Date, scenario: DemoScenario): unkn
   }
   if (query.includes('kubelet_volume_stats_used_bytes')) {
     return vector([
-      { metric: { namespace: 'monitoring', persistentvolumeclaim: 'data-prometheus-monitoring-chart-kube-prom-prometheus-0' }, value: 41.3 * 2 ** 30 },
+      { metric: { namespace: 'monitoring', persistentvolumeclaim: 'data-prometheus-monitoring-chart-kube-prom-prometheus-0' }, value: (broken ? 44.1 : 41.3) * 2 ** 30 },
       { metric: { namespace: 'monitoring', persistentvolumeclaim: 'data-loki-0' }, value: 12.1 * 2 ** 30 },
       { metric: { namespace: 'default', persistentvolumeclaim: 'shop-api-pg-1' }, value: 21.7 * 2 ** 30 },
       { metric: { namespace: 'weblate', persistentvolumeclaim: 'data-weblate-0' }, value: 6.4 * 2 ** 30 },
@@ -1049,11 +1112,43 @@ export class DemoKubeClient extends KubeClient {
       }
       return found as T;
     }
-    const hit = this.paths.get(path);
+    const hit = this.paths.get(path) ?? this.one(path);
     if (hit === undefined) {
       throw new KubeError(404, `not found: ${path}`);
     }
     return hit as T;
+  }
+
+  /** One object out of the lists: `/apis/<g>/<v>/namespaces/<ns>/<res>/<name>` (or core `/api/v1/…`), as the actions read it before writing. */
+  private one(path: string): unknown {
+    const m = /^(\/apis\/[^/]+\/[^/]+|\/api\/v1)\/(?:namespaces\/([^/]+)\/)?([a-z]+)\/([^/]+)$/.exec(path);
+    if (!m) {
+      return undefined;
+    }
+    const [, prefix, ns, resource, name] = m;
+    this.paths = buildDemoCluster(this.now(), this.scenario);
+    const items = (this.paths.get(`${prefix}/${resource}`) as { items?: { metadata: { name: string; namespace?: string } }[] } | undefined)?.items ?? [];
+    return items.find((i) => i.metadata.name === decodeURIComponent(name!) && (ns === undefined || (i.metadata.namespace ?? 'default') === decodeURIComponent(ns)));
+  }
+
+  /** ConfigMap metadata the restart offer reads: the one a crashing worker reads through env changed two minutes ago (broken). */
+  override async metadata<T>(path: string): Promise<T> {
+    if (this.scenario === 'broken' && path === '/api/v1/namespaces/default/configmaps/newsletter-config') {
+      return {
+        kind: 'PartialObjectMetadata',
+        metadata: {
+          name: 'newsletter-config',
+          namespace: 'default',
+          creationTimestamp: new Date(this.now().getTime() - 30 * 86_400_000).toISOString(),
+          managedFields: [{ manager: 'argocd-controller', operation: 'Apply', time: new Date(this.now().getTime() - 2 * 60_000).toISOString() }],
+        },
+      } as T;
+    }
+    throw new KubeError(404, `not found: ${path}`);
+  }
+
+  override async delete(path: string, opts: { gracePeriodSeconds?: number } = {}): Promise<void> {
+    this.writes.push({ method: 'DELETE', path, body: opts });
   }
 
   override async text(path: string, _max?: number): Promise<string> {

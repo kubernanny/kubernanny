@@ -35,11 +35,14 @@ export interface ArgoApplication {
     history?: ArgoHistoryEntry[];
     sync?: { status?: string; revision?: string };
     health?: { status?: string; message?: string };
-    operationState?: { phase?: string; message?: string; finishedAt?: string; syncResult?: { revision?: string } };
+    operationState?: { phase?: string; message?: string; startedAt?: string; finishedAt?: string; syncResult?: { revision?: string } };
     resources?: AppResource[];
     conditions?: { type: string; message?: string }[];
   };
 }
+
+/** How long a running operation may take before ending it is offered. */
+export const OPERATION_STUCK_MS = 30 * 60_000;
 
 const RESTARTABLE = new Set<string>(['Deployment', 'StatefulSet', 'DaemonSet']);
 
@@ -114,6 +117,19 @@ export function evaluateArgoApps(apps: ArgoApplication[], inv?: Inventory, now: 
         title: t('argocd.health.title', { app: name, health }),
         cause: rawOr(detail || app.status?.health?.message, t('argocd.health.cause', { health })),
         actions: [...restarts, ...syncActions],
+      });
+    }
+
+    const started = Date.parse(op?.startedAt ?? '');
+    if (syncing && Number.isFinite(started) && now.getTime() - started > OPERATION_STUCK_MS) {
+      // A sync that hangs (a hook Job that never ends, a resource that never gets healthy) blocks every later sync.
+      issues.push({
+        id: `${id}/operation-stuck`,
+        check: 'argocd',
+        severity: 'warning',
+        title: t('argocd.opStuck.title', { app: name, age: ageText(now.getTime() - started) }),
+        cause: rawOr(op?.message, t('argocd.opStuck.cause')),
+        actions: [{ type: 'argocd-terminate-op', namespace: ns, app: name }],
       });
     }
 

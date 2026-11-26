@@ -91,7 +91,7 @@ describe('pods', () => {
     expect(podOwner(crashing('x'))).toEqual({ kind: 'Deployment', name: 'shop-api-chart' });
   });
 
-  it('groups crashing replicas into one issue with logs of the last run and a restart', () => {
+  it('groups crashing replicas into one issue with logs of the last run first and a restart as the second choice', () => {
     const issues = de(evaluatePods([crashing('a'), crashing('b')], NOW));
     expect(issues).toHaveLength(1);
     expect(issues[0]).toMatchObject({
@@ -101,7 +101,7 @@ describe('pods', () => {
     });
     expect(issues[0].actions).toEqual([
       { type: 'logs', namespace: 'default', pod: 'a', container: 'api', previous: true },
-      { type: 'restart', kind: 'Deployment', namespace: 'default', name: 'shop-api-chart' },
+      { type: 'restart', kind: 'Deployment', namespace: 'default', name: 'shop-api-chart', secondary: true },
     ]);
   });
 

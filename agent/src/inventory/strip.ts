@@ -53,8 +53,38 @@ export function stripMeta(meta: unknown): Obj {
 
 const CONTAINER_KEYS = ['name', 'image', 'resources', 'securityContext', 'ports'] as const;
 
+/**
+ * Only the ConfigMaps a container reads into its environment, by name (the
+ * restart offer asks whether one changed after the start). Literal values
+ * and Secret references are dropped.
+ */
+function envRefs(c: Obj, out: Obj): void {
+  if (Array.isArray(c.envFrom)) {
+    const refs = c.envFrom.filter((e) => isObj(e) && isObj(e.configMapRef)).map((e) => ({ configMapRef: pick((e as Obj).configMapRef, ['name']) }));
+    if (refs.length) {
+      out.envFrom = refs;
+    }
+  }
+  if (Array.isArray(c.env)) {
+    const refs = c.env
+      .filter((e) => isObj(e) && isObj(e.valueFrom) && isObj(e.valueFrom.configMapKeyRef))
+      .map((e) => ({ name: (e as Obj).name, valueFrom: { configMapKeyRef: pick(((e as Obj).valueFrom as Obj).configMapKeyRef, ['name']) } }));
+    if (refs.length) {
+      out.env = refs;
+    }
+  }
+}
+
 function stripContainers(list: unknown): unknown {
-  return Array.isArray(list) ? list.map((c) => pick(c, CONTAINER_KEYS)) : undefined;
+  return Array.isArray(list)
+    ? list.map((c) => {
+        const out = pick(c, CONTAINER_KEYS);
+        if (out && isObj(c)) {
+          envRefs(c, out);
+        }
+        return out;
+      })
+    : undefined;
 }
 
 /** A pod spec as the checks read it: containers' image, resources and security context, volumes by claim or host path, host namespaces. */
@@ -93,7 +123,16 @@ export function stripNode(o: unknown): Obj {
     delete status.images;
     delete status.volumesAttached;
   }
-  return { metadata: stripMeta(n.metadata), spec: pick(n.spec, ['unschedulable', 'taints', 'podCIDR', 'providerID']), status };
+  const metadata = stripMeta(n.metadata);
+  // When the node was cordoned: only the managedFields entries that own spec.unschedulable, without their field lists.
+  const meta = isObj(n.metadata) ? n.metadata : {};
+  if (Array.isArray(meta.managedFields)) {
+    const owners = meta.managedFields.filter((m) => isObj(m) && isObj(m.fieldsV1) && isObj((m.fieldsV1 as Obj)['f:spec']) && ((m.fieldsV1 as Obj)['f:spec'] as Obj)['f:unschedulable'] !== undefined);
+    if (owners.length) {
+      metadata.managedFields = owners.map((m) => pick(m, ['manager', 'operation', 'time']));
+    }
+  }
+  return { metadata, spec: pick(n.spec, ['unschedulable', 'taints', 'podCIDR', 'providerID']), status };
 }
 
 /** Deployments, StatefulSets, DaemonSets. */

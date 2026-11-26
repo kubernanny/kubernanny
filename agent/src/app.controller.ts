@@ -20,7 +20,21 @@ import { BackupsView, buildBackups } from './views/backups';
 import { IncidentsView } from './views/incidents';
 import { IncidentsService } from './incidents/incidents.service';
 
-const RUNNABLE: IssueActionType[] = ['argocd-sync', 'argocd-refresh', 'restart', 'cnpg-backup'];
+const RUNNABLE: IssueActionType[] = [
+  'argocd-sync',
+  'argocd-refresh',
+  'argocd-terminate-op',
+  'restart',
+  'cnpg-backup',
+  'longhorn-backup',
+  'velero-backup',
+  'uncordon',
+  'job-rerun',
+  'reconcile-now',
+  'cleanup-pods',
+  'force-delete-terminating',
+  'pvc-expand',
+];
 export { AGENT_VERSION };
 
 export class AppController {
