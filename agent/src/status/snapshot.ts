@@ -72,12 +72,6 @@ export interface Snapshot {
   nextCheckAt?: string;
 }
 
-export interface HistoryPoint {
-  t: number;
-  cpu: number | null;
-  memory: number | null;
-}
-
 export const SEVERITY_RANK: Record<IssueSeverity, number> = { critical: 0, warning: 1, info: 2 };
 
 export function lightFor(modules: Pick<ModuleView, 'status'>[], issues: Pick<Issue, 'severity'>[]): Light {

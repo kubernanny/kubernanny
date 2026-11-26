@@ -167,6 +167,10 @@ spec:
             - name: DEADMAN
               value: "off"
             {{- end }}
+            {{- if not .Values.history.persist }}
+            - name: HISTORY_PERSIST
+              value: "off"
+            {{- end }}
             {{- $widgetRefresh := .Values.notifications.appPush.widgetRefreshMinutes }}
             {{- if and (not (kindIs "invalid" $widgetRefresh)) (ne (int $widgetRefresh) 60) }}
             - name: WIDGET_REFRESH_MINUTES

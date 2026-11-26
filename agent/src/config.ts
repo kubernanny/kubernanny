@@ -306,6 +306,12 @@ export interface Config {
   shutdownDelaySeconds?: number;
   /** READY_TIMEOUT_SECONDS: /readyz turns ready after the first run, or after this long without one (default 90). */
   readyTimeoutSeconds?: number;
+  /**
+   * HISTORY_PERSIST (Helm `history.persist`): keep the problem history and the
+   * own CPU and memory record in the ConfigMap `kubernanny-history`, so a
+   * restart continues the week. Absent counts as on; never in the demo.
+   */
+  historyPersist?: boolean;
 }
 
 /** A status page slug goes into a URL path: letters, digits and dashes only, as Uptime Kuma itself allows. */
@@ -381,6 +387,7 @@ export function loadConfig(): Config {
     leaseName: process.env.LEASE_NAME || 'kubernanny',
     shutdownDelaySeconds: num('SHUTDOWN_DELAY_SECONDS', 5),
     readyTimeoutSeconds: num('READY_TIMEOUT_SECONDS', 90),
+    historyPersist: parseSwitch('HISTORY_PERSIST', process.env.HISTORY_PERSIST, true),
   };
 }
 

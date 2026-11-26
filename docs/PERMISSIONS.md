@@ -136,7 +136,8 @@ These lines are in the ClusterRole whatever is switched off: every check builds 
 | secrets | `kubernanny-identity`, `kubernanny-devices` | get | the agent's X25519 key pair; the names and public keys of paired devices |
 | secrets | `kubernanny-devices` | patch | adds a device on pairing, removes it on revocation |
 | configmaps | `kubernanny-settings` | get, patch | the switches set in the app, silenced issues, accepted advisories |
-| secrets, configmaps | any (see why) | create | creates the three objects above on first start. Kubernetes RBAC cannot limit `create` by name (the name is not known before the object exists), so this line cannot carry `resourceNames`; the agent only ever creates those three |
+| configmaps | `kubernanny-history` | get, patch | the problem history of the last 7 days and, without Prometheus, the own CPU and memory record, so a restart continues the week; the chart creates it empty, only the pod in charge writes it (at most once a minute and on shutdown). Not rendered with `history.persist: false` |
+| secrets, configmaps | any (see why) | create | creates the two Secrets and `kubernanny-settings` on first start (never `kubernanny-history`, which comes with the chart). Kubernetes RBAC cannot limit `create` by name (the name is not known before the object exists), so this line cannot carry `resourceNames`; the agent only ever creates those three |
 | coordination.k8s.io/leases | `kubernanny` | get, patch | which pod is in charge during a rolling update (sends notifications, runs actions, holds the relay): renewed every 2 s, released on shutdown |
 | coordination.k8s.io/leases | any (see why) | create | creates that Lease on first start (again, `create` cannot be limited by name) |
 <!-- /generated:role -->
@@ -176,6 +177,7 @@ Every switch of `values.yaml` (a test fails when one is added without a row here
 | `notifications.weeklyDigest.enabled: false (default)` | yes |  |  | no weekly report through the notification channels |  |
 | `notifications.appPush.enabled: false` | yes |  | `POST` and `DELETE /api/push/register` and `POST /api/push/test` answer 404 `PUSH_OFF` before reading or writing anything | no Push frame on the relay connection: the agent never hands a push to the relay | push tokens stored earlier are deleted from `kubernanny-devices` on start; the app shows push as locked |
 | `notifications.appPush.deadman.enabled: false` | yes |  |  | no Deposit frame with dead man's switch messages on the relay connection (the first frame of each connection clears what an earlier run left) | the app shows "Warn when the agent goes silent" as switched off in the deployment |
+| `history.persist: false` | yes | `get` and `patch` on the ConfigMap `kubernanny-history` in the Role |  |  | no ConfigMap `kubernanny-history`: the problem history, the weekly report and the own CPU and memory record live in memory only and start again with every restart or rollout |
 | `ingress.enabled: false (default)` | yes |  |  |  | no Ingress object: the agent is reachable only inside the cluster (or through the relay) |
 | `serviceMonitor.enabled: false (default)` | yes |  |  |  | no ServiceMonitor; `/metrics` on port 9100 stays, without names |
 | `networkPolicy.enabled: true` | yes |  |  |  | adds a NetworkPolicy: port 8080 only from the ingress controller namespace, 9100 only from the monitoring namespace |

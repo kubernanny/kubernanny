@@ -225,7 +225,7 @@ describe('RBAC of the install manifest', () => {
     expect(missing).toEqual([]);
   });
 
-  it('lets the agent touch only its own two Secrets and its settings ConfigMap by name, and nothing else in its namespace', () => {
+  it('lets the agent touch only its own two Secrets and its settings and history ConfigMaps by name, and nothing else in its namespace', () => {
     const docs = parseAllDocuments(readFileSync(join(__dirname, '../../deploy/install.yaml'), 'utf8')).map((d) =>
       d.toJS(),
     );
@@ -243,7 +243,16 @@ describe('RBAC of the install manifest', () => {
     const configMapRules = (role.rules as { resources: string[]; verbs: string[]; resourceNames?: string[] }[]).filter(
       (r) => r.resources.includes('configmaps') && r.verbs.some((v) => v !== 'create'),
     );
-    expect(configMapRules.flatMap((r) => r.resourceNames ?? ['*'])).toEqual(['kubernanny-settings']);
+    expect(configMapRules.flatMap((r) => r.resourceNames ?? ['*'])).toEqual([
+      'kubernanny-settings',
+      'kubernanny-history',
+    ]);
+    // The history ConfigMap comes with the manifest (created empty), so the agent never needs to create it.
+    expect(configMapRules.flatMap((r) => r.verbs)).not.toContain('update');
+    expect(
+      docs.find((d) => d?.kind === 'ConfigMap' && d.metadata?.name === 'kubernanny-history')?.data,
+    ).toBeUndefined();
+    expect(docs.some((d) => d?.kind === 'ConfigMap' && d.metadata?.name === 'kubernanny-history')).toBe(true);
     expect(secretRules.flatMap((r) => r.verbs)).not.toContain('delete');
     const clusterRole = docs.find((d) => d?.kind === 'ClusterRole');
     // No cluster-wide access to core Secrets (CRDs named *secrets* are fine).

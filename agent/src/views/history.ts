@@ -1,7 +1,6 @@
 import { t, Text } from '../i18n/text';
 import { Inventory } from '../inventory/inventory';
 import { Prometheus } from '../modules/service-proxy';
-import type { HistoryPoint } from '../status/status.service';
 
 export type Unit = 'ratio' | 'bytesPerSecond' | 'count' | 'seconds';
 
@@ -10,11 +9,16 @@ export interface Series {
   label: Text;
   unit: Unit;
   points: [number, number][];
+  /** The agent's own record only: the peak of each point's 5-minute buckets (`points` holds their average). */
+  max?: [number, number][];
 }
 
 export interface HistoryView {
+  /** prometheus: queried from Prometheus; agent: recorded by the agent itself from metrics-server (history/metrics-recorder.ts). */
   source: 'prometheus' | 'agent';
   hours: number;
+  /** The agent's own record only: seconds per point (at least its 5-minute buckets). */
+  stepSeconds?: number;
   series: Series[];
 }
 
@@ -122,19 +126,4 @@ export async function prometheusHistory(
     hours,
     series: [...cluster.filter((s): s is Series => s !== null), ...perNode.flat()],
   };
-}
-
-export function agentHistory(buffer: HistoryPoint[], hours: number): HistoryView {
-  const since = Date.now() - hours * 3_600_000;
-  const points = buffer.filter((p) => p.t >= since);
-  const series: Series[] = [];
-  const cpu = points.filter((p) => p.cpu !== null).map((p) => [p.t, p.cpu!] as [number, number]);
-  const mem = points.filter((p) => p.memory !== null).map((p) => [p.t, p.memory!] as [number, number]);
-  if (cpu.length) {
-    series.push({ id: 'cpu', label: t('history.cpu'), unit: 'ratio', points: cpu });
-  }
-  if (mem.length) {
-    series.push({ id: 'memory', label: t('history.memory'), unit: 'ratio', points: mem });
-  }
-  return { source: 'agent', hours, series };
 }

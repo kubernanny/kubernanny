@@ -16,7 +16,7 @@ import { SilenceService } from './silence/silence.service';
 import { Snapshot, StatusService } from './status/status.service';
 import { AGENT_BUILD, AGENT_COMMIT, AGENT_VERSION } from './version';
 import { BackupsView, buildBackups } from './views/backups';
-import { agentHistory, HistoryView, prometheusHistory } from './views/history';
+import { HistoryView, prometheusHistory } from './views/history';
 import { IncidentsView } from './views/incidents';
 import { buildEvents, buildNetwork, buildNodes, buildStorage, buildWorkloads } from './views/views';
 
@@ -199,20 +199,22 @@ export class AppApi {
     return buildBackups(data, checkedAt ? new Date(checkedAt) : new Date(), this.config.backupMaxAgeHours);
   }
 
-  /** CPU, RAM, network, restarts, etcd over time: from Prometheus when there is one, else the agent's own memory. */
+  /**
+   * CPU, RAM, network, restarts, etcd over time from Prometheus when there is
+   * one; else CPU and RAM from the agent's own record (`source: 'agent'`, a
+   * week in 5-minute buckets, history/metrics-recorder.ts).
+   */
   async history(hoursParam?: number): Promise<HistoryView> {
     const hours = Math.min(Math.max(hoursParam ?? 6, 1), 168);
     const { prom, inv } = this.status.state();
     if (!prom) {
-      return agentHistory(this.status.history(), Math.min(hours, 6));
+      return this.status.metrics.view(hours, Date.now());
     }
     const key = String(hours);
     if (this.historyCache && this.historyCache.key === key && Date.now() - this.historyCache.at < 60_000) {
       return this.historyCache.value;
     }
-    const value = await prometheusHistory(prom, inv, hours).catch(() =>
-      agentHistory(this.status.history(), Math.min(hours, 6)),
-    );
+    const value = await prometheusHistory(prom, inv, hours).catch(() => this.status.metrics.view(hours, Date.now()));
     this.historyCache = { key, at: Date.now(), value };
     return value;
   }

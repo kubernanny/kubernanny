@@ -205,11 +205,18 @@ export const NAMESPACE_ROLE: readonly {
     holds: 'the switches set in the app, silenced issues, accepted advisories',
   },
   {
+    resources: ['configmaps'],
+    names: ['kubernanny-history'],
+    verbs: ['get', 'patch'],
+    holds:
+      'the problem history of the last 7 days and, without Prometheus, the own CPU and memory record, so a restart continues the week; the chart creates it empty, only the pod in charge writes it (at most once a minute and on shutdown). Not rendered with `history.persist: false`',
+  },
+  {
     resources: ['secrets', 'configmaps'],
     names: [],
     verbs: ['create'],
     holds:
-      'creates the three objects above on first start. Kubernetes RBAC cannot limit `create` by name (the name is not known before the object exists), so this line cannot carry `resourceNames`; the agent only ever creates those three',
+      'creates the two Secrets and `kubernanny-settings` on first start (never `kubernanny-history`, which comes with the chart). Kubernetes RBAC cannot limit `create` by name (the name is not known before the object exists), so this line cannot carry `resourceNames`; the agent only ever creates those three',
   },
   {
     group: 'coordination.k8s.io',

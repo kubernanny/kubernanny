@@ -73,6 +73,15 @@ notifications:
 # Time zone for the weekly report and log times, e.g. Europe/Berlin. Empty: UTC.
 timezone: ""
 
+history:
+  # Keep the problem history of the last 7 days (the overview's strip, the
+  # incident list, the weekly report) and, without Prometheus, the agent's own
+  # CPU and memory record in the ConfigMap `kubernanny-history`, so a restart
+  # or a rollout continues the week. The chart creates the ConfigMap; the
+  # agent gets get and patch on that one name. false (HISTORY_PERSIST=off):
+  # no ConfigMap, no permission, and every start begins a new week.
+  persist: true
+
 checks:
   intervalSeconds: 60
   certWarnDays: 14

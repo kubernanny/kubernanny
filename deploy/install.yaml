@@ -161,6 +161,17 @@ subjects:
     name: kubernanny
     namespace: kubernanny
 ---
+# Where the agent keeps the problem history of the last 7 days and its own CPU
+# and memory record, so a restart or a rollout continues the week. Created
+# empty here; the agent writes its keys. Removed with the rest.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubernanny-history
+  namespace: kubernanny
+  labels:
+    app.kubernetes.io/name: kubernanny
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -182,8 +193,14 @@ rules:
     resources: [configmaps]
     resourceNames: [kubernanny-settings]
     verbs: [get, patch]
+  # The problem history and the own CPU and memory record (history/history-store.ts).
+  # The ConfigMap is created empty below, so the agent needs no create for it.
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [kubernanny-history]
+    verbs: [get, patch]
   # create cannot be limited by name in Kubernetes RBAC; the agent only ever
-  # creates the two Secrets and the ConfigMap above.
+  # creates the two Secrets and kubernanny-settings.
   - apiGroups: [""]
     resources: [secrets, configmaps]
     verbs: [create]

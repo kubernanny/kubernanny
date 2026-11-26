@@ -1,0 +1,12 @@
+{{- if .Values.history.persist }}
+# Where the agent keeps the problem history of the last 7 days and its own CPU
+# and memory record, so a restart or a rollout continues the week. Created
+# empty: the agent writes its keys (merge patch), and `helm upgrade` leaves
+# them alone because the chart never sets `data`. `helm uninstall` removes it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubernanny-history
+  labels:
+    {{- include "kubernanny.labels" . | nindent 4 }}
+{{- end }}

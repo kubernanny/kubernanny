@@ -1,6 +1,7 @@
 import { Issue } from '../checks/types';
 import type { Config } from '../config';
 import { Detected, discover, distribution } from '../discovery/discovery';
+import { MetricsRecorder } from '../history/metrics-recorder';
 import { errorText, raw, t } from '../i18n/text';
 import { IncidentsService } from '../incidents/incidents.service';
 import { ClusterCache } from '../inventory/cluster-cache';
@@ -21,16 +22,7 @@ import { SilenceService } from '../silence/silence.service';
 import { AGENT_BUILD, AGENT_COMMIT, AGENT_VERSION } from '../version';
 import { mergeIssues, runComponent, runCoreCheck } from './run-modules';
 import { runTiming } from './run-timing';
-import {
-  buildOverview,
-  HistoryPoint,
-  IssueView,
-  lightFor,
-  Overview,
-  scoreFor,
-  SEVERITY_RANK,
-  Snapshot,
-} from './snapshot';
+import { buildOverview, IssueView, lightFor, scoreFor, SEVERITY_RANK, Snapshot } from './snapshot';
 
 // The types and rules of a snapshot live in snapshot.ts; existing imports keep working through here.
 export * from './snapshot';
@@ -52,7 +44,6 @@ export class StatusService {
   private runData: RunData = {};
   private promClient: Prometheus | null = null;
   private readonly firstSeen = new Map<string, Date>();
-  private readonly historyBuffer: HistoryPoint[] = [];
   private timer?: NodeJS.Timeout;
   private running: Promise<void> | null = null;
   /** Consecutive runs that could not read the cluster, and since when. */
@@ -175,10 +166,10 @@ export class StatusService {
     return { inv: this.inventory, detected: this.detected, data: this.runData, prom: this.promClient };
   }
 
-  /** CPU and memory share of the whole cluster, one point per run, from metrics-server. */
-  history(): HistoryPoint[] {
-    return this.historyBuffer;
-  }
+  /** The agent's own CPU and memory record (a week, 5-minute buckets), filled only while there is no Prometheus. */
+  readonly metrics = new MetricsRecorder();
+  /** After every published run (the history store's debounced write, wired by the agent). */
+  afterRun: (now: Date) => void = () => undefined;
 
   findIssue(id: string): Issue | undefined {
     return this.snapshotValue.issues.find((i) => i.id === id) ?? this.pendingSyncIssue(id);
@@ -322,7 +313,10 @@ export class StatusService {
     this.detected = detected;
     this.runData = data;
     this.promClient = prom;
-    this.record(now, overview);
+    // With Prometheus the charts come from there: nothing is recorded twice.
+    if (!prom) {
+      this.metrics.sample(now.getTime(), inv);
+    }
 
     const maintenanceUntil = this.silences.maintenanceUntil(now.getTime());
     const audible = issues.filter((i) => !i.silencedUntil);
@@ -434,23 +428,7 @@ export class StatusService {
     if (this.notifies()) {
       await this.notifier.refreshDeadman(snapshot, this.settings.notificationsOn());
     }
-  }
-
-  private record(now: Date, o: Overview): void {
-    // One point per interval: early runs (after a watch event) would otherwise shorten the six hours the buffer covers.
-    const last = this.historyBuffer.at(-1);
-    if (last && now.getTime() - last.t < this.config.intervalSeconds * 900) {
-      return;
-    }
-    this.historyBuffer.push({
-      t: now.getTime(),
-      cpu: o.cpu && o.cpu.allocatableMilli > 0 ? o.cpu.usedMilli / o.cpu.allocatableMilli : null,
-      memory: o.memory && o.memory.allocatable > 0 ? o.memory.used / o.memory.allocatable : null,
-    });
-    const keep = Math.ceil((6 * 3600) / this.config.intervalSeconds);
-    if (this.historyBuffer.length > keep) {
-      this.historyBuffer.splice(0, this.historyBuffer.length - keep);
-    }
+    this.afterRun(now);
   }
 }
 

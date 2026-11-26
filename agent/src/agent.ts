@@ -12,6 +12,7 @@ import { DemoKubeClient } from './demo/demo-cluster';
 import { E2eApi, e2eRoutes } from './e2e/e2e.routes';
 import { E2eService } from './e2e/e2e.service';
 import { InternalServer } from './e2e/internal-server';
+import { HistoryStore } from './history/history-store';
 import { HttpError } from './http/errors';
 import { createHttpHandler, Reply, Route } from './http/server';
 import { t } from './i18n/text';
@@ -74,6 +75,8 @@ export class Agent {
   readonly status: StatusService;
   readonly actions: ActionsService;
   readonly rollbacks: RollbackService;
+  /** The problem history and the own CPU and memory record in the ConfigMap `kubernanny-history`. */
+  readonly history: HistoryStore;
   /** Which pod is in charge during a rolling update (POD_NAME set: a Lease; else always this one). */
   readonly leader: Leader;
   /** Every route the agent answers, public or guarded (`auth/public-routes.spec.ts` checks the public ones). */
@@ -145,6 +148,8 @@ export class Agent {
     this.actions = new ActionsService(kube, this.status, this.settings);
     this.rollbacks = new RollbackService(kube, this.settings, this.status, this.notifier);
     this.status.notifies = isLeader;
+    this.history = new HistoryStore(config, kube, this.incidents, this.status.metrics, isLeader);
+    this.status.afterRun = () => this.history.schedule();
 
     this.routes = [
       // Readiness, no data: ready once the first run is in memory (or READY_TIMEOUT_SECONDS passed), unready again on SIGTERM.
@@ -210,6 +215,7 @@ export class Agent {
       [StatusService, this.status],
       [ActionsService, this.actions],
       [RollbackService, this.rollbacks],
+      [HistoryStore, this.history],
     ] as const) {
       this.registry.set(cls, value);
     }
@@ -262,6 +268,8 @@ export class Agent {
 
   private async loadState(): Promise<void> {
     await Promise.all([
+      // Before the first run and before anything is served: the history continues where the last pod left it.
+      this.history.load(),
       this.identity.onModuleInit(),
       this.devices.onModuleInit(),
       this.settings.onModuleInit(),
@@ -299,6 +307,8 @@ export class Agent {
         }
       }
       this.stateCurrent = true;
+      // What the previous pod wrote last (its SIGTERM flush) joins this pod's own record; never blocks the takeover.
+      await this.history.takeOver();
     }
     await this.appPush.onApplicationBootstrap();
     this.relay.onApplicationBootstrap();
@@ -329,7 +339,8 @@ export class Agent {
   }
 
   /**
-   * SIGTERM: unready at once and out of charge (the lease is released, the
+   * SIGTERM: unready at once, the history written one last time, and out of
+   * charge (the lease is released, the
    * relay connection closed with 1001), so the new pod takes over within
    * seconds; the watches and timers stop. The listener keeps answering for
    * SHUTDOWN_DELAY_SECONDS while the endpoints are removed, then closes and
@@ -343,6 +354,8 @@ export class Agent {
     this.logger.log('shutting down: handing over');
     this.relay.handOver();
     this.status.onApplicationShutdown();
+    // The last write of the history, while this pod still holds the lease (at most 5 s).
+    await this.history.flush();
     await this.leader.release();
     await new Promise((resolve) => setTimeout(resolve, (this.config.shutdownDelaySeconds ?? 5) * 1000));
     const server = this.server;
@@ -372,7 +385,12 @@ export class Agent {
       return;
     }
     this.closed = true;
+    const wasShuttingDown = this.shuttingDown;
     this.shuttingDown = true;
+    if (!wasShuttingDown) {
+      this.status.onApplicationShutdown();
+      await this.history.flush();
+    }
     await this.leader.release();
     this.relay.onModuleDestroy();
     await this.internal.close();

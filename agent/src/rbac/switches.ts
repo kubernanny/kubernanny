@@ -116,6 +116,14 @@ export const SWITCHES: readonly HardSwitch[] = [
     other: 'the app shows "Warn when the agent goes silent" as switched off in the deployment',
   },
   {
+    value: 'history.persist',
+    set: 'history.persist: false',
+    hard: true,
+    rbac: '`get` and `patch` on the ConfigMap `kubernanny-history` in the Role',
+    other:
+      'no ConfigMap `kubernanny-history`: the problem history, the weekly report and the own CPU and memory record live in memory only and start again with every restart or rollout',
+  },
+  {
     value: 'ingress.enabled',
     set: 'ingress.enabled: false (default)',
     hard: true,

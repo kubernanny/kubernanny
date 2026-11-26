@@ -24,17 +24,63 @@ export const MAX_EPISODES = 5_000;
 
 /**
  * Follows issues from run to run and keeps the episodes of the last week
- * (hints never count). In memory: after a restart the next report covers the
- * time since the restart, and says so.
+ * (hints never count). Kept in memory and, with `history.persist` on, in the
+ * ConfigMap `kubernanny-history` (history/history-store.ts), so a restart
+ * continues the week instead of starting it again.
  */
 export class EpisodeLog {
   private readonly episodes: Episode[];
-  /** When the agent started watching; `history` lets the demo pretend it has watched for a week. */
-  readonly since: number;
+  /** When the agent first started watching (the stored value after a restart); `history` lets the demo pretend a week. */
+  private sinceValue: number;
 
   constructor(now: number, history: { since: number; episodes: Episode[] } | null = null) {
-    this.since = history?.since ?? now;
+    this.sinceValue = history?.since ?? now;
     this.episodes = history ? history.episodes.map((e) => ({ ...e })) : [];
+  }
+
+  get since(): number {
+    return this.sinceValue;
+  }
+
+  /** Every episode kept, oldest start first (copies). */
+  all(): Episode[] {
+    return this.episodes.map((e) => ({ ...e }));
+  }
+
+  /**
+   * Takes in what was stored (at start, or what the previous pod wrote last
+   * on a takeover). The earlier `since` wins. An episode this pod also has
+   * (same issue, same start) keeps this pod's version unless only the stored
+   * one has ended: then it ends at the stored time, which is the earlier one.
+   * Episodes only the store knows are added; an open one this pod has open
+   * too (seen first at another time) stays one episode, from the earlier start.
+   */
+  merge(stored: { since: number; episodes: Episode[] }, now: number): void {
+    this.sinceValue = Math.min(this.sinceValue, stored.since);
+    const mine = new Map(this.episodes.map((e) => [`${e.id}@${e.start}`, e]));
+    const openHere = new Map(this.episodes.filter((e) => e.end === null).map((e) => [e.id, e]));
+    for (const s of stored.episodes) {
+      // Both pods saw the issue open, each since its own first sight: one episode, from the earlier start.
+      const same = s.end === null ? openHere.get(s.id) : undefined;
+      const own = mine.get(`${s.id}@${s.start}`) ?? same;
+      if (same && same.start > s.start) {
+        same.start = s.start;
+      }
+      if (!own) {
+        this.episodes.push({ ...s });
+      } else if (own.end !== null && s.end !== null) {
+        own.end = Math.min(own.end, s.end);
+      }
+      if (own && s.severity === 'critical') {
+        own.severity = 'critical';
+      }
+      if (own && s.silenced) {
+        own.silenced = true;
+      }
+    }
+    this.episodes.sort((a, b) => a.start - b.start);
+    this.forgetOld(now);
+    this.cap();
   }
 
   record(issues: IssueView[], now: number): void {
@@ -67,14 +113,18 @@ export class EpisodeLog {
         silenced: Boolean(issue.silencedUntil),
       });
     }
-    // Forget what ended more than a week ago.
+    this.forgetOld(now);
+    this.cap();
+  }
+
+  /** Forgets what ended more than a week ago. */
+  private forgetOld(now: number): void {
     for (let i = this.episodes.length - 1; i >= 0; i--) {
       const end = this.episodes[i]!.end;
       if (end !== null && end < now - WEEK) {
         this.episodes.splice(i, 1);
       }
     }
-    this.cap();
   }
 
   /** Bounds the log: the newest MAX_EPISODES_PER_ISSUE ended episodes per issue, MAX_EPISODES in all (oldest ended first, then oldest). */

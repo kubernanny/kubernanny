@@ -7,9 +7,10 @@ import { buildIncidents, IncidentsView } from '../views/incidents';
 
 /**
  * Owns the episode log: the run loop records every run into it, the
- * notifier's weekly report and `GET /incidents` read it. In memory, like the
- * rest of the agent's state: after a restart the history starts again, and
- * `coveredSince` says from when.
+ * notifier's weekly report and `GET /incidents` read it. Kept in the
+ * ConfigMap `kubernanny-history` by the history store (history/history-store.ts),
+ * so a restart continues the week; `coveredSince` is the first start ever
+ * (or this start, with `history.persist` off).
  */
 export class IncidentsService {
   private readonly log: EpisodeLog;
@@ -27,6 +28,16 @@ export class IncidentsService {
 
   record(issues: IssueView[], now: number): void {
     this.log.record(issues, now);
+  }
+
+  /** Every episode kept, for the history store. */
+  all(): Episode[] {
+    return this.log.all();
+  }
+
+  /** What the history store read back joins the log. */
+  merge(stored: { since: number; episodes: Episode[] }, now: number): void {
+    this.log.merge(stored, now);
   }
 
   lastWeek(now: number): Episode[] {
