@@ -269,6 +269,8 @@ export const en: Dictionary = {
       other: '+ {{count}} pods without a limit',
     },
     over: '+{{pct}}% overbooked',
+    overCpu: 'Limits add up to {{pct}}% of the cores: throttled, not killed',
+    overCpuShort: 'Limits {{pct}}% of the cores',
   },
   resources: {
     cores: '{{used}} / {{total}} cores',

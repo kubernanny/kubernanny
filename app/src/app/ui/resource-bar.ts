@@ -31,8 +31,14 @@ export interface LegendItem {
   text: string;
   /** "+ 8 Pods ohne Limit", attached to the limit item. */
   extra?: string;
-  /** "+60 % überbucht" when the limits exceed the capacity. */
+  /**
+   * When the limits exceed the capacity: "+60 % überbucht" for memory (a warning: the
+   * kernel kills a pod when they are all used), "Limits zusammen 160 % der Kerne: wird
+   * gedrosselt, nicht beendet" for CPU (a fact: CPU is shared out, nobody is killed).
+   */
   over?: string;
+  /** The memory kind of overbooking, in the warning colour; CPU's is a neutral note. */
+  overWarns?: boolean;
 }
 
 export interface ResourceBarView {
@@ -46,6 +52,8 @@ export interface ResourceBarView {
   limitPct: number | null;
   /** Limits above the capacity: the striped overflow cap at the right end. */
   overbooked: boolean;
+  /** Memory limits above the capacity draw the cap in amber; CPU limits in a neutral grey. */
+  overWarns: boolean;
   legend: LegendItem[];
   aria: string;
 }
@@ -64,8 +72,10 @@ const clamp = (v: number) => Math.max(0, Math.min(100, v));
 /**
  * A loading bar for CPU or RAM: the track is the capacity, the reserved part
  * (requests) a striped layer from the left, the use a solid bar on top of it,
- * the limits a marker with a cap, and an amber overflow cap when they add up
- * to more than there is. Tone: coral from 90 % use, amber from 80 % use or
+ * the limits a marker with a cap, and an overflow cap when they add up to
+ * more than there is: amber for memory (the kernel kills pods once they all
+ * use their limit), neutral for CPU (it is shared out and throttled, nobody
+ * is killed). Tone: coral from 90 % use, amber from 80 % use or
  * when requests take 90 % (nothing more can be scheduled).
  */
 export function resourceBarView(
@@ -115,13 +125,17 @@ export function resourceBarView(
     });
   } else if (r.limit !== undefined) {
     const over = limit !== null && limit > 1 ? Math.round((limit - 1) * 100) : 0;
+    const overText =
+      r.kind === 'cpu'
+        ? tr.t(short ? 'bar.overCpuShort' : 'bar.overCpu', { pct: Math.round((limit ?? 0) * 100) })
+        : tr.t('bar.over', { pct: over });
     legend.push({
       kind: 'limit',
       text: r.limit > 0 ? tr.t('bar.limit', { value: fmt(r.limit) }) : tr.t('bar.noLimit'),
       ...(r.withoutLimit
         ? { extra: tr.n(short ? 'bar.withoutLimitShort' : 'bar.withoutLimit', r.withoutLimit) }
         : {}),
-      ...(over > 0 ? { over: tr.t('bar.over', { pct: over }) } : {}),
+      ...(over > 0 ? { over: overText, overWarns: r.kind === 'memory' } : {}),
     });
   }
   const aria = [
@@ -138,6 +152,7 @@ export function resourceBarView(
     reservedPct: reserved === null ? 0 : clamp(reserved * 100),
     limitPct: limit === null || (r.limit ?? 0) <= 0 ? null : clamp(limit * 100),
     overbooked: limit !== null && limit > 1,
+    overWarns: r.kind === 'memory',
     legend,
     aria,
   };
@@ -179,12 +194,13 @@ export function resourceBarView(
               <span
                 class="seg-limit"
                 [class.at-end]="v.overbooked"
+                [class.warns]="v.overWarns"
                 [style.left.%]="v.limitPct"
               ></span>
             }
           </div>
           @if (v.overbooked) {
-            <span class="seg-over"></span>
+            <span class="seg-over" [class.warns]="v.overWarns"></span>
           }
         </div>
         @if (legend()) {
@@ -197,7 +213,7 @@ export function resourceBarView(
                   <span class="extra">{{ l.extra }}</span>
                 }
                 @if (l.over) {
-                  <span class="over-text">{{ l.over }}</span>
+                  <span class="over-text" [class.warns]="l.overWarns">{{ l.over }}</span>
                 }
               </li>
             }
@@ -307,20 +323,27 @@ export function resourceBarView(
       border-top: 5px solid var(--ink);
       border-bottom: 0;
     }
+    /* Limits above the capacity: grey for CPU (throttled, not killed), amber for memory. */
     .seg-limit.at-end {
-      background: var(--warn);
+      --over: var(--mute);
+      background: var(--over);
     }
     .seg-limit.at-end::before {
-      border-top-color: var(--warn);
+      border-top-color: var(--over);
     }
     .seg-over {
+      --over: var(--mute);
       flex: none;
       width: 1.1rem;
       height: var(--rb-h);
       margin-left: 3px;
       border-radius: 0 999px 999px 0;
-      background: repeating-linear-gradient(135deg, var(--warn) 0 2px, transparent 2px 4px);
-      box-shadow: inset 0 0 0 1px var(--warn);
+      background: repeating-linear-gradient(135deg, var(--over) 0 2px, transparent 2px 4px);
+      box-shadow: inset 0 0 0 1px var(--over);
+    }
+    .seg-limit.at-end.warns,
+    .seg-over.warns {
+      --over: var(--warn);
     }
     .legend {
       display: flex;
@@ -375,6 +398,9 @@ export function resourceBarView(
       color: var(--mute);
     }
     .over-text {
+      color: var(--mute);
+    }
+    .over-text.warns {
       color: var(--warn);
       font-weight: 600;
     }

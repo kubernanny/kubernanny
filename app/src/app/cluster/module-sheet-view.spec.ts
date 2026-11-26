@@ -173,7 +173,7 @@ describe('workload restarts', () => {
 });
 
 describe('resource bar', () => {
-  it('shows use, reservation and limits in cores with a comma, and overbooking with the pods without a limit', async () => {
+  it('shows use, reservation and limits in cores with a comma, and CPU limits above the cores as a neutral note', async () => {
     const { resourceBarView } = await import('../ui/resource-bar');
     const v = resourceBarView(
       { kind: 'cpu', used: 1730, capacity: 4000, requested: 1150, limit: 6400, withoutLimit: 8 },
@@ -188,15 +188,40 @@ describe('resource bar', () => {
       Math.round(v.reservedPct),
       v.limitPct,
       v.overbooked,
-    ]).toEqual(['1,73 / 4 Kerne', '43 %', 'ok', 43, 29, 100, true]);
+      v.overWarns,
+    ]).toEqual(['1,73 / 4 Kerne', '43 %', 'ok', 43, 29, 100, true, false]);
     expect(v.legend).toEqual([
       { kind: 'used', text: '1,73 genutzt' },
       { kind: 'reserved', text: '1,15 reserviert' },
-      { kind: 'limit', text: '6,40 Limit', extra: '+ 8 Pods ohne Limit', over: '+60 % überbucht' },
+      {
+        kind: 'limit',
+        text: '6,40 Limit',
+        extra: '+ 8 Pods ohne Limit',
+        over: 'Limits zusammen 160 % der Kerne: wird gedrosselt, nicht beendet',
+        overWarns: false,
+      },
     ]);
     expect(v.aria).toBe(
-      'CPU, 1,73 / 4 Kerne, 1,73 genutzt, 1,15 reserviert, 6,40 Limit + 8 Pods ohne Limit +60 % überbucht',
+      'CPU, 1,73 / 4 Kerne, 1,73 genutzt, 1,15 reserviert, 6,40 Limit + 8 Pods ohne Limit Limits zusammen 160 % der Kerne: wird gedrosselt, nicht beendet',
     );
+    const rail = resourceBarView(
+      { kind: 'cpu', used: 1730, capacity: 4000, limit: 6400 },
+      'CPU',
+      translatorFor('en'),
+      true,
+    );
+    expect(rail.legend.at(-1)?.over).toBe('Limits 160% of the cores');
+  });
+
+  it('keeps memory limits above the capacity amber: the kernel kills pods once they use them', async () => {
+    const { resourceBarView } = await import('../ui/resource-bar');
+    const v = resourceBarView(
+      { kind: 'memory', used: 4 * 2 ** 30, capacity: 8 * 2 ** 30, limit: 12 * 2 ** 30 },
+      'RAM',
+      de,
+    );
+    expect([v.overbooked, v.overWarns]).toEqual([true, true]);
+    expect(v.legend.at(-1)).toMatchObject({ over: '+50 % überbucht', overWarns: true });
   });
 
   it('turns amber when requests take 90 % even at low use, coral from 90 % use', async () => {

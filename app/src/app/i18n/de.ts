@@ -270,6 +270,8 @@ export const de = {
     withoutLimitShort: { one: '+ {{count}} ohne Limit', other: '+ {{count}} ohne Limit' },
     withoutLimit: { one: '+ {{count}} Pod ohne Limit', other: '+ {{count}} Pods ohne Limit' },
     over: '+{{pct}} % überbucht',
+    overCpu: 'Limits zusammen {{pct}} % der Kerne: wird gedrosselt, nicht beendet',
+    overCpuShort: 'Limits {{pct}} % der Kerne',
   },
   resources: {
     cores: '{{used}} / {{total}} Kerne',

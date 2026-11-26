@@ -38,7 +38,7 @@ CPU and RAM are one component everywhere (`ui/resource-bar.ts`: hero vitals, ove
 
 - **Reserved** (requests): a soft, finely striped layer from the left at full height, always visible.
 - **Used**: the solid bar in the figure's tone, inset 2 px so the reserved layer shows around it, with a bright tip; its width animates (not with reduced motion).
-- **Limit**: a marker with a small cap at the sum of the limits. Limits above the capacity put the marker at the end and an amber striped cap after it ("+60 % überbucht").
+- **Limit**: a marker with a small cap at the sum of the limits. Limits above the capacity put the marker at the end and a striped cap after it. For memory it is amber ("+60 % überbucht"): once the pods use their limits the kernel kills one. For CPU it is grey with a plain note ("Limits zusammen 148 % der Kerne: wird gedrosselt, nicht beendet", in the one-line legend "Limits 148 % der Kerne"): CPU is shared out and throttled, nobody is killed, so it is no warning. A container that actually runs against its CPU limit is the standard alerts' hint `cpu-throttled`.
 - **Legend** right under the bar, one swatch each: "1,73 genutzt", "1,15 reserviert", "1,60 Limit + 8 Pods ohne Limit". The header keeps "43 % 1,73 / 4 Kerne".
 - CPU is always in cores with the locale's decimals (0,40, never 400m), RAM in MiB/GiB.
 - Tone: coral from 90 % use; amber from 80 % use, or when requests take 90 % (nothing more can be scheduled there).
