@@ -100,6 +100,13 @@ export const SWITCHES: readonly HardSwitch[] = [
     other: 'push tokens stored earlier are deleted from `kubernanny-devices` on start; the app shows push as locked',
   },
   {
+    value: 'notifications.appPush.deadman.enabled',
+    set: 'notifications.appPush.deadman.enabled: false',
+    hard: true,
+    outbound: 'no Deposit frame with dead man\'s switch messages on the relay connection (the first frame of each connection clears what an earlier run left)',
+    other: 'the app shows "Warn when the agent goes silent" as switched off in the deployment',
+  },
+  {
     value: 'ingress.enabled',
     set: 'ingress.enabled: false (default)',
     hard: true,

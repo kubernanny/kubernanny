@@ -175,6 +175,7 @@ Every switch of `values.yaml` (a test fails when one is added without a row here
 | `relay.enabled: false (default)` | yes |  |  | no `RELAY_URL`: no WebSocket to the relay, and no NetworkPolicy egress rule for it |  |
 | `notifications.weeklyDigest.enabled: false (default)` | yes |  |  | no weekly report through the notification channels |  |
 | `notifications.appPush.enabled: false` | yes |  | `POST` and `DELETE /api/push/register` and `POST /api/push/test` answer 404 `PUSH_OFF` before reading or writing anything | no Push frame on the relay connection: the agent never hands a push to the relay | push tokens stored earlier are deleted from `kubernanny-devices` on start; the app shows push as locked |
+| `notifications.appPush.deadman.enabled: false` | yes |  |  | no Deposit frame with dead man's switch messages on the relay connection (the first frame of each connection clears what an earlier run left) | the app shows "Warn when the agent goes silent" as switched off in the deployment |
 | `ingress.enabled: false (default)` | yes |  |  |  | no Ingress object: the agent is reachable only inside the cluster (or through the relay) |
 | `serviceMonitor.enabled: false (default)` | yes |  |  |  | no ServiceMonitor; `/metrics` on port 9100 stays, without names |
 | `networkPolicy.enabled: true` | yes |  |  |  | adds a NetworkPolicy: port 8080 only from the ingress controller namespace, 9100 only from the monitoring namespace |
