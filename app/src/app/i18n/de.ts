@@ -218,7 +218,7 @@ export const de = {
     usage: 'Auslastung',
     range: 'Zeitraum',
     historyFromAgent:
-      'Verlauf aus metrics-server, seit der Agent läuft. Mit Prometheus im Cluster zeigt Kubernanny auch Netz, Neustarts und etcd über Tage.',
+      'Aus Kubernanny selbst, 5-Minuten-Auflösung: CPU und RAM aus metrics-server, 7 Tage lang. Mit Prometheus im Cluster zeigt Kubernanny auch Netz, Neustarts und etcd.',
     loadingHistory: 'Lade Verlauf…',
     noHistory:
       'Noch kein Verlauf. Ohne Prometheus und metrics-server misst Kubernanny keine Auslastung.',

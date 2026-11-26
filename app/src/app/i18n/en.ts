@@ -214,7 +214,7 @@ export const en: Dictionary = {
     usage: 'Usage',
     range: 'Time range',
     historyFromAgent:
-      'History from metrics-server since the agent started. With Prometheus in the cluster, Kubernanny also shows network, restarts and etcd over several days.',
+      'From Kubernanny itself, 5-minute resolution: CPU and RAM from metrics-server, kept for 7 days. With Prometheus in the cluster, Kubernanny also shows network, restarts and etcd.',
     loadingHistory: 'Loading history…',
     noHistory:
       'No history yet. Without Prometheus or metrics-server, Kubernanny cannot measure usage.',

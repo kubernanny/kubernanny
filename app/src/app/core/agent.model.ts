@@ -456,11 +456,16 @@ export interface Series {
   label: string;
   unit: Unit;
   points: [number, number][];
+  /** Only from the agent's own record: the peak of each point's 5-minute buckets (`points` is their average). */
+  max?: [number, number][];
 }
 
 export interface HistoryView {
+  /** prometheus: queried from Prometheus; agent: CPU and RAM the agent recorded itself, a week in 5-minute buckets. */
   source: 'prometheus' | 'agent';
   hours: number;
+  /** Only from the agent's own record: seconds per point. */
+  stepSeconds?: number;
   series: Series[];
 }
 

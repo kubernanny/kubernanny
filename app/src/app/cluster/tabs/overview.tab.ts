@@ -43,6 +43,19 @@ export function hourChoices(tr: Translator): { hours: number; label: string }[] 
   }));
 }
 
+/**
+ * The range buttons and the source note above the usage charts: ranges when
+ * the history reaches back further than an hour (Prometheus, or the agent's
+ * own week-long record), the note when the agent recorded it itself.
+ */
+export function usageChrome(
+  history: HistoryView | null,
+  hasPrometheus: boolean,
+): { ranges: boolean; fromAgent: boolean } {
+  const fromAgent = history?.source === 'agent';
+  return { ranges: hasPrometheus || fromAgent, fromAgent };
+}
+
 /** Warnings shown before "Alle N Warnungen zeigen". */
 export const WARNINGS_SHOWN = 3;
 
@@ -170,7 +183,7 @@ export function foldIssues(
       <section>
         <div class="section-head">
           <h2>{{ t('overview.usage') }}</h2>
-          @if (view().hasPrometheus) {
+          @if (chrome().ranges) {
             <div class="range" role="group" [attr.aria-label]="t('overview.range')">
               @for (choice of hourChoices(); track choice.hours) {
                 <button
@@ -198,7 +211,7 @@ export function foldIssues(
               </div>
             }
           </div>
-          @if (history().value?.source === 'agent') {
+          @if (chrome().fromAgent) {
             <p class="muted note">{{ t('overview.historyFromAgent') }}</p>
           }
         } @else if (history().loading) {
@@ -540,6 +553,7 @@ export class OverviewTab {
   readonly setHours = output<number>();
   private readonly language = inject(LanguageService);
   readonly hourChoices = computed(() => hourChoices(this.language.translator()));
+  readonly chrome = computed(() => usageChrome(this.history().value, this.view().hasPrometheus));
   /** Outages always; warnings after the first three behind a button, so the figures are not pages away on a phone. */
   readonly allWarnings = signal(false);
   readonly openHints = signal(false);
