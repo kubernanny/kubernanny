@@ -192,6 +192,32 @@ ion-alert {
   --background: var(--surface);
 }
 
+/*
+ * Action sheets (silence, "does not apply"): every colour from the theme. In the Android (md)
+ * style Ionic takes the option text from --ion-color-step-850, which the dark theme does not set;
+ * its light default made the options near black on the dark sheet, there but invisible.
+ */
+/* With the mode class: Ionic sets these on the host through a class of its own, which a bare element selector loses to. */
+ion-action-sheet.md,
+ion-action-sheet.ios {
+  --background: var(--surface);
+  --color: var(--ink);
+  --button-color: var(--ink);
+  --button-color-activated: var(--ink);
+  --button-color-focused: var(--ink);
+  --button-color-hover: var(--ink);
+  --button-color-selected: var(--ink);
+  --button-background-activated: var(--ink);
+  --button-background-activated-opacity: 0.12;
+  --button-background-focused: var(--ink);
+  --button-background-focused-opacity: 0.12;
+}
+
+ion-action-sheet .action-sheet-title,
+ion-action-sheet .action-sheet-sub-title {
+  color: var(--ink-2);
+}
+
 ion-toast {
   --border-radius: var(--radius-m);
 }
