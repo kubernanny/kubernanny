@@ -2,6 +2,18 @@
 
 Agent, chart and relay. The apps in the App Store and on Google Play have their own release notes (`fastlane/release-notes/`).
 
+## [0.5.0](https://github.com/kubernanny/kubernanny/compare/v0.4.0...v0.5.0) (2026-11-27)
+
+Install: `helm upgrade --install kubernanny oci://ghcr.io/kubernanny/charts/kubernanny --version 0.5.0 -n kubernanny`, or `kubectl apply -f deploy/install.yaml` from the `v0.5.0` tag. From this release on, a version is cut by release-please from the conventional commits ([RELEASING.md](docs/RELEASING.md)).
+
+### Added
+
+- **Calmer events**: a pod's readiness and liveness failures from the moment it began shutting down are left out of the Events tab. A graceful shutdown answers 503 and then closes the port, so every rollout and scale-down used to leave warnings that were no problem; failures from before the shutdown still show. ([11583c3](https://github.com/kubernanny/kubernanny/commit/11583c3e2b343b3b6f23f404603336793a94227e))
+
+### Fixed
+
+- **Web UI**: locked actions read well on a phone and give the Helm values to paste as YAML, the choices of the silence and "does not apply" sheets are readable in the dark theme, and the identification sign before pushes can always be switched off. ([1937a11](https://github.com/kubernanny/kubernanny/commit/1937a11dcaf4dd329ddc7213b2dc4b799ac1a647), [54ceef6](https://github.com/kubernanny/kubernanny/commit/54ceef65b6f0142affdf0f4ef6e4e26485b1513a), [f67915b](https://github.com/kubernanny/kubernanny/commit/f67915bb1d330207fb8f824214d70071497b39c1))
+
 ## 0.4.0 (2026-11-27)
 
 Install: `helm upgrade --install kubernanny oci://ghcr.io/kubernanny/charts/kubernanny --version 0.4.0 -n kubernanny`, or `kubectl apply -f deploy/install.yaml` from the `v0.4.0` tag. **New permission**: the agent may now delete Jobs (`job-delete`, on by default), held by the admission policy to failed Jobs of a CronJob or without owner; `actions.disabled: [job-delete]` keeps the old permissions.
