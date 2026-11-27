@@ -481,6 +481,8 @@ export const en: Dictionary = {
     disable: 'Turn push off',
     test: 'Send a test push',
     on: 'On for this device.',
+    unknown:
+      'The agent does not say right now whether push is on for this device. The sign is kept on the phone and can be switched off here all the same.',
     relayNotNow:
       'On for this device. The relay does not deliver push right now; messages go out once it does.',
     locked:

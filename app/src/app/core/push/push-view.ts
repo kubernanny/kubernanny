@@ -5,15 +5,21 @@ import { AgentPushView } from '../agent.model';
 import { NativePushStatus } from './push-native';
 
 export interface PushVM {
-  /** Shown at all: only in a build that can push, for a real cluster whose agent answered. */
+  /** Shown at all: in a build that can push, for a real cluster whose agent answered, or to switch off a stored sign. */
   visible: boolean;
+  /** The agent answered, so on, off, locked and no relay are its word (false while only a stored sign is shown). */
+  known: boolean;
   /** Switched off in the deployment: a lock, no button (like a locked module). */
   locked: boolean;
   note: string;
   action: 'enable' | 'disable' | null;
   actionLabel: string;
   canTest: boolean;
-  /** The optional sign before each push, under "Advanced"; only while push is on for this device. */
+  /**
+   * The optional sign before each push, under "Advanced": while push is on for this device, and
+   * whenever a sign is stored on it, whatever the agent says (the phone puts it before every push it
+   * opens, so it must always be possible to switch it off).
+   */
   sign: SignVM | null;
   /** "Warn when the agent goes silent"; only while push is on for this device. */
   deadman: DeadmanVM | null;
@@ -43,6 +49,7 @@ export interface DeadmanVM {
 
 const HIDDEN: PushVM = {
   visible: false,
+  known: false,
   locked: false,
   note: '',
   action: null,
@@ -93,18 +100,34 @@ export function pushView(
   tr: Translator,
 ): PushVM {
   const { demo, native, agent, marker } = input;
-  if (demo || !native?.available || !agent) {
+  if (demo || !native?.available) {
     return HIDDEN;
   }
+  // A sign this device keeps: offered to switch off in every state below, not only with push on.
+  const stored: SignVM | null = marker
+    ? { on: true, line: tr.t('push.markerOn', { marker }) }
+    : null;
+  if (!agent) {
+    // The agent did not answer (out of reach, or before native push): only the stored sign, if any.
+    return stored ? { ...HIDDEN, visible: true, note: tr.t('push.unknown'), sign: stored } : HIDDEN;
+  }
   if (agent.state === 'locked') {
-    return { ...HIDDEN, visible: true, locked: true, note: tr.t('push.locked') };
+    return {
+      ...HIDDEN,
+      visible: true,
+      known: true,
+      locked: true,
+      note: tr.t('push.locked'),
+      sign: stored,
+    };
   }
   if (agent.state === 'no-relay') {
-    return { ...HIDDEN, visible: true, note: tr.t('push.noRelay') };
+    return { ...HIDDEN, visible: true, known: true, note: tr.t('push.noRelay'), sign: stored };
   }
   if (agent.registered) {
     return {
       visible: true,
+      known: true,
       locked: false,
       note: tr.t(agent.relay ? 'push.on' : 'push.relayNotNow'),
       action: 'disable',
@@ -120,8 +143,10 @@ export function pushView(
   return {
     ...HIDDEN,
     visible: true,
+    known: true,
     note: tr.t('push.hint'),
     action: 'enable',
     actionLabel: tr.t('push.enable'),
+    sign: stored,
   };
 }

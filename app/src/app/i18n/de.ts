@@ -485,6 +485,8 @@ export const de = {
     disable: 'Push ausschalten',
     test: 'Test-Push senden',
     on: 'Für dieses Gerät eingeschaltet.',
+    unknown:
+      'Ob Push für dieses Gerät an ist, sagt der Agent gerade nicht. Das Erkennungszeichen liegt auf dem Handy und lässt sich hier trotzdem ausschalten.',
     relayNotNow:
       'Für dieses Gerät eingeschaltet. Das Relay stellt gerade keine Pushes zu; Nachrichten gehen raus, sobald es das wieder tut.',
     locked: 'In der Installation abgeschaltet (notifications.appPush.enabled). Nur dort änderbar.',

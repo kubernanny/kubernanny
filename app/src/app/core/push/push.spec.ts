@@ -116,6 +116,31 @@ describe('pushView', () => {
       pushView({ demo: false, native: ios, agent: agent({ registered: true, relay: false }) }, en),
     ).toMatchObject({ action: 'disable', canTest: false });
   });
+
+  it('always offers to switch off a sign kept on the phone, whatever the agent says', () => {
+    const on = { on: true, line: expect.stringContaining('🦉🌵⚓') };
+    // The agent did not answer: the section shows, with only the sign.
+    expect(pushView({ demo: false, native: ios, agent: null, marker: '🦉🌵⚓' }, en)).toMatchObject(
+      {
+        visible: true,
+        action: null,
+        sign: on,
+      },
+    );
+    // Push off for this device, locked or without a relay: the sign stays reachable.
+    for (const a of [agent(), agent({ state: 'locked' }), agent({ state: 'no-relay' })]) {
+      expect(
+        pushView({ demo: false, native: ios, agent: a, marker: '🦉🌵⚓' }, en).sign,
+      ).toMatchObject(on);
+    }
+    // Without a stored sign nothing changes: no sign row where push is off.
+    expect(
+      pushView({ demo: false, native: ios, agent: agent(), marker: null }, en).sign,
+    ).toBeNull();
+    expect(pushView({ demo: false, native: ios, agent: null, marker: null }, en).visible).toBe(
+      false,
+    );
+  });
 });
 
 /** Stands in for the plugin: what it holds is what the device's keychain or Keystore would hold. */

@@ -73,15 +73,16 @@ describe('the marker in the push section', () => {
     ).toMatchObject({ action: 'enable', actionLabel: 'Push to this device' });
   });
 
-  it('says nothing about it while push is off', () => {
-    expect(
-      pushView({ demo: false, native, agent: { ...agent, registered: false }, marker: '🦉' }, en)
-        .sign,
-    ).toBeNull();
-    expect(
-      pushView({ demo: false, native, agent: { ...agent, state: 'locked' }, marker: '🦉' }, en)
-        .sign,
-    ).toBeNull();
+  it('while push is off, offers a stored sign only to switch it off, and nothing without one', () => {
+    for (const a of [
+      { ...agent, registered: false },
+      { ...agent, state: 'locked' as const },
+    ]) {
+      expect(pushView({ demo: false, native, agent: a, marker: '🦉' }, en).sign).toMatchObject({
+        on: true,
+      });
+      expect(pushView({ demo: false, native, agent: a, marker: null }, en).sign).toBeNull();
+    }
   });
 });
 

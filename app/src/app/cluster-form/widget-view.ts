@@ -23,7 +23,7 @@ export interface WidgetVM {
 }
 
 export function widgetPushState(push: PushVM | null, cluster: ClusterConfig): WidgetPushState {
-  if (push?.visible) {
+  if (push?.visible && push.known) {
     if (push.action === 'disable') {
       return 'on';
     }
