@@ -165,6 +165,9 @@ export const de = {
       'Einen neuen Job aus der Vorlage von CronJob {{target}} starten, wie kubectl create job --from=cronjob? Der nächste geplante Lauf kommt trotzdem.',
     rerunJobConfirm:
       'Job {{target}} erneut ausführen? Kubernanny legt eine Kopie mit demselben Pod-Template an. Der fehlgeschlagene Job bleibt zum Nachlesen stehen.',
+    jobDelete: 'Job löschen',
+    jobDeleteConfirm:
+      'Den fehlgeschlagenen Job {{target}} samt Pods löschen, wie kubectl delete job? Seine Logs gehen damit verloren. Ein CronJob bleibt und läuft nach Plan weiter.',
     reconcile: 'Jetzt abgleichen',
     reconcileFluxConfirm:
       'Flux bitten, {{kind}} {{target}} sofort abzugleichen? Kubernanny setzt die Annotation reconcile.fluxcd.io/requestedAt, wie flux reconcile.',

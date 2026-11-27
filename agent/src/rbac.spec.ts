@@ -150,6 +150,7 @@ describe('declared reads of the modules', () => {
       'cnpg-backup',
       'config-change-hint',
       'force-delete-terminating',
+      'job-delete',
       'job-rerun',
       'logs',
       'longhorn-backup',
@@ -196,6 +197,10 @@ describe('declared reads of the modules', () => {
     expect(generated.actions['longhorn-backup']!.modules).toEqual(['longhorn']);
     expect(generated.actions['velero-backup']!.modules).toEqual(['velero']);
     expect(generated.actions['job-rerun']!.modules).toEqual(['pods']);
+    expect(generated.actions['job-delete']).toEqual({
+      modules: ['pods'],
+      rules: [{ group: 'batch', resources: ['jobs'], verbs: ['delete'] }],
+    });
     expect(INTEGRATIONS.find((i) => i.id === 'argocd')!.actions).toContain('argocd-sync');
     // An action's permission is tied to the modules offering it: switching off Argo CD also drops its patch.
     expect(generated.actions['argocd-sync']!.modules).toEqual(['argocd']);

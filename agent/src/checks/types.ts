@@ -42,6 +42,8 @@ export type IssueAction =
   | { type: 'uncordon'; node: string }
   /** `from: 'CronJob'`: a new Job from the CronJob's jobTemplate. `from: 'Job'`: a copy of a failed stand-alone Job. */
   | { type: 'job-rerun'; namespace: string; from: 'CronJob' | 'Job'; name: string }
+  /** The failed Job the issue names (a CronJob's last run, or a Job without owner); `uid` so a newer Job of the same name is never hit. */
+  | { type: 'job-delete'; namespace: string; job: string; uid: string }
   | { type: 'reconcile-now'; kind: ReconcileKind; namespace: string; name: string }
   | { type: 'cleanup-pods'; namespace: string; pods: string[] }
   | { type: 'force-delete-terminating'; namespace: string; pod: string; node: string; statefulSet?: string }
@@ -190,6 +192,8 @@ export function condition(conditions: Condition[] | undefined, type: string): Co
 export interface ObjectMeta {
   name: string;
   namespace?: string;
+  /** Kept by the inventory (strip.ts); job-delete deletes only the Job with this uid. */
+  uid?: string;
   labels?: Record<string, string>;
   annotations?: Record<string, string>;
   creationTimestamp?: string;

@@ -266,6 +266,48 @@ describe('job rerun offers', () => {
       'jobs/shop/hook': [],
     });
   });
+
+  it('offers to delete the failed Job itself, by uid: the last run of a CronJob and a Job nobody owns, never one an operator owns', () => {
+    const inv = emptyInventory(NOW);
+    inv.jobs = [
+      {
+        metadata: {
+          name: 'nightly-2',
+          namespace: 'shop',
+          uid: 'u-2',
+          ownerReferences: [{ kind: 'CronJob', name: 'nightly' }],
+          creationTimestamp: minutesAgo(60),
+        },
+        status: { conditions: [failed] },
+      },
+      {
+        metadata: {
+          name: 'nightly-1',
+          namespace: 'shop',
+          uid: 'u-1',
+          ownerReferences: [{ kind: 'CronJob', name: 'nightly' }],
+          creationTimestamp: minutesAgo(120),
+        },
+        status: { conditions: [failed] },
+      },
+      { metadata: { name: 'migrate', namespace: 'shop', uid: 'u-m' }, status: { conditions: [failed] } },
+      {
+        metadata: { name: 'hook', namespace: 'shop', uid: 'u-h', ownerReferences: [{ kind: 'Workflow', name: 'w' }] },
+        status: { conditions: [failed] },
+      },
+      // Without a uid (an older inventory) nothing is offered: the delete must name exactly the Job seen.
+      { metadata: { name: 'old', namespace: 'shop' }, status: { conditions: [failed] } },
+    ];
+    const byId = Object.fromEntries(
+      evaluateJobs(inv).map((i) => [i.id, i.actions.filter((a) => a.type === 'job-delete')]),
+    );
+    expect(byId).toEqual({
+      'jobs/shop/nightly': [{ type: 'job-delete', namespace: 'shop', job: 'nightly-2', uid: 'u-2' }],
+      'jobs/shop/migrate': [{ type: 'job-delete', namespace: 'shop', job: 'migrate', uid: 'u-m' }],
+      'jobs/shop/hook': [],
+      'jobs/shop/old': [],
+    });
+  });
 });
 
 describe('volume growth offer', () => {

@@ -50,7 +50,7 @@ export const HARD_SWITCHES: HardSwitch[] = [
     default: null,
     removes: ['write', 'route'],
     detail:
-      'Each action alone: restart, argocd-sync, argocd-refresh, cnpg-backup, longhorn-backup, velero-backup, reconcile-now, uncordon, cleanup-pods, logs, and the opt-in ones. Its permission leaves the RBAC once nothing else needs it.',
+      'Each action alone: restart, argocd-sync, argocd-refresh, cnpg-backup, longhorn-backup, velero-backup, reconcile-now, uncordon, cleanup-pods, job-delete, logs, and the opt-in ones. Its permission leaves the RBAC once nothing else needs it.',
   },
   {
     goal: 'Wider-reaching actions only if I allow them',

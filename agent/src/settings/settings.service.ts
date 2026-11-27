@@ -49,6 +49,7 @@ export const ACTION_TYPES: readonly {
   action('uncordon', true),
   action('cleanup-pods', true),
   action('job-rerun', true),
+  action('job-delete', true),
   action('force-delete-terminating', true),
   action('argocd-terminate-op', true),
   action('pvc-expand', true),

@@ -524,6 +524,11 @@ export const de = {
     'Einen fehlgeschlagenen Job erneut starten: aus der Vorlage des CronJobs oder als Kopie eines einzelnen Jobs.',
   'action.job-rerun.effect':
     'Darf Jobs anlegen (wie kubectl create job --from=cronjob/…). Nur mit actions.enabled im Helm-Chart.',
+  'action.job-delete.label': 'Fehlgeschlagene Jobs löschen',
+  'action.job-delete.description':
+    'Einen fehlgeschlagenen Job samt Pods löschen, damit seine Warnung und Alarme dazu verschwinden. Der CronJob bleibt und läuft nach Plan weiter.',
+  'action.job-delete.effect':
+    'Darf Jobs löschen, deren Failed-Bedingung gesetzt ist, wie kubectl delete job. Die Admission-Policy lässt nichts anderes zu.',
   'action.reconcile-now.label': 'Sofort abgleichen',
   'action.reconcile-now.description':
     'Flux, External Secrets, Infisical oder cert-manager bitten, ein Objekt mit Problem sofort neu abzugleichen.',
@@ -580,6 +585,7 @@ export const de = {
   'action.done.uncordon': (p: { node: string }) => `${p.node} nimmt wieder Pods an.`,
   'action.done.jobRerunCron': (p: { cron: string }) => `Neuer Job aus ${p.cron} gestartet.`,
   'action.done.jobRerun': (p: { job: string }) => `${p.job} wird erneut ausgeführt.`,
+  'action.done.jobDelete': (p: { job: string }) => `${p.job} gelöscht.`,
   'action.done.reconcile': (p: { kind: string; name: string }) => `${p.kind} ${p.name} wird abgeglichen.`,
   'action.done.renew': (p: { name: string }) => `Zertifikat ${p.name} wird neu ausgestellt.`,
   'action.done.cleanupPods': (p: { n: number; namespace: string }) =>

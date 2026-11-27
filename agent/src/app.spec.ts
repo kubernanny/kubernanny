@@ -552,6 +552,7 @@ describe('agent against the demo cluster', () => {
       'uncordon',
       'cleanup-pods',
       'job-rerun',
+      'job-delete',
       'force-delete-terminating',
       'argocd-terminate-op',
       'pvc-expand',

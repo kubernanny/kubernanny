@@ -281,6 +281,14 @@ function buttonBase(action: IssueAction, index: number, tr: Translator): ButtonB
           { target },
         ),
       };
+    case 'job-delete':
+      return {
+        type: action.type,
+        index,
+        label: tr.t('actions.jobDelete'),
+        icon: 'trash-outline',
+        confirm: tr.t('actions.jobDeleteConfirm', { target: `${action.namespace}/${action.job}` }),
+      };
     case 'reconcile-now':
       if (action.kind === 'Certificate') {
         return {

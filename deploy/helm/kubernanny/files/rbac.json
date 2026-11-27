@@ -417,6 +417,22 @@
         }
       ]
     },
+    "job-delete": {
+      "modules": [
+        "pods"
+      ],
+      "rules": [
+        {
+          "group": "batch",
+          "resources": [
+            "jobs"
+          ],
+          "verbs": [
+            "delete"
+          ]
+        }
+      ]
+    },
     "job-rerun": {
       "modules": [
         "pods"
@@ -611,6 +627,7 @@
     "cnpg-backup",
     "uncordon",
     "job-rerun",
+    "job-delete",
     "reconcile-now",
     "cleanup-pods",
     "force-delete-terminating",
@@ -724,6 +741,7 @@
     "cnpg-backup",
     "config-change-hint",
     "force-delete-terminating",
+    "job-delete",
     "job-rerun",
     "logs",
     "longhorn-backup",

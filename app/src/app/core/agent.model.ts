@@ -52,6 +52,7 @@ export type IssueAction =
   | { type: 'cnpg-backup'; namespace: string; cluster: string }
   | { type: 'uncordon'; node: string }
   | { type: 'job-rerun'; namespace: string; from: 'CronJob' | 'Job'; name: string }
+  | { type: 'job-delete'; namespace: string; job: string; uid: string }
   | { type: 'reconcile-now'; kind: string; namespace: string; name: string }
   | { type: 'cleanup-pods'; namespace: string; pods: string[] }
   | {

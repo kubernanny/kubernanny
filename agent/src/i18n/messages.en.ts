@@ -465,6 +465,11 @@ export const en = {
     "Start a failed job again: from the CronJob's template, or as a copy of a stand-alone job.",
   'action.job-rerun.effect':
     'May create Jobs (like kubectl create job --from=cronjob/…). Only with actions.enabled in the Helm chart.',
+  'action.job-delete.label': 'Delete failed jobs',
+  'action.job-delete.description':
+    'Delete a failed job with its pods, so its warning and alerts on it go. The CronJob stays and runs on schedule.',
+  'action.job-delete.effect':
+    'May delete Jobs whose Failed condition is set, like kubectl delete job. The admission policy allows nothing else.',
   'action.reconcile-now.label': 'Reconcile now',
   'action.reconcile-now.description':
     'Ask Flux, External Secrets, Infisical or cert-manager to reconcile an object with a problem right away.',
@@ -517,6 +522,7 @@ export const en = {
   'action.done.uncordon': (p) => `${p.node} takes pods again.`,
   'action.done.jobRerunCron': (p) => `New job from ${p.cron} started.`,
   'action.done.jobRerun': (p) => `Running ${p.job} again.`,
+  'action.done.jobDelete': (p) => `${p.job} deleted.`,
   'action.done.reconcile': (p) => `Reconciling ${p.kind} ${p.name}.`,
   'action.done.renew': (p) => `Certificate ${p.name} is being reissued.`,
   'action.done.cleanupPods': (p) => `Deleted ${p.n} pod${p.n === 1 ? '' : 's'} in ${p.namespace}.`,

@@ -161,6 +161,9 @@ export const en: Dictionary = {
       "Start a new job from the CronJob {{target}}'s template, like kubectl create job --from=cronjob? The next scheduled run still happens.",
     rerunJobConfirm:
       'Run job {{target}} again? Kubernanny creates a copy with the same pod template. The failed job stays for reading.',
+    jobDelete: 'Delete job',
+    jobDeleteConfirm:
+      'Delete the failed job {{target}} with its pods, like kubectl delete job? Its logs go with it. A CronJob stays and runs on schedule.',
     reconcile: 'Reconcile now',
     reconcileFluxConfirm:
       'Ask Flux to reconcile {{kind}} {{target}} right away? Kubernanny sets the annotation reconcile.fluxcd.io/requestedAt, like flux reconcile.',

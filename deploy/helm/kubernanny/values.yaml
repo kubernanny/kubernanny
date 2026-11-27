@@ -146,7 +146,7 @@ customComponents: []
 actions:
   # Action types to switch off for good: restart, argocd-sync, argocd-refresh,
   # cnpg-backup, longhorn-backup, velero-backup, reconcile-now, uncordon,
-  # cleanup-pods, logs (and the opt-in ones below); the app cannot switch them
+  # cleanup-pods, job-delete, logs (and the opt-in ones below); the app cannot switch them
   # on. A permission is dropped once no enabled action of an enabled module
   # needs it (argocd-sync and argocd-refresh share `patch` on Applications:
   # disable both to drop it).

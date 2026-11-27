@@ -38,6 +38,7 @@ describe('admission policy for the agent (security review M4)', () => {
       'apps/deployments',
       'apps/statefulsets',
       'argoproj.io/applications',
+      'batch/jobs',
       'cert-manager.io/certificates',
       'cert-manager.io/certificates/status',
       'external-secrets.io/externalsecrets',
@@ -77,9 +78,13 @@ describe('admission policy for the agent (security review M4)', () => {
 
   it('keeps the opt-in policies and branches out of install.yaml and renders them only on opt-in', () => {
     const names = policies.map((p) => p.metadata.name);
-    for (const optIn of ['kubernanny-jobs', 'kubernanny-pvcs']) {
-      expect(names).not.toContain(optIn);
-    }
+    expect(names).not.toContain('kubernanny-pvcs');
+    // The Jobs policy is there for job-delete (on by default), without job-rerun's create branch.
+    const jobs = JSON.stringify(policies.find((p) => p.metadata.name === 'kubernanny-jobs'));
+    expect(jobs).toContain("request.operation == 'DELETE'");
+    expect(jobs).toContain("c.type == 'Failed' && c.status == 'True'");
+    expect(jobs).not.toContain('manualSelector');
+    expect(jobs).not.toContain('variables.pod');
     const pods = JSON.stringify(policies.find((p) => p.metadata.name === 'kubernanny-pods'));
     expect(pods).toContain("oldObject.status.?phase.orValue('') in ['Failed', 'Succeeded']");
     expect(pods).not.toContain('deletionTimestamp');
@@ -87,7 +92,8 @@ describe('admission policy for the agent (security review M4)', () => {
       "optional.of('Terminating')",
     );
     const template = chart('templates/admission-policy.yaml');
-    expect(template).toContain('{{- if has "job-rerun" $writes }}');
+    expect(template).toContain('{{- $rerun := has "job-rerun" $writes }}');
+    expect(template).toContain('{{- $jobDelete := has "job-delete" $writes }}');
     expect(template).toContain('{{- if has "pvc-expand" $writes }}');
     expect(template).toContain('{{- $force := has "force-delete-terminating" $writes }}');
     expect(template).toContain('{{- $terminate := has "argocd-terminate-op" $writes }}');
@@ -187,6 +193,7 @@ describe('chart hardening (security review H3, M1, M2, LOW)', () => {
       'cnpg-backup',
       'config-change-hint',
       'force-delete-terminating',
+      'job-delete',
       'job-rerun',
       'logs',
       'longhorn-backup',

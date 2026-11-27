@@ -31,6 +31,7 @@ export const ACTION_PERMISSIONS: Record<ActionType, Rule[]> = {
   logs: [{ group: '', resources: ['pods/log'], verbs: ['get'] }],
   uncordon: [{ group: '', resources: ['nodes'], verbs: ['patch'] }],
   'job-rerun': [{ group: 'batch', resources: ['jobs'], verbs: ['create'] }],
+  'job-delete': [{ group: 'batch', resources: ['jobs'], verbs: ['delete'] }],
   'reconcile-now': [
     { group: 'kustomize.toolkit.fluxcd.io', resources: ['kustomizations'], verbs: ['patch'] },
     { group: 'helm.toolkit.fluxcd.io', resources: ['helmreleases'], verbs: ['patch'] },
@@ -68,6 +69,7 @@ export const WRITE_ACTIONS: ActionType[] = [
   'cnpg-backup',
   'uncordon',
   'job-rerun',
+  'job-delete',
   'reconcile-now',
   'cleanup-pods',
   'force-delete-terminating',

@@ -264,6 +264,7 @@ Every action belongs to an issue: the app names the issue and the action type, t
 | `uncordon` | yes | `nodes/<node>/cordoned` | `kubectl uncordon` |
 | `cleanup-pods` | yes | `pods/finished/<ns>` | deletes the finished pods listed (never a running one) |
 | `logs` | yes | crash loops, failed jobs, CNPG, etcd | reads the last 300 lines, changes nothing |
+| `job-delete` | yes | `jobs/…` | deletes the failed Job itself with its pods (`kubectl delete job`): the last run of a CronJob, or a Job nobody owns, only the one with the uid the agent saw. The CronJob stays and runs on schedule; the warning, and an alert on the Job such as `KubeJobFailed`, go with it. |
 | `job-rerun` | **opt-in** | `jobs/…` | a Job from the CronJob's template (`kubectl create job --from=cronjob/…`), or a copy of a failed stand-alone Job without its controller-uid labels and selector. Never for a Job another controller owns, nor for one whose pod leaves the Pod Security Standards baseline profile. |
 | `force-delete-terminating` | **opt-in** | `pods/terminating/…` | deletes the pod with grace period 0. The confirmation warns that a StatefulSet pod could run twice if the node is in fact alive. |
 | `argocd-terminate-op` | **opt-in** | `argocd/<app>/operation-stuck` | ends the running operation |

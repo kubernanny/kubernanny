@@ -175,6 +175,14 @@ export class ActionsService {
       case 'job-rerun':
         done = await this.rerunJob(action);
         break;
+      case 'job-delete':
+        // Only the Job the agent saw: a newer one of the same name answers 409 and stays.
+        await this.kube.delete(`/apis/batch/v1/namespaces/${enc(action.namespace)}/jobs/${enc(action.job)}`, {
+          propagationPolicy: 'Background',
+          preconditions: { uid: action.uid },
+        });
+        done = t('action.done.jobDelete', { job: action.job });
+        break;
       case 'reconcile-now':
         done = await this.reconcile(action);
         break;

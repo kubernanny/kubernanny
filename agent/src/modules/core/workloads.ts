@@ -84,6 +84,19 @@ export function evaluateJobs(inv: Inventory): Issue[] {
     return pod ? [{ type: 'logs', namespace: ns, pod: pod.metadata.name }] : [];
   };
 
+  // The failed Job itself, so its pods, the warning and an alert on it (KubeJobFailed) go; only with its uid.
+  const deleteFor = (job: (typeof inv.jobs)[number]): IssueAction[] =>
+    job.metadata.uid
+      ? [
+          {
+            type: 'job-delete',
+            namespace: job.metadata.namespace ?? 'default',
+            job: job.metadata.name,
+            uid: job.metadata.uid,
+          },
+        ]
+      : [];
+
   for (const [key, jobs] of byCron) {
     const latest = jobs
       .filter((j) => j.status?.completionTime || failedOf(j)?.status === 'True')
@@ -105,6 +118,7 @@ export function evaluateJobs(inv: Inventory): Issue[] {
             from: 'CronJob',
             name: latest.metadata.ownerReferences!.find((o) => o.kind === 'CronJob')!.name,
           },
+          ...deleteFor(latest),
         ],
       });
     }
@@ -132,6 +146,7 @@ export function evaluateJobs(inv: Inventory): Issue[] {
           ...(own
             ? [{ type: 'job-rerun' as const, namespace: ns, from: 'Job' as const, name: job.metadata.name }]
             : []),
+          ...(own ? deleteFor(job) : []),
         ],
       });
     }
@@ -150,6 +165,7 @@ export class WorkloadsCheck extends CoreCheck {
     'restart',
     'logs',
     'job-rerun',
+    'job-delete',
     'cleanup-pods',
     'force-delete-terminating',
     'config-change-hint',

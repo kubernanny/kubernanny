@@ -227,7 +227,7 @@ Sources and rules, each the same as its check: CNPG clusters with backups config
 
 ### `POST /actions/:type?issue=<issue id>&index=<n>`
 
-`type`: `argocd-sync`, `argocd-refresh`, `restart`, `cnpg-backup`, `longhorn-backup`, `velero-backup`, `reconcile-now`, `uncordon`, `cleanup-pods`, and the opt-in `job-rerun`, `force-delete-terminating`, `argocd-terminate-op`, `pvc-expand` (403 `ACTION_DISABLED` until named in Helm `actions.enabled`). `index` picks among several actions of the same type on one issue (an Argo CD app with two degraded Deployments offers two restarts), default 0. What each one changes: [CHECKS.md](CHECKS.md#actions).
+`type`: `argocd-sync`, `argocd-refresh`, `restart`, `cnpg-backup`, `longhorn-backup`, `velero-backup`, `reconcile-now`, `uncordon`, `cleanup-pods`, `job-delete`, and the opt-in `job-rerun`, `force-delete-terminating`, `argocd-terminate-op`, `pvc-expand` (403 `ACTION_DISABLED` until named in Helm `actions.enabled`). `index` picks among several actions of the same type on one issue (an Argo CD app with two degraded Deployments offers two restarts), default 0. What each one changes: [CHECKS.md](CHECKS.md#actions).
 
 `argocd-sync` takes sync options in the body (any other action answers 400 `OPTIONS_UNSUPPORTED`, unknown fields 400 `OPTIONS_INVALID`):
 

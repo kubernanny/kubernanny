@@ -141,6 +141,13 @@ export const WRITE_EFFECTS: Record<WriteActionType, { changes: string; marker: s
     admission:
       'only CREATE of a Job labelled `app.kubernetes.io/created-by: kubernanny` that is either owned by exactly one CronJob (`controller: true`) or carries `kubernanny.io/rerun-of` and no owner, without `manualSelector`, and whose pod template stays within the Pod Security Standards baseline profile at pod and container level, init containers included (no host namespaces, hostPath, hostPort, hostProcess or privileged container; capabilities only from the baseline allowlist; SELinux type only `container_t`, `container_init_t`, `container_kvm_t` or `container_engine_t` and no user or role; `procMount` only `Default`; no `Unconfined` seccomp or AppArmor, by field or annotation; only the baseline safe sysctls; probes and lifecycle hooks only to the pod itself), plus no `allowPrivilegeEscalation: true` and no ephemeral containers (the agent refuses to rerun such a Job itself, `actions/pod-security.ts`). The policy cannot compare the rest of the template, image and ServiceAccount included, with the CronJob (it sees only the request): a compromised pod could still run any image as any ServiceAccount of any namespace within the baseline profile, which is why the action is opt-in',
   },
+  'job-delete': {
+    changes:
+      'deletes the failed Job the issue names (the last run of a CronJob, or a Job without owner), only with the uid the agent saw (`preconditions`), its pods with it (`propagationPolicy: Background`): the same as `kubectl delete job`',
+    marker: "propagationPolicy: 'Background'",
+    admission:
+      'only a DELETE of a Job whose `Failed` condition is True and that is owned by exactly one CronJob or by nothing; no create or update (with the opt-in `job-rerun` the same policy also allows its create), never a running or succeeded Job',
+  },
   'reconcile-now': {
     changes:
       'merge patch of one annotation on the object the issue names: `reconcile.fluxcd.io/requestedAt` on a Flux Kustomization or HelmRelease (`flux reconcile`), `force-sync` on an ExternalSecret, `kubernanny.io/requested-at` on an InfisicalStaticSecret. On a cert-manager Certificate a merge patch of its status subresource that sets the `Issuing` condition to True with reason `ManuallyTriggered` (`cmctl renew`)',
@@ -262,13 +269,15 @@ export interface RbacRule {
 }
 
 export const NEVER: readonly { what: string; matches: (r: RbacRule, kind: 'ClusterRole' | 'Role') => boolean }[] = [
-  // cleanup-pods and force-delete-terminating delete pods; the admission policy holds that to finished or already terminating ones.
+  // cleanup-pods and force-delete-terminating delete pods, job-delete failed Jobs; the admission policy holds that to
+  // finished or already terminating pods and to failed Jobs.
   {
-    what: '`deletecollection` on anything, or `delete` on anything but pods (pods only for `cleanup-pods` and `force-delete-terminating`, held to finished or already terminating pods by the admission policy)',
+    what: '`deletecollection` on anything, or `delete` on anything but pods and Jobs (pods only for `cleanup-pods` and `force-delete-terminating`, held to finished or already terminating pods by the admission policy; Jobs only for `job-delete`, held to failed ones)',
     matches: (r) =>
       r.verbs.includes('deletecollection') ||
       (r.verbs.includes('delete') &&
-        !(r.apiGroups.length === 1 && r.apiGroups[0] === '' && r.resources.every((x) => x === 'pods'))),
+        !(r.apiGroups.length === 1 && r.apiGroups[0] === '' && r.resources.every((x) => x === 'pods')) &&
+        !(r.apiGroups.length === 1 && r.apiGroups[0] === 'batch' && r.resources.every((x) => x === 'jobs'))),
   },
   // A policy engine's constraint kinds are created by its users, so reading "every resource of constraints.gatekeeper.sh" needs `*`; only for get and list.
   {

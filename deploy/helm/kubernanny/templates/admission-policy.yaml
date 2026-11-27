@@ -21,6 +21,8 @@ ServiceAccount may only
   - on certificates/status: set the Issuing condition (cmctl renew);
   - on Longhorn: create a Snapshot and a Backup; on Velero: create a Backup
     labelled with its schedule;
+  - on Jobs: delete one that has failed, of a CronJob or without owner
+    (job-delete);
   - opt-in only: create a Job owned by a CronJob or labelled as a rerun
     (job-rerun), end a running Argo CD operation (argocd-terminate-op), raise
     a PVC's storage request by at most half (pvc-expand).
@@ -402,7 +404,9 @@ spec:
   policyName: {{ $prefix }}-pods
   validationActions: [Deny]
 {{- end }}
-{{- if has "job-rerun" $writes }}
+{{- $rerun := has "job-rerun" $writes }}
+{{- $jobDelete := has "job-delete" $writes }}
+{{- if or $rerun $jobDelete }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -421,6 +425,7 @@ spec:
   matchConditions:
     - name: only-the-agent
       expression: request.userInfo.username == {{ $agent | quote }}
+{{- if $rerun }}
   variables:
     - name: labels
       expression: "request.operation == 'CREATE' ? object.metadata.?labels.orValue({}) : {}"
@@ -441,64 +446,91 @@ spec:
         'net.ipv4.tcp_keepalive_time', 'net.ipv4.tcp_fin_timeout', 'net.ipv4.tcp_keepalive_intvl',
         'net.ipv4.tcp_keepalive_probes', 'net.ipv4.tcp_rmem', 'net.ipv4.tcp_wmem',
         'net.ipv4.tcp_slow_start_after_idle', 'net.ipv4.tcp_notsent_lowat']
+{{- end }}
   validations:
-    - expression: request.operation == 'CREATE'
-      message: the Kubernanny agent may only create Jobs
+    - expression: >-
+        request.operation in [{{ if $rerun }}'CREATE'{{ end }}{{ if and $rerun $jobDelete }}, {{ end }}{{ if $jobDelete }}'DELETE'{{ end }}]
+      message: the Kubernanny agent may only {{ if $rerun }}create Jobs{{ end }}{{ if and $rerun $jobDelete }} or {{ end }}{{ if $jobDelete }}delete failed Jobs{{ end }}
       reason: Forbidden
+{{- if $jobDelete }}
+    # job-delete: a Job that has failed, of a CronJob or without owner (what the agent offers it for); never a running
+    # or succeeded one, nor one another controller owns.
+    - expression: >-
+        request.operation != 'DELETE' || (
+          oldObject.status.?conditions.orValue([]).exists(c, c.type == 'Failed' && c.status == 'True') &&
+          (size(oldObject.metadata.?ownerReferences.orValue([])) == 0 ||
+            (size(oldObject.metadata.?ownerReferences.orValue([])) == 1 &&
+              oldObject.metadata.ownerReferences.exists(o, o.kind == 'CronJob' && o.apiVersion == 'batch/v1')))
+        )
+      message: the Kubernanny agent may only delete a failed Job of a CronJob or without owner
+      reason: Forbidden
+{{- end }}
+{{- if $rerun }}
     # The template cannot be compared with the CronJob's here (a policy sees only the request);
     # that is why job-rerun is opt-in (docs/SECURITY.md).
     - expression: >-
-        variables.labels[?'app.kubernetes.io/created-by'] == optional.of('kubernanny') &&
-        object.spec.?manualSelector.orValue(false) == false &&
-        ((size(object.metadata.?ownerReferences.orValue([])) == 1 &&
-          object.metadata.ownerReferences.exists(o, o.kind == 'CronJob' && o.apiVersion == 'batch/v1' && o.?controller.orValue(false) == true)) ||
-          ('kubernanny.io/rerun-of' in variables.labels && size(object.metadata.?ownerReferences.orValue([])) == 0))
+        request.operation == 'DELETE' || (
+          variables.labels[?'app.kubernetes.io/created-by'] == optional.of('kubernanny') &&
+          object.spec.?manualSelector.orValue(false) == false &&
+          ((size(object.metadata.?ownerReferences.orValue([])) == 1 &&
+            object.metadata.ownerReferences.exists(o, o.kind == 'CronJob' && o.apiVersion == 'batch/v1' && o.?controller.orValue(false) == true)) ||
+            ('kubernanny.io/rerun-of' in variables.labels && size(object.metadata.?ownerReferences.orValue([])) == 0))
+        )
       message: the Kubernanny agent may only create a Job run of a CronJob or a rerun of a failed Job without owner
       reason: Forbidden
     # The Pod Security Standards "baseline" profile, at pod and container level, whatever the template
     # says (the agent refuses such a rerun itself: agent/src/actions/pod-security.ts), plus no
     # allowPrivilegeEscalation: true and no ephemeral containers.
     - expression: >-
-        variables.pod.?hostNetwork.orValue(false) == false &&
-        variables.pod.?hostPID.orValue(false) == false &&
-        variables.pod.?hostIPC.orValue(false) == false &&
-        variables.pod.?volumes.orValue([]).all(v, !has(v.hostPath)) &&
-        size(variables.pod.?ephemeralContainers.orValue([])) == 0
+        request.operation == 'DELETE' || (
+          variables.pod.?hostNetwork.orValue(false) == false &&
+          variables.pod.?hostPID.orValue(false) == false &&
+          variables.pod.?hostIPC.orValue(false) == false &&
+          variables.pod.?volumes.orValue([]).all(v, !has(v.hostPath)) &&
+          size(variables.pod.?ephemeralContainers.orValue([])) == 0
+        )
       message: the Kubernanny agent may not create a Job with host namespaces, hostPath volumes or ephemeral containers
       reason: Forbidden
     - expression: >-
-        variables.pod.?securityContext.?windowsOptions.?hostProcess.orValue(false) == false &&
-        variables.pod.?securityContext.?seLinuxOptions.?type.orValue('') in variables.seLinuxTypes &&
-        variables.pod.?securityContext.?seLinuxOptions.?user.orValue('') == '' &&
-        variables.pod.?securityContext.?seLinuxOptions.?role.orValue('') == '' &&
-        variables.pod.?securityContext.?seccompProfile.?type.orValue('') != 'Unconfined' &&
-        variables.pod.?securityContext.?appArmorProfile.?type.orValue('RuntimeDefault') in ['RuntimeDefault', 'Localhost'] &&
-        variables.pod.?securityContext.?sysctls.orValue([]).all(s, s.name in variables.sysctls) &&
-        variables.annotations.all(k, !k.startsWith('container.apparmor.security.beta.kubernetes.io/') ||
-          variables.annotations[k] == 'runtime/default' || variables.annotations[k].startsWith('localhost/'))
+        request.operation == 'DELETE' || (
+          variables.pod.?securityContext.?windowsOptions.?hostProcess.orValue(false) == false &&
+          variables.pod.?securityContext.?seLinuxOptions.?type.orValue('') in variables.seLinuxTypes &&
+          variables.pod.?securityContext.?seLinuxOptions.?user.orValue('') == '' &&
+          variables.pod.?securityContext.?seLinuxOptions.?role.orValue('') == '' &&
+          variables.pod.?securityContext.?seccompProfile.?type.orValue('') != 'Unconfined' &&
+          variables.pod.?securityContext.?appArmorProfile.?type.orValue('RuntimeDefault') in ['RuntimeDefault', 'Localhost'] &&
+          variables.pod.?securityContext.?sysctls.orValue([]).all(s, s.name in variables.sysctls) &&
+          variables.annotations.all(k, !k.startsWith('container.apparmor.security.beta.kubernetes.io/') ||
+            variables.annotations[k] == 'runtime/default' || variables.annotations[k].startsWith('localhost/'))
+        )
       message: the Kubernanny agent may not create a Job whose pod leaves the baseline profile (hostProcess, SELinux, seccomp, AppArmor, sysctls)
       reason: Forbidden
     - expression: >-
-        variables.containers.all(c,
-          c.?securityContext.?privileged.orValue(false) == false &&
-          c.?securityContext.?allowPrivilegeEscalation.orValue(false) == false &&
-          c.?securityContext.?capabilities.?add.orValue([]).all(x, x in variables.capabilities) &&
-          c.?securityContext.?procMount.orValue('Default') == 'Default' &&
-          c.?securityContext.?windowsOptions.?hostProcess.orValue(false) == false &&
-          c.?securityContext.?seLinuxOptions.?type.orValue('') in variables.seLinuxTypes &&
-          c.?securityContext.?seLinuxOptions.?user.orValue('') == '' &&
-          c.?securityContext.?seLinuxOptions.?role.orValue('') == '' &&
-          c.?securityContext.?seccompProfile.?type.orValue('') != 'Unconfined' &&
-          c.?securityContext.?appArmorProfile.?type.orValue('RuntimeDefault') in ['RuntimeDefault', 'Localhost'] &&
-          c.?ports.orValue([]).all(p, p.?hostPort.orValue(0) == 0))
+        request.operation == 'DELETE' || (
+          variables.containers.all(c,
+            c.?securityContext.?privileged.orValue(false) == false &&
+            c.?securityContext.?allowPrivilegeEscalation.orValue(false) == false &&
+            c.?securityContext.?capabilities.?add.orValue([]).all(x, x in variables.capabilities) &&
+            c.?securityContext.?procMount.orValue('Default') == 'Default' &&
+            c.?securityContext.?windowsOptions.?hostProcess.orValue(false) == false &&
+            c.?securityContext.?seLinuxOptions.?type.orValue('') in variables.seLinuxTypes &&
+            c.?securityContext.?seLinuxOptions.?user.orValue('') == '' &&
+            c.?securityContext.?seLinuxOptions.?role.orValue('') == '' &&
+            c.?securityContext.?seccompProfile.?type.orValue('') != 'Unconfined' &&
+            c.?securityContext.?appArmorProfile.?type.orValue('RuntimeDefault') in ['RuntimeDefault', 'Localhost'] &&
+            c.?ports.orValue([]).all(p, p.?hostPort.orValue(0) == 0))
+        )
       message: the Kubernanny agent may not create a Job with a container that leaves the baseline profile (privileged, capabilities, procMount, hostProcess, SELinux, seccomp, AppArmor, hostPort)
       reason: Forbidden
     - expression: >-
-        variables.containers.all(c,
-          [c.?livenessProbe, c.?readinessProbe, c.?startupProbe].all(p, p.?httpGet.?host.orValue('') == '' && p.?tcpSocket.?host.orValue('') == '') &&
-          [c.?lifecycle.?postStart, c.?lifecycle.?preStop].all(h, h.?httpGet.?host.orValue('') == '' && h.?tcpSocket.?host.orValue('') == ''))
+        request.operation == 'DELETE' || (
+          variables.containers.all(c,
+            [c.?livenessProbe, c.?readinessProbe, c.?startupProbe].all(p, p.?httpGet.?host.orValue('') == '' && p.?tcpSocket.?host.orValue('') == '') &&
+            [c.?lifecycle.?postStart, c.?lifecycle.?preStop].all(h, h.?httpGet.?host.orValue('') == '' && h.?tcpSocket.?host.orValue('') == ''))
+        )
       message: the Kubernanny agent may not create a Job whose probes or lifecycle hooks name another host
       reason: Forbidden
+{{- end }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding

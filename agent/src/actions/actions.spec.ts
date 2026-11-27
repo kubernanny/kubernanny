@@ -89,6 +89,7 @@ const CASES: { action: IssueAction; objects?: Record<string, unknown> }[] = [
   },
   { action: { type: 'reconcile-now', kind: 'Kustomization', namespace: 'flux-system', name: 'apps' } },
   { action: { type: 'cleanup-pods', namespace: 'ns', pods: ['a'] } },
+  { action: { type: 'job-delete', namespace: 'ns', job: 'nightly-1', uid: 'u1' } },
   { action: { type: 'force-delete-terminating', namespace: 'ns', pod: 'p', node: 'n2' } },
   { action: { type: 'longhorn-backup', namespace: 'longhorn-system', volume: 'pvc-1', label: 'ns/data' } },
   {
@@ -307,6 +308,23 @@ describe('the issue actions (target from the issue, never from the request)', ()
       ['DELETE', '/api/v1/namespaces/default/pods/a', {}],
       ['DELETE', '/api/v1/namespaces/default/pods/gone', {}],
       ['DELETE', '/api/v1/namespaces/default/pods/b', {}],
+    ]);
+  });
+
+  it('job-delete deletes the failed Job with its pods, only the one with the uid the agent saw', async () => {
+    const { kube, actions } = service({
+      type: 'job-delete',
+      namespace: 'default',
+      job: 'import-feed-29929020',
+      uid: 'u-9',
+    });
+    expect(de(await actions.run('x/issue', 'job-delete'))).toEqual({ done: 'import-feed-29929020 gelöscht.' });
+    expect(kube.writes()).toEqual([
+      {
+        method: 'DELETE',
+        path: '/apis/batch/v1/namespaces/default/jobs/import-feed-29929020',
+        body: { propagationPolicy: 'Background', preconditions: { uid: 'u-9' } },
+      },
     ]);
   });
 

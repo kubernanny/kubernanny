@@ -2,6 +2,12 @@
 
 Agent, chart and relay. The apps in the App Store and on Google Play have their own release notes (`fastlane/release-notes/`).
 
+## Unreleased
+
+### Added
+
+- **Delete a failed Job from the app** (`job-delete`, on by default): a CronJob whose last run failed, or a failed Job nobody owns, offers to delete that Job with its pods, so the warning and alerts on it (`KubeJobFailed`) go. Only the Job the agent saw (by uid); the admission policy allows deleting failed Jobs of a CronJob or without owner, nothing else. `actions.disabled: [job-delete]` removes it and its permission. [CHECKS.md](docs/CHECKS.md#actions).
+
 ## 0.3.1 (2026-11-26)
 
 ### Fixed

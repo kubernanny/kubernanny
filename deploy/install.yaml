@@ -121,6 +121,10 @@ rules:
   - apiGroups: [""]
     resources: [pods]
     verbs: [delete]
+  # job-delete (held to failed Jobs of a CronJob or without owner by the admission policy).
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [delete]
   # reconcile-now: the reconcile annotation, or cert-manager's Issuing condition.
   - apiGroups: [kustomize.toolkit.fluxcd.io]
     resources: [kustomizations]
@@ -593,6 +597,37 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
+  name: kubernanny-jobs
+  labels:
+    app.kubernetes.io/name: kubernanny
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [batch]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [jobs]
+  matchConditions:
+    - name: only-the-agent
+      expression: request.userInfo.username == "system:serviceaccount:kubernanny:kubernanny"
+  validations:
+    - expression: request.operation == 'DELETE'
+      message: the Kubernanny agent may only delete failed Jobs
+      reason: Forbidden
+    # job-delete: a Job that has failed, of a CronJob or without owner (what the agent offers it for); never a running
+    # or succeeded one, nor one another controller owns. job-rerun (create) is opt-in and needs the Helm chart.
+    - expression: >-
+        oldObject.status.?conditions.orValue([]).exists(c, c.type == 'Failed' && c.status == 'True') &&
+        (size(oldObject.metadata.?ownerReferences.orValue([])) == 0 ||
+          (size(oldObject.metadata.?ownerReferences.orValue([])) == 1 &&
+            oldObject.metadata.ownerReferences.exists(o, o.kind == 'CronJob' && o.apiVersion == 'batch/v1')))
+      message: the Kubernanny agent may only delete a failed Job of a CronJob or without owner
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
   name: kubernanny-reconcile
   labels:
     app.kubernetes.io/name: kubernanny
@@ -886,6 +921,16 @@ metadata:
     app.kubernetes.io/name: kubernanny
 spec:
   policyName: kubernanny-pods
+  validationActions: [Deny]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: kubernanny-jobs
+  labels:
+    app.kubernetes.io/name: kubernanny
+spec:
+  policyName: kubernanny-jobs
   validationActions: [Deny]
 ---
 apiVersion: admissionregistration.k8s.io/v1

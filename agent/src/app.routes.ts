@@ -30,6 +30,7 @@ const RUNNABLE: IssueActionType[] = [
   'velero-backup',
   'uncordon',
   'job-rerun',
+  'job-delete',
   'reconcile-now',
   'cleanup-pods',
   'force-delete-terminating',

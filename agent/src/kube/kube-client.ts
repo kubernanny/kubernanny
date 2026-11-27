@@ -167,7 +167,14 @@ export class KubeClient {
   }
 
   /** DELETE; `gracePeriodSeconds: 0` with `force` (a pod whose node is gone). */
-  async delete(path: string, opts: { gracePeriodSeconds?: number } = {}): Promise<void> {
+  async delete(
+    path: string,
+    opts: {
+      gracePeriodSeconds?: number;
+      propagationPolicy?: 'Background' | 'Foreground' | 'Orphan';
+      preconditions?: { uid?: string };
+    } = {},
+  ): Promise<void> {
     const res = await this.request(path, {
       method: 'DELETE',
       headers: { 'content-type': 'application/json' },
@@ -175,6 +182,8 @@ export class KubeClient {
         kind: 'DeleteOptions',
         apiVersion: 'v1',
         ...(opts.gracePeriodSeconds !== undefined ? { gracePeriodSeconds: opts.gracePeriodSeconds } : {}),
+        ...(opts.propagationPolicy ? { propagationPolicy: opts.propagationPolicy } : {}),
+        ...(opts.preconditions ? { preconditions: opts.preconditions } : {}),
       }),
     });
     await this.assertOk(res, path);

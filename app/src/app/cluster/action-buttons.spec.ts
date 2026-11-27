@@ -27,6 +27,7 @@ const ALL: IssueAction[] = [
   { type: 'uncordon', node: 'rke2-node-4' },
   { type: 'job-rerun', namespace: 'default', from: 'CronJob', name: 'nightly' },
   { type: 'job-rerun', namespace: 'default', from: 'Job', name: 'migrate' },
+  { type: 'job-delete', namespace: 'default', job: 'nightly-29929020', uid: 'u-1' },
   { type: 'reconcile-now', kind: 'Kustomization', namespace: 'flux-system', name: 'apps' },
   { type: 'reconcile-now', kind: 'ExternalSecret', namespace: 'shop', name: 'db' },
   { type: 'reconcile-now', kind: 'InfisicalStaticSecret', namespace: 'shop', name: 'token' },
@@ -116,20 +117,26 @@ describe('action buttons', () => {
   });
 
   it('names the risk where there is one: running twice, no shrinking back, the template that stays', () => {
-    const force = actionButton(ALL[9]!, 0, de).confirm!;
+    const force = actionButton(ALL[10]!, 0, de).confirm!;
     expect(force).toContain('startet StatefulSet uptime-kuma denselben Pod ein zweites Mal');
-    const grow = actionButton(ALL[13]!, 0, en);
+    const grow = actionButton(ALL[14]!, 0, en);
     expect(grow.label).toBe('Grow to 63Gi');
     expect(grow.confirm).toBe(
       "Grow PVC monitoring/data-prom-0 from 50Gi to 63Gi? A volume cannot be shrunk afterwards. StatefulSet prom's volumeClaimTemplates keep the old size: change them wherever you manage them.",
     );
-    expect(actionButton(ALL[7]!, 0, de)).toMatchObject({
+    expect(actionButton(ALL[8]!, 0, de)).toMatchObject({
       label: 'Neu ausstellen',
       icon: 'ribbon-outline',
     });
-    expect(actionButton(ALL[8]!, 0, de).confirm).toBe(
+    expect(actionButton(ALL[9]!, 0, de).confirm).toBe(
       '2 beendete Pods in default löschen? Nur Pods, die nicht mehr laufen. Ihre Logs gehen damit verloren.',
     );
+    expect(actionButton(ALL[4]!, 0, de)).toMatchObject({
+      label: 'Job löschen',
+      icon: 'trash-outline',
+      confirm:
+        'Den fehlgeschlagenen Job default/nightly-29929020 samt Pods löschen, wie kubectl delete job? Seine Logs gehen damit verloren. Ein CronJob bleibt und läuft nach Plan weiter.',
+    });
     expect(
       actionButton({ type: 'cleanup-pods', namespace: 'default', pods: ['a'] }, 0, en).confirm,
     ).toBe('Delete one finished pod in default? It no longer runs. Its logs go with it.');
