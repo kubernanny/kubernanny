@@ -1,1 +1,1 @@
-Die Auswahl beim Stummschalten und bei „Trifft nicht zu“ ist unter Android wieder lesbar: Die Optionen waren im dunklen Design fast unsichtbar.
+Pushes eines Clusters stapeln sich unter Android jetzt, statt sich gegenseitig zu überschreiben: Eine Entwarnung löscht den Alarm davor nicht mehr. Pro Cluster bleiben die letzten zehn.

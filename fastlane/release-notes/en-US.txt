@@ -1,1 +1,1 @@
-The choices when silencing a problem or marking an advisory as not applicable are readable on Android again: in the dark theme they were nearly invisible.
+On Android, pushes of a cluster now stack instead of replacing each other: an all-clear no longer wipes the alert before it. The last ten per cluster stay.
