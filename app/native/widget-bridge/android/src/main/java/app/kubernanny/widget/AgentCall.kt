@@ -40,7 +40,14 @@ object AgentCall {
     private const val TAGLEN = 16
     private const val MAX_MESSAGE = 65535
     /** The largest answer opened; a status is a few hundred kilobytes at most. */
-    private const val MAX_RESPONSE_BODY = 8 * 1024 * 1024
+    const val MAX_RESPONSE_BODY = 4 * 1024 * 1024
+    /**
+     * The most bytes read from the wire for one answer: the body plus its framing (version byte, the
+     * handshake message, per frame of up to 65518 bytes a length and a tag). Whoever answers (a relay, a
+     * proxy, a wrong address) cannot make the reader hold more than this, which matters for an iOS widget
+     * extension's small memory limit and keeps the Android worker in step.
+     */
+    const val MAX_WIRE_BYTES = MAX_RESPONSE_BODY + MAX_RESPONSE_BODY / 1000 + 1024
     private val BASEPOINT = ByteArray(32).also { it[0] = 9 }
 
     /** The answer: the agent's HTTP-like status, its clock (ms) and the body (JSON text). */

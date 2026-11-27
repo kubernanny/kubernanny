@@ -185,7 +185,19 @@ object WidgetRefresher {
             connection.outputStream.use { it.write(body) }
             val code = connection.responseCode
             if (code != 200) throw IOException("HTTP $code")
-            return connection.inputStream.use { it.readBytes() }
+            // Capped while reading, not after: whoever answers decides how much comes.
+            if (connection.contentLengthLong > AgentCall.MAX_WIRE_BYTES) throw IOException("answer too large")
+            return connection.inputStream.use { input ->
+                val out = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(16 * 1024)
+                while (true) {
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    if (out.size() + n > AgentCall.MAX_WIRE_BYTES) throw IOException("answer too large")
+                    out.write(buffer, 0, n)
+                }
+                out.toByteArray()
+            }
         } finally {
             connection.disconnect()
         }

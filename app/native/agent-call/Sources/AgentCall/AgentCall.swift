@@ -29,7 +29,11 @@ public enum AgentCall {
     static let protocolName = Data("Noise_IK_25519_ChaChaPoly_BLAKE2b".utf8)
     static let maxMessage = 65535
     /// The largest answer opened; a status is a few hundred kilobytes at most.
-    static let maxResponseBody = 8 * 1024 * 1024
+    public static let maxResponseBody = 4 * 1024 * 1024
+    /// The most bytes read from the wire for one answer: the body plus its framing (version byte, the
+    /// handshake message, per frame of up to 65518 bytes a length and a tag). Whoever answers (a relay, a
+    /// proxy, a wrong address) cannot make the widget extension, with its small memory limit, hold more.
+    public static let maxWireBytes = maxResponseBody + maxResponseBody / 1000 + 1024
 
     /// A sealed request: `body` goes out as the POST body, `open` reads exactly its answer, once.
     public final class Sealed {

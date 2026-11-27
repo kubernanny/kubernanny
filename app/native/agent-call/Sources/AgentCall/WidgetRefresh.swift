@@ -158,10 +158,17 @@ public enum WidgetRefresh {
             request.httpMethod = "POST"
             request.setValue("application/octet-stream", forHTTPHeaderField: "content-type")
             request.httpBody = sealed.body
-            let (data, response) = try await session.data(for: request)
+            let (bytes, response) = try await session.bytes(for: request)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else {
                 // A relay or proxy answered instead of the agent (502 to 504), or nothing usable came back.
                 throw URLError(.badServerResponse)
+            }
+            // Capped while reading, not after: whoever answers decides how much comes.
+            guard response.expectedContentLength <= AgentCall.maxWireBytes else { throw URLError(.dataLengthExceedsMaximum) }
+            var data = Data()
+            for try await byte in bytes {
+                guard data.count < AgentCall.maxWireBytes else { throw URLError(.dataLengthExceedsMaximum) }
+                data.append(byte)
             }
             let answer = try sealed.open(data)
             let skew = answer.status == 401
