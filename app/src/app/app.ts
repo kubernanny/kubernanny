@@ -1,7 +1,7 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { App as CapApp } from '@capacitor/app';
-import { IonApp, IonRouterOutlet } from '@ionic/angular/standalone';
+import { IonApp, IonRouterOutlet, Platform } from '@ionic/angular/standalone';
 
 import { ClusterStore } from './core/cluster-store.service';
 import { registerIcons } from './core/icons';
@@ -27,9 +27,21 @@ export class App {
   private readonly store = inject(ClusterStore);
   private readonly scanPairing = inject(ScanPairing);
   private readonly widgetRefresh = inject(WidgetRefresh);
+  private readonly outlet = viewChild(IonRouterOutlet);
 
   constructor() {
     registerIcons();
+    // Android's back button. Capacitor hands it to the page (the document's "backbutton" event, which
+    // Ionic turns into ionBackButton) only while a listener is registered; without one it only went back
+    // in the WebView's history, behind an open sheet or dialog. With it, Ionic closes the topmost
+    // overlay first (priority 100: sheets, alerts, action sheets, modals), then goes back a page
+    // (priority 0). Last, on the first page, the app goes to the background as Android apps do.
+    void CapApp.addListener('backButton', () => undefined).catch(() => undefined);
+    inject(Platform).backButton.subscribeWithPriority(-1, () => {
+      if (!this.outlet()?.canGoBack()) {
+        void CapApp.minimizeApp().catch(() => undefined);
+      }
+    });
     // Scanning the QR code from the agent's logs opens the app with this link.
     void CapApp.addListener('appUrlOpen', ({ url }) => {
       const params = pairingRoute(url);
