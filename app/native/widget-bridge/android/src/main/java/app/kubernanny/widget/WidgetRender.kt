@@ -58,7 +58,7 @@ object WidgetRender {
     private fun overviewSmall(context: Context, list: List<WidgetCluster>, now: Long): RemoteViews {
         val v = RemoteViews(context.packageName, R.layout.kn_overview_small)
         v.setOnClickPendingIntent(R.id.kn_root, openIntent(context, list.firstOrNull()?.id))
-        v.setOnClickPendingIntent(R.id.kn_refresh, refreshIntent(context))
+        refreshButton(context, v, R.id.kn_refresh, now)
         if (list.isEmpty()) {
             v.setViewVisibility(R.id.kn_empty, View.VISIBLE)
             v.setViewVisibility(R.id.kn_headline, View.GONE)
@@ -108,8 +108,8 @@ object WidgetRender {
         // The refresh button sits in the header where there is one, else at the end of the first row
         // (the other rows keep a spacer as wide, so the times stay in one column).
         val inHeader = header && list.isNotEmpty()
-        v.setOnClickPendingIntent(R.id.kn_refresh, refreshIntent(context))
-        v.setOnClickPendingIntent(R.id.kn_refresh_row, refreshIntent(context))
+        refreshButton(context, v, R.id.kn_refresh, now)
+        refreshButton(context, v, R.id.kn_refresh_row, now)
         v.setViewVisibility(R.id.kn_refresh_row, if (inHeader) View.GONE else View.VISIBLE)
         for (i in 1 until 5) {
             v.setViewVisibility(id(context, "kn_refresh_slot_$i"), if (inHeader) View.GONE else View.INVISIBLE)
@@ -186,7 +186,7 @@ object WidgetRender {
     private fun clusterViews(context: Context, layout: Int, cluster: WidgetCluster?, now: Long): RemoteViews {
         val v = RemoteViews(context.packageName, layout)
         v.setOnClickPendingIntent(R.id.kn_root, openIntent(context, cluster?.id))
-        v.setOnClickPendingIntent(R.id.kn_refresh, refreshIntent(context))
+        refreshButton(context, v, R.id.kn_refresh, now)
         if (cluster == null) {
             v.setViewVisibility(R.id.kn_empty, View.VISIBLE)
             for (gone in listOf(R.id.kn_name, R.id.kn_line1, R.id.kn_time)) {
@@ -285,6 +285,12 @@ object WidgetRender {
      * on a second line, in a softer amber (the time view allows two lines in every layout).
      */
     private fun time(context: Context, v: RemoteViews, viewId: Int, checkedAt: Long?, stale: Boolean, now: Long) {
+        if (WidgetRefresher.refreshing(context, now)) {
+            v.setViewVisibility(viewId, View.VISIBLE)
+            v.setTextViewText(viewId, context.getString(R.string.kn_widget_refreshing))
+            v.setTextColor(viewId, context.getColor(R.color.kn_mute))
+            return
+        }
         if (checkedAt == null) {
             v.setViewVisibility(viewId, View.GONE)
             return
@@ -403,18 +409,33 @@ object WidgetRender {
     }
 
     /**
-     * The refresh button: the widget cannot ask an agent itself (no key), so it
-     * opens the app with kubernanny://refresh. The app asks every agent, writes
-     * the widget's list and goes back to the home screen (WidgetRefresh in
-     * app/src/app/core/widget/). Explicit like openIntent.
+     * The refresh button. With the background refresh on (RefreshTargets) it asks
+     * the agents in place (WidgetRefreshReceiver, not exported). Without it the
+     * widget holds no key, so it opens the app with kubernanny://refresh: the
+     * app asks every agent, writes the widget's list and goes back to the home
+     * screen (WidgetRefresh in app/src/app/core/widget/). Explicit like openIntent.
      */
     private fun refreshIntent(context: Context): PendingIntent {
+        if (WidgetRefresher.supported && RefreshTargets.enabled(context)) {
+            return PendingIntent.getBroadcast(
+                context,
+                REFRESH_REQUEST,
+                Intent(WidgetRefreshReceiver.REFRESH_NOW).setClass(context, WidgetRefreshReceiver::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
         val intent = (context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent()).apply {
             action = Intent.ACTION_VIEW
             data = Uri.Builder().scheme("kubernanny").authority("refresh").build()
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
         return PendingIntent.getActivity(context, REFRESH_REQUEST, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    }
+
+    /** The refresh button, faded while a refresh it started is under way. */
+    private fun refreshButton(context: Context, v: RemoteViews, viewId: Int, now: Long) {
+        v.setOnClickPendingIntent(viewId, refreshIntent(context))
+        v.setInt(viewId, "setImageAlpha", if (WidgetRefresher.refreshing(context, now)) 90 else 255)
     }
 
     /** Apart from the cluster links' request codes (their ids' hash codes); the data differs anyway. */

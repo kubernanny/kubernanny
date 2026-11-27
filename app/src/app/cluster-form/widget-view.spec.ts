@@ -149,6 +149,31 @@ describe('widgetView', () => {
     });
   });
 
+  it('with the background refresh on, says so and no longer that only the open app updates it', () => {
+    const off = push({
+      state: 'on',
+      relay: true,
+      registered: false,
+      deadman: { state: 'on' as const, grace: 15 },
+    });
+    const view = widgetView({ cluster: cluster(), push: off, refreshMinutes: 30 }, de);
+    expect(view.pushLine).toBe(
+      'Push ist auf diesem Gerät aus: Das Widget fragt den Agent etwa alle 30 Minuten selbst, ein neues Problem siehst du also erst dann.',
+    );
+    expect(view.lines).toContain(
+      'Außerdem fragt es den Agent etwa alle 30 Minuten selbst, auch ohne die App.',
+    );
+    expect(view.offerPush).toBe(true);
+    // Never for the demo, which has no agent to ask.
+    expect(
+      widgetView({ cluster: cluster({ demo: 'healthy' }), push: null, refreshMinutes: 30 }, de)
+        .lines,
+    ).not.toContain('Außerdem fragt es den Agent etwa alle 30 Minuten selbst, auch ohne die App.');
+    expect(widgetView({ cluster: cluster(), push: off }, de).pushLine).toContain(
+      'nur aktuell, wenn du die App öffnest',
+    );
+  });
+
   it('keeps every line free of em and en dashes', () => {
     for (const tr of [de, en]) {
       for (const p of [

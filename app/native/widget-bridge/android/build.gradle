@@ -54,5 +54,11 @@ dependencies {
     implementation "androidx.core:core-ktx:$androidxCoreVersion"
     // Capacitor's Plugin.getActivity() is an AppCompatActivity (moveToBack); the app ships it already.
     compileOnly "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    // The background refresh (WidgetRefreshWorker): periodic work that survives a reboot, waits for a network.
+    implementation "androidx.work:work-runtime-ktx:2.10.5"
+    // X25519 for Android before API 33 (the push module uses the same).
+    implementation 'com.google.crypto.tink:tink-android:1.22.0'
     testImplementation "junit:junit:4.13.2"
+    // Android's org.json is a stub in JVM tests; AgentCall and the snapshot reading use it.
+    testImplementation 'org.json:json:20250517'
 }

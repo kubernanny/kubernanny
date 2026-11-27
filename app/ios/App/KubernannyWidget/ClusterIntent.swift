@@ -56,7 +56,7 @@ struct ChosenClusterProvider: AppIntentTimelineProvider {
     }
 
     func timeline(for configuration: SelectClusterIntent, in context: Context) async -> Timeline<ClustersEntry> {
-        Timelines.entries(chosenId: configuration.cluster?.id)
+        await Timelines.refreshedEntries(chosenId: configuration.cluster?.id)
     }
 }
 

@@ -8,7 +8,10 @@
 #   bundle id app.kubernanny.KubernannyWidget), embedded in the app, with the
 #   app's deployment target, linking WidgetKit and SwiftUI;
 # - its entitlements file (App Group group.app.kubernanny, into which the
-#   app's WidgetBridge plugin writes the clusters);
+#   app's WidgetBridge plugin writes the clusters; the same id is the keychain
+#   access group the background refresh keeps its targets in);
+# - the local Swift package app/native/agent-call (KubernannyAgentCall), the
+#   widget's own call to an agent for the background refresh;
 # - on the App target: the same App Group, merged into the entitlements file
 #   the target already uses, or a new App/App.entitlements. Other entries
 #   (push's App Group, aps-environment) stay.
@@ -116,5 +119,26 @@ SOURCES.each do |file|
   extension.add_file_references([ref])
 end
 
+# The background refresh: the local Swift package with the widget's call to an agent
+# (app/native/agent-call), linked into the extension. The App target gets it through
+# the WidgetBridge plugin's package (CapApp-SPM).
+PACKAGE_PATH = '../../native/agent-call'
+PACKAGE_PRODUCT = 'KubernannyAgentCall'
+package = project.root_object.package_references.find { |r| r.respond_to?(:relative_path) && r.relative_path == PACKAGE_PATH }
+unless package
+  package = project.new(Xcodeproj::Project::Object::XCLocalSwiftPackageReference)
+  package.relative_path = PACKAGE_PATH
+  project.root_object.package_references << package
+end
+unless extension.package_product_dependencies.any? { |d| d.product_name == PACKAGE_PRODUCT }
+  dependency = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+  dependency.package = package
+  dependency.product_name = PACKAGE_PRODUCT
+  extension.package_product_dependencies << dependency
+  build_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
+  build_file.product_ref = dependency
+  extension.frameworks_build_phase.files << build_file
+end
+
 project.save
-puts "#{NAME}: in #{File.basename(PROJECT)}; App entitlements carry #{GROUP}"
+puts "#{NAME}: in #{File.basename(PROJECT)}; App entitlements carry #{GROUP}; links #{PACKAGE_PRODUCT}"

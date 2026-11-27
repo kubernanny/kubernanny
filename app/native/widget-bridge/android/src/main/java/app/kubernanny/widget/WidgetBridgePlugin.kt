@@ -47,6 +47,57 @@ class WidgetBridgePlugin : Plugin() {
     }
 
     /**
+     * The background refresh (WidgetRefresher): how often (minutes, 0 off), in which language, and per
+     * cluster of the widget list what GET /status needs. Sealed into the Keystore-backed store, then the
+     * periodic work is (re)scheduled. Resolves whether this device can do it at all (API 28 and later).
+     */
+    @PluginMethod
+    fun setRefresh(call: PluginCall) {
+        val minutes = call.getInt("intervalMinutes") ?: 0
+        val list = call.getArray("targets") ?: JSArray()
+        val targets = try {
+            (0 until list.length()).map { i ->
+                val t = list.getJSONObject(i)
+                RefreshTarget(
+                    id = t.getString("id"),
+                    url = t.getString("url"),
+                    relayUrl = t.optString("relayUrl", "").ifEmpty { null },
+                    agentKey = t.getString("agentKey"),
+                    deviceKey = t.getString("deviceKey"),
+                )
+            }
+        } catch (e: Exception) {
+            call.reject("invalid refresh targets")
+            return
+        }
+        val supported = WidgetRefresher.supported
+        try {
+            RefreshTargets.write(context, RefreshSettings(if (supported) minutes else 0, call.getString("language"), targets))
+            WidgetRefresher.schedule(context)
+        } catch (e: Exception) {
+            call.reject("cannot store the refresh targets")
+            return
+        }
+        // The refresh button changes with it: in place, or opening the app.
+        WidgetRender.updateAll(context)
+        call.resolve(JSObject().put("supported", supported))
+    }
+
+    /** The app's page in the system settings, where its battery use can be set to "Unrestricted". */
+    @PluginMethod
+    fun openBatterySettings(call: PluginCall) {
+        val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+            .setData(android.net.Uri.fromParts("package", context.packageName, null))
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            context.startActivity(intent)
+            call.resolve()
+        } catch (e: Exception) {
+            call.reject("cannot open the settings")
+        }
+    }
+
+    /**
      * After a refresh from the widget's button (kubernanny://refresh): back to
      * the home screen the person came from, the app staying in the background.
      */

@@ -1,4 +1,5 @@
 import { ClusterConfig, Light, Snapshot } from '../agent.model';
+import { usableRelay } from '../relay-route';
 import { ClusterState } from '../status-store.service';
 
 /** One open problem as the larger widgets list it. */
@@ -202,4 +203,40 @@ export function validWidgetList(value: unknown): WidgetCluster[] {
         ? { unreachableSince }
         : {}),
     }));
+}
+
+/** How often the widgets may ask the agents themselves, in minutes; 0 is off (the default). */
+export const REFRESH_CHOICES = [0, 15, 30, 60] as const;
+export type RefreshMinutes = (typeof REFRESH_CHOICES)[number];
+
+/**
+ * What the native background refresh needs per cluster of the widget list to
+ * ask GET /status itself (WidgetRefresher on Android, the widget extension on
+ * iOS): its address, the relay it may fall back to, the pinned agent key and
+ * this device's key. Only clusters the widgets show, never the demo.
+ */
+export interface RefreshTarget {
+  id: string;
+  url: string;
+  relayUrl?: string;
+  agentKey: string;
+  deviceKey: string;
+}
+
+export function refreshTargets(clusters: ClusterConfig[], allOff: boolean): RefreshTarget[] {
+  if (allOff) {
+    return [];
+  }
+  return clusters
+    .filter((c) => !c.widgetOff && c.demo === undefined && c.url && c.agentKey && c.deviceKey)
+    .map((c) => {
+      const relay = usableRelay(c);
+      return {
+        id: c.id,
+        url: c.url,
+        ...(relay ? { relayUrl: relay } : {}),
+        agentKey: c.agentKey,
+        deviceKey: c.deviceKey,
+      };
+    });
 }

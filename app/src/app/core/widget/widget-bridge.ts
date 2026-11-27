@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
-import { validWidgetList, WidgetCluster } from './widget-summary';
+import { RefreshTarget, validWidgetList, WidgetCluster } from './widget-summary';
 
 /**
  * The native side (`app/native/widget-bridge`, Swift and Kotlin): keeps the
@@ -16,6 +16,14 @@ interface WidgetBridgePlugin {
   placed(): Promise<{ count: number }>;
   /** Android only: sends the app to the background, back to the home screen it was opened from. */
   moveToBack(): Promise<{ moved: boolean }>;
+  /** The background refresh: interval (0 off), language, and per cluster what GET /status needs. */
+  setRefresh(options: {
+    intervalMinutes: number;
+    language: string;
+    targets: RefreshTarget[];
+  }): Promise<{ supported: boolean }>;
+  /** Android only: the app's system settings, where its battery use can be set to unrestricted. */
+  openBatterySettings(): Promise<void>;
 }
 
 /** On the web there are no widgets: nothing stored, nothing written. */
@@ -25,6 +33,8 @@ const native = registerPlugin<WidgetBridgePlugin>('WidgetBridge', {
     write: async () => undefined,
     placed: async () => ({ count: 0 }),
     moveToBack: async () => ({ moved: false }),
+    setRefresh: async () => ({ supported: false }),
+    openBatterySettings: async () => undefined,
   },
 });
 
@@ -72,6 +82,28 @@ export class WidgetBridge {
       return (await native.moveToBack()).moved;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Hands the native background refresh its settings and targets, which it keeps sealed
+   * (Android Keystore, iOS keychain). Interval 0 or no targets removes them there.
+   * Resolves whether this device can refresh in the background at all.
+   */
+  async setRefresh(
+    intervalMinutes: number,
+    language: string,
+    targets: RefreshTarget[],
+  ): Promise<boolean> {
+    if (!this.supported) {
+      return false;
+    }
+    return (await native.setRefresh({ intervalMinutes, language, targets })).supported;
+  }
+
+  async openBatterySettings(): Promise<void> {
+    if (Capacitor.getPlatform() === 'android') {
+      await native.openBatterySettings().catch(() => undefined);
     }
   }
 

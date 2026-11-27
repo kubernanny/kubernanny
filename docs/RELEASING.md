@@ -125,7 +125,8 @@ Every line must carry `android:required="false"` unless the app cannot work with
 How the widgets work: [ARCHITECTURE.md, Widgets](ARCHITECTURE.md#widgets). For the build:
 
 - **Android**: nothing to do. `app/native/widget-bridge` carries both widgets and their receivers in its own manifest, which the merger adds; no `<uses-feature>`, no permission.
-- **iOS**: the extension `KubernannyWidget` (bundle id `app.kubernanny.KubernannyWidget`, sources in `app/ios/App/KubernannyWidget/`) was added by `cd app && bundle exec ruby scripts/add-widget-extension.rb`. Run it again after adding a source file to the widget (it adds the files of its `SOURCES` list that the target lacks). App, widget and push extension must all have the App Group `group.app.kubernanny`, or the widget stays empty.
+- **iOS**: the extension `KubernannyWidget` (bundle id `app.kubernanny.KubernannyWidget`, sources in `app/ios/App/KubernannyWidget/`) was added by `cd app && bundle exec ruby scripts/add-widget-extension.rb`. Run it again after adding a source file to the widget (it adds the files of its `SOURCES` list that the target lacks). App, widget and push extension must all have the App Group `group.app.kubernanny`, or the widget stays empty. It also links the local Swift package `app/native/agent-call` (`KubernannyAgentCall`, the background refresh) into the extension; the app gets it through the WidgetBridge plugin's `Package.swift`. The same App Group id is the keychain access group the refresh keeps its targets in, so it needs no keychain capability of its own. Its tests: `cd app/native/agent-call && swift test`.
+- **Android**: the background refresh adds WorkManager and Tink to `app/native/widget-bridge/android`; its tests run with `./gradlew :kubernanny-widget-bridge:testDebugUnitTest` in `app/android`.
 
 ### Encryption
 

@@ -1,13 +1,22 @@
 import { effect, inject, Injectable, signal } from '@angular/core';
 import { Preferences } from '@capacitor/preferences';
 
+import { LanguageService } from '../../i18n/language.service';
 import { ClusterConfig } from '../agent.model';
 import { ClusterStore } from '../cluster-store.service';
 import { StatusStore } from '../status-store.service';
 import { WidgetBridge } from './widget-bridge';
-import { keepFresher, nextWidgetList, WidgetCluster } from './widget-summary';
+import {
+  keepFresher,
+  nextWidgetList,
+  REFRESH_CHOICES,
+  RefreshMinutes,
+  refreshTargets,
+  WidgetCluster,
+} from './widget-summary';
 
 const OFF_KEY = 'widgetsOff';
+const REFRESH_KEY = 'widgetRefreshMinutes';
 
 /**
  * Keeps the home-screen widgets' copy in step with the app: whenever a new
@@ -21,7 +30,16 @@ export class WidgetSync {
   private readonly bridge = inject(WidgetBridge);
   private readonly clusters = inject(ClusterStore);
   private readonly status = inject(StatusStore);
+  private readonly language = inject(LanguageService);
   private readonly off = signal(false);
+  private readonly refresh = signal<RefreshMinutes>(0);
+  private readonly refreshAvailable = signal(true);
+  /** How often the widgets ask the agents themselves (minutes, 0 off): a setting of this device. */
+  readonly refreshMinutes = this.refresh.asReadonly();
+  /** False where the device cannot (Android before 9); known after the first hand-over. */
+  readonly refreshSupported = this.refreshAvailable.asReadonly();
+  /** What the native refresh was last given, so unchanged settings are not sealed again. */
+  private refreshJson: string | null = null;
   private readonly ready = signal(false);
   /** Switched off in the app: nothing is kept for any widget. */
   readonly allOff = this.off.asReadonly();
@@ -39,6 +57,42 @@ export class WidgetSync {
         void this.sync();
       }
     });
+    // The background refresh follows the clusters, the widget switches, the setting and the language.
+    effect(() => {
+      if (this.ready()) {
+        void this.syncRefresh(this.language.lang());
+      }
+    });
+  }
+
+  /** The background refresh: 0 off, else every 15, 30 or 60 minutes. */
+  async setRefreshMinutes(minutes: RefreshMinutes): Promise<void> {
+    this.refresh.set(minutes);
+    try {
+      await Preferences.set({ key: REFRESH_KEY, value: String(minutes) });
+    } catch {
+      // Not persisted: it holds for this session.
+    }
+    await this.syncRefresh(this.language.lang());
+  }
+
+  /** Hands the native side what it needs for GET /status per cluster of the widget list, when that changed. */
+  private syncRefresh(language: string): Promise<void> {
+    const minutes = this.refresh();
+    const targets = minutes > 0 ? refreshTargets(this.clusters.clusters(), this.off()) : [];
+    const json = JSON.stringify({ minutes, language, targets });
+    if (json === this.refreshJson) {
+      return this.queue;
+    }
+    this.refreshJson = json;
+    this.queue = this.queue.then(async () => {
+      try {
+        this.refreshAvailable.set(await this.bridge.setRefresh(minutes, language, targets));
+      } catch {
+        this.refreshJson = null;
+      }
+    });
+    return this.queue;
   }
 
   /** The global switch. Off deletes every cluster from the widget storage before it resolves. */
@@ -98,6 +152,15 @@ export class WidgetSync {
       this.off.set(value === '1');
     } catch {
       // Unreadable: on, the default.
+    }
+    try {
+      const { value } = await Preferences.get({ key: REFRESH_KEY });
+      const minutes = Number(value);
+      this.refresh.set(
+        (REFRESH_CHOICES as readonly number[]).includes(minutes) ? (minutes as RefreshMinutes) : 0,
+      );
+    } catch {
+      // Unreadable: off, the default.
     }
     try {
       this.written = await this.bridge.read();

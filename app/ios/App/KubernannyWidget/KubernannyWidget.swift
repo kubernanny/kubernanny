@@ -1,12 +1,16 @@
+import AppIntents
+import KubernannyAgentCall
 import SwiftUI
 import WidgetKit
 
-// The home-screen and Lock Screen widgets. They never talk to an agent and
-// hold no key: all they show is the short list in the App Group (WidgetData),
-// written by the app while it is open and updated from every native push by
-// the push extension (WidgetPushStatus.swift). Nothing else can refresh them,
-// so each entry shows its age, and a cluster whose last check is over 30
-// minutes old is drawn grey.
+// The home-screen and Lock Screen widgets. They show the short list in the App
+// Group (WidgetData), written by the app while it is open and updated from
+// every native push by the push extension (WidgetPushStatus.swift). With the
+// background refresh switched on in the app, the timeline also asks the agents
+// itself before it is built (KubernannyAgentCall, WidgetRefresh), as often as
+// iOS allows; the keys for that are in the keychain group the app shares.
+// Each entry shows its age, and a cluster whose last check is over two hours
+// old is drawn grey.
 //
 // Two kinds:
 // - "Kubernanny" (KubernannyClusters, the original kind, so placed widgets
@@ -33,8 +37,21 @@ enum Timelines {
         let clusters = WidgetData.sorted(WidgetData.load())
         let dates = WidgetData.timelineDates(now: now, clusters: clusters)
         let entries = dates.map { ClustersEntry(date: $0, clusters: clusters, chosenId: chosenId) }
-        // The app and the push extension reload on every write; this only renews the ticking age after a day.
+        // With the background refresh: the next timeline (and with it the next question to the agents) after
+        // the chosen interval, as far as iOS's budget allows. Without: the app and the push extension reload on
+        // every write; this only renews the ticking age after a day.
+        if let minutes = RefreshState.interval {
+            return Timeline(entries: entries, policy: .after(now.addingTimeInterval(Double(minutes) * 60)))
+        }
         return Timeline(entries: entries, policy: .after(dates.last ?? now.addingTimeInterval(86_400)))
+    }
+
+    /// The timeline, after asking the agents when the background refresh is on.
+    static func refreshedEntries(chosenId: String? = nil) async -> Timeline<ClustersEntry> {
+        if RefreshState.enabled {
+            await WidgetRefresh.refreshAll()
+        }
+        return entries(chosenId: chosenId)
     }
 
     static func snapshot(in context: TimelineProviderContext, chosenId: String? = nil) -> ClustersEntry {
@@ -53,7 +70,9 @@ struct ClustersProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<ClustersEntry>) -> Void) {
-        completion(Timelines.entries())
+        Task {
+            completion(await Timelines.refreshedEntries())
+        }
     }
 }
 
@@ -96,5 +115,29 @@ enum ClusterFamilies {
             families += [.accessoryCircular, .accessoryRectangular, .accessoryInline]
         }
         return families
+    }
+}
+
+/// Whether the app switched the background refresh on, and how often (minutes): read from the keychain.
+enum RefreshState {
+    static var interval: Int? {
+        guard let settings = WidgetRefresh.load(), settings.interval > 0, !settings.targets.isEmpty else { return nil }
+        return settings.interval
+    }
+
+    static var enabled: Bool { interval != nil }
+}
+
+/// The widget's refresh button (iOS 17 and later): asks every agent of the list now, in the widget
+/// extension, then every widget reloads with what came back.
+@available(iOSApplicationExtension 17.0, *)
+struct RefreshWidgetsIntent: AppIntent {
+    static var title: LocalizedStringResource = "widget.refresh"
+    static var isDiscoverable = false
+
+    func perform() async throws -> some IntentResult {
+        await WidgetRefresh.refreshAll()
+        WidgetCenter.shared.reloadAllTimelines()
+        return .result()
     }
 }

@@ -11,6 +11,8 @@ import {
   isUnreachable,
   keepFresher,
   nextWidgetList,
+  RefreshTarget,
+  refreshTargets,
   validWidgetList,
   WidgetCluster,
   widgetCluster,
@@ -28,6 +30,11 @@ class FakeBridge {
   async write(clusters: WidgetCluster[]) {
     this.writes.push(clusters);
     this.stored = clusters;
+  }
+  refreshes: { minutes: number; language: string; targets: RefreshTarget[] }[] = [];
+  async setRefresh(minutes: number, language: string, targets: RefreshTarget[]) {
+    this.refreshes.push({ minutes, language, targets });
+    return true;
   }
 }
 
@@ -303,6 +310,35 @@ describe('isUnreachable (the widgets\' "Agent not answering")', () => {
   });
 });
 
+describe('refreshTargets', () => {
+  it('hands the background refresh only the clusters the widgets show, never the demo, with a usable relay', () => {
+    const targets = refreshTargets(
+      [
+        config('a', { relayUrl: 'https://relay.kubernanny.app/' }),
+        config('b', { widgetOff: true }),
+        config('demo-healthy', { demo: 'healthy' }),
+        config('c', { relayUrl: 'http://evil.example' }),
+        config('d', { relayUrl: 'https://relay.kubernanny.app', relayOff: true }),
+        config('e', { deviceKey: '' }),
+      ],
+      false,
+    );
+    expect(targets.map((t) => [t.id, t.relayUrl])).toEqual([
+      ['a', 'https://relay.kubernanny.app'],
+      ['c', undefined],
+      ['d', undefined],
+    ]);
+    expect(targets[0]).toEqual({
+      id: 'a',
+      url: 'https://secret-host.example',
+      relayUrl: 'https://relay.kubernanny.app',
+      agentKey: 'AGENTKEY'.repeat(5),
+      deviceKey: 'PRIVATE-DEVICE-KEY',
+    });
+    expect(refreshTargets([config('a')], true)).toEqual([]);
+  });
+});
+
 describe('WidgetSync', () => {
   let bridge: FakeBridge;
   let clusters: FakeClusters;
@@ -497,5 +533,29 @@ describe('WidgetSync', () => {
     const sync = await open();
     await settle(sync);
     expect(bridge.writes).toEqual([]);
+  });
+
+  it('hands the background refresh its targets only while it is on, again only when they change, and remembers the setting', async () => {
+    clusters.clusters.set([config('a')]);
+    let sync = await open();
+    await settle(sync);
+    expect(sync.refreshMinutes()).toBe(0);
+    // Off by default: the native side is told to hold nothing.
+    expect(bridge.refreshes.at(-1)).toMatchObject({ minutes: 0, targets: [] });
+
+    await sync.setRefreshMinutes(30);
+    expect(bridge.refreshes.at(-1)).toMatchObject({ minutes: 30, targets: [{ id: 'a' }] });
+    const handed = bridge.refreshes.length;
+    await settle(sync);
+    expect(bridge.refreshes.length).toBe(handed);
+
+    // A cluster switched off for the widget leaves the targets; all widgets off leaves none.
+    await sync.setShown(clusters.clusters()[0]!, false);
+    await settle(sync);
+    expect(bridge.refreshes.at(-1)).toMatchObject({ minutes: 30, targets: [] });
+
+    sync = await open();
+    await settle(sync);
+    expect(sync.refreshMinutes()).toBe(30);
   });
 });

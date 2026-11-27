@@ -1,8 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { Capacitor } from '@capacitor/core';
 import { IonButton } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
 
 import { ClusterConfig } from '../core/agent.model';
+import { WidgetBridge } from '../core/widget/widget-bridge';
+import { REFRESH_CHOICES, RefreshMinutes } from '../core/widget/widget-summary';
 import { WidgetSync } from '../core/widget/widget-sync.service';
 import { LanguageService } from '../i18n/language.service';
 import { PushSectionComponent } from './push-section.component';
@@ -47,6 +50,36 @@ import { widgetView } from './widget-view';
               }
             </ul>
           }
+          @if (!v.allOff) {
+            <h3 id="widget-refresh-label">{{ t('widget.refreshTitle') }}</h3>
+            @if (refreshSupported()) {
+              <div class="choices" role="group" aria-labelledby="widget-refresh-label">
+                @for (m of choices; track m) {
+                  <button
+                    type="button"
+                    [class.on]="m === refreshMinutes()"
+                    [attr.aria-pressed]="m === refreshMinutes()"
+                    (click)="setRefresh(m)"
+                  >
+                    {{ m === 0 ? t('widget.refreshOff') : t('widget.refreshEvery', { n: m }) }}
+                  </button>
+                }
+              </div>
+              <p class="hint">{{ t('widget.refreshHint') }}</p>
+              @if (refreshMinutes() > 0) {
+                <p class="hint">
+                  {{ android ? t('widget.refreshAndroid') : t('widget.refreshIos') }}
+                </p>
+                @if (android) {
+                  <ion-button fill="outline" size="small" (click)="openBattery()">{{
+                    t('widget.batterySettings')
+                  }}</ion-button>
+                }
+              }
+            } @else {
+              <p class="hint">{{ t('widget.refreshUnsupported') }}</p>
+            }
+          }
           <p class="hint">{{ t('widget.hint') }}</p>
         </section>
       }
@@ -90,6 +123,33 @@ import { widgetView } from './widget-view';
       justify-self: start;
       margin: 0;
     }
+    h3 {
+      font-size: 1rem;
+      font-weight: 650;
+      margin: 1.25rem 0 0.5rem;
+    }
+    .choices {
+      display: inline-flex;
+      flex-wrap: wrap;
+      background: var(--surface);
+      border-radius: 999px;
+      padding: 3px;
+      margin-bottom: 0.5rem;
+    }
+    .choices button {
+      border: 0;
+      background: transparent;
+      color: var(--mute);
+      font: inherit;
+      font-weight: 600;
+      padding: 0.35rem 0.8rem;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .choices button.on {
+      background: var(--raise);
+      color: var(--ink);
+    }
     .lines {
       display: grid;
       gap: 0.5rem;
@@ -103,7 +163,12 @@ export class WidgetSectionComponent {
   /** The push section on the same page: its state is this device's push, and "Turn push on" scrolls to it. */
   readonly push = input<PushSectionComponent>();
   private readonly widgets = inject(WidgetSync);
+  private readonly bridge = inject(WidgetBridge);
   private readonly language = inject(LanguageService);
+  readonly choices = REFRESH_CHOICES;
+  readonly refreshMinutes = this.widgets.refreshMinutes;
+  readonly refreshSupported = this.widgets.refreshSupported;
+  readonly android = Capacitor.getPlatform() === 'android';
 
   readonly view = computed(() => {
     const c = this.cluster();
@@ -113,9 +178,24 @@ export class WidgetSectionComponent {
     return {
       shown: !c.widgetOff,
       allOff: this.widgets.allOff(),
-      ...widgetView({ cluster: c, push: this.push()?.view() ?? null }, this.language.translator()),
+      ...widgetView(
+        {
+          cluster: c,
+          push: this.push()?.view() ?? null,
+          refreshMinutes: this.widgets.refreshMinutes(),
+        },
+        this.language.translator(),
+      ),
     };
   });
+
+  setRefresh(minutes: RefreshMinutes): void {
+    void this.widgets.setRefreshMinutes(minutes);
+  }
+
+  openBattery(): void {
+    void this.bridge.openBatterySettings();
+  }
 
   showPush(): void {
     this.push()?.reveal();

@@ -1,5 +1,6 @@
 import Capacitor
 import Foundation
+import KubernannyAgentCall
 import WidgetKit
 
 /// Hands the home-screen widget its short list of clusters.
@@ -15,7 +16,9 @@ public class WidgetBridgePlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "WidgetBridge"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "read", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "write", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "write", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setRefresh", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "placed", returnType: CAPPluginReturnPromise)
     ]
 
     /// Keep in step with `WidgetData.swift` in the widget extension.
@@ -61,5 +64,45 @@ public class WidgetBridgePlugin: CAPPlugin, CAPBridgedPlugin {
         // so reload all of them, not only the overview.
         WidgetCenter.shared.reloadAllTimelines()
         call.resolve()
+    }
+
+    /// How many widgets of the app are placed, of every kind (home screen, Lock Screen). Every kind shows
+    /// every cluster of the list or the worst of them, so the app tells each agent of the list that a widget
+    /// shows it (the silent hourly status pushes, docs/NOTIFICATIONS.md). Without this method the app took
+    /// "none" and never asked for them on iOS.
+    @objc func placed(_ call: CAPPluginCall) {
+        WidgetCenter.shared.getCurrentConfigurations { result in
+            switch result {
+            case .success(let widgets):
+                call.resolve(["count": widgets.count])
+            case .failure:
+                call.resolve(["count": 0])
+            }
+        }
+    }
+
+    /// The background refresh (KubernannyAgentCall, WidgetRefresh): how often (minutes, 0 off), in which
+    /// language, and per cluster of the widget list what GET /status needs. Stored in the keychain group the
+    /// widget extension shares (this device only); interval 0 or no targets removes it. The widgets reload,
+    /// so their next timeline asks the agents and the refresh button changes with it.
+    @objc func setRefresh(_ call: CAPPluginCall) {
+        let minutes = call.getInt("intervalMinutes") ?? 0
+        var targets: [RefreshTarget] = []
+        for case let t as [String: Any] in call.getArray("targets") ?? [] {
+            guard
+                let id = t["id"] as? String, let url = t["url"] as? String,
+                let agentKey = t["agentKey"] as? String, let deviceKey = t["deviceKey"] as? String
+            else {
+                call.reject("invalid refresh targets")
+                return
+            }
+            targets.append(RefreshTarget(id: id, url: url, relayUrl: t["relayUrl"] as? String, agentKey: agentKey, deviceKey: deviceKey))
+        }
+        guard WidgetRefresh.store(RefreshSettings(interval: minutes, language: call.getString("language"), targets: targets)) else {
+            call.reject("cannot store the refresh targets; is the keychain group \(WidgetRefresh.accessGroup) in the entitlements?")
+            return
+        }
+        WidgetCenter.shared.reloadAllTimelines()
+        call.resolve(["supported": true])
     }
 }

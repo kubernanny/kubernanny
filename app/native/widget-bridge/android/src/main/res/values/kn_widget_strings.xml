@@ -10,6 +10,7 @@
     <string name="kn_widget_stale_time">Not current · as of %1$s</string>
     <string name="kn_widget_stale_open">Open Kubernanny</string>
     <string name="kn_widget_refresh">Refresh</string>
+    <string name="kn_widget_refreshing">Refreshing…</string>
     <string name="kn_widget_silent">Agent not answering</string>
     <string name="kn_widget_silent_many">%1$d agents not answering</string>
     <string name="kn_widget_demo">Demo</string>

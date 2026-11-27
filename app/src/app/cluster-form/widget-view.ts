@@ -34,23 +34,26 @@ export function widgetPushState(push: PushVM | null, cluster: ClusterConfig): Wi
 
 /** The widget section's explanation (docs/NOTIFICATIONS.md, "The home-screen widget"). */
 export function widgetView(
-  input: { cluster: ClusterConfig; push: PushVM | null },
+  input: { cluster: ClusterConfig; push: PushVM | null; refreshMinutes?: number },
   tr: Translator,
 ): WidgetVM {
+  const refresh = input.refreshMinutes ?? 0;
   const push = widgetPushState(input.push, input.cluster);
+  // Without push the background refresh still brings the state, only not the moment something happens.
   const pushLine =
     push === 'unknown'
       ? ''
-      : tr.t(
-          push === 'on'
-            ? 'widget.pushOn'
-            : push === 'off'
-              ? 'widget.pushOff'
-              : 'widget.pushUnavailable',
-        );
+      : push === 'on'
+        ? tr.t('widget.pushOn')
+        : refresh > 0
+          ? tr.t(push === 'off' ? 'widget.pushOffRefresh' : 'widget.pushUnavailableRefresh', {
+              n: refresh,
+            })
+          : tr.t(push === 'off' ? 'widget.pushOff' : 'widget.pushUnavailable');
   return {
     lines: [
       tr.t('widget.updates'),
+      ...(refresh > 0 && !input.cluster.demo ? [tr.t('widget.refreshOn', { n: refresh })] : []),
       tr.t('widget.quiet'),
       tr.t('widget.stale', { hours: WIDGET_STALE_HOURS }),
       tr.t('widget.silent'),

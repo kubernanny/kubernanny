@@ -852,11 +852,27 @@ export const de = {
     pushOff: 'Push ist auf diesem Gerät aus: Das Widget wird nur aktuell, wenn du die App öffnest.',
     pushUnavailable:
       'Push gibt es für diesen Cluster nicht: Das Widget wird nur aktuell, wenn du die App öffnest.',
+    pushOffRefresh:
+      'Push ist auf diesem Gerät aus: Das Widget fragt den Agent etwa alle {{n}} Minuten selbst, ein neues Problem siehst du also erst dann.',
+    pushUnavailableRefresh:
+      'Push gibt es für diesen Cluster nicht: Das Widget fragt den Agent etwa alle {{n}} Minuten selbst.',
     turnOnPush: 'Push einschalten',
     allOffNote: 'Widgets sind für alle Cluster ausgeschaltet (in der Clusterliste).',
     allLabel: 'Widgets',
     on: 'An',
     off: 'Aus',
     allTitle: 'Aus löscht sofort alle Cluster aus den Widgets und speichert nichts mehr für sie.',
+    refreshTitle: 'Im Hintergrund aktualisieren',
+    refreshOff: 'Aus',
+    refreshEvery: '{{n}} Min.',
+    refreshOn: 'Außerdem fragt es den Agent etwa alle {{n}} Minuten selbst, auch ohne die App.',
+    refreshHint:
+      'Das Widget fragt die Agents selbst nach dem Stand: erst direkt (im WLAN oder VPN), sonst über das Relay. Gilt für alle Cluster auf diesem Gerät. Dafür liegt der Schlüssel dieses Geräts zusätzlich im geschützten Speicher des Widgets. Es liest nur, es löst nie eine Aktion aus.',
+    refreshAndroid:
+      'Android verschiebt Hintergrundarbeit, solange das Handy ruht oder Energie spart. Für verlässliche Abstände die Akkunutzung von Kubernanny auf „Uneingeschränkt“ stellen.',
+    refreshIos:
+      'iOS entscheidet selbst, wie oft ein Widget fragen darf, meist etwa alle 15 bis 60 Minuten. Der Knopf im Widget fragt sofort (ab iOS 17).',
+    refreshUnsupported: 'Auf diesem Gerät nicht möglich: Dafür braucht es Android 9 oder neuer.',
+    batterySettings: 'Akku-Einstellungen öffnen',
   },
 };

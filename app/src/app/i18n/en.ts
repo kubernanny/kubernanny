@@ -844,11 +844,27 @@ export const en: Dictionary = {
     pushOff: 'Push is off for this device: the widget only catches up when you open the app.',
     pushUnavailable:
       'Push is not available for this cluster: the widget only catches up when you open the app.',
+    pushOffRefresh:
+      'Push is off on this device: the widget asks the agent itself about every {{n}} minutes, so a new problem shows only then.',
+    pushUnavailableRefresh:
+      'There is no push for this cluster: the widget asks the agent itself about every {{n}} minutes.',
     turnOnPush: 'Turn push on',
     allOffNote: 'Widgets are switched off for every cluster (on the cluster list).',
     allLabel: 'Home-screen widgets',
     on: 'On',
     off: 'Off',
     allTitle: 'Off deletes every cluster from the widgets at once and keeps nothing for them.',
+    refreshTitle: 'Refresh in the background',
+    refreshOff: 'Off',
+    refreshEvery: '{{n}} min',
+    refreshOn: 'It also asks the agent itself about every {{n}} minutes, without the app.',
+    refreshHint:
+      "The widget asks the agents for their state itself: directly first (on Wi-Fi or VPN), else through the relay. Applies to every cluster on this device. For this, the key of this device is also kept in the widget's protected storage. It only reads, it never runs an action.",
+    refreshAndroid:
+      'Android postpones background work while the phone rests or saves energy. For reliable intervals, set the battery use of Kubernanny to "Unrestricted".',
+    refreshIos:
+      'iOS decides how often a widget may ask, usually about every 15 to 60 minutes. The button in the widget asks right away (iOS 17 and later).',
+    refreshUnsupported: 'Not possible on this device: it needs Android 9 or later.',
+    batterySettings: 'Open battery settings',
   },
 };

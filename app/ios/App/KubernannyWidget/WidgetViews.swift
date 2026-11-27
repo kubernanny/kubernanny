@@ -155,6 +155,8 @@ private struct OverviewLarge: View {
                         .font(.caption.weight(.semibold))
                         .foregroundColor(Palette.mute)
                 }
+                Spacer(minLength: 4)
+                RefreshButton()
             }
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(clusters.prefix(rows)) { cluster in
@@ -576,6 +578,8 @@ private struct AgeLine: View {
                         .font(.caption2.weight(.semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
+                    Spacer(minLength: 2)
+                    RefreshButton()
                 }
                 if stale {
                     // What to do about it, under the clock's text: the age stays readable in the small sizes.
@@ -599,6 +603,26 @@ private struct AgeLine: View {
             parts.append(asOf(date))
         }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// The refresh button beside the time. With the background refresh on (iOS 17 and later) it asks
+/// the agents right here (RefreshWidgetsIntent); otherwise it opens the app, which asks them and
+/// writes the widget's list (kubernanny://refresh, WidgetRefresh in the app).
+struct RefreshButton: View {
+    var body: some View {
+        let label = Image(systemName: "arrow.clockwise")
+            .font(.caption2.weight(.bold))
+            .foregroundColor(Palette.mute)
+            .frame(width: 22, height: 22)
+            .contentShape(Rectangle())
+            .accessibilityLabel(Text("widget.refresh"))
+        if #available(iOSApplicationExtension 17.0, *), RefreshState.enabled {
+            Button(intent: RefreshWidgetsIntent()) { label }
+                .buttonStyle(.plain)
+        } else {
+            Link(destination: URL(string: "kubernanny://refresh")!) { label }
+        }
     }
 }
 

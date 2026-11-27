@@ -14,11 +14,21 @@ import android.content.Intent
  */
 class WidgetRefreshReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == REFRESH_NOW) {
+            // The widget's refresh button with the background refresh on: ask the agents now, in place.
+            WidgetRefresher.refreshNow(context)
+            return
+        }
         WidgetRender.updateAll(context)
+        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            WidgetRefresher.schedule(context)
+        }
     }
 
     companion object {
         /** Keep in step with WidgetPushStatus.REFRESH in app/native/push. */
         const val ACTION = "app.kubernanny.widget.REFRESH"
+        /** The refresh button while the background refresh is on (WidgetRender.refreshIntent). */
+        const val REFRESH_NOW = "app.kubernanny.widget.REFRESH_NOW"
     }
 }

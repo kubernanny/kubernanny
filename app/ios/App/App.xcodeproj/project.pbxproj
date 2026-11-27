@@ -37,6 +37,7 @@
 		C834F874D0600AAE2B8A2E8B /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B267767B10BEDE3F91CF76 /* NotificationService.swift */; };
 		DB598020DCC7D523E30E87FA /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 218D54F7DCA7CDC49932D901 /* Localizable.strings */; };
 		DC847C81D357F8EFA63B745F /* KubernannyWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 815587D4CAF0E6E959303C30 /* KubernannyWidget.swift */; };
+		E6F1794392175D6AD29A7F39 /* KubernannyAgentCall in Frameworks */ = {isa = PBXBuildFile; productRef = 61FF63A5562F84BC82B42976 /* KubernannyAgentCall */; };
 		F2D0D03EBBAA25BAE97DD025 /* WidgetPushStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A382D4FB71C82280655A2C /* WidgetPushStatus.swift */; };
 /* End PBXBuildFile section */
 
@@ -127,6 +128,7 @@
 				69B0298DE7DAE384EF970D71 /* Foundation.framework in Frameworks */,
 				2AE03481AEAB5541097225CD /* WidgetKit.framework in Frameworks */,
 				55DE0EBD6C8679EC8B2B9C6D /* SwiftUI.framework in Frameworks */,
+				E6F1794392175D6AD29A7F39 /* KubernannyAgentCall in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -246,6 +248,9 @@
 			dependencies = (
 			);
 			name = KubernannyWidget;
+			packageProductDependencies = (
+				61FF63A5562F84BC82B42976 /* KubernannyAgentCall */,
+			);
 			productName = KubernannyWidget;
 			productReference = F31882D1BA597DD30FBC800C /* KubernannyWidget.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -344,6 +349,7 @@
 			mainGroup = 504EC2FB1FED79650016851F;
 			packageReferences = (
 				D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */,
+				BD543E56AF600DC31059BB2B /* XCLocalSwiftPackageReference "agent-call" */,
 			);
 			productRefGroup = 504EC3051FED79650016851F /* Products */;
 			projectDirPath = "";
@@ -803,6 +809,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		BD543E56AF600DC31059BB2B /* XCLocalSwiftPackageReference "agent-call" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../../native/agent-call";
+		};
 		D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "CapApp-SPM";
@@ -814,6 +824,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */;
 			productName = "CapApp-SPM";
+		};
+		61FF63A5562F84BC82B42976 /* KubernannyAgentCall */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BD543E56AF600DC31059BB2B /* XCLocalSwiftPackageReference "agent-call" */;
+			productName = KubernannyAgentCall;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
