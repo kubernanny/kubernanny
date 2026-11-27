@@ -159,11 +159,41 @@ public class PushMessagingService extends FirebaseMessagingService {
             .setGroup(clusterId)
             .setPriority(priority >= 4 ? NotificationCompat.PRIORITY_HIGH : NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(tap);
+        // The group's summary: Android shows the cluster's pushes as one expandable stack under it. It carries
+        // the newest push's text (what a collapsed stack shows) and never alerts itself: the push does.
+        NotificationCompat.Builder summary = new NotificationCompat.Builder(context, CHANNEL)
+            .setSmallIcon(R.drawable.kn_push_icon)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setWhen(when)
+            .setShowWhen(true)
+            .setAutoCancel(true)
+            .setGroup(clusterId)
+            .setGroupSummary(true)
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(tap);
         try {
-            // One notification per cluster: the newest state replaces the one before.
-            NotificationManagerCompat.from(context).notify(clusterId, 1, builder.build());
+            // One notification per push, stacked per cluster: a resolution no longer wipes the alert before it.
+            NotificationManagerCompat notifications = NotificationManagerCompat.from(context);
+            notifications.notify(clusterId, NotificationStack.idFor(when), builder.build());
+            notifications.notify(clusterId, NotificationStack.SUMMARY_ID, summary.build());
+            trim(manager, clusterId);
         } catch (SecurityException noPermission) {
             // Notifications were turned off for the app since.
+        }
+    }
+
+    /** At most NotificationStack.KEEP notifications per cluster: the oldest beyond go. */
+    private static void trim(NotificationManager manager, String clusterId) {
+        java.util.List<NotificationStack.Shown> shown = new java.util.ArrayList<>();
+        for (android.service.notification.StatusBarNotification n : manager.getActiveNotifications()) {
+            if (clusterId.equals(n.getTag())) {
+                shown.add(new NotificationStack.Shown(n.getId(), n.getNotification().when));
+            }
+        }
+        for (int id : NotificationStack.toCancel(shown)) {
+            manager.cancel(clusterId, id);
         }
     }
 }

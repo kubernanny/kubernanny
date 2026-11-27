@@ -207,6 +207,8 @@ A message opens only if the agent sealed it with the agent key the phone pinned 
 
 **Phones that chose a sign before it became optional** (turning push on used to ask for one) keep it, and keep it on: a security setting is never switched off behind anyone's back. On simply means a sign is stored on the phone; the iOS extension and the Android service prefix exactly when there is one, as they always did, and off removes it. New installs and new push registrations start without one.
 
+Pushes of one cluster stack: each stays a notification of its own, so a resolution does not wipe the alert before it. Android groups them under the cluster with the newest on top and keeps the last 10 per cluster; iOS threads them by cluster.
+
 Tapping a push opens its cluster: the push names its key id, and the app knows which of its clusters it registered that key for (the agent never learns the app's cluster ids). Anything that does not lead to a cluster in the app's list opens the app as it is.
 
 ### Switching it off
