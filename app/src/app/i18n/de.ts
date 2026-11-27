@@ -603,9 +603,9 @@ export const de = {
     switchOn: 'Einschalten',
     switchedOn: 'Eingeschaltet. Sie erscheint mit dem nächsten Check.',
     howToOptIn:
-      'Sie ist standardmäßig aus, weil ihr Recht weiter reicht als die Aktion selbst, falls der Agent je kompromittiert würde. Zum Freischalten {{line}} in die Helm-Values (oder ENABLED_ACTIONS) eintragen und upgraden.',
+      'Sie ist standardmäßig aus, weil ihr Recht weiter reicht als die Aktion selbst, falls der Agent je kompromittiert würde. Zum Freischalten {{type}} in den Helm-Values unter actions.enabled eintragen und upgraden.',
     howToDisabled:
-      'Sie ist in der Installation abgeschaltet: In den Helm-Values steht {{line}} oder rbac.allowActions: false. Dort entfernen und upgraden.',
+      'Sie ist in der Installation abgeschaltet: In den Helm-Values steht {{type}} unter actions.disabled, oder rbac.allowActions ist false. Dort ändern und upgraden.',
     copyLine: 'Zeile kopieren',
     copyFailed: 'Kopieren hat nicht geklappt.',
     accept: 'Trifft nicht zu',
@@ -785,7 +785,11 @@ export const de = {
     actionsOffHint: 'In der App für diesen Cluster ausgeschaltet. Hier wieder einschalten.',
     actionsLockedTitle: 'Im Helm-Chart gesperrte Aktionen',
     actionsLockedHint:
-      'Im Helm-Chart aus, die App kann sie nicht einschalten. Bei jeder steht, warum, und welche Zeile der Helm-Values das ändert.',
+      'Die App kann sie nicht einschalten, nur die Helm-Values. Die meisten sind opt-in: standardmäßig aus, weil ihr Recht weiter reicht als die Aktion selbst, falls der Agent je kompromittiert würde.',
+    lockedOptIn: 'Standardmäßig aus. Zum Einschalten in die Helm-Values:',
+    lockedDisabled:
+      'In den Helm-Values abgeschaltet: {{type}} unter actions.disabled, oder rbac.allowActions ist false.',
+    lockedLabel: 'Nur in den Helm-Values änderbar',
     notificationsTitle: 'Benachrichtigungen',
     notificationsHint:
       'Pausiert gehen keine Nachrichten an ntfy oder Webhooks. Die App zeigt den Zustand weiter.',

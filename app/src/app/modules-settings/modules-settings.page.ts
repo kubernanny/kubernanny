@@ -21,7 +21,7 @@ import {
 } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
 
-import { helmLine } from '../cluster/cluster-view';
+import { helmSnippet } from '../cluster/cluster-view';
 import {
   ClusterConfig,
   ModuleSetting,
@@ -47,7 +47,9 @@ interface Row {
   effect?: string;
   on: boolean;
   locked: boolean;
-  /** A locked action: the Helm values line that switches it on, to copy. */
+  /** A locked action: why, in one short line, under its description. */
+  why?: string;
+  /** A locked opt-in action: the Helm values (YAML) that switch it on, to copy. */
   helm?: string;
   patch: (on: boolean) => SettingsPatch;
 }
@@ -57,18 +59,23 @@ type ActionSetting = SettingsView['actions'][number];
 function actionRow(a: ActionSetting, tr: Translator): Row {
   // Agents before lockedBy: a locked opt-in type is "not enabled", anything else locked "disabled".
   const lockedBy = a.lockedBy ?? (a.optIn ? 'opt-in' : 'disabled');
-  const helm = a.state === 'locked' ? helmLine(a.type, lockedBy) : undefined;
+  const locked = a.state === 'locked';
+  const helm = locked ? helmSnippet(a.type, lockedBy) : null;
   return {
     key: `a:${a.type}`,
     icon: a.type === 'logs' ? 'document-text-outline' : 'flash-outline',
     title: a.label,
-    note:
-      a.state === 'locked'
-        ? `${a.description} ${tr.t(lockedBy === 'opt-in' ? 'issues.howToOptIn' : 'issues.howToDisabled', { line: helm! })}`
-        : a.description,
+    note: a.description,
+    ...(locked
+      ? {
+          why: tr.t(lockedBy === 'opt-in' ? 'modules.lockedOptIn' : 'modules.lockedDisabled', {
+            type: a.type,
+          }),
+        }
+      : {}),
     ...(a.effect ? { effect: a.effect } : {}),
     on: a.state === 'on',
-    locked: a.state === 'locked',
+    locked,
     ...(helm ? { helm } : {}),
     patch: (on: boolean) => ({ actions: { [a.type]: on } }),
   };
@@ -205,20 +212,38 @@ export function settingsSections(
                             ><ion-icon name="key-outline" aria-hidden="true" />{{ r.effect }}</span
                           >
                         }
+                        @if (r.why) {
+                          <span class="why">{{ r.why }}</span>
+                        }
                         @if (r.helm) {
-                          <button type="button" class="copy" (click)="copy(r.helm)">
-                            <code>{{ r.helm }}</code>
-                            <ion-icon name="copy-outline" aria-hidden="true" />
-                            <span class="visually-hidden">{{ t('issues.copyLine') }}</span>
-                          </button>
+                          <div class="snippet">
+                            <pre>{{ r.helm }}</pre>
+                            <button
+                              type="button"
+                              (click)="copy(r.helm)"
+                              [attr.aria-label]="t('issues.copyLine')"
+                              [title]="t('issues.copyLine')"
+                            >
+                              <ion-icon name="copy-outline" aria-hidden="true" />
+                            </button>
+                          </div>
                         }
                       </div>
-                      <ion-toggle
-                        [checked]="r.on"
-                        [disabled]="r.locked || saving()"
-                        (ionChange)="toggle(r, $event.detail.checked)"
-                        [attr.aria-label]="r.title"
-                      />
+                      @if (r.locked) {
+                        <!-- Only the deployment can switch it: no switch, a lock. -->
+                        <ion-icon
+                          class="lock"
+                          name="lock-closed-outline"
+                          [attr.aria-label]="t('modules.lockedLabel')"
+                        />
+                      } @else {
+                        <ion-toggle
+                          [checked]="r.on"
+                          [disabled]="saving()"
+                          (ionChange)="toggle(r, $event.detail.checked)"
+                          [attr.aria-label]="r.title"
+                        />
+                      }
                     </li>
                   }
                 </ul>
@@ -262,7 +287,8 @@ export function settingsSections(
     }
     li {
       display: grid;
-      grid-template-columns: auto 1fr auto;
+      /* minmax(0, 1fr): a long line in the middle wraps instead of widening the row past the card. */
+      grid-template-columns: auto minmax(0, 1fr) auto;
       gap: 0.85rem;
       align-items: center;
       padding: 0.7rem 0.9rem;
@@ -270,30 +296,46 @@ export function settingsSections(
     li + li {
       border-top: 1px solid var(--line);
     }
-    .copy {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      margin-top: 0.4rem;
-      padding: 0.3rem 0.55rem;
+    .why {
+      color: var(--ink-2);
+      font-weight: 600;
+      font-size: 0.8125rem;
+      line-height: 1.4;
+    }
+    .snippet {
+      position: relative;
+      margin-top: 0.35rem;
+      min-width: 0;
+    }
+    .snippet pre {
+      margin: 0;
+      padding: 0.55rem 2.6rem 0.55rem 0.7rem;
       background: var(--ground);
       border: 1px solid var(--line);
       border-radius: var(--radius-s, 6px);
       color: var(--ink-2);
       font-size: 0.8125rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .snippet button {
+      position: absolute;
+      top: 0.25rem;
+      right: 0.25rem;
+      display: grid;
+      place-items: center;
+      width: 2rem;
+      height: 2rem;
+      border: 0;
+      border-radius: var(--radius-s, 6px);
+      background: transparent;
+      color: var(--accent);
       cursor: pointer;
-      max-width: 100%;
     }
-    .copy code {
-      min-width: 0;
-      text-align: left;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .copy ion-icon {
-      font-size: 1rem;
-      flex: none;
+    .snippet button ion-icon {
+      font-size: 1.05rem;
+      color: inherit;
     }
     .visually-hidden {
       position: absolute;
@@ -310,6 +352,7 @@ export function settingsSections(
     li div {
       display: grid;
       gap: 0.15rem;
+      min-width: 0;
     }
     li .hint {
       margin: 0;
@@ -329,8 +372,19 @@ export function settingsSections(
       margin-top: 0.05rem;
       color: var(--mute);
     }
+    /* Long rows: the icon and the lock stay beside the title, not in the middle of the text. */
     li.locked {
-      opacity: 0.6;
+      align-items: start;
+    }
+    li.locked > ion-icon {
+      margin-top: 0.1rem;
+    }
+    li.locked > ion-icon:first-child,
+    li .lock {
+      color: var(--mute);
+    }
+    li .lock {
+      font-size: 1.15rem;
     }
     .error {
       color: var(--crit);

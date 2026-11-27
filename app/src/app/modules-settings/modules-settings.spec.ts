@@ -107,12 +107,20 @@ describe('settings sections', () => {
     expect(s[3]!.rows[0]!.helm).toBeUndefined();
     expect(s[3]!.rows[0]!.patch(true)).toEqual({ actions: { 'job-delete': true } });
     const [restart, rerun] = s[4]!.rows;
-    expect(restart).toMatchObject({ locked: true, helm: 'actions.disabled: [restart]' });
-    expect(restart!.note).toContain('In den Helm-Values steht actions.disabled: [restart]');
-    expect(rerun).toMatchObject({ locked: true, helm: 'actions.enabled: [job-rerun]' });
-    expect(rerun!.note).toBe(
-      'Erneut starten. Sie ist standardmäßig aus, weil ihr Recht weiter reicht als die Aktion selbst, falls der Agent je kompromittiert würde. Zum Freischalten actions.enabled: [job-rerun] in die Helm-Values (oder ENABLED_ACTIONS) eintragen und upgraden.',
-    );
+    // Disabled: nothing to add, only what to take out; no switch, a lock.
+    expect(restart).toMatchObject({
+      locked: true,
+      note: 'x',
+      why: 'In den Helm-Values abgeschaltet: restart unter actions.disabled, oder rbac.allowActions ist false.',
+    });
+    expect(restart!.helm).toBeUndefined();
+    // Opt-in: one short line, and valid YAML to paste into the values.
+    expect(rerun).toMatchObject({
+      locked: true,
+      note: 'Erneut starten.',
+      why: 'Standardmäßig aus. Zum Einschalten in die Helm-Values:',
+      helm: 'actions:\n  enabled:\n    - job-rerun',
+    });
     expect(s[5]!.rows[0]!.patch(true)).toEqual({ notifications: true });
     expect(s[6]!.rows[0]).toMatchObject({ title: 'Velero', locked: true });
   });
@@ -161,7 +169,7 @@ describe('settings sections', () => {
     expect(s[1]!.rows.find((r) => r.title === 'Weblate')!.note).toBe(
       'Übersetzungen. Only its pods are checked.',
     );
-    expect(s[4]!.rows[1]!.note).toContain('add actions.enabled: [job-rerun] to the Helm values');
+    expect(s[4]!.rows[1]!.why).toBe('Off by default. To switch it on, add to the Helm values:');
   });
 
   it("says under each action what it may change, in the agent's words", () => {

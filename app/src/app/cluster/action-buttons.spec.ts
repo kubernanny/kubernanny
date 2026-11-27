@@ -176,9 +176,9 @@ describe('switched-off actions on an issue card', () => {
     expect(rerun).toMatchObject({
       reason: 'im Helm-Chart nicht freigeschaltet',
       canSwitchOn: false,
-      helm: 'actions.enabled: [job-rerun]',
+      helm: 'actions:\n  enabled:\n    - job-rerun',
     });
-    expect(rerun!.howTo).toContain('actions.enabled: [job-rerun] in die Helm-Values');
+    expect(rerun!.howTo).toContain('job-rerun in den Helm-Values unter actions.enabled eintragen');
     expect(del).toMatchObject({
       reason: 'in der App aus',
       canSwitchOn: true,
@@ -187,7 +187,7 @@ describe('switched-off actions on an issue card', () => {
     });
     expect(restart).toMatchObject({
       reason: 'im Helm-Chart gesperrt',
-      helm: 'actions.disabled: [restart]',
+      helm: null,
     });
   });
 

@@ -501,9 +501,11 @@ export class IssueList {
       message: `${hint.description} ${hint.canSwitchOn ? tr.t('issues.offText') : (hint.howTo ?? '')}`,
       buttons: [
         { text: tr.t('common.close'), role: 'cancel' },
-        hint.canSwitchOn
-          ? { text: tr.t('issues.switchOn'), role: 'confirm' }
-          : { text: tr.t('issues.copyLine'), role: 'copy' },
+        ...(hint.canSwitchOn
+          ? [{ text: tr.t('issues.switchOn'), role: 'confirm' }]
+          : hint.helm
+            ? [{ text: tr.t('issues.copyLine'), role: 'copy' }]
+            : []),
       ],
     });
     await alert.present();

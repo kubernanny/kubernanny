@@ -75,8 +75,9 @@ export interface UnavailableHint {
   reason: string;
   /** Off in the app: the app can switch it on. Locked: only the deployment can. */
   canSwitchOn: boolean;
-  /** What to do in the deployment, with the values line to copy; null when the app can switch it on. */
+  /** What to do in the deployment; null when the app can switch it on. */
   howTo: string | null;
+  /** The Helm values to copy (YAML) for an opt-in action; null otherwise. */
   helm: string | null;
 }
 
@@ -438,9 +439,13 @@ export function issueCards(
   }));
 }
 
-/** The Helm values line that switches a locked action on: `opt-in` names it, `disabled` takes it off the list. */
-export function helmLine(type: string, lockedBy: 'opt-in' | 'disabled'): string {
-  return lockedBy === 'opt-in' ? `actions.enabled: [${type}]` : `actions.disabled: [${type}]`;
+/**
+ * What to paste into the Helm values to switch an opt-in action on: valid YAML,
+ * one entry of `actions.enabled`. A disabled one has nothing to add (it is taken
+ * off `actions.disabled`), so null.
+ */
+export function helmSnippet(type: string, lockedBy: 'opt-in' | 'disabled'): string | null {
+  return lockedBy === 'opt-in' ? `actions:\n  enabled:\n    - ${type}` : null;
 }
 
 export function unavailableHints(issue: Issue, tr: Translator): UnavailableHint[] {
@@ -455,15 +460,14 @@ export function unavailableHints(issue: Issue, tr: Translator): UnavailableHint[
         helm: null,
       };
     }
-    const helm = helmLine(u.type, u.lockedBy);
     return {
       ...base,
       reason: tr.t(u.lockedBy === 'opt-in' ? 'issues.lockedOptIn' : 'issues.lockedDisabled'),
       canSwitchOn: false,
       howTo: tr.t(u.lockedBy === 'opt-in' ? 'issues.howToOptIn' : 'issues.howToDisabled', {
-        line: helm,
+        type: u.type,
       }),
-      helm,
+      helm: helmSnippet(u.type, u.lockedBy),
     };
   });
 }

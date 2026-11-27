@@ -596,9 +596,9 @@ export const en: Dictionary = {
     switchOn: 'Switch on',
     switchedOn: 'Switched on. It shows on the next check.',
     howToOptIn:
-      'It is off by default, because its permission reaches further than the action itself if the agent were ever compromised. To allow it, add {{line}} to the Helm values (or ENABLED_ACTIONS) and upgrade.',
+      'It is off by default, because its permission reaches further than the action itself if the agent were ever compromised. To allow it, add {{type}} under actions.enabled in the Helm values and upgrade.',
     howToDisabled:
-      'It is switched off in the deployment: the Helm values contain {{line}}, or rbac.allowActions: false. Remove it there and upgrade.',
+      'It is switched off in the deployment: the Helm values list {{type}} under actions.disabled, or rbac.allowActions is false. Change it there and upgrade.',
     copyLine: 'Copy line',
     copyFailed: 'Could not copy.',
     accept: 'Not applicable',
@@ -777,7 +777,11 @@ export const en: Dictionary = {
     actionsOffHint: 'Switched off in the app for this cluster. Switch them on again here.',
     actionsLockedTitle: 'Actions locked in the deployment',
     actionsLockedHint:
-      'Off in the Helm chart, so the app cannot switch them on. Each says why and which line of the Helm values changes that.',
+      'The app cannot switch them on, only the Helm values can. Most are opt-in: off by default, because their permission reaches further than the action itself if the agent were ever compromised.',
+    lockedOptIn: 'Off by default. To switch it on, add to the Helm values:',
+    lockedDisabled:
+      'Switched off in the Helm values: {{type}} under actions.disabled, or rbac.allowActions is false.',
+    lockedLabel: 'Only the Helm values can change this',
     notificationsTitle: 'Notifications',
     notificationsHint:
       'While paused, no messages go to ntfy or webhooks. The app keeps showing the state.',
