@@ -1,1 +1,1 @@
-The identification sign before each push can now always be switched off, also while the agent does not answer. On Android the back button closes open dialogs such as the Argo CD sync before it goes back a page. Locked actions read better in the settings, with the Helm values to copy.
+The choices when silencing a problem or marking an advisory as not applicable are readable on Android again: in the dark theme they were nearly invisible.

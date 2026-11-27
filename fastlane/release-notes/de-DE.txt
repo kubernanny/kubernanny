@@ -1,1 +1,1 @@
-Das Erkennungszeichen vor jedem Push lässt sich jetzt immer ausschalten, auch wenn der Agent gerade nicht antwortet. Der Zurück-Knopf unter Android schließt offene Dialoge wie den Argo-CD-Sync, bevor er eine Seite zurückgeht. Gesperrte Aktionen sind in den Einstellungen besser lesbar, mit den Helm-Values zum Kopieren.
+Die Auswahl beim Stummschalten und bei „Trifft nicht zu“ ist unter Android wieder lesbar: Die Optionen waren im dunklen Design fast unsichtbar.
