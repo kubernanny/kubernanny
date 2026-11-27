@@ -1,6 +1,28 @@
 /** The Events tab: recent Kubernetes warnings, newest first, one row per object and reason. */
 import { podOwner } from '../checks/pods.check';
-import { Inventory } from '../inventory/inventory';
+import { podKey } from '../inventory/cluster-cache';
+import { Inventory, KubeEvent } from '../inventory/inventory';
+
+/** A probe may fail this long before the recorded shutdown and still count as part of it (clock skew between nodes). */
+const SHUTDOWN_SLACK_MS = 2_000;
+
+/**
+ * A readiness or liveness failure of a pod that was already shutting down: a graceful shutdown
+ * answers 503 first, then closes the port, and the kubelet probes until the container is gone. That
+ * is how stopping looks, not a problem, so the Events tab leaves it out. Failures from before the
+ * shutdown (another Event object, first seen earlier) stay.
+ */
+export function probeFailureWhileStopping(e: KubeEvent, shutdowns: ReadonlyMap<string, number> | undefined): boolean {
+  if (!shutdowns || e.reason !== 'Unhealthy' || e.involvedObject?.kind !== 'Pod' || !e.involvedObject.name) {
+    return false;
+  }
+  if (!/^(Readiness|Liveness) probe (failed|errored)/.test(e.message ?? '')) {
+    return false;
+  }
+  const at = shutdowns.get(podKey(e.involvedObject.namespace ?? e.metadata.namespace, e.involvedObject.name));
+  const first = Date.parse(e.firstTimestamp ?? e.eventTime ?? e.metadata.creationTimestamp ?? '');
+  return at !== undefined && Number.isFinite(first) && first >= at - SHUTDOWN_SLACK_MS;
+}
 
 export interface EventView {
   /** When it was last seen (the newest of the grouped events). */
@@ -61,6 +83,9 @@ function workloadOf(
 export function buildEvents(inv: Inventory, limit = 200): EventView[] {
   const groups = new Map<string, EventView>();
   for (const e of inv.events) {
+    if (probeFailureWhileStopping(e, inv.podShutdowns)) {
+      continue;
+    }
     const time =
       e.series?.lastObservedTime ??
       e.lastTimestamp ??

@@ -152,8 +152,18 @@ export interface ClusterCacheOptions {
  * the version, metrics.k8s.io, which cannot be watched, and the Gateway API
  * and Traefik CRDs) are still listed on every run.
  */
+/** `namespace/name` of a pod. */
+export function podKey(namespace: string | undefined, name: string): string {
+  return `${namespace ?? ''}/${name}`;
+}
+
 export class ClusterCache {
   private readonly caches = new Map<WatchedKind, WatchCache<Keyed>>();
+  /**
+   * When each pod began shutting down (its deletionTimestamp, ms), kept as long as warning events
+   * are: a pod is gone from the cache seconds later, its last events stay for hours.
+   */
+  private readonly shutdowns = new Map<string, number>();
   private readonly logger = new Logger('watch');
   private started = false;
 
@@ -171,6 +181,9 @@ export class ClusterCache {
           strip: spec.strip,
           resyncMs: options.resyncMs,
           onChange: (type, prev, next) => {
+            if (kind === 'pods') {
+              this.noteShutdown((next ?? prev) as AnyObj | undefined, type === 'DELETED');
+            }
             if (isRelevantChange(kind, type, prev as AnyObj, next as AnyObj)) {
               this.options.onRelevantChange?.(kind);
             }
@@ -217,5 +230,30 @@ export class ClusterCache {
 
   get(kind: WatchedKind): WatchCache<Keyed> {
     return this.caches.get(kind)!;
+  }
+
+  /** Pods that began shutting down within EVENT_MAX_AGE_MS: `namespace/name` to the time in ms. */
+  podShutdowns(now = Date.now()): ReadonlyMap<string, number> {
+    for (const [key, at] of this.shutdowns) {
+      if (now - at > EVENT_MAX_AGE_MS) {
+        this.shutdowns.delete(key);
+      }
+    }
+    return this.shutdowns;
+  }
+
+  private noteShutdown(pod: AnyObj | undefined, deleted: boolean): void {
+    const name = pod?.metadata?.name;
+    if (!name) {
+      return;
+    }
+    const key = podKey(pod.metadata.namespace, name);
+    const at = Date.parse((pod.metadata as { deletionTimestamp?: string }).deletionTimestamp ?? '');
+    // A pod deleted without a graceful shutdown seen first (grace 0, or missed while the watch
+    // reconnected): its deletion is the moment.
+    const when = Number.isFinite(at) ? at : deleted ? Date.now() : NaN;
+    if (Number.isFinite(when) && !this.shutdowns.has(key)) {
+      this.shutdowns.set(key, when);
+    }
   }
 }

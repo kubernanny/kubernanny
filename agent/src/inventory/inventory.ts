@@ -2,7 +2,7 @@ import type { Node } from '../checks/nodes.check';
 import type { Pod } from '../checks/pods.check';
 import { Condition, ObjectMeta } from '../checks/types';
 import { KubeClient } from '../kube/kube-client';
-import { ClusterCache, EVENT_MAX_AGE_MS, EVENT_MAX_ITEMS, WatchedKind } from './cluster-cache';
+import { ClusterCache, EVENT_MAX_AGE_MS, EVENT_MAX_ITEMS, podKey, WatchedKind } from './cluster-cache';
 import { eventTime } from './strip';
 
 export interface PodSpecLite {
@@ -195,6 +195,11 @@ export interface Inventory {
   pvcs: Pvc[];
   storageClasses: StorageClass[];
   events: KubeEvent[];
+  /**
+   * When pods began shutting down (`namespace/name` to ms): from the watch, which keeps them after the
+   * pod is gone, and from the pods listed now that carry a deletionTimestamp. Absent in tests.
+   */
+  podShutdowns?: ReadonlyMap<string, number>;
   /** null when metrics-server is not installed. */
   nodeUsage: Map<string, Usage> | null;
   podUsage: Map<string, Usage> | null;
@@ -396,6 +401,7 @@ export async function gatherInventory(kube: KubeClient, now: Date, options: Gath
     pvcs,
     storageClasses,
     events: boundEvents(events, now),
+    podShutdowns: shutdownsOf(pods, cache?.podShutdowns(now.getTime())),
     nodeUsage,
     podUsage,
     stale,
@@ -426,4 +432,20 @@ export function emptyInventory(now: Date): Inventory {
     podUsage: null,
     stale: [],
   };
+}
+
+/** The watch's shutdown times, plus every listed pod with a deletionTimestamp (the cache may not be running). */
+export function shutdownsOf(
+  pods: FullPod[],
+  watched: ReadonlyMap<string, number> | undefined,
+): ReadonlyMap<string, number> {
+  const out = new Map(watched ?? []);
+  for (const p of pods) {
+    const at = Date.parse((p.metadata as { deletionTimestamp?: string }).deletionTimestamp ?? '');
+    const key = podKey(p.metadata.namespace, p.metadata.name);
+    if (Number.isFinite(at) && !out.has(key)) {
+      out.set(key, at);
+    }
+  }
+  return out;
 }
