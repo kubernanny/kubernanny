@@ -4,7 +4,7 @@ import type { Certificate } from '../checks/certificates.check';
 import type { CnpgCluster } from '../checks/cnpg.check';
 import type { LonghornVolume } from '../checks/longhorn.check';
 import type { EtcdSnapshot, LonghornBackup, LonghornBackupTarget } from '../checks/maintenance.check';
-import { CheckStatus, Issue } from '../checks/types';
+import { ActionLock, ActionType, CheckStatus, Issue } from '../checks/types';
 import { Config } from '../config';
 import { Category } from '../discovery/catalog';
 import { Detected, Link } from '../discovery/discovery';
@@ -156,6 +156,11 @@ export interface ModuleContext {
   syncReplaceOn?: boolean;
   /** `restart` and the opt-in `config-change-hint` are on: the workloads check may read ConfigMap metadata to tell a restart that fixes from one that does not. */
   restartOn?: boolean;
+  /**
+   * Why an action type is off (null while on), with its name and description: a switched-off action an issue
+   * would offer is listed in the issue's `unavailable` instead of dropped silently. Absent in tests: dropped.
+   */
+  actionLock?: (type: ActionType) => (ActionLock & { label: Text; description: Text }) | null;
 }
 
 /** An API resource a module reads; the RBAC test checks the chart and install.yaml grant it. */

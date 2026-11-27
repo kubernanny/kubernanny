@@ -587,6 +587,20 @@ export const en: Dictionary = {
     week: '1 week',
     silenced: 'Silenced.',
     unsilenced: 'Silence lifted.',
+    alsoPossible: 'Also possible:',
+    offInApp: 'off in the app',
+    lockedOptIn: 'not enabled in the Helm chart',
+    lockedDisabled: 'disabled in the Helm chart',
+    offText:
+      'It is switched off in the app for this cluster. Switching it on applies to every device paired with it.',
+    switchOn: 'Switch on',
+    switchedOn: 'Switched on. It shows on the next check.',
+    howToOptIn:
+      'It is off by default, because its permission reaches further than the action itself if the agent were ever compromised. To allow it, add {{line}} to the Helm values (or ENABLED_ACTIONS) and upgrade.',
+    howToDisabled:
+      'It is switched off in the deployment: the Helm values contain {{line}}, or rbac.allowActions: false. Remove it there and upgrade.',
+    copyLine: 'Copy line',
+    copyFailed: 'Could not copy.',
     accept: 'Not applicable',
     acceptLabel: 'Mark {{id}} as not applicable',
     acceptHeader: '{{id}} does not apply here',
@@ -759,6 +773,11 @@ export const en: Dictionary = {
     actionsTitle: 'Actions',
     actionsHint:
       'What the app may trigger in the cluster. Always for one open issue only, except the Argo CD rollback, which works on any manual-sync app and only if the Helm chart allows it.',
+    actionsOffTitle: 'Actions switched off',
+    actionsOffHint: 'Switched off in the app for this cluster. Switch them on again here.',
+    actionsLockedTitle: 'Actions locked in the deployment',
+    actionsLockedHint:
+      'Off in the Helm chart, so the app cannot switch them on. Each says why and which line of the Helm values changes that.',
     notificationsTitle: 'Notifications',
     notificationsHint:
       'While paused, no messages go to ntfy or webhooks. The app keeps showing the state.',

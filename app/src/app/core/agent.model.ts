@@ -91,12 +91,24 @@ export interface Issue {
   title: string;
   cause: string;
   actions: IssueAction[];
+  /** Actions that would fit but are switched off, with why (agents after 0.3.1). */
+  unavailable?: UnavailableAction[];
   since: string;
   /** Set while someone silenced the issue: shown, but no light, score or notification. */
   silencedUntil?: string;
   /** OSV advisory ids (known vulnerabilities); the app links each to osv.dev. */
   advisories?: string[];
 }
+
+/** Why an action is off: in the app (`off`), or locked in the deployment as opt-in or explicitly disabled. */
+export type ActionLock = { state: 'off' } | { state: 'locked'; lockedBy: 'opt-in' | 'disabled' };
+
+/** A switched-off action an issue would offer: no target, only what it is and why it is off. */
+export type UnavailableAction = {
+  type: IssueAction['type'];
+  label: string;
+  description: string;
+} & ActionLock;
 
 export interface Stat {
   label: string;
@@ -635,6 +647,10 @@ export interface SettingsView {
     description: string;
     effect: string;
     state: ToggleState;
+    /** Only when locked: an opt-in type not named in `actions.enabled`, or named in `actions.disabled` (agents after 0.3.1). */
+    lockedBy?: 'opt-in' | 'disabled';
+    /** Off until the deployment names it in `actions.enabled` (agents after 0.3.1). */
+    optIn?: boolean;
   }[];
   notifications: ToggleState;
 }

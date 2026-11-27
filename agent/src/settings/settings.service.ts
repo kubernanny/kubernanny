@@ -1,5 +1,5 @@
 import type { Principal } from '../auth/devices.service';
-import { ActionType, OPT_IN_ACTIONS } from '../checks/types';
+import { ActionLock, ActionType, OPT_IN_ACTIONS } from '../checks/types';
 import type { Config } from '../config';
 import { DemoKubeClient } from '../demo/demo-cluster';
 import { CATALOG, CatalogEntry, Category } from '../discovery/catalog';
@@ -80,7 +80,19 @@ export interface ModuleSetting {
 
 export interface SettingsView {
   modules: ModuleSetting[];
-  actions: { type: ActionType; label: Text; description: Text; effect: Text; state: ToggleState }[];
+  /**
+   * `lockedBy` (only when locked): an opt-in type not named in `actions.enabled`, or named in `actions.disabled`.
+   * `optIn`: the type is off until the deployment names it, so the app can say so also when it is on.
+   */
+  actions: {
+    type: ActionType;
+    label: Text;
+    description: Text;
+    effect: Text;
+    state: ToggleState;
+    lockedBy?: 'opt-in' | 'disabled';
+    optIn: boolean;
+  }[];
   notifications: ToggleState;
 }
 
@@ -207,6 +219,24 @@ export class SettingsService {
 
   actionOn = (type: ActionType): boolean => this.actionState(type) === 'on';
 
+  /** Why an action is off, or null while it is on (ActionLock: what the app shows next to it and on an issue). */
+  actionLock = (type: ActionType): ActionLock | null => {
+    const state = this.actionState(type);
+    if (state === 'on') {
+      return null;
+    }
+    if (state === 'off') {
+      return { state: 'off' };
+    }
+    return { state: 'locked', lockedBy: this.config.disabledActions.includes(type) ? 'disabled' : 'opt-in' };
+  };
+
+  /** Name and description of an action type, for an issue's `unavailable` list. */
+  actionText(type: ActionType): { label: Text; description: Text } | undefined {
+    const a = ACTION_TYPES.find((x) => x.type === type);
+    return a ? { label: a.label, description: a.description } : undefined;
+  }
+
   notificationsOn(): boolean {
     return !this.stored.notificationsPaused && !this.config.disabledModules.includes('notifications');
   }
@@ -237,6 +267,8 @@ export class SettingsService {
         description: a.description,
         effect: a.effect,
         state: this.actionState(a.type),
+        ...lockedBy(this.actionLock(a.type)),
+        optIn: OPT_IN_ACTIONS.includes(a.type),
       })),
       notifications: this.config.disabledModules.includes('notifications')
         ? 'locked'
@@ -383,4 +415,8 @@ function parseStored(text: string | undefined): Stored {
   } catch {
     return { disabledModules: [], enabledModules: [], disabledActions: [], notificationsPaused: false };
   }
+}
+
+function lockedBy(lock: ActionLock | null): { lockedBy?: 'opt-in' | 'disabled' } {
+  return lock?.state === 'locked' ? { lockedBy: lock.lockedBy } : {};
 }

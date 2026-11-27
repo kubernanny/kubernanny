@@ -1,5 +1,5 @@
 import { withSwitches } from '../checks/argocd-sync-offer';
-import { ActionType, Issue } from '../checks/types';
+import { ActionType, Issue, UnavailableAction } from '../checks/types';
 import type { Config } from '../config';
 import { Detected } from '../discovery/discovery';
 import type { Text } from '../i18n/text';
@@ -42,10 +42,18 @@ export abstract class CheckModule {
     'pvcs',
   ];
 
-  /** Drops every action this module did not declare or that is switched off; a sync's options follow their switches. */
-  protected keepActions(issues: Issue[], allowed: (type: ActionType) => boolean): Issue[] {
+  /**
+   * Drops every action this module did not declare or that is switched off; a sync's options follow their switches.
+   * A declared one that is off is named in `unavailable` (once per type), so the app can say how to switch it on.
+   */
+  protected keepActions(
+    issues: Issue[],
+    allowed: (type: ActionType) => boolean,
+    lock?: ModuleContext['actionLock'],
+  ): Issue[] {
     return issues.map((i) => ({
       ...i,
+      ...this.unavailable(i, allowed, lock),
       actions: i.actions
         .filter((a) => this.actions.includes(a.type) && allowed(a.type))
         .map((a) =>
@@ -60,6 +68,27 @@ export abstract class CheckModule {
             : a,
         ),
     }));
+  }
+
+  private unavailable(
+    issue: Issue,
+    allowed: (type: ActionType) => boolean,
+    lock: ModuleContext['actionLock'],
+  ): { unavailable?: UnavailableAction[] } {
+    if (!lock) {
+      return {};
+    }
+    const out: UnavailableAction[] = [];
+    for (const a of issue.actions) {
+      if (!this.actions.includes(a.type) || allowed(a.type) || out.some((u) => u.type === a.type)) {
+        continue;
+      }
+      const why = lock(a.type);
+      if (why) {
+        out.push({ ...why, type: a.type });
+      }
+    }
+    return out.length > 0 ? { unavailable: out } : {};
   }
 }
 
@@ -84,7 +113,7 @@ export abstract class CoreCheck extends CheckModule {
 
   async run(ctx: ModuleContext, allowed: (type: ActionType) => boolean): Promise<ModuleResult> {
     const result = await this.check(ctx);
-    return { ...result, issues: this.keepActions(result.issues, allowed) };
+    return { ...result, issues: this.keepActions(result.issues, allowed, ctx.actionLock) };
   }
 }
 
@@ -119,7 +148,12 @@ export abstract class Integration extends CheckModule {
   async run(ctx: ModuleContext, det: Detected, allowed: (type: ActionType) => boolean): Promise<ModuleResult> {
     const scoped: ModuleContext = this.untrusted ? ctx : { ...ctx, prom: null };
     const result = await this.inspect(scoped, det);
-    const issues = this.keepActions(result.issues, (t) => !this.untrusted && allowed(t));
+    // An untrusted integration's issues carry no actions at all, so nothing is "unavailable" either.
+    const issues = this.keepActions(
+      result.issues,
+      (t) => !this.untrusted && allowed(t),
+      this.untrusted ? undefined : ctx.actionLock,
+    );
     // An answer from an in-cluster service can be forged and as long as its sender likes.
     return this.untrusted
       ? {

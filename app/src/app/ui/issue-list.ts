@@ -9,11 +9,12 @@ import {
 } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
 
-import { ActionButton, IssueCard } from '../cluster/cluster-view';
+import { ActionButton, IssueCard, UnavailableHint } from '../cluster/cluster-view';
 import { confirmSync } from '../cluster/sync-options-sheet';
 import { ACCEPT_CHOICES } from '../cluster/vulnerability-acceptance';
 import { ClusterConfig, SyncOptions } from '../core/agent.model';
 import { AgentClient, describeError } from '../core/agent-client.service';
+import { copyText } from '../core/share';
 import { TranslationKey } from '../i18n/dictionary';
 import { LanguageService } from '../i18n/language.service';
 import { LogsModal } from './logs-modal';
@@ -152,6 +153,26 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
                   }
                 }
               }
+              @if (item.unavailable.length > 0) {
+                <!-- What else would fit, switched off: tapping says why and how to switch it on. -->
+                <div class="unavailable">
+                  <span class="lead">{{ t('issues.alsoPossible') }}</span>
+                  @for (u of item.unavailable; track u.type) {
+                    <button
+                      type="button"
+                      class="link"
+                      [disabled]="busy() !== null"
+                      (click)="explain(u)"
+                    >
+                      <ion-icon name="lock-closed-outline" aria-hidden="true" />
+                      <span
+                        ><span class="name">{{ u.label }}</span>
+                        <span class="why">&nbsp;· {{ u.reason }}</span></span
+                      >
+                    </button>
+                  }
+                </div>
+              }
             </div>
           </li>
         }
@@ -159,6 +180,40 @@ export const SILENCE_CHOICES: readonly { hours: number; label: TranslationKey }[
     </ng-container>
   `,
   styles: `
+    .unavailable {
+      margin: 0.6rem 0 0;
+      color: var(--mute);
+      font-size: 0.8125rem;
+      line-height: 1.4;
+    }
+    .unavailable .lead {
+      display: block;
+      margin-bottom: 0.15rem;
+    }
+    .unavailable .link {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.4rem;
+      width: 100%;
+      padding: 0.2rem 0;
+      background: none;
+      border: 0;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .unavailable .link ion-icon {
+      color: var(--mute);
+      font-size: 0.85rem;
+      margin: 0.15rem 0 0;
+    }
+    .unavailable .name {
+      color: var(--ink-2);
+      text-decoration: underline;
+      text-decoration-color: var(--line);
+      text-underline-offset: 0.2em;
+    }
     ul {
       list-style: none;
       margin: 0;
@@ -432,6 +487,36 @@ export class IssueList {
       await this.client.acceptAdvisory(this.cluster(), component, advisory, days, reason);
       await this.toast(this.language.translator().t('issues.accepted'), 'success');
     });
+  }
+
+  /**
+   * What a switched-off action would do and how to switch it on: in the app with one tap,
+   * or, locked in the deployment, the Helm values line to copy.
+   */
+  async explain(hint: UnavailableHint): Promise<void> {
+    const tr = this.language.translator();
+    const alert = await this.alerts.create({
+      header: hint.label,
+      subHeader: hint.reason,
+      message: `${hint.description} ${hint.canSwitchOn ? tr.t('issues.offText') : (hint.howTo ?? '')}`,
+      buttons: [
+        { text: tr.t('common.close'), role: 'cancel' },
+        hint.canSwitchOn
+          ? { text: tr.t('issues.switchOn'), role: 'confirm' }
+          : { text: tr.t('issues.copyLine'), role: 'copy' },
+      ],
+    });
+    await alert.present();
+    const { role } = await alert.onDidDismiss();
+    if (role === 'copy' && hint.helm) {
+      const ok = await copyText(hint.helm);
+      await this.toast(tr.t(ok ? 'common.copied' : 'issues.copyFailed'), ok ? 'success' : 'danger');
+    } else if (role === 'confirm') {
+      await this.busyWhile('switch' + hint.type, async () => {
+        await this.client.changeSettings(this.cluster(), { actions: { [hint.type]: true } });
+        await this.toast(tr.t('issues.switchedOn'), 'success');
+      });
+    }
   }
 
   async unsilence(item: IssueCard): Promise<void> {

@@ -250,6 +250,11 @@ export class StatusService {
       syncPruneOn: this.settings.actionOn('argocd-sync-prune'),
       syncReplaceOn: this.settings.actionOn('argocd-sync-replace'),
       restartOn: this.settings.actionOn('restart') && this.settings.actionOn('config-change-hint'),
+      actionLock: (type) => {
+        const lock = this.settings.actionLock(type);
+        const text = this.settings.actionText(type);
+        return lock && text ? { ...lock, ...text } : null;
+      },
     };
     const allowed = this.settings.actionOn;
 

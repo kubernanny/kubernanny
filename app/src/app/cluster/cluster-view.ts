@@ -62,6 +62,22 @@ export interface IssueCard {
   advisoryLinks: { id: string; url: string }[];
   /** The component whose advisories can be marked as not applicable here; null when the agent does not allow it. */
   acceptComponent: string | null;
+  /** Actions that would fit but are switched off: shown under the buttons, with how to switch them on. */
+  unavailable: UnavailableHint[];
+}
+
+/** A switched-off action on an issue card: what it is, why it is off, how to switch it on. */
+export interface UnavailableHint {
+  type: IssueActionType;
+  label: string;
+  description: string;
+  /** "off in the app", "not enabled in the Helm chart", "disabled in the Helm chart". */
+  reason: string;
+  /** Off in the app: the app can switch it on. Locked: only the deployment can. */
+  canSwitchOn: boolean;
+  /** What to do in the deployment, with the values line to copy; null when the app can switch it on. */
+  howTo: string | null;
+  helm: string | null;
 }
 
 export interface Kpi {
@@ -418,7 +434,38 @@ export function issueCards(
     canSilence: issue.severity !== 'info' && !issue.silencedUntil,
     advisoryLinks: advisoryLinks(issue.advisories),
     acceptComponent: acceptComponentOf(issue, canAccept),
+    unavailable: unavailableHints(issue, tr),
   }));
+}
+
+/** The Helm values line that switches a locked action on: `opt-in` names it, `disabled` takes it off the list. */
+export function helmLine(type: string, lockedBy: 'opt-in' | 'disabled'): string {
+  return lockedBy === 'opt-in' ? `actions.enabled: [${type}]` : `actions.disabled: [${type}]`;
+}
+
+export function unavailableHints(issue: Issue, tr: Translator): UnavailableHint[] {
+  return (issue.unavailable ?? []).map((u) => {
+    const base = { type: u.type, label: u.label, description: u.description };
+    if (u.state === 'off') {
+      return {
+        ...base,
+        reason: tr.t('issues.offInApp'),
+        canSwitchOn: true,
+        howTo: null,
+        helm: null,
+      };
+    }
+    const helm = helmLine(u.type, u.lockedBy);
+    return {
+      ...base,
+      reason: tr.t(u.lockedBy === 'opt-in' ? 'issues.lockedOptIn' : 'issues.lockedDisabled'),
+      canSwitchOn: false,
+      howTo: tr.t(u.lockedBy === 'opt-in' ? 'issues.howToOptIn' : 'issues.howToDisabled', {
+        line: helm,
+      }),
+      helm,
+    };
+  });
 }
 
 /**

@@ -7,6 +7,7 @@ Agent, chart and relay. The apps in the App Store and on Google Play have their 
 ### Added
 
 - **Delete a failed Job from the app** (`job-delete`, on by default): a CronJob whose last run failed, or a failed Job nobody owns, offers to delete that Job with its pods, so the warning and alerts on it (`KubeJobFailed`) go. Only the Job the agent saw (by uid); the admission policy allows deleting failed Jobs of a CronJob or without owner, nothing else. `actions.disabled: [job-delete]` removes it and its permission. [CHECKS.md](docs/CHECKS.md#actions).
+- **The app shows which actions are off, and why**: an issue lists the actions that would fit but are switched off (`unavailable`), off in the app (switch it on with one tap) or locked in the deployment, as opt-in or disabled, with the Helm values line to copy. The settings group the actions into active, switched off in the app and locked in the Helm chart. `GET /settings` names why an action is locked (`lockedBy`) and whether it is opt-in. [API.md](docs/API.md).
 
 ## 0.3.1 (2026-11-26)
 

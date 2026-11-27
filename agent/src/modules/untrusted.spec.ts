@@ -69,6 +69,23 @@ describe('trust of integrations', () => {
     expect(off.issues[0]!.actions).toEqual([]);
   });
 
+  it('names a declared action that is switched off in `unavailable`, with why; never for an untrusted integration', async () => {
+    const lock: ModuleContext['actionLock'] = (type) =>
+      type === 'restart'
+        ? { state: 'locked', lockedBy: 'disabled', label: raw('Restart'), description: raw('d') }
+        : null;
+    const off = await new Probe(true).run({ ...ctx(null), actionLock: lock }, det, (t) => t !== 'restart');
+    expect(off.issues[0]!.actions).toEqual([]);
+    expect(off.issues[0]!.unavailable).toEqual([
+      { type: 'restart', state: 'locked', lockedBy: 'disabled', label: raw('Restart'), description: raw('d') },
+    ]);
+    // Undeclared (logs) and allowed actions are not listed; nothing at all when everything is on.
+    const on = await new Probe(true).run({ ...ctx(null), actionLock: lock }, det, () => true);
+    expect(on.issues[0]!.unavailable).toBeUndefined();
+    const untrusted = await new Probe(false).run({ ...ctx(null), actionLock: lock }, det, (t) => t !== 'restart');
+    expect(untrusted.issues[0]!.unavailable).toBeUndefined();
+  });
+
   it('marks the integrations that act on the cluster as trusted, the HTTP readers as untrusted', () => {
     const flagged = INTEGRATIONS.filter((i) => i.untrusted).map((i) => i.id);
     expect(flagged).toEqual(expect.arrayContaining(['prometheus', 'alertmanager', 'grafana', 'loki', 'kured']));

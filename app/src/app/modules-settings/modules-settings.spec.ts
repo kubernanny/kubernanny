@@ -50,12 +50,31 @@ const view: SettingsView = {
     },
   ],
   actions: [
+    { type: 'logs', label: 'Logs lesen', description: 'Logs.', effect: 'l', state: 'on' },
+    // An agent before lockedBy/optIn: locked, reason unknown, counts as disabled.
     {
       type: 'restart',
       label: 'Workloads neu starten',
       description: 'x',
       effect: 'y',
       state: 'locked',
+    },
+    {
+      type: 'job-rerun',
+      label: 'Jobs neu ausführen',
+      description: 'Erneut starten.',
+      effect: 'z',
+      state: 'locked',
+      lockedBy: 'opt-in',
+      optIn: true,
+    },
+    {
+      type: 'job-delete',
+      label: 'Fehlgeschlagene Jobs löschen',
+      description: 'Löschen.',
+      effect: 'w',
+      state: 'off',
+      optIn: false,
     },
   ],
   notifications: 'off',
@@ -68,6 +87,8 @@ describe('settings sections', () => {
       'Kubernetes',
       'Erkannte Komponenten',
       'Aktionen',
+      'Ausgeschaltete Aktionen',
+      'Im Helm-Chart gesperrte Aktionen',
       'Benachrichtigungen',
       'Nicht gefunden',
     ]);
@@ -77,12 +98,23 @@ describe('settings sections', () => {
     expect(s[1]!.rows.find((r) => r.title === 'Weblate')!.note).toBe(
       'Übersetzungen. Geprüft werden nur die Pods.',
     );
-    expect(s[2]!.rows[0]).toMatchObject({
-      locked: true,
-      note: 'Im Helm-Chart ausgeschaltet, nur dort änderbar.',
+    expect(s[2]!.rows.map((r) => r.title)).toEqual(['Logs lesen']);
+    expect(s[3]!.rows[0]).toMatchObject({
+      title: 'Fehlgeschlagene Jobs löschen',
+      on: false,
+      locked: false,
     });
-    expect(s[3]!.rows[0]!.patch(true)).toEqual({ notifications: true });
-    expect(s[4]!.rows[0]).toMatchObject({ title: 'Velero', locked: true });
+    expect(s[3]!.rows[0]!.helm).toBeUndefined();
+    expect(s[3]!.rows[0]!.patch(true)).toEqual({ actions: { 'job-delete': true } });
+    const [restart, rerun] = s[4]!.rows;
+    expect(restart).toMatchObject({ locked: true, helm: 'actions.disabled: [restart]' });
+    expect(restart!.note).toContain('In den Helm-Values steht actions.disabled: [restart]');
+    expect(rerun).toMatchObject({ locked: true, helm: 'actions.enabled: [job-rerun]' });
+    expect(rerun!.note).toBe(
+      'Erneut starten. Sie ist standardmäßig aus, weil ihr Recht weiter reicht als die Aktion selbst, falls der Agent je kompromittiert würde. Zum Freischalten actions.enabled: [job-rerun] in die Helm-Values (oder ENABLED_ACTIONS) eintragen und upgraden.',
+    );
+    expect(s[5]!.rows[0]!.patch(true)).toEqual({ notifications: true });
+    expect(s[6]!.rows[0]).toMatchObject({ title: 'Velero', locked: true });
   });
 
   it('shows what a default-off module would send out of the cluster', () => {
@@ -121,13 +153,15 @@ describe('settings sections', () => {
       'Kubernetes',
       'Detected components',
       'Actions',
+      'Actions switched off',
+      'Actions locked in the deployment',
       'Notifications',
       'Not found',
     ]);
     expect(s[1]!.rows.find((r) => r.title === 'Weblate')!.note).toBe(
       'Übersetzungen. Only its pods are checked.',
     );
-    expect(s[2]!.rows[0]!.note).toBe('Turned off in the Helm chart, and only changeable there.');
+    expect(s[4]!.rows[1]!.note).toContain('add actions.enabled: [job-rerun] to the Helm values');
   });
 
   it("says under each action what it may change, in the agent's words", () => {

@@ -49,6 +49,29 @@ describe('settings', () => {
     expect((await service({})).actionState('argocd-sync')).toBe('on');
   });
 
+  it('says why an action is off: switched off in the app, opt-in not enabled, or disabled in the deployment', async () => {
+    const s = await service({ DISABLED_ACTIONS: 'restart' });
+    expect(s.actionLock('argocd-sync')).toBeNull();
+    expect(s.actionLock('restart')).toEqual({ state: 'locked', lockedBy: 'disabled' });
+    expect(s.actionLock('job-rerun')).toEqual({ state: 'locked', lockedBy: 'opt-in' });
+    await s.update({ actions: { 'job-delete': false } }, who);
+    expect(s.actionLock('job-delete')).toEqual({ state: 'off' });
+    const view = s.view([]).actions;
+    expect(view.find((a) => a.type === 'job-rerun')).toMatchObject({
+      state: 'locked',
+      lockedBy: 'opt-in',
+      optIn: true,
+    });
+    expect(view.find((a) => a.type === 'restart')).toMatchObject({
+      state: 'locked',
+      lockedBy: 'disabled',
+      optIn: false,
+    });
+    expect(view.find((a) => a.type === 'job-delete')).toMatchObject({ state: 'off', optIn: false });
+    expect(view.find((a) => a.type === 'job-delete')).not.toHaveProperty('lockedBy');
+    expect(s.actionText('job-rerun')?.label).toBeDefined();
+  });
+
   it('keeps app switches across a restart through the ConfigMap', async () => {
     const kube = new DemoKubeClient();
     const config = loadConfig();

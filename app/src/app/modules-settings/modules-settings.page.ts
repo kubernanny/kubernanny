@@ -21,6 +21,7 @@ import {
 } from '@ionic/angular/standalone';
 import { TranslocoDirective } from '@jsverse/transloco';
 
+import { helmLine } from '../cluster/cluster-view';
 import {
   ClusterConfig,
   ModuleSetting,
@@ -30,6 +31,7 @@ import {
 } from '../core/agent.model';
 import { AgentClient, describeError } from '../core/agent-client.service';
 import { ClusterStore } from '../core/cluster-store.service';
+import { copyText } from '../core/share';
 import { StatusStore } from '../core/status-store.service';
 import { LanguageService } from '../i18n/language.service';
 import { Translator } from '../i18n/translator';
@@ -45,7 +47,31 @@ interface Row {
   effect?: string;
   on: boolean;
   locked: boolean;
+  /** A locked action: the Helm values line that switches it on, to copy. */
+  helm?: string;
   patch: (on: boolean) => SettingsPatch;
+}
+
+type ActionSetting = SettingsView['actions'][number];
+
+function actionRow(a: ActionSetting, tr: Translator): Row {
+  // Agents before lockedBy: a locked opt-in type is "not enabled", anything else locked "disabled".
+  const lockedBy = a.lockedBy ?? (a.optIn ? 'opt-in' : 'disabled');
+  const helm = a.state === 'locked' ? helmLine(a.type, lockedBy) : undefined;
+  return {
+    key: `a:${a.type}`,
+    icon: a.type === 'logs' ? 'document-text-outline' : 'flash-outline',
+    title: a.label,
+    note:
+      a.state === 'locked'
+        ? `${a.description} ${tr.t(lockedBy === 'opt-in' ? 'issues.howToOptIn' : 'issues.howToDisabled', { line: helm! })}`
+        : a.description,
+    ...(a.effect ? { effect: a.effect } : {}),
+    on: a.state === 'on',
+    locked: a.state === 'locked',
+    ...(helm ? { helm } : {}),
+    patch: (on: boolean) => ({ actions: { [a.type]: on } }),
+  };
 }
 
 function moduleRow(m: ModuleSetting, tr: Translator): Row {
@@ -82,19 +108,20 @@ export function settingsSections(
   return [
     { title: tr.t('modules.coreTitle'), hint: tr.t('modules.coreHint'), rows: core.map(row) },
     { title: tr.t('modules.foundTitle'), hint: tr.t('modules.foundHint'), rows: found.map(row) },
-    {
-      title: tr.t('modules.actionsTitle'),
-      hint: tr.t('modules.actionsHint'),
-      rows: view.actions.map((a) => ({
-        key: `a:${a.type}`,
-        icon: a.type === 'logs' ? 'document-text-outline' : 'flash-outline',
-        title: a.label,
-        note: a.state === 'locked' ? tr.t('modules.locked') : a.description,
-        ...(a.effect ? { effect: a.effect } : {}),
-        ...state(a.state),
-        patch: (on: boolean) => ({ actions: { [a.type]: on } }),
-      })),
-    },
+    // Actions in three groups: what runs, what the app switched off (and can switch on), what only the deployment can.
+    ...(
+      [
+        ['on', 'modules.actionsTitle', 'modules.actionsHint'],
+        ['off', 'modules.actionsOffTitle', 'modules.actionsOffHint'],
+        ['locked', 'modules.actionsLockedTitle', 'modules.actionsLockedHint'],
+      ] as const
+    )
+      .map(([s, title, hint]) => ({
+        title: tr.t(title),
+        hint: tr.t(hint),
+        rows: view.actions.filter((a) => a.state === s).map((a) => actionRow(a, tr)),
+      }))
+      .filter((section) => section.rows.length > 0),
     {
       title: tr.t('modules.notificationsTitle'),
       hint: tr.t('modules.notificationsHint'),
@@ -178,6 +205,13 @@ export function settingsSections(
                             ><ion-icon name="key-outline" aria-hidden="true" />{{ r.effect }}</span
                           >
                         }
+                        @if (r.helm) {
+                          <button type="button" class="copy" (click)="copy(r.helm)">
+                            <code>{{ r.helm }}</code>
+                            <ion-icon name="copy-outline" aria-hidden="true" />
+                            <span class="visually-hidden">{{ t('issues.copyLine') }}</span>
+                          </button>
+                        }
                       </div>
                       <ion-toggle
                         [checked]="r.on"
@@ -235,6 +269,39 @@ export function settingsSections(
     }
     li + li {
       border-top: 1px solid var(--line);
+    }
+    .copy {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 0.4rem;
+      padding: 0.3rem 0.55rem;
+      background: var(--ground);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-s, 6px);
+      color: var(--ink-2);
+      font-size: 0.8125rem;
+      cursor: pointer;
+      max-width: 100%;
+    }
+    .copy code {
+      min-width: 0;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .copy ion-icon {
+      font-size: 1rem;
+      flex: none;
+    }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
     }
     li ion-icon {
       font-size: 1.35rem;
@@ -328,5 +395,17 @@ export class ModulesSettingsPage implements OnInit {
     } finally {
       this.saving.set(false);
     }
+  }
+
+  /** The Helm values line of a locked action. */
+  async copy(line: string): Promise<void> {
+    const tr = this.language.translator();
+    const ok = await copyText(line);
+    const toast = await this.toasts.create({
+      message: tr.t(ok ? 'common.copied' : 'issues.copyFailed'),
+      duration: 2000,
+      position: 'bottom',
+    });
+    await toast.present();
   }
 }

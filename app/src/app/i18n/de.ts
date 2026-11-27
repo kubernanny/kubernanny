@@ -594,6 +594,20 @@ export const de = {
     week: '1 Woche',
     silenced: 'Stummgeschaltet.',
     unsilenced: 'Wird wieder gemeldet.',
+    alsoPossible: 'Auch möglich:',
+    offInApp: 'in der App aus',
+    lockedOptIn: 'im Helm-Chart nicht freigeschaltet',
+    lockedDisabled: 'im Helm-Chart gesperrt',
+    offText:
+      'Sie ist in der App für diesen Cluster ausgeschaltet. Einschalten gilt für alle Geräte, die mit ihm gekoppelt sind.',
+    switchOn: 'Einschalten',
+    switchedOn: 'Eingeschaltet. Sie erscheint mit dem nächsten Check.',
+    howToOptIn:
+      'Sie ist standardmäßig aus, weil ihr Recht weiter reicht als die Aktion selbst, falls der Agent je kompromittiert würde. Zum Freischalten {{line}} in die Helm-Values (oder ENABLED_ACTIONS) eintragen und upgraden.',
+    howToDisabled:
+      'Sie ist in der Installation abgeschaltet: In den Helm-Values steht {{line}} oder rbac.allowActions: false. Dort entfernen und upgraden.',
+    copyLine: 'Zeile kopieren',
+    copyFailed: 'Kopieren hat nicht geklappt.',
     accept: 'Trifft nicht zu',
     acceptLabel: '{{id}} als nicht zutreffend markieren',
     acceptHeader: '{{id}} trifft hier nicht zu',
@@ -767,6 +781,11 @@ export const de = {
     actionsTitle: 'Aktionen',
     actionsHint:
       'Was die App am Cluster auslösen darf. Immer nur für ein offenes Problem, außer dem Zurückrollen in Argo CD: das gilt für jede App mit manuellem Sync und nur, wenn das Helm-Chart es erlaubt.',
+    actionsOffTitle: 'Ausgeschaltete Aktionen',
+    actionsOffHint: 'In der App für diesen Cluster ausgeschaltet. Hier wieder einschalten.',
+    actionsLockedTitle: 'Im Helm-Chart gesperrte Aktionen',
+    actionsLockedHint:
+      'Im Helm-Chart aus, die App kann sie nicht einschalten. Bei jeder steht, warum, und welche Zeile der Helm-Values das ändert.',
     notificationsTitle: 'Benachrichtigungen',
     notificationsHint:
       'Pausiert gehen keine Nachrichten an ntfy oder Webhooks. Die App zeigt den Zustand weiter.',

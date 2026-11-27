@@ -150,3 +150,48 @@ describe('action buttons', () => {
     }
   });
 });
+
+describe('switched-off actions on an issue card', () => {
+  const card = (unavailable: Issue['unavailable']) =>
+    issueCards([{ ...issue([]), unavailable }], [], NOW, de)[0]!;
+
+  it('names each with why it is off and how to switch it on', () => {
+    const [rerun, del, restart] = card([
+      {
+        type: 'job-rerun',
+        label: 'Jobs neu ausführen',
+        description: 'd',
+        state: 'locked',
+        lockedBy: 'opt-in',
+      },
+      { type: 'job-delete', label: 'Fehlgeschlagene Jobs löschen', description: 'd', state: 'off' },
+      {
+        type: 'restart',
+        label: 'Workloads neu starten',
+        description: 'd',
+        state: 'locked',
+        lockedBy: 'disabled',
+      },
+    ]).unavailable;
+    expect(rerun).toMatchObject({
+      reason: 'im Helm-Chart nicht freigeschaltet',
+      canSwitchOn: false,
+      helm: 'actions.enabled: [job-rerun]',
+    });
+    expect(rerun!.howTo).toContain('actions.enabled: [job-rerun] in die Helm-Values');
+    expect(del).toMatchObject({
+      reason: 'in der App aus',
+      canSwitchOn: true,
+      helm: null,
+      howTo: null,
+    });
+    expect(restart).toMatchObject({
+      reason: 'im Helm-Chart gesperrt',
+      helm: 'actions.disabled: [restart]',
+    });
+  });
+
+  it('shows nothing for agents without the field', () => {
+    expect(card(undefined).unavailable).toEqual([]);
+  });
+});

@@ -148,9 +148,26 @@ export interface Issue {
   /** Why, in one or two sentences. */
   cause: Text;
   actions: IssueAction[];
+  /**
+   * Actions that would fit this issue but are switched off, so the app can
+   * say what else is possible and how to switch it on. Only the type, why it
+   * is off, and the action's name and description: no target. Absent when
+   * nothing is off (and from agents before this field).
+   */
+  unavailable?: UnavailableAction[];
   /** OSV advisory ids (vulnerabilities module); the app links each to osv.dev. */
   advisories?: string[];
 }
+
+/**
+ * Why an action is not available: switched off in the app (`off`, the app can
+ * switch it on), or locked in the deployment (`locked`): an opt-in type not
+ * named in Helm `actions.enabled` (`opt-in`), or named in `actions.disabled`
+ * (also every write action with `rbac.allowActions: false`) (`disabled`).
+ */
+export type ActionLock = { state: 'off' } | { state: 'locked'; lockedBy: 'opt-in' | 'disabled' };
+
+export type UnavailableAction = { type: IssueActionType; label: Text; description: Text } & ActionLock;
 
 export interface CheckContext {
   now: Date;
