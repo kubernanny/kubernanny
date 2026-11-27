@@ -23,7 +23,7 @@ import { qrModules } from './pseudo-qr';
           <p>
             <strong>Other ways:</strong>
             <code
-              >kubectl apply -f https://raw.githubusercontent.com/kubernanny/kubernanny/v0.3.1/deploy/install.yaml</code
+              >kubectl apply -f https://raw.githubusercontent.com/kubernanny/kubernanny/v0.4.0/deploy/install.yaml</code
             >, or an Argo CD Application.
           </p>
           <p>

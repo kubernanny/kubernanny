@@ -91,7 +91,7 @@ export interface Issue {
   title: string;
   cause: string;
   actions: IssueAction[];
-  /** Actions that would fit but are switched off, with why (agents after 0.3.1). */
+  /** Actions that would fit but are switched off, with why (agents from 0.4.0 on). */
   unavailable?: UnavailableAction[];
   since: string;
   /** Set while someone silenced the issue: shown, but no light, score or notification. */
@@ -647,9 +647,9 @@ export interface SettingsView {
     description: string;
     effect: string;
     state: ToggleState;
-    /** Only when locked: an opt-in type not named in `actions.enabled`, or named in `actions.disabled` (agents after 0.3.1). */
+    /** Only when locked: an opt-in type not named in `actions.enabled`, or named in `actions.disabled` (agents from 0.4.0 on). */
     lockedBy?: 'opt-in' | 'disabled';
-    /** Off until the deployment names it in `actions.enabled` (agents after 0.3.1). */
+    /** Off until the deployment names it in `actions.enabled` (agents from 0.4.0 on). */
     optIn?: boolean;
   }[];
   notifications: ToggleState;

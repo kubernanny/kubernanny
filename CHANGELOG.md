@@ -2,7 +2,9 @@
 
 Agent, chart and relay. The apps in the App Store and on Google Play have their own release notes (`fastlane/release-notes/`).
 
-## Unreleased
+## 0.4.0 (2026-11-27)
+
+Install: `helm upgrade --install kubernanny oci://ghcr.io/kubernanny/charts/kubernanny --version 0.4.0 -n kubernanny`, or `kubectl apply -f deploy/install.yaml` from the `v0.4.0` tag. **New permission**: the agent may now delete Jobs (`job-delete`, on by default), held by the admission policy to failed Jobs of a CronJob or without owner; `actions.disabled: [job-delete]` keeps the old permissions.
 
 ### Added
 
