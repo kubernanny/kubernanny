@@ -104,9 +104,9 @@ const CHANNELS = ['ntfy', 'Discord', 'Slack', 'Gotify', 'JSON webhook'];
             <span class="badge"><kn-icon name="wrench" /></span>
             <h3>Actions bound to issues</h3>
             <p>
-              Restart, back up now, reconcile, renew, uncordon, clean up: offered only on an open problem, always
-              confirmed first, with what exactly happens. A crash loop shows its logs first; after an OOMKill there is
-              no restart button. The agent takes the target from its own check, never from the request.
+              Restart, back up now, reconcile, renew, uncordon, clean up, delete a failed job: offered only on an open
+              problem, always confirmed first, with what exactly happens. A crash loop shows its logs first; after an
+              OOMKill there is no restart button. The agent takes the target from its own check, never from the request.
             </p>
           </div>
           <div class="shot">
@@ -194,9 +194,9 @@ const CHANNELS = ['ntfy', 'Discord', 'Slack', 'Gotify', 'JSON webhook'];
           <p>
             A problem is sent once it has lasted five minutes, so rollouts and planned reboots never wake you. Again if
             it turns critical, and once more when it is resolved. Straight to the app as a native push, sealed for your
-            device so neither the relay nor Google can read it, and the home-screen widget updates with it. If the agent
-            or the whole cluster goes silent, the relay sends the warning it holds sealed for your phone. Or to your own
-            channels:
+            device so neither the relay nor Google can read it, and the home-screen widget updates with it, or asks the
+            agent itself every 15 to 60 minutes if you switch that on. If the agent or the whole cluster goes silent,
+            the relay sends the warning it holds sealed for your phone. Or to your own channels:
           </p>
           <ul class="channels" aria-label="Channels">
             @for (c of vm.channels; track c) {

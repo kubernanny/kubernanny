@@ -27,7 +27,7 @@ const PILLARS: Pillar[] = [
   {
     icon: 'shield',
     title: 'Least privilege, generated',
-    text: 'The ClusterRole is generated from what each enabled module and action needs. No Secrets outside its own two, no exec, no delete beyond finished pods, and admission policies hold every write to its action. Actions with a wider reach are opt-in. rbac.allowActions=false makes it strictly read-only.',
+    text: 'The ClusterRole is generated from what each enabled module and action needs. No Secrets outside its own two, no exec, no delete beyond finished pods and failed Jobs, and admission policies hold every write to its action. Actions with a wider reach are opt-in. rbac.allowActions=false makes it strictly read-only.',
     link: { route: '/docs/security', label: 'Security model' },
   },
   {

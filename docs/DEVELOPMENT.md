@@ -213,4 +213,6 @@ They register the pairing scheme `kubernanny://` (the app listens in `app.ts`, `
 
 ## Releases
 
-Agent, chart and relay image are released by CI from a `vX.Y.Z` tag, the apps with `cd app && npm run release`: [RELEASING.md](RELEASING.md), for maintainers.
+Agent, chart and relay image are released through a release pull request that release-please keeps up to date from the commits on `main`; merging it tags `vX.Y.Z` and CI publishes. The apps are released with `cd app && npm run release`. Details: [RELEASING.md](RELEASING.md), for maintainers.
+
+That is why commit subjects follow [Conventional Commits](https://www.conventionalcommits.org/): `fix(agent): …` and `feat(app): …` decide the next version and become its changelog lines, written for the people who install it; `docs`, `chore`, `test`, `ci` and `refactor` do not appear.

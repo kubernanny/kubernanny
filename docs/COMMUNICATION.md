@@ -19,7 +19,7 @@ Every connection Kubernanny makes or accepts and what protects it. This is the p
 |---|---|---|---|---|---|
 | 1 | App / browser → agent | Noise IK per call over HTTP(S) `POST /api/e2e` | device key and agent key, every call | everyone but the device and the agent, including ingress, proxies, relay | status, details, logs of broken pods, action requests |
 | 2 | Phone → agent, once | the same, `POST /pair` inside | one-time code + the device key from the handshake | the same | device name in, device id out |
-| 3 | Agent → Kubernetes API | HTTPS | ServiceAccount token (projected, rotated) | network; server certificate checked against the cluster CA | list/get; patch, create and delete (finished pods) for the enabled actions |
+| 3 | Agent → Kubernetes API | HTTPS | ServiceAccount token (projected, rotated) | network; server certificate checked against the cluster CA | list/get; patch, create and delete (finished pods, failed Jobs) for the enabled actions |
 | 4 | Agent → Prometheus, Alertmanager, Grafana, Loki | HTTP inside the cluster | none | by your CNI, if it encrypts (WireGuard, IPsec) | GET of read endpoints only |
 | 5 | Agent → notification service | HTTPS (HTTP only to `*.svc`) | URL / token you configure | network | cluster name, issue titles and causes (or only counts) |
 | 6 | Prometheus → agent `:9100` | HTTP inside the cluster | none | by your CNI | counts and scores, no names |
