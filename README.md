@@ -46,7 +46,7 @@ The log shows a QR code. Scan it in the app or with your phone's camera, or open
 
 **From anywhere, without opening a port:** `relay.enabled: true`. The agent dials out to a relay that passes sealed messages along and can read none of them ([docs/RELAY.md](docs/RELAY.md)).
 
-Other ways: `kubectl apply -f https://raw.githubusercontent.com/kubernanny/kubernanny/v0.4.0/deploy/install.yaml`, or an Argo CD Application pointing at `deploy/helm/kubernanny`. No ingress? `kubectl -n kubernanny port-forward svc/kubernanny 8080:80`: the agent serves the full web UI itself. [docs/CONFIGURATION.md](docs/CONFIGURATION.md). <!-- x-release-please-version -->
+Other ways: `kubectl apply -f https://raw.githubusercontent.com/kubernanny/kubernanny/v0.5.0/deploy/install.yaml`, or an Argo CD Application pointing at `deploy/helm/kubernanny`. No ingress? `kubectl -n kubernanny port-forward svc/kubernanny 8080:80`: the agent serves the full web UI itself. [docs/CONFIGURATION.md](docs/CONFIGURATION.md). <!-- x-release-please-version -->
 
 ## What it checks
 

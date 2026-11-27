@@ -1,6 +1,6 @@
 # A self-hosted Kubernanny relay (docs/RELAY.md).
 #
-#   kubectl apply -f https://raw.githubusercontent.com/kubernanny/kubernanny/v0.4.0/deploy/relay/relay.yaml x-release-please-version
+#   kubectl apply -f https://raw.githubusercontent.com/kubernanny/kubernanny/v0.5.0/deploy/relay/relay.yaml x-release-please-version
 #
 # Run it OUTSIDE the clusters it serves (a small VPS, another cluster): a
 # relay inside the cluster it monitors goes down together with it, exactly
@@ -44,7 +44,7 @@ spec:
         - name: relay
           # Pinned to a released version, bumped with every release (docs/RELEASING.md). Never :latest,
           # which changes under a running relay and cannot be rolled back.
-          image: ghcr.io/kubernanny/relay:0.4.0 # x-release-please-version
+          image: ghcr.io/kubernanny/relay:0.5.0 # x-release-please-version
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
