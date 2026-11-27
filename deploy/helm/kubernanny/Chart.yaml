@@ -2,7 +2,7 @@ apiVersion: v2
 name: kubernanny
 description: Health checks for self-hosted Kubernetes. Recognises Longhorn, Argo CD, cert-manager, CloudNativePG, Prometheus and ~70 more components, tells you what is broken and why, and serves the Kubernanny web UI.
 type: application
-version: 0.4.0
-appVersion: "0.4.0"
+version: 0.4.0 # x-release-please-version
+appVersion: "0.4.0" # x-release-please-version
 home: https://github.com/kubernanny/kubernanny
 keywords: [homelab, monitoring, health, longhorn, argocd, cert-manager, cloudnative-pg]

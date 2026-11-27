@@ -12,12 +12,12 @@ For maintainers: how the agent, the chart, the relay, the website and the apps g
 - A tag `vX.Y.Z` builds `agent:X.Y.Z`, `relay:X.Y.Z` and both `:latest`, and pushes the chart to `oci://ghcr.io/kubernanny/charts/kubernanny` with that version.
 - The app's tags are `app-vX.Y.Z`, which do not match CI's `v*` trigger.
 
-A release of the agent:
+A release of the agent, the chart and the relay is a pull request ([release-please](https://github.com/googleapis/release-please), `.github/workflows/release-please.yml`):
 
-1. Bump `version` and `appVersion` in `deploy/helm/kubernanny/Chart.yaml`, the image tags in `deploy/install.yaml` and `deploy/relay/relay.yaml`, `version` in `agent/package.json` and `relay/package.json`, `AGENT_VERSION` in `agent/src/version.ts` , the `v<version>` in the raw install URLs of `README.md`, `website/src/app/landing/install.component.ts` and the comment in `deploy/relay/relay.yaml` (and `KNOWN_AGENT_VERSION` in `app/src/app/core/version.ts`, so the app offers the update).
-2. Add the `CHANGELOG.md` entry (`## X.Y.Z (YYYY-MM-DD)…`). CI's `release-check` refuses a tag that disagrees with any of these files or has no dated entry, before anything is published.
-3. Commit, tag `vX.Y.Z`, push both.
-4. The first time only: make the GHCR packages `agent`, `relay` and `charts/kubernanny` public (organisation → Packages → package settings), and optionally add the chart repository to Artifact Hub.
+1. Every push to `main` updates the open release pull request "chore(release): agent and chart X.Y.Z". The version comes from the [conventional commits](https://www.conventionalcommits.org/) since the last release: `fix` a patch, `feat` a minor version (before 1.0 a breaking change too), and so does its `CHANGELOG.md` entry, under "Added" and "Fixed". Commits that only touch the native apps, their store texts or the website (`exclude-paths` in `release-please-config.json`) are left out; the web UI in `app/src` ships with the agent and counts. `docs`, `chore`, `test`, `ci`, `refactor` and `style` commits count for nothing and are not listed.
+2. The pull request also bumps every file that names the version: `deploy/helm/kubernanny/Chart.yaml` (`version`, `appVersion`), the image tags in `deploy/install.yaml` and `deploy/relay/relay.yaml`, `agent/package.json`, `relay/package.json`, `AGENT_VERSION` in `agent/src/version.ts`, `KNOWN_AGENT_VERSION` in `app/src/app/core/version.ts` (the app then offers the update), and the `v<version>` in the raw install URLs of `README.md`, `website/src/app/landing/install.component.ts` and `deploy/relay/relay.yaml`. Each such line carries an `x-release-please-version` marker; a new place needs one, and an entry in `extra-files`.
+3. Edit the `CHANGELOG.md` entry in the pull request until it reads well for people installing the agent (the commit subjects are a starting point), then merge it. release-please tags `vX.Y.Z`, creates the GitHub release and starts CI on the tag. CI's `release-check` (`scripts/check-release-version.sh`) refuses a tag that disagrees with any of these files or has no dated entry, before anything is published; then it publishes the images and the chart.
+4. The first time only: make the GHCR packages `agent`, `relay` and `charts/kubernanny` public (organisation → Packages → package settings), and optionally add the chart repository to Artifact Hub; and allow GitHub Actions to create pull requests (repository settings → Actions → General).
 
 ## Commands
 

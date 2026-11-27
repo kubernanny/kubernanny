@@ -13,16 +13,20 @@ check() { # file, pattern that must match
   if ! grep -Eq "$2" "$1"; then echo "::error file=$1::does not carry version $v (expected /$2/)"; fail=1; fi
 }
 q="${v//./\\.}"
-check deploy/helm/kubernanny/Chart.yaml "^version: $q$"
-check deploy/helm/kubernanny/Chart.yaml "^appVersion: \"?$q\"?$"
-check deploy/install.yaml "image: ghcr\.io/kubernanny/agent:$q$"
-check deploy/relay/relay.yaml "image: ghcr\.io/kubernanny/relay:$q$"
+# release-please's marker may follow a version (release-please-config.json).
+m='( *#? *x-release-please-version)?'
+
+check deploy/helm/kubernanny/Chart.yaml "^version: $q$m$"
+check deploy/helm/kubernanny/Chart.yaml "^appVersion: \"?$q\"?$m$"
+check deploy/install.yaml "image: ghcr\.io/kubernanny/agent:$q$m$"
+check deploy/relay/relay.yaml "image: ghcr\.io/kubernanny/relay:$q$m$"
 check agent/src/version.ts "AGENT_VERSION = '$q';"
 check agent/package.json "\"version\": \"$q\","
 check relay/package.json "\"version\": \"$q\","
 check README.md "kubernanny/v$q/deploy/install\.yaml"
 check website/src/app/landing/install.component.ts "kubernanny/v$q/deploy/install\.yaml"
 check deploy/relay/relay.yaml "kubernanny/v$q/deploy/relay/relay\.yaml"
-check CHANGELOG.md "^## $q \([0-9]{4}-[0-9]{2}-[0-9]{2}\)"
+# Written by hand ("## 0.4.0 (2026-11-27)") or by release-please ("## [0.4.1](…compare…) (2026-11-28)").
+check CHANGELOG.md "^## (\[$q\]\([^)]*\)|$q) \([0-9]{4}-[0-9]{2}-[0-9]{2}\)"
 if [ "$fail" = 0 ]; then echo "All version files and CHANGELOG.md agree on $v."; fi
 exit "$fail"

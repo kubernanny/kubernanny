@@ -3,7 +3,7 @@
  * keeps the two in step). An agent that reports an older one gets an update
  * hint: worked out on the device, no request to any update server.
  */
-export const KNOWN_AGENT_VERSION = '0.4.0';
+export const KNOWN_AGENT_VERSION = '0.4.0'; // x-release-please-version
 
 export const UPGRADE_COMMAND =
   'helm upgrade kubernanny oci://ghcr.io/kubernanny/charts/kubernanny -n kubernanny --reuse-values';

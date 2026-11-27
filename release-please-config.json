@@ -1,0 +1,53 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "50bacc02f39c0426ad730303fcf06e6f10c12e47",
+  "include-component-in-tag": false,
+  "include-v-in-tag": true,
+  "bump-minor-pre-major": true,
+  "pull-request-title-pattern": "chore(release): agent and chart ${version}",
+  "pull-request-header": "The next release of the agent, the chart and the relay. Edit CHANGELOG.md in this pull request until the entry reads well, then merge: release-please tags it, and CI publishes the images and the chart.",
+  "changelog-sections": [
+    { "type": "feat", "section": "Added" },
+    { "type": "fix", "section": "Fixed" },
+    { "type": "perf", "section": "Changed" },
+    { "type": "revert", "section": "Changed" },
+    { "type": "security", "section": "Security" },
+    { "type": "docs", "section": "Documentation", "hidden": true },
+    { "type": "chore", "section": "Chores", "hidden": true },
+    { "type": "refactor", "section": "Refactoring", "hidden": true },
+    { "type": "style", "section": "Style", "hidden": true },
+    { "type": "test", "section": "Tests", "hidden": true },
+    { "type": "ci", "section": "CI", "hidden": true },
+    { "type": "build", "section": "Build", "hidden": true }
+  ],
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "package-name": "kubernanny",
+      "changelog-path": "CHANGELOG.md",
+      "exclude-paths": [
+        "app/native",
+        "app/ios",
+        "app/android",
+        "app/scripts",
+        "fastlane",
+        "website",
+        "branding",
+        "scripts/store-screenshots",
+        "Gemfile",
+        "Gemfile.lock"
+      ],
+      "extra-files": [
+        { "type": "generic", "path": "deploy/helm/kubernanny/Chart.yaml" },
+        { "type": "generic", "path": "deploy/install.yaml" },
+        { "type": "generic", "path": "deploy/relay/relay.yaml" },
+        { "type": "generic", "path": "agent/src/version.ts" },
+        { "type": "generic", "path": "app/src/app/core/version.ts" },
+        { "type": "generic", "path": "README.md" },
+        { "type": "generic", "path": "website/src/app/landing/install.component.ts" },
+        { "type": "json", "path": "agent/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "relay/package.json", "jsonpath": "$.version" }
+      ]
+    }
+  }
+}

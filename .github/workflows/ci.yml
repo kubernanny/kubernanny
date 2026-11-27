@@ -5,6 +5,8 @@ on:
     branches: [main]
     tags: ['v*']
   pull_request:
+  # Started on a release tag by release-please.yml (a tag pushed with GITHUB_TOKEN starts no push run).
+  workflow_dispatch:
 
 # Every job reads only; the publishing jobs below grant themselves packages
 # and id-token. Third-party actions are pinned by commit (the comment names the
@@ -264,7 +266,7 @@ jobs:
   image:
     needs: [changes, release-check, protocol, agent, app, chart, e2e]
     # Skipped test jobs (nothing of theirs changed) do not block it; a failed or cancelled one does.
-    if: github.event_name == 'push' && !cancelled() && !failure() && needs.changes.outputs.image == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && !cancelled() && !failure() && needs.changes.outputs.image == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -323,7 +325,7 @@ jobs:
 
   relay-image:
     needs: [changes, release-check, protocol, relay]
-    if: github.event_name == 'push' && !cancelled() && !failure() && needs.changes.outputs.relay_image == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && !cancelled() && !failure() && needs.changes.outputs.relay_image == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
