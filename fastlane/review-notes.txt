@@ -12,4 +12,7 @@ The agent is installed with Helm or kubectl (https://github.com/kubernanny/kuber
 NETWORK AND ENCRYPTION
 The app connects only to the user's own agent, often by plain HTTP inside a home network or VPN, where certificates are rare, or through an optional relay that only passes sealed messages along. Every request and answer is end-to-end encrypted and authenticated with the Noise protocol: the device has its own key pair, and the agent's public key is pinned at pairing. The transport therefore only ever carries ciphertext. This is why the app sets NSAllowsArbitraryLoadsInWebContent (all requests to the agent go through the web view; the app has no other networking apart from registering for push notifications) and asks for local network access.
 
+NO VPN FUNCTIONALITY
+Kubernanny does not contain VPN functionality. It does not use the NetworkExtension framework, has no Network Extension entitlement, does not create or configure a VPN profile or packet tunnel, and does not route, proxy or inspect any of the device's traffic. Where the description or the app mentions a VPN, it means a VPN the user may already run on their own to reach their network; the app works over it like any other app but never sets one up or controls it. The app collects no user information through a VPN, and no data is shared with third parties: there is no analytics and no advertising, and cluster status travels only between the user's device and their own agent, end-to-end encrypted.
+
 The app is open source under the Apache-2.0 licence: https://github.com/kubernanny/kubernanny
